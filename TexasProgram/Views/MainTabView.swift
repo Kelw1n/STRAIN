@@ -492,7 +492,7 @@ struct DayDetailView: View {
         .scrollIndicators(.hidden)
         .screenBackground()
         // В очереди день недели зависит от места в очереди, поэтому в заголовке его нет.
-        .navigationTitle(profile.useQueueSchedule
+        .navigationTitle(profile.scheduleMode == .queue
                          ? "Неделя \(week)"
                          : "Неделя \(week) · \(profile.shortWeekdayName(forDay: day.number).uppercased())")
         .navigationBarTitleDisplayMode(.inline)

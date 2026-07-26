@@ -394,17 +394,14 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("Порядок", selection: $profile.useQueueSchedule) {
-                        Text("Очередь").tag(true)
-                        Text("По дням недели").tag(false)
+                    Picker("Порядок", selection: $profile.scheduleMode) {
+                        ForEach(ScheduleMode.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
                 } header: {
                     Text("Порядок тренировок")
                 } footer: {
-                    Text(profile.useQueueSchedule
-                         ? "Невыполненные тренировки идут подряд по ближайшим тренировочным дням. Пропустил — ничего не теряется, очередь просто сдвигается."
-                         : "Каждый день программы закреплён за своим днём недели. Пропущенные дни остаются в списке пропущенных и ждут этого дня на следующей неделе.")
+                    Text(profile.scheduleMode.explanation)
                 }
 
                 Section {
@@ -418,9 +415,9 @@ struct SettingsView: View {
                 } header: {
                     Text("Дни недели")
                 } footer: {
-                    Text(profile.useQueueSchedule
+                    Text(profile.scheduleMode == .queue
                          ? "Дни, в которые ты ходишь в зал. Очередь раздаёт тренировки именно по ним."
-                         : "По этим дням экран «Сегодня» определяет, какая тренировка идёт сегодня и когда следующая.")
+                         : "День недели задаёт тип тренировки. Поменяешь здесь — поменяется и то, что приложение предложит в этот день.")
                 }
 
                 if profile.programKind == .upperLower {

@@ -103,7 +103,12 @@ struct BenchWaveView: View {
         let prefix = session.id > 1
             ? "Тренировки 1–\(session.id - 1) будут отмечены выполненными вместе с их днями программы."
             : "Прогресс волны будет сброшен к началу."
-        return prefix + " Тренировка \(session.id) станет следующей — \(when)."
+        // В режиме по дням недели тренировка встанет на свой день недели, и раньше
+        // неё может оказаться другой день программы — поэтому не обещаем «следующая».
+        let tail = profile.scheduleMode == .queue
+            ? "Тренировка \(session.id) станет следующей — \(when)."
+            : "Тренировка \(session.id) встанет на \(when)."
+        return prefix + " " + tail
     }
 
     private func toggleExpanded(_ id: Int) {

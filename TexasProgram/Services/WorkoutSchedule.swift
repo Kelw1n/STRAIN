@@ -81,9 +81,10 @@ enum WorkoutScheduler {
     }
 
     static func build(profile: ProgramProfile, plan: WorkoutPlan, now: Date = Date(), calendar base: Calendar = .current) -> WorkoutSchedule {
-        profile.useQueueSchedule
-            ? buildQueue(profile: profile, plan: plan, now: now, calendar: base)
-            : buildByWeekday(profile: profile, plan: plan, now: now, calendar: base)
+        switch profile.scheduleMode {
+        case .queue: return buildQueue(profile: profile, plan: plan, now: now, calendar: base)
+        case .weekday: return buildByWeekday(profile: profile, plan: plan, now: now, calendar: base)
+        }
     }
 
     // MARK: - Очередь
@@ -166,83 +167,62 @@ enum WorkoutScheduler {
 
     // MARK: - По дням недели
 
-    /// Раскладывает план по календарю.
+    /// У каждого дня недели свой счётчик.
     ///
-    /// Текущая неделя плана — первая, в которой остались невыполненные дни. Она ложится
-    /// на календарную неделю из явной привязки профиля, а если её нет — на текущую.
-    /// Неделя, которая целиком в прошлом, переносится вперёд: иначе новый пользователь
-    /// сразу видел бы «пропущено» за дни, когда приложения у него ещё не было.
+    /// Понедельник всегда отдаёт понедельничную тренировку — самую раннюю невыполненную.
+    /// Сделал понедельники первой и второй недели — в следующий понедельник будет третья.
+    /// Пропущенный четверг не теряется и не переезжает на понедельник: он достанется
+    /// ближайшему четвергу.
     private static func buildByWeekday(profile: ProgramProfile, plan: WorkoutPlan, now: Date, calendar base: Calendar) -> WorkoutSchedule {
         let calendar = trainingCalendar(base)
         let startOfToday = calendar.startOfDay(for: now)
-        let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: startOfToday)?.start ?? startOfToday
+        let todayWeekday = calendar.component(.weekday, from: startOfToday)
+        let trainedToday = profile.lastCompletionDate.map { calendar.isDate($0, inSameDayAs: startOfToday) } ?? false
 
-        let anchorWeek = plan.weeks.first { week in
-            week.days.contains { !profile.isCompleted(week: week.number, day: $0.number) }
-        }?.number ?? plan.weeks.first?.number ?? 1
-
-        let weekdays = plan.weeks.first?.days.map { profile.weekday(forDay: $0.number) } ?? []
-        var weekStart = anchoredWeekStart(profile: profile, anchorWeek: anchorWeek, fallback: thisWeekStart, calendar: calendar)
-
-        // Неделя ещё не начата, но её дни уже позади (свежая установка в конце недели) —
-        // переносим её вперёд, чтобы не показывать пропуски за дни без приложения.
-        // Начатую неделю не двигаем: её невыполненные дни — настоящие пропуски.
-        let weekStarted = plan.weeks.first { $0.number == anchorWeek }?.days
-            .contains { profile.isCompleted(week: anchorWeek, day: $0.number) } ?? false
-        if !weekStarted, lastTrainingDate(weekStart: weekStart, weekdays: weekdays, calendar: calendar) < startOfToday {
-            weekStart = thisWeekStart
-            if lastTrainingDate(weekStart: weekStart, weekdays: weekdays, calendar: calendar) < startOfToday {
-                weekStart = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart) ?? weekStart
-            }
-        }
+        // Номера тренировочных дней программы: 1...3 для «Техаса», 1...4 для «Верх / Низ».
+        let dayNumbers = plan.weeks.first?.days.map(\.number) ?? []
 
         var entries: [ScheduledWorkout] = []
-        entries.reserveCapacity(plan.weeks.count * 4)
+        entries.reserveCapacity(plan.weeks.count * dayNumbers.count)
 
-        for week in plan.weeks {
-            for day in week.days {
-                let weekday = profile.weekday(forDay: day.number)
-                guard let date = date(week: week.number, weekday: weekday, anchorWeek: anchorWeek, weekStart: weekStart, calendar: calendar) else { continue }
+        for dayNumber in dayNumbers {
+            let weekday = profile.weekday(forDay: dayNumber)
+            var cursor = nextOccurrence(of: weekday, from: startOfToday, calendar: calendar)
+            // Сегодня уже отметились — этот слот занят, следующий такой день через неделю.
+            if trainedToday, weekday == todayWeekday {
+                cursor = calendar.date(byAdding: .weekOfYear, value: 1, to: cursor) ?? cursor
+            }
+
+            for week in plan.weeks {
+                guard let day = week.days.first(where: { $0.number == dayNumber }) else { continue }
+                guard !profile.isCompleted(week: week.number, day: dayNumber) else { continue }
                 entries.append(ScheduledWorkout(
                     week: week.number,
                     day: day,
-                    date: date,
+                    date: cursor,
                     weekday: weekday,
-                    isCompleted: profile.isCompleted(week: week.number, day: day.number)
+                    isCompleted: false
                 ))
+                cursor = calendar.date(byAdding: .weekOfYear, value: 1, to: cursor) ?? cursor
             }
         }
 
-        let todayEntry = entries.first { calendar.isDate($0.date, inSameDayAs: startOfToday) }
-        let pending = entries.filter { !$0.isCompleted }
-        // Дни до начала цикла пропущенными не считаются.
-        let cycleStart = calendar.startOfDay(for: profile.cycleStartedAt)
+        entries.sort { $0.date < $1.date }
 
         return WorkoutSchedule(
-            today: todayEntry.flatMap { $0.isCompleted ? nil : $0 },
-            upcoming: pending.filter { $0.date > startOfToday }.min { $0.date < $1.date },
-            overdue: pending.filter { $0.date < startOfToday && $0.date >= cycleStart }.sorted { $0.date < $1.date },
-            todayAlreadyDone: todayEntry?.isCompleted ?? false,
-            allPending: pending.sorted { $0.date < $1.date },
+            today: entries.first { calendar.isDate($0.date, inSameDayAs: startOfToday) },
+            upcoming: entries.first { $0.date > startOfToday },
+            overdue: [],
+            todayAlreadyDone: trainedToday && dayNumbers.contains { profile.weekday(forDay: $0) == todayWeekday },
+            allPending: entries,
             referenceDate: now
         )
     }
 
-    private static func anchoredWeekStart(profile: ProgramProfile, anchorWeek: Int, fallback: Date, calendar: Calendar) -> Date {
-        guard profile.scheduleAnchorWeek > 0, let stored = profile.scheduleAnchorDate else { return fallback }
-        return calendar.date(byAdding: .weekOfYear, value: anchorWeek - profile.scheduleAnchorWeek, to: stored) ?? fallback
-    }
-
-    private static func lastTrainingDate(weekStart: Date, weekdays: [Int], calendar: Calendar) -> Date {
-        let offsets = weekdays.map { ($0 - 2 + 7) % 7 }
-        let last = offsets.max() ?? 0
-        return calendar.date(byAdding: .day, value: last, to: weekStart) ?? weekStart
-    }
-
-    private static func date(week: Int, weekday: Int, anchorWeek: Int, weekStart: Date, calendar: Calendar) -> Date? {
-        guard let base = calendar.date(byAdding: .weekOfYear, value: week - anchorWeek, to: weekStart) else { return nil }
-        // firstWeekday = 2, поэтому понедельник — нулевое смещение от начала недели.
-        let offset = (weekday - 2 + 7) % 7
-        return calendar.date(byAdding: .day, value: offset, to: base)
+    /// Ближайшая дата с нужным днём недели, начиная с указанной.
+    static func nextOccurrence(of weekday: Int, from start: Date, calendar: Calendar) -> Date {
+        let current = calendar.component(.weekday, from: start)
+        let delta = (weekday - current + 7) % 7
+        return calendar.date(byAdding: .day, value: delta, to: start) ?? start
     }
 }

@@ -150,24 +150,85 @@ final class ProgramCalculatorTests: XCTestCase {
         utcCalendar.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
-    // MARK: - Режим очереди
+    // MARK: - Режимы расписания
 
-    /// Профиль в режиме «по дням недели» — старое поведение.
+    /// Профиль в режиме «по дням недели» — значение по умолчанию.
     private func weekdayProfile(_ input: UpperLowerInput = .demo) -> ProgramProfile {
+        ProgramProfile(upperLowerInput: input)
+    }
+
+    /// Профиль с очередью.
+    private func queueProfile(_ input: UpperLowerInput = .demo) -> ProgramProfile {
         let profile = ProgramProfile(upperLowerInput: input)
-        profile.useQueueSchedule = false
+        profile.scheduleMode = .queue
         return profile
     }
 
-    func testQueueIsDefault() {
-        XCTAssertTrue(ProgramProfile(upperLowerInput: .demo).useQueueSchedule)
-        XCTAssertTrue(ProgramProfile(input: .demo).useQueueSchedule)
+    func testWeekdayModeIsDefault() {
+        XCTAssertEqual(ProgramProfile(upperLowerInput: .demo).scheduleMode, .weekday)
+        XCTAssertEqual(ProgramProfile(input: .demo).scheduleMode, .weekday)
     }
 
-    /// Случай со скриншота: сделаны неделя 1 целиком и понедельник со вторником недели 2.
-    /// Четверг и пятница пропущены, сегодня воскресенье — следующая должна быть завтра.
+    /// Главный случай: неделя 1 закрыта, во второй сделаны понедельник и вторник,
+    /// четверг с пятницей пропущены. Завтра понедельник — значит понедельничная
+    /// тренировка третьей недели, а не пропущенный четверг второй.
+    func testWeekdaySlotTakesOwnDayTypeFromNextUncompletedWeek() {
+        let profile = weekdayProfile()
+        for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
+        profile.toggleCompleted(week: 2, day: 1)
+        profile.toggleCompleted(week: 2, day: 2)
+        profile.lastCompletionDate = nil
+
+        let sunday = date(26, 7, 2026)
+        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: sunday, calendar: utcCalendar)
+
+        XCTAssertNil(schedule.today)
+        XCTAssertTrue(schedule.isRestDay)
+        XCTAssertEqual(schedule.upcoming?.week, 3)
+        XCTAssertEqual(schedule.upcoming?.day.number, 1)
+        XCTAssertEqual(schedule.upcoming?.date, date(27, 7, 2026))
+        XCTAssertEqual(schedule.upcoming?.fullTitle, "ПОНЕДЕЛЬНИК · ВЕРХ ТЯЖЁЛЫЙ")
+        XCTAssertEqual(schedule.relativeTitle(for: schedule.upcoming!, calendar: utcCalendar), "Завтра")
+    }
+
+    /// Пропущенный четверг не теряется: он достаётся ближайшему четвергу.
+    func testWeekdayModeKeepsMissedWorkoutForItsOwnWeekday() {
+        let profile = weekdayProfile()
+        for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
+        profile.toggleCompleted(week: 2, day: 1)
+        profile.toggleCompleted(week: 2, day: 2)
+        profile.lastCompletionDate = nil
+
+        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: date(26, 7, 2026), calendar: utcCalendar)
+        let thursday = schedule.allPending.first { $0.weekday == 5 }
+
+        XCTAssertEqual(thursday?.week, 2)
+        XCTAssertEqual(thursday?.day.number, 3)
+        XCTAssertEqual(thursday?.date, date(30, 7, 2026))
+    }
+
+    /// Каждый день недели идёт своим счётчиком.
+    func testWeekdayModeAdvancesEachSlotIndependently() {
+        let profile = weekdayProfile()
+        for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
+        profile.toggleCompleted(week: 2, day: 1)
+        profile.toggleCompleted(week: 2, day: 2)
+        profile.lastCompletionDate = nil
+
+        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: date(26, 7, 2026), calendar: utcCalendar)
+        let firstFour = schedule.allPending.prefix(4)
+
+        XCTAssertEqual(firstFour.map(\.date), [
+            date(27, 7, 2026), date(28, 7, 2026), date(30, 7, 2026), date(31, 7, 2026)
+        ])
+        XCTAssertEqual(firstFour.map(\.week), [3, 3, 2, 2])
+        XCTAssertEqual(firstFour.map(\.day.number), [1, 2, 3, 4])
+    }
+
+    /// Случай со скриншота в режиме очереди: там пропущенный четверг переезжает
+    /// на понедельник — поведение сохранено как альтернатива.
     func testQueueMovesMissedWorkoutToNextTrainingDay() {
-        let profile = ProgramProfile(upperLowerInput: .demo)
+        let profile = queueProfile()
         for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
         profile.toggleCompleted(week: 2, day: 1)
         profile.toggleCompleted(week: 2, day: 2)
@@ -188,7 +249,7 @@ final class ProgramCalculatorTests: XCTestCase {
 
     /// Очередь раздаёт тренировки подряд по тренировочным дням.
     func testQueueFillsFollowingSlotsInOrder() {
-        let profile = ProgramProfile(upperLowerInput: .demo)
+        let profile = queueProfile()
         for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
         profile.toggleCompleted(week: 2, day: 1)
         profile.toggleCompleted(week: 2, day: 2)
@@ -208,7 +269,7 @@ final class ProgramCalculatorTests: XCTestCase {
     /// Отметились сегодня — следующая тренировка уезжает на следующий тренировочный день.
     func testQueueSkipsTodayAfterCompletion() {
         let monday = date(27, 7, 2026)
-        let profile = ProgramProfile(upperLowerInput: .demo)
+        let profile = queueProfile()
         profile.toggleCompleted(week: 1, day: 1, now: monday)
 
         let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: monday, calendar: utcCalendar)
@@ -223,7 +284,7 @@ final class ProgramCalculatorTests: XCTestCase {
     /// В тренировочный день очередь отдаёт тренировку на сегодня.
     func testQueueGivesTodaysWorkoutOnTrainingDay() {
         let monday = date(27, 7, 2026)
-        let profile = ProgramProfile(upperLowerInput: .demo)
+        let profile = queueProfile()
         let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: monday, calendar: utcCalendar)
 
         XCTAssertEqual(schedule.today?.week, 1)
@@ -234,7 +295,7 @@ final class ProgramCalculatorTests: XCTestCase {
     /// «Начать отсюда» в очереди ставит выбранную тренировку на ближайший тренировочный день.
     func testQueueSetCurrentBenchSessionLandsOnNextSlot() {
         let sunday = date(26, 7, 2026)
-        let profile = ProgramProfile(upperLowerInput: .demo)
+        let profile = queueProfile()
         profile.setCurrentBenchSession(4, now: sunday, calendar: utcCalendar)
 
         XCTAssertEqual(profile.completedBenchSessions.sorted(), [1, 2, 3])
@@ -260,26 +321,6 @@ final class ProgramCalculatorTests: XCTestCase {
         XCTAssertEqual(profile.weekdayName(forDay: 2), "четверг")
     }
 
-    func testSundayShowsRestDayAndNextMondayWorkout() {
-        let profile = weekdayProfile()
-        profile.cycleStartedAt = date(1, 7, 2026)
-        // Первая неделя закрыта целиком, во второй сделаны понедельник и вторник.
-        for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
-        profile.toggleCompleted(week: 2, day: 1)
-        profile.toggleCompleted(week: 2, day: 2)
-
-        let sunday = date(26, 7, 2026)
-        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: sunday, calendar: utcCalendar)
-
-        XCTAssertNil(schedule.today)
-        XCTAssertTrue(schedule.isRestDay)
-        XCTAssertEqual(schedule.overdue.map(\.day.number), [3, 4])
-        XCTAssertEqual(schedule.upcoming?.week, 3)
-        XCTAssertEqual(schedule.upcoming?.day.number, 1)
-        XCTAssertEqual(schedule.upcoming?.date, date(27, 7, 2026))
-        XCTAssertEqual(schedule.relativeTitle(for: schedule.upcoming!, calendar: utcCalendar), "Завтра")
-    }
-
     func testFreshProfileHasNoMissedWorkouts() {
         let profile = weekdayProfile()
         let sunday = date(26, 7, 2026)
@@ -288,7 +329,7 @@ final class ProgramCalculatorTests: XCTestCase {
 
         XCTAssertTrue(schedule.overdue.isEmpty)
         XCTAssertTrue(schedule.isRestDay)
-        // Неделя 1 целиком в прошлом относительно воскресенья — переносится на следующую.
+        // Понедельничный слот отдаёт первую невыполненную понедельничную тренировку.
         XCTAssertEqual(schedule.upcoming?.week, 1)
         XCTAssertEqual(schedule.upcoming?.day.number, 1)
         XCTAssertEqual(schedule.upcoming?.date, date(27, 7, 2026))
@@ -318,10 +359,14 @@ final class ProgramCalculatorTests: XCTestCase {
 
         let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: sunday, calendar: utcCalendar)
         XCTAssertTrue(schedule.overdue.isEmpty)
-        XCTAssertEqual(schedule.upcoming?.week, 2)
-        XCTAssertEqual(schedule.upcoming?.day.number, 3)
-        // Четверг ближайшей недели.
-        XCTAssertEqual(schedule.upcoming?.date, date(30, 7, 2026))
+        // Жим №4 — четверговый, поэтому встаёт на ближайший четверг.
+        let target = schedule.allPending.first { $0.week == 2 && $0.day.number == 3 }
+        XCTAssertEqual(target?.date, date(30, 7, 2026))
+        XCTAssertEqual(profile.plannedStartDate(forDay: 3, now: sunday, calendar: utcCalendar), date(30, 7, 2026))
+        // А раньше него по календарю идёт понедельник третьей недели.
+        XCTAssertEqual(schedule.upcoming?.week, 3)
+        XCTAssertEqual(schedule.upcoming?.day.number, 1)
+        XCTAssertEqual(schedule.upcoming?.date, date(27, 7, 2026))
     }
 
     func testSetCurrentWorkoutOnMondaySchedulesTomorrow() {
@@ -350,8 +395,8 @@ final class ProgramCalculatorTests: XCTestCase {
 
     func testCompletedTodayIsReported() {
         let profile = weekdayProfile()
-        profile.toggleCompleted(week: 1, day: 1)
         let monday = date(27, 7, 2026)
+        profile.toggleCompleted(week: 1, day: 1, now: monday)
         let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: monday, calendar: utcCalendar)
 
         XCTAssertNil(schedule.today)

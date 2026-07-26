@@ -46,6 +46,27 @@ enum AdditionalExerciseCategory: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+/// Как невыполненные тренировки раскладываются по календарю.
+enum ScheduleMode: String, CaseIterable, Codable, Identifiable, Sendable {
+    /// День недели задаёт тип тренировки: в понедельник — понедельничная,
+    /// просто ближайшей невыполненной недели.
+    case weekday = "По дням недели"
+    /// Невыполненные идут строго подряд по ближайшим тренировочным дням,
+    /// даже если тип дня не совпадает с днём недели.
+    case queue = "Очередь"
+
+    var id: String { rawValue }
+
+    var explanation: String {
+        switch self {
+        case .weekday:
+            return "В понедельник — понедельничная тренировка, в четверг — четверговая. Пропущенная не теряется: она достанется следующему такому же дню недели."
+        case .queue:
+            return "Невыполненные тренировки идут строго подряд по ближайшим тренировочным дням. Пропустил четверг — сделаешь его в ближайший тренировочный день, каким бы он ни был."
+        }
+    }
+}
+
 struct ProgramInput: Equatable, Codable, Sendable {
     var squat5RM: Double
     var bench5RM: Double
@@ -171,9 +192,9 @@ final class ProgramProfile {
     /// Используется только в режиме «по дням недели».
     var scheduleAnchorWeek: Int = 0
     var scheduleAnchorDate: Date?
-    /// Очередь: невыполненные тренировки идут подряд по ближайшим тренировочным дням.
-    /// Выключено — каждый день плана жёстко привязан к своему дню недели.
-    var useQueueSchedule: Bool = true
+    /// Как план ложится на календарь. Свойство новое: у существующих профилей
+    /// подставится значение по умолчанию, то есть режим по дням недели.
+    var scheduleModeRaw: String = ScheduleMode.weekday.rawValue
     /// Дата последней отметки. В режиме очереди по ней видно, что сегодня уже тренировались.
     var lastCompletionDate: Date?
     var cycleStartedAt: Date
@@ -209,6 +230,11 @@ final class ProgramProfile {
     var level: TrainingLevel {
         get { TrainingLevel(rawValue: levelRaw) ?? .beginner }
         set { levelRaw = newValue.rawValue }
+    }
+
+    var scheduleMode: ScheduleMode {
+        get { ScheduleMode(rawValue: scheduleModeRaw) ?? .weekday }
+        set { scheduleModeRaw = newValue.rawValue }
     }
 
     var input: ProgramInput {
@@ -296,10 +322,12 @@ final class ProgramProfile {
     }
 
     /// Дата, на которую встанет день плана, если сделать его текущим.
-    /// В режиме очереди это ближайший свободный тренировочный день, иначе — свой день недели.
+    /// В очереди это ближайший свободный тренировочный день, иначе — свой день недели.
     func plannedStartDate(forDay day: Int, now: Date = Date(), calendar: Calendar = .current) -> Date {
-        guard useQueueSchedule else { return nextOccurrence(ofDay: day, now: now, calendar: calendar) }
-        return WorkoutScheduler.nextTrainingSlot(profile: self, now: now, calendar: calendar)
+        switch scheduleMode {
+        case .queue: return WorkoutScheduler.nextTrainingSlot(profile: self, now: now, calendar: calendar)
+        case .weekday: return nextOccurrence(ofDay: day, now: now, calendar: calendar)
+        }
     }
 
     /// «Я сейчас здесь»: всё до выбранного дня отмечается выполненным, выбранный день
@@ -317,16 +345,10 @@ final class ProgramProfile {
         }
         // Отметки проставлены задним числом — сегодняшней тренировки среди них нет.
         lastCompletionDate = nil
-        guard !useQueueSchedule else {
-            // В очереди привязка не нужна: выбранный день сам станет первым в списке.
-            scheduleAnchorWeek = 0
-            scheduleAnchorDate = nil
-            return
-        }
-        let target = nextOccurrence(ofDay: day, now: now, calendar: calendar)
-        let trainingCalendar = WorkoutScheduler.trainingCalendar(calendar)
-        scheduleAnchorWeek = week
-        scheduleAnchorDate = trainingCalendar.dateInterval(of: .weekOfYear, for: target)?.start ?? target
+        // Привязка к календарной неделе больше не используется: оба режима считают
+        // даты от сегодняшнего дня и от того, что осталось невыполненным.
+        scheduleAnchorWeek = 0
+        scheduleAnchorDate = nil
     }
 
     /// То же самое, но по номеру тренировки волны жима.
