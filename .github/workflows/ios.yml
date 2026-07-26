@@ -10,7 +10,7 @@ jobs:
   test:
     if: github.event_name == 'pull_request'
     continue-on-error: true
-    runs-on: macos-15
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
@@ -39,7 +39,7 @@ jobs:
 
   unsigned-ipa:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-15
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
