@@ -50,4 +50,24 @@ final class ProgramCalculatorTests: XCTestCase {
         XCTAssertEqual(plan.weeks.count, 3)
         XCTAssertTrue(plan.weeks.last!.days[2].exercises.prefix(3).allSatisfy { $0.load == .testOneRepMax })
     }
+
+    func testUpperLowerPlanHasSevenWeeksAndFourDays() {
+        let plan = UpperLowerCalculator.generate(input: .demo)
+        XCTAssertEqual(plan.weeks.count, 7)
+        XCTAssertTrue(plan.weeks.allSatisfy { $0.days.count == 4 })
+        XCTAssertEqual(plan.weeks[0].days[1].exercises[0].load, .kilograms(85))
+        XCTAssertEqual(plan.weeks[0].days[1].exercises[1].load, .kilograms(85))
+        XCTAssertEqual(plan.weeks[0].days[3].exercises[0].load, .kilograms(75))
+        XCTAssertEqual(plan.weeks[0].days[3].exercises[1].load, .kilograms(100))
+    }
+
+    func testUpperLowerBenchWaveComesFromFourteenSessionSheet() {
+        let plan = UpperLowerCalculator.generate(input: .demo)
+        let firstBench = plan.weeks[0].days[0].exercises[0]
+        let lastBench = plan.weeks[6].days[2].exercises[0]
+        XCTAssertEqual(firstBench.sets, 5)
+        XCTAssertEqual(firstBench.reps, "6 / 5 / 5 / 4 / 4")
+        XCTAssertEqual(lastBench.sets, 3)
+        XCTAssertTrue(lastBench.name.contains("рекорд"))
+    }
 }

@@ -6,16 +6,17 @@ struct MainTabView: View {
     @Bindable var profile: ProgramProfile
     @State private var selectedTab = 0
     @State private var showingSettings = false
+    let onResetApplication: () -> Void
 
     var body: some View {
         TabView(selection: $selectedTab) {
             TodayView(profile: profile, onSettings: { showingSettings = true }).tabItem { Label("Сегодня", systemImage: "calendar.badge.clock") }.tag(0)
             PlanView(profile: profile).tabItem { Label("План", systemImage: "list.bullet.rectangle") }.tag(1)
             ProgressScreen(profile: profile).tabItem { Label("Прогресс", systemImage: "chart.bar.xaxis") }.tag(2)
-            InstructionsView().tabItem { Label("Инструкция", systemImage: "book.closed") }.tag(3)
+            InstructionsView(programKind: profile.programKind).tabItem { Label("Инструкция", systemImage: "book.closed") }.tag(3)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: selectedTab)
-        .sheet(isPresented: $showingSettings) { SettingsView(profile: profile) }
+        .sheet(isPresented: $showingSettings) { SettingsView(profile: profile, onResetApplication: onResetApplication) }
     }
 }
 
@@ -24,7 +25,7 @@ struct TodayView: View {
     @Bindable var profile: ProgramProfile
     let onSettings: () -> Void
     @State private var expandedDay: String?
-    private var plan: WorkoutPlan { ProgramCalculator.generate(input: profile.input) }
+    private var plan: WorkoutPlan { profile.workoutPlan }
 
     var next: (Int, WorkoutDayPlan)? {
         for week in plan.weeks { for day in week.days where !profile.isCompleted(week: week.number, day: day.number) { return (week.number, day) } }
@@ -45,7 +46,7 @@ struct TodayView: View {
                         CompleteButton(isCompleted: profile.isCompleted(week: next.0, day: next.1.number)) { withAnimation(reduceMotion ? nil : .spring) { profile.toggleCompleted(week: next.0, day: next.1.number) } }
                     }.padding()
                 } else {
-                    ContentUnavailableView("Цикл завершён", systemImage: "checkmark.seal", description: Text("Все 12 недель отмечены. Можно запустить пикирование из настроек."))
+                    ContentUnavailableView("Цикл завершён", systemImage: "checkmark.seal", description: Text(profile.programKind == .texas ? "Все 12 недель отмечены. Можно запустить пикирование из настроек." : "Все 7 недель программы Верх / Низ отмечены."))
                 }
             }
             .background(Color(uiColor: .systemGroupedBackground))
@@ -60,7 +61,7 @@ struct PlanView: View {
     @Bindable var profile: ProgramProfile
     @State private var selectedWeek = 1
     @Namespace private var dayAnimation
-    private var plan: WorkoutPlan { ProgramCalculator.generate(input: profile.input) }
+    private var plan: WorkoutPlan { profile.workoutPlan }
     var body: some View {
         NavigationStack {
             ScrollView {

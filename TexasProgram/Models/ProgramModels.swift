@@ -1,6 +1,19 @@
 import Foundation
 import SwiftData
 
+enum TrainingProgramKind: String, CaseIterable, Codable, Identifiable, Sendable {
+    case texas = "Техасский метод"
+    case upperLower = "Верх / Низ"
+
+    var id: String { rawValue }
+    var subtitle: String {
+        switch self {
+        case .texas: return "12 недель · 3 тренировки в неделю · расчёт по 5ПМ"
+        case .upperLower: return "7 недель · 4 тренировки в неделю · расчёт по 1ПМ"
+        }
+    }
+}
+
 enum TrainingLevel: String, CaseIterable, Codable, Identifiable, Sendable {
     case beginner = "Начальный"
     case intermediate = "Средний"
@@ -45,6 +58,14 @@ struct ProgramInput: Equatable, Codable, Sendable {
     var press: String?
 
     static let demo = ProgramInput(squat5RM: 100, bench5RM: 100, deadlift5RM: 100, level: .intermediate, pull: nil, arms: nil, core: "Копенгагенская планка", back: nil, press: nil)
+}
+
+struct UpperLowerInput: Equatable, Codable, Sendable {
+    var squat1RM: Double
+    var bench1RM: Double
+    var deadlift1RM: Double
+
+    static let demo = UpperLowerInput(squat1RM: 100, bench1RM: 100, deadlift1RM: 130)
 }
 
 enum LoadPrescription: Equatable, Hashable, Codable, Sendable {
@@ -125,6 +146,7 @@ struct WorkoutPlan: Equatable, Codable, Sendable {
 
 @Model
 final class ProgramProfile {
+    var programKindRaw: String = TrainingProgramKind.texas.rawValue
     var squat5RM: Double
     var bench5RM: Double
     var deadlift5RM: Double
@@ -142,9 +164,25 @@ final class ProgramProfile {
     var peakDeadlift5RM: Double?
 
     init(input: ProgramInput = .demo) {
+        programKindRaw = TrainingProgramKind.texas.rawValue
         squat5RM = input.squat5RM; bench5RM = input.bench5RM; deadlift5RM = input.deadlift5RM
         levelRaw = input.level.rawValue; pull = input.pull; arms = input.arms; core = input.core; back = input.back; press = input.press
         completedDayKeys = []; cycleStartedAt = .now; peakingActive = false
+    }
+
+    init(upperLowerInput: UpperLowerInput) {
+        programKindRaw = TrainingProgramKind.upperLower.rawValue
+        squat5RM = upperLowerInput.squat1RM
+        bench5RM = upperLowerInput.bench1RM
+        deadlift5RM = upperLowerInput.deadlift1RM
+        levelRaw = TrainingLevel.beginner.rawValue
+        pull = nil; arms = nil; core = nil; back = nil; press = nil
+        completedDayKeys = []; cycleStartedAt = .now; peakingActive = false
+    }
+
+    var programKind: TrainingProgramKind {
+        get { TrainingProgramKind(rawValue: programKindRaw) ?? .texas }
+        set { programKindRaw = newValue.rawValue }
     }
 
     var level: TrainingLevel {
@@ -155,6 +193,20 @@ final class ProgramProfile {
     var input: ProgramInput {
         ProgramInput(squat5RM: squat5RM, bench5RM: bench5RM, deadlift5RM: deadlift5RM, level: level, pull: pull, arms: arms, core: core, back: back, press: press)
     }
+
+    var upperLowerInput: UpperLowerInput {
+        UpperLowerInput(squat1RM: squat5RM, bench1RM: bench5RM, deadlift1RM: deadlift5RM)
+    }
+
+    var workoutPlan: WorkoutPlan {
+        switch programKind {
+        case .texas: return ProgramCalculator.generate(input: input)
+        case .upperLower: return UpperLowerCalculator.generate(input: upperLowerInput)
+        }
+    }
+
+    var maximumLabel: String { programKind == .texas ? "5ПМ" : "1ПМ" }
+    var totalDays: Int { workoutPlan.weeks.reduce(0) { $0 + $1.days.count } }
 
     func isCompleted(week: Int, day: Int) -> Bool { completedDayKeys.contains("\(week)-\(day)") }
     func toggleCompleted(week: Int, day: Int) {

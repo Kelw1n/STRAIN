@@ -9,10 +9,14 @@ struct RootView: View {
     var body: some View {
         Group {
             if let profile = profiles.first {
-                MainTabView(profile: profile)
+                MainTabView(profile: profile) {
+                    modelContext.delete(profile)
+                    try? modelContext.save()
+                    hasSeenSetup = false
+                }
             } else {
-                SetupView { input in
-                    modelContext.insert(ProgramProfile(input: input))
+                ProgramOnboardingView { profile in
+                    modelContext.insert(profile)
                     hasSeenSetup = true
                 }
             }
@@ -21,7 +25,61 @@ struct RootView: View {
     }
 }
 
+struct ProgramOnboardingView: View {
+    let onSave: (ProgramProfile) -> Void
+    @State private var selectedProgram: TrainingProgramKind?
+
+    var body: some View {
+        Group {
+            switch selectedProgram {
+            case .texas:
+                SetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(input: $0)) }
+            case .upperLower:
+                UpperLowerSetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(upperLowerInput: $0)) }
+            case nil:
+                ProgramSelectionView(selection: $selectedProgram)
+            }
+        }
+    }
+}
+
+struct ProgramSelectionView: View {
+    @Binding var selection: TrainingProgramKind?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Image(systemName: "figure.strengthtraining.traditional")
+                            .font(.system(size: 42)).foregroundStyle(.teal)
+                        Text("Выбери программу")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                        Text("После выбора введи свои максимумы. Вернуться сюда можно полным сбросом в настройках.")
+                            .foregroundStyle(.secondary)
+                    }.padding(.vertical, 20)
+                    ForEach(TrainingProgramKind.allCases) { kind in
+                        Button { withAnimation(.snappy) { selection = kind } } label: {
+                            CardView {
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(kind.rawValue).font(.title2.weight(.semibold)).foregroundStyle(.primary)
+                                        Text(kind.subtitle).font(.subheadline).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right.circle.fill").font(.title2).foregroundStyle(.teal)
+                                }
+                            }
+                        }.buttonStyle(.plain)
+                    }
+                }.padding()
+            }.background(Color(uiColor: .systemGroupedBackground))
+        }
+    }
+}
+
 struct SetupView: View {
+    let onBack: () -> Void
     let onSave: (ProgramInput) -> Void
     @State private var squat = "100"
     @State private var bench = "100"
@@ -85,13 +143,55 @@ struct SetupView: View {
                 .padding(.bottom, 24)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("Настройка")
+            .navigationTitle("Техасский метод")
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Назад", action: onBack) } }
         }
     }
 
     private var validMaxes: Bool {
         [squat, bench, deadlift].allSatisfy { (Double($0.replacingOccurrences(of: ",", with: ".")) ?? 0) > 0 }
     }
+}
+
+struct UpperLowerSetupView: View {
+    let onBack: () -> Void
+    let onSave: (UpperLowerInput) -> Void
+    @State private var squat = "100"
+    @State private var bench = "100"
+    @State private var deadlift = "130"
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Верх / Низ").font(.system(size: 34, weight: .bold, design: .rounded))
+                        Text("4 тренировки в неделю. Введи протестированные 1ПМ — базовые веса и 14 жимовых тренировок рассчитаются автоматически.").foregroundStyle(.secondary)
+                    }.padding(.top, 24)
+                    CardView {
+                        Text("Твои 1ПМ").font(.title3.weight(.semibold))
+                        NumberField(title: "Приседания", text: $squat)
+                        NumberField(title: "Жим лёжа", text: $bench)
+                        NumberField(title: "Становая тяга", text: $deadlift)
+                        Text("Рабочие веса округляются к 5 кг, как в исходной таблице.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    CardView {
+                        Label("7 недель · 28 тренировок", systemImage: "calendar")
+                        Text("Понедельник — тяжёлый верх, вторник — тяжёлый низ, четверг — объёмный верх, пятница — объёмный низ.").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Button {
+                        onSave(UpperLowerInput(squat1RM: value(squat), bench1RM: value(bench), deadlift1RM: value(deadlift)))
+                    } label: { Text("Построить программу").frame(maxWidth: .infinity) }
+                    .buttonStyle(.borderedProminent).controlSize(.large).disabled(!validMaxes)
+                }.padding(.horizontal).padding(.bottom, 24)
+            }.background(Color(uiColor: .systemGroupedBackground))
+                .navigationTitle("Верх / Низ")
+                .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Назад", action: onBack) } }
+        }
+    }
+
+    private func value(_ text: String) -> Double { Double(text.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+    private var validMaxes: Bool { [squat, bench, deadlift].allSatisfy { value($0) > 0 } }
 }
 
 struct NumberField: View {
