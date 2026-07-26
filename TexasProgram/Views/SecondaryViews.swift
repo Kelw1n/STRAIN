@@ -354,6 +354,20 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    ForEach(1...profile.trainingDayCount, id: \.self) { day in
+                        Picker(dayLabel(day), selection: weekdayBinding(for: day)) {
+                            ForEach(RuDate.weekOrder, id: \.self) { weekday in
+                                Text(RuDate.full(weekday: weekday).capitalized).tag(weekday)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Дни недели")
+                } footer: {
+                    Text("По этим дням экран «Сегодня» определяет, какая тренировка идёт сегодня и когда следующая.")
+                }
+
                 if profile.programKind == .upperLower {
                     Section("Жим 14") {
                         HStack {
@@ -392,6 +406,20 @@ struct SettingsView: View {
             Button("Сбросить приложение", role: .destructive) { dismiss(); onResetApplication() }
             Button("Отмена", role: .cancel) {}
         }
+    }
+
+    /// Название тренировочного дня в расписании: «День 1 · Верх тяжёлый».
+    private func dayLabel(_ day: Int) -> String {
+        let title = profile.workoutPlan.weeks.first?.days.first { $0.number == day }?.title
+        guard let title, profile.programKind == .upperLower else { return "День \(day)" }
+        return "День \(day) · " + title.prefix(1) + title.dropFirst().lowercased()
+    }
+
+    private func weekdayBinding(for day: Int) -> Binding<Int> {
+        Binding(
+            get: { profile.weekday(forDay: day) },
+            set: { profile.setWeekday($0, forDay: day) }
+        )
     }
 
     private func binding(for category: AdditionalExerciseCategory) -> Binding<String?> {

@@ -137,6 +137,75 @@ final class ProgramCalculatorTests: XCTestCase {
         XCTAssertTrue(profile.completedBenchSessions.isEmpty)
     }
 
+    // MARK: - Расписание по дням недели
+
+    private var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    /// Начало суток — расписание оперирует днями, а не моментами времени.
+    private func date(_ day: Int, _ month: Int, _ year: Int) -> Date {
+        utcCalendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    func testDefaultWeekdaysMatchProgram() {
+        XCTAssertEqual(ProgramProfile(upperLowerInput: .demo).weekdays, [2, 3, 5, 6])
+        XCTAssertEqual(ProgramProfile(input: .demo).weekdays, [2, 4, 6])
+    }
+
+    func testCustomWeekdayIsStored() {
+        let profile = ProgramProfile(input: .demo)
+        profile.setWeekday(5, forDay: 2)
+        XCTAssertEqual(profile.weekdays, [2, 5, 6])
+        XCTAssertEqual(profile.weekdayName(forDay: 2), "четверг")
+    }
+
+    func testSundayShowsRestDayAndNextMondayWorkout() {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        // Первая неделя закрыта целиком, во второй сделаны понедельник и вторник.
+        for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
+        profile.toggleCompleted(week: 2, day: 1)
+        profile.toggleCompleted(week: 2, day: 2)
+
+        let sunday = date(26, 7, 2026)
+        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: sunday, calendar: utcCalendar)
+
+        XCTAssertNil(schedule.today)
+        XCTAssertTrue(schedule.isRestDay)
+        XCTAssertEqual(schedule.overdue.map(\.day.number), [3, 4])
+        XCTAssertEqual(schedule.upcoming?.week, 3)
+        XCTAssertEqual(schedule.upcoming?.day.number, 1)
+        XCTAssertEqual(schedule.upcoming?.date, date(27, 7, 2026))
+        XCTAssertEqual(schedule.relativeTitle(for: schedule.upcoming!, calendar: utcCalendar), "Завтра")
+    }
+
+    func testMondayShowsTodaysWorkout() {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        let monday = date(27, 7, 2026)
+        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: monday, calendar: utcCalendar)
+
+        XCTAssertEqual(schedule.today?.week, 1)
+        XCTAssertEqual(schedule.today?.day.number, 1)
+        XCTAssertFalse(schedule.isRestDay)
+        XCTAssertTrue(schedule.overdue.isEmpty)
+        XCTAssertEqual(schedule.relativeTitle(for: schedule.today!, calendar: utcCalendar), "Сегодня")
+    }
+
+    func testCompletedTodayIsReported() {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        profile.toggleCompleted(week: 1, day: 1)
+        let monday = date(27, 7, 2026)
+        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: monday, calendar: utcCalendar)
+
+        XCTAssertNil(schedule.today)
+        XCTAssertTrue(schedule.todayAlreadyDone)
+        XCTAssertFalse(schedule.isRestDay)
+        XCTAssertEqual(schedule.upcoming?.day.number, 2)
+        XCTAssertEqual(schedule.upcoming?.date, date(28, 7, 2026))
+    }
+
     func testUpperLowerBenchWaveComesFromFourteenSessionSheet() {
         let plan = UpperLowerCalculator.generate(input: .demo)
         let firstBench = plan.weeks[0].days[0].exercises[0]

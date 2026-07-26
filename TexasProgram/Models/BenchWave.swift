@@ -90,7 +90,6 @@ struct BenchSessionPlan: Identifiable, Hashable, Codable, Sendable {
     let week: Int
     let dayNumber: Int
     let dayTitle: String
-    let shortDayTitle: String
     let sets: [BenchSetPlan]
     /// Первый нестандартный подход задаёт характер тренировки.
     let highlight: BenchSetKind?
@@ -105,8 +104,6 @@ struct BenchSessionPlan: Identifiable, Hashable, Codable, Sendable {
         self.week = week
         self.dayNumber = dayNumber
         self.dayTitle = dayTitle
-        self.shortDayTitle = dayTitle.split(separator: "·").first
-            .map { $0.trimmingCharacters(in: .whitespaces).capitalized } ?? dayTitle
         self.sets = sets
 
         let special = sets.first(where: { $0.kind.isSpecial })?.kind

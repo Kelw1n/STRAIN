@@ -308,7 +308,7 @@ struct UpperLowerSetupView: View {
                         Divider().opacity(0.4)
                         Label("7 недель · 28 тренировок", systemImage: "calendar")
                             .font(.subheadline.weight(.semibold))
-                        Text("Понедельник — тяжёлый верх, вторник — тяжёлый низ, четверг — объёмный верх, пятница — объёмный низ.")
+                        Text("Понедельник — тяжёлый верх, вторник — тяжёлый низ, четверг — объёмный верх, пятница — объёмный низ. Дни недели можно поменять в настройках.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .appearIn(2)

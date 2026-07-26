@@ -162,6 +162,8 @@ final class ProgramProfile {
     var press: String?
     var completedDayKeys: [String]
     var completedBenchSessions: [Int] = []
+    /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
+    var scheduleWeekdays: [Int] = []
     var cycleStartedAt: Date
     var peakingActive: Bool
     var peakSquat5RM: Double?
@@ -229,6 +231,42 @@ final class ProgramProfile {
         } else {
             completedDayKeys.removeAll { $0 == key }
         }
+    }
+
+    // MARK: - Расписание по дням недели
+
+    var trainingDayCount: Int { programKind == .texas ? 3 : 4 }
+
+    /// «Верх / Низ» — понедельник, вторник, четверг, пятница. Техас — понедельник, среда, пятница.
+    var defaultWeekdays: [Int] { programKind == .texas ? [2, 4, 6] : [2, 3, 5, 6] }
+
+    var weekdays: [Int] {
+        scheduleWeekdays.count == trainingDayCount ? scheduleWeekdays : defaultWeekdays
+    }
+
+    func weekday(forDay day: Int) -> Int {
+        let list = weekdays
+        guard day >= 1, day <= list.count else { return list.first ?? 2 }
+        return list[day - 1]
+    }
+
+    func setWeekday(_ weekday: Int, forDay day: Int) {
+        var list = weekdays
+        guard day >= 1, day <= list.count else { return }
+        list[day - 1] = weekday
+        scheduleWeekdays = list
+    }
+
+    func weekdayName(forDay day: Int) -> String { RuDate.full(weekday: weekday(forDay: day)) }
+    func shortWeekdayName(forDay day: Int) -> String { RuDate.short(weekday: weekday(forDay: day)) }
+
+    /// Заголовок дня с реальным днём недели: «ПОНЕДЕЛЬНИК · ВЕРХ ТЯЖЁЛЫЙ».
+    func fullTitle(forDay day: WorkoutDayPlan) -> String {
+        weekdayName(forDay: day.number).uppercased() + " · " + day.title
+    }
+
+    var schedule: WorkoutSchedule {
+        WorkoutScheduler.build(profile: self, plan: workoutPlan)
     }
 
     // MARK: - Волна «Жим 14»

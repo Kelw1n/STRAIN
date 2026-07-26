@@ -34,6 +34,7 @@ struct BenchWaveView: View {
                         ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
                             BenchSessionCard(
                                 session: session,
+                                subtitle: "Неделя \(session.week) · \(profile.weekdayName(forDay: session.dayNumber).capitalized)",
                                 isDone: completed.contains(session.id),
                                 isNext: next == session.id,
                                 isExpanded: expanded == session.id,
@@ -246,6 +247,7 @@ struct BenchWaveChart: View {
 
 struct BenchSessionCard: View {
     let session: BenchSessionPlan
+    let subtitle: String
     let isDone: Bool
     let isNext: Bool
     let isExpanded: Bool
@@ -282,7 +284,7 @@ struct BenchSessionCard: View {
                             OutlineBadge(text: highlight.rawValue, tint: highlight.tint)
                         }
                     }
-                    Text("Неделя \(session.week) · \(session.shortDayTitle)")
+                    Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

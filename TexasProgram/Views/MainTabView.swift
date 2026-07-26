@@ -67,50 +67,59 @@ struct TodayView: View {
     let onSettings: () -> Void
     var onOpenBench: ((Int) -> Void)?
 
-    private var plan: WorkoutPlan { profile.workoutPlan }
-
-    private var next: (week: Int, day: WorkoutDayPlan)? {
-        for week in plan.weeks {
-            for day in week.days where !profile.isCompleted(week: week.number, day: day.number) {
-                return (week.number, day)
-            }
-        }
-        return nil
-    }
-
     private var overallProgress: Double {
         guard profile.totalDays > 0 else { return 0 }
         return Double(profile.completedDayCount) / Double(profile.totalDays)
     }
 
     var body: some View {
-        // План берётся один раз за проход body — раньше он пересобирался
-        // на каждое обращение к next / totalDays.
-        let next = self.next
+        // Расписание считается один раз за проход body.
+        let schedule = profile.schedule
+        let focus = schedule.focus
         return NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    if let next {
-                        hero(week: next.week, day: next.day).appearIn(0)
-
-                        if let onOpenBench, let session = next.day.exercises.compactMap(\.benchSession).first {
-                            BenchTeaser(profile: profile, session: session, action: { onOpenBench(session) })
-                                .appearIn(1)
+                    if let focus {
+                        if schedule.todayAlreadyDone {
+                            statusCard(
+                                icon: "checkmark.circle.fill",
+                                gradient: Theme.successGradient,
+                                title: "Сегодня уже отмечено",
+                                subtitle: dateLine(for: schedule.referenceDate)
+                            ).appearIn(0)
+                        } else if schedule.isRestDay {
+                            statusCard(
+                                icon: "moon.zzz.fill",
+                                gradient: Theme.deepGradient,
+                                title: "Сегодня отдых",
+                                subtitle: dateLine(for: schedule.referenceDate)
+                            ).appearIn(0)
                         }
 
-                        ForEach(Array(next.day.exercises.enumerated()), id: \.element.id) { index, exercise in
+                        hero(workout: focus, schedule: schedule).appearIn(1)
+
+                        if !schedule.overdue.isEmpty {
+                            overdueCard(schedule.overdue).appearIn(2)
+                        }
+
+                        if let onOpenBench, let session = focus.day.exercises.compactMap(\.benchSession).first {
+                            BenchTeaser(profile: profile, session: session, action: { onOpenBench(session) })
+                                .appearIn(3)
+                        }
+
+                        ForEach(Array(focus.day.exercises.enumerated()), id: \.element.id) { index, exercise in
                             ExerciseCard(exercise: exercise, onOpenBench: onOpenBench)
-                                .appearIn(index + 2)
+                                .appearIn(index + 4)
                                 .softScroll()
                         }
 
-                        CompleteButton(isCompleted: profile.isCompleted(week: next.week, day: next.day.number)) {
+                        CompleteButton(isCompleted: focus.isCompleted) {
                             withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
-                                profile.toggleCompleted(week: next.week, day: next.day.number)
+                                profile.toggleCompleted(week: focus.week, day: focus.day.number)
                             }
                         }
                         .padding(.top, 4)
-                        .appearIn(next.day.exercises.count + 2)
+                        .appearIn(focus.day.exercises.count + 4)
                     } else {
                         finished.appearIn(0)
                     }
@@ -133,18 +142,74 @@ struct TodayView: View {
         }
     }
 
-    private func hero(week: Int, day: WorkoutDayPlan) -> some View {
+    private func dateLine(for date: Date) -> String {
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let weekday = calendar.component(.weekday, from: date)
+        return RuDate.full(weekday: weekday).capitalized + ", " + RuDate.dayMonth(date, calendar: calendar)
+    }
+
+    private func statusCard(icon: String, gradient: LinearGradient, title: String, subtitle: String) -> some View {
+        CardView(padding: 16) {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(gradient, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.subheadline.weight(.bold))
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func overdueCard(_ items: [ScheduledWorkout]) -> some View {
+        CardView(padding: 16, spacing: 10) {
+            Label("Пропущено на этой неделе", systemImage: "exclamationmark.arrow.circlepath")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Theme.warning)
+            ForEach(items) { item in
+                NavigationLink {
+                    DayDetailView(profile: profile, week: item.week, day: item.day, onOpenBench: onOpenBench)
+                } label: {
+                    HStack(spacing: 10) {
+                        Text(item.shortWeekday.uppercased())
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(Theme.warning)
+                            .frame(width: 26, alignment: .leading)
+                        Text(item.day.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(RuDate.dayMonth(item.date))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
+                    .background(Theme.warning.opacity(0.09), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+            }
+        }
+    }
+
+    private func hero(workout: ScheduledWorkout, schedule: WorkoutSchedule) -> some View {
         HighlightCard {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("СЛЕДУЮЩАЯ ТРЕНИРОВКА")
+                    Text((schedule.relativeTitle(for: workout) + " · " + RuDate.dayMonth(workout.date)).uppercased())
                         .font(.caption2.weight(.bold))
                         .tracking(1.3)
                         .foregroundStyle(Theme.accentGradient)
-                    Text("Неделя \(week)")
+                    Text("Неделя \(workout.week)")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .contentTransition(.numericText())
-                    Text(day.title)
+                    Text(profile.fullTitle(forDay: workout.day))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -349,7 +414,7 @@ struct DaySummaryCard: View {
                         .symbolEffect(.bounce, value: isDone)
                 }
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(day.title)
+                    Text(profile.fullTitle(forDay: day))
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
@@ -396,7 +461,7 @@ struct DayDetailView: View {
         }
         .scrollIndicators(.hidden)
         .screenBackground()
-        .navigationTitle("Неделя \(week)")
+        .navigationTitle("Неделя \(week) · \(profile.shortWeekdayName(forDay: day.number).uppercased())")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
