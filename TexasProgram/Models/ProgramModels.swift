@@ -257,12 +257,43 @@ final class ProgramProfile {
 
     func isCompleted(week: Int, day: Int) -> Bool { completedDayKeys.contains("\(week)-\(day)") }
 
-    /// Отметка дня. Для «Верх / Низ» синхронно двигает связанную тренировку волны жима.
+    /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
+    /// какая именно это тренировка, определяет счётчик волны, а не день недели.
     func toggleCompleted(week: Int, day: Int, now: Date = Date()) {
         let done = !isCompleted(week: week, day: day)
         setDayCompleted(week: week, day: day, done)
-        if let session = benchSession(week: week, day: day) { setBenchCompleted(session, done) }
+        if carriesBenchWave(day: day) {
+            if done {
+                if let next = nextBenchSession { setBenchCompleted(next, true) }
+            } else if let last = completedBenchSessions.max() {
+                setBenchCompleted(last, false)
+            }
+        }
         if done { lastCompletionDate = now }
+    }
+
+    /// Дни, которые несут волну жима: в «Верх / Низ» это верхние дни — первый и третий.
+    func carriesBenchWave(day: Int) -> Bool {
+        programKind == .upperLower && (day == 1 || day == 3)
+    }
+
+    /// Упражнения тренировки: вспомогательные — из дня программы, жим — из волны.
+    func exercises(for workout: ScheduledWorkout) -> [ExercisePrescription] {
+        guard let session = workout.benchSession,
+              let wave = benchWave.first(where: { $0.id == session })
+        else { return workout.day.exercises }
+
+        return workout.day.exercises.map { exercise in
+            guard exercise.benchSession != nil else { return exercise }
+            return ExercisePrescription(
+                id: exercise.id,
+                name: wave.exerciseName,
+                sets: wave.sets.count,
+                reps: wave.repsText,
+                load: .repRange(wave.weightsText),
+                benchSession: wave.id
+            )
+        }
     }
 
     private func setDayCompleted(week: Int, day: Int, _ done: Bool) {
@@ -335,14 +366,15 @@ final class ProgramProfile {
     func setCurrentWorkout(week: Int, day: Int, now: Date = Date(), calendar: Calendar = .current) {
         completedDayKeys = []
         completedBenchSessions = []
+        // Волна остаётся непрерывной: сколько верхних дней закрыли, столько жимов и сделано.
+        var benchDone = 0
         for planWeek in workoutPlan.weeks {
             for planDay in planWeek.days where planWeek.number < week || (planWeek.number == week && planDay.number < day) {
                 setDayCompleted(week: planWeek.number, day: planDay.number, true)
-                if let session = benchSession(week: planWeek.number, day: planDay.number) {
-                    setBenchCompleted(session, true)
-                }
+                if carriesBenchWave(day: planDay.number) { benchDone += 1 }
             }
         }
+        if benchDone > 0 { completedBenchSessions = Array(1...min(benchDone, UpperLowerCalculator.benchSessionCount)) }
         // Отметки проставлены задним числом — сегодняшней тренировки среди них нет.
         lastCompletionDate = nil
         // Привязка к календарной неделе больше не используется: оба режима считают

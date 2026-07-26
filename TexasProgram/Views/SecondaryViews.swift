@@ -436,8 +436,6 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Иконка приложения") { AlternateIconPicker() }
-
                 Section {
                     Button(profiles.count > 1 ? "Удалить этот профиль" : "Сбросить профиль", role: .destructive) { showReset = true }
                     Text(profiles.count > 1

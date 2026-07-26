@@ -32,6 +32,9 @@ struct ScheduledWorkout: Identifiable, Equatable {
     let date: Date
     let weekday: Int
     let isCompleted: Bool
+    /// Номер тренировки волны жима, выданный этому дню. Волна идёт своим порядком,
+    /// не привязанным к дню недели, поэтому номер приходит из расписания.
+    var benchSession: Int?
 
     var id: String { "\(week)-\(day.number)" }
     var weekdayName: String { RuDate.full(weekday: weekday) }
@@ -137,6 +140,7 @@ enum WorkoutScheduler {
             }
         }
 
+        assignBenchSessions(&entries, profile: profile)
         let todayEntry = entries.first { calendar.isDate($0.date, inSameDayAs: startOfToday) }
 
         return WorkoutSchedule(
@@ -208,6 +212,7 @@ enum WorkoutScheduler {
         }
 
         entries.sort { $0.date < $1.date }
+        assignBenchSessions(&entries, profile: profile)
 
         return WorkoutSchedule(
             today: entries.first { calendar.isDate($0.date, inSameDayAs: startOfToday) },
@@ -217,6 +222,21 @@ enum WorkoutScheduler {
             allPending: entries,
             referenceDate: now
         )
+    }
+
+    /// Раздаёт тренировки волны жима по порядку тем дням, которые её несут.
+    ///
+    /// Волна не смотрит на день недели: следующая невыполненная достаётся ближайшему
+    /// верхнему дню, каким бы он ни был. Так в понедельник получаются понедельничные
+    /// вспомогательные упражнения и при этом правильный по счёту жим.
+    private static func assignBenchSessions(_ entries: inout [ScheduledWorkout], profile: ProgramProfile) {
+        guard profile.programKind == .upperLower, var next = profile.nextBenchSession else { return }
+        let total = UpperLowerCalculator.benchSessionCount
+        for index in entries.indices where profile.carriesBenchWave(day: entries[index].day.number) {
+            guard next <= total else { return }
+            entries[index].benchSession = next
+            next += 1
+        }
     }
 
     /// Ближайшая дата с нужным днём недели, начиная с указанной.

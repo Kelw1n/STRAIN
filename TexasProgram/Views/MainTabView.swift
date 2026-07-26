@@ -103,12 +103,14 @@ struct TodayView: View {
                             overdueCard(schedule.overdue).appearIn(2)
                         }
 
-                        if let onOpenBench, let session = focus.day.exercises.compactMap(\.benchSession).first {
+                        if let onOpenBench, let session = focus.benchSession {
                             BenchTeaser(profile: profile, session: session, action: { onOpenBench(session) })
                                 .appearIn(3)
                         }
 
-                        ForEach(Array(focus.day.exercises.enumerated()), id: \.element.id) { index, exercise in
+                        // Вспомогательные упражнения — из дня программы, жим — из волны.
+                        let exercises = profile.exercises(for: focus)
+                        ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
                             ExerciseCard(exercise: exercise, onOpenBench: onOpenBench)
                                 .appearIn(index + 4)
                                 .softScroll()
@@ -120,7 +122,7 @@ struct TodayView: View {
                             }
                         }
                         .padding(.top, 4)
-                        .appearIn(focus.day.exercises.count + 4)
+                        .appearIn(exercises.count + 4)
                     } else {
                         finished.appearIn(0)
                     }
@@ -173,7 +175,7 @@ struct TodayView: View {
                 .foregroundStyle(Theme.warning)
             ForEach(items) { item in
                 NavigationLink {
-                    DayDetailView(profile: profile, week: item.week, day: item.day, onOpenBench: onOpenBench)
+                    DayDetailView(profile: profile, week: item.week, day: item.day, scheduled: item, onOpenBench: onOpenBench)
                 } label: {
                     HStack(spacing: 10) {
                         Text(item.shortWeekday.uppercased())
@@ -322,7 +324,13 @@ struct PlanView: View {
                         VStack(spacing: 14) {
                             ForEach(Array(week.days.enumerated()), id: \.element.id) { index, day in
                                 NavigationLink {
-                                    DayDetailView(profile: profile, week: week.number, day: day, onOpenBench: onOpenBench)
+                                    DayDetailView(
+                                        profile: profile,
+                                        week: week.number,
+                                        day: day,
+                                        scheduled: dates["\(week.number)-\(day.number)"],
+                                        onOpenBench: onOpenBench
+                                    )
                                 } label: {
                                     DaySummaryCard(
                                         profile: profile,
@@ -420,7 +428,11 @@ struct DaySummaryCard: View {
     var scheduled: ScheduledWorkout?
 
     private var isDone: Bool { profile.isCompleted(week: week, day: day.number) }
-    private var benchSession: Int? { day.exercises.compactMap(\.benchSession).first }
+
+    /// У запланированной тренировки номер жима приходит из волны.
+    private var benchSession: Int? {
+        scheduled?.benchSession ?? day.exercises.compactMap(\.benchSession).first
+    }
 
     /// Выполненный день показываем без дня недели, невыполненный — с реальной датой.
     private var title: String {
@@ -468,12 +480,19 @@ struct DayDetailView: View {
     @Bindable var profile: ProgramProfile
     let week: Int
     let day: WorkoutDayPlan
+    var scheduled: ScheduledWorkout?
     var onOpenBench: ((Int) -> Void)?
+
+    /// У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
+    private var exercises: [ExercisePrescription] {
+        guard let scheduled else { return day.exercises }
+        return profile.exercises(for: scheduled)
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(day.exercises.enumerated()), id: \.element.id) { index, exercise in
+                ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
                     ExerciseCard(exercise: exercise, onOpenBench: onOpenBench)
                         .appearIn(index)
                         .softScroll()
@@ -484,7 +503,7 @@ struct DayDetailView: View {
                     }
                 }
                 .padding(.top, 4)
-                .appearIn(day.exercises.count)
+                .appearIn(exercises.count)
             }
             .padding(.horizontal)
             .padding(.bottom, 28)

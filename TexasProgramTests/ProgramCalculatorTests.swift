@@ -191,6 +191,74 @@ final class ProgramCalculatorTests: XCTestCase {
         XCTAssertEqual(schedule.relativeTitle(for: schedule.upcoming!, calendar: utcCalendar), "Завтра")
     }
 
+    /// Главное: в понедельник понедельничные вспомогательные упражнения,
+    /// но жим — следующий по волне, а не привязанный к дню недели.
+    func testBenchWaveIsIndependentFromWeekday() {
+        let profile = weekdayProfile()
+        for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
+        profile.toggleCompleted(week: 2, day: 1)
+        profile.toggleCompleted(week: 2, day: 2)
+        profile.lastCompletionDate = nil
+
+        XCTAssertEqual(profile.nextBenchSession, 4)
+
+        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: date(26, 7, 2026), calendar: utcCalendar)
+        let monday = schedule.upcoming!
+
+        // День — понедельничный, третьей недели.
+        XCTAssertEqual(monday.week, 3)
+        XCTAssertEqual(monday.day.number, 1)
+        XCTAssertEqual(monday.day.title, "ВЕРХ ТЯЖЁЛЫЙ")
+        // А жим — четвёртый по волне.
+        XCTAssertEqual(monday.benchSession, 4)
+
+        let exercises = profile.exercises(for: monday)
+        let bench = exercises.first { $0.benchSession != nil }
+        XCTAssertEqual(bench?.benchSession, 4)
+        XCTAssertEqual(bench?.name, "Жим лёжа · негатив")
+        XCTAssertEqual(bench?.load, .repRange("90 / 90 / 95 / 95 / 105 кг"))
+        // Вспомогательные остались понедельничными.
+        XCTAssertTrue(exercises.contains { $0.name == "Жим гантелей на наклонной скамье (30°)" })
+        XCTAssertEqual(exercises.count, 8)
+    }
+
+    /// Волна раздаётся верхним дням по порядку календаря.
+    func testBenchWaveIsHandedOutInCalendarOrder() {
+        let profile = weekdayProfile()
+        for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
+        profile.toggleCompleted(week: 2, day: 1)
+        profile.toggleCompleted(week: 2, day: 2)
+        profile.lastCompletionDate = nil
+
+        let schedule = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: date(26, 7, 2026), calendar: utcCalendar)
+        let upperDays = schedule.allPending.filter { $0.benchSession != nil }.prefix(3)
+
+        XCTAssertEqual(upperDays.map(\.benchSession), [4, 5, 6])
+        XCTAssertEqual(upperDays.map(\.date), [date(27, 7, 2026), date(30, 7, 2026), date(3, 8, 2026)])
+    }
+
+    /// Отметка верхнего дня двигает волну на одну тренировку, снятие — возвращает.
+    func testCompletingUpperDayAdvancesWaveByOne() {
+        let profile = weekdayProfile()
+        for day in 1...4 { profile.toggleCompleted(week: 1, day: day) }
+        profile.toggleCompleted(week: 2, day: 1)
+        profile.toggleCompleted(week: 2, day: 2)
+        XCTAssertEqual(profile.completedBenchSessions.sorted(), [1, 2, 3])
+
+        // Закрыли понедельник третьей недели — сделан жим №4.
+        profile.toggleCompleted(week: 3, day: 1)
+        XCTAssertEqual(profile.completedBenchSessions.sorted(), [1, 2, 3, 4])
+        XCTAssertEqual(profile.nextBenchSession, 5)
+
+        // Сняли отметку — волна откатилась.
+        profile.toggleCompleted(week: 3, day: 1)
+        XCTAssertEqual(profile.completedBenchSessions.sorted(), [1, 2, 3])
+
+        // Дни низа волну не двигают.
+        profile.toggleCompleted(week: 2, day: 4)
+        XCTAssertEqual(profile.completedBenchSessions.sorted(), [1, 2, 3])
+    }
+
     /// Пропущенный четверг не теряется: он достаётся ближайшему четвергу.
     func testWeekdayModeKeepsMissedWorkoutForItsOwnWeekday() {
         let profile = weekdayProfile()
