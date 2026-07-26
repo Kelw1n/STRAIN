@@ -16,7 +16,7 @@ struct ProgressScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                LazyVStack(spacing: 16) {
                     hero.appearIn(0)
                     maxes.appearIn(1)
                     if profile.programKind == .upperLower { benchCard.appearIn(2) }
@@ -160,7 +160,7 @@ struct PRRow: View {
                 .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             Text(title).font(.subheadline)
             Spacer()
-            Text("\(value, specifier: "%.1f") кг")
+            Text(WeightFormat.kilogramsPrecise(value))
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .contentTransition(.numericText())
@@ -228,7 +228,7 @@ struct InstructionsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                LazyVStack(spacing: 14) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         GuideCard(item: item, isOpen: opened == item.id) {
                             withAnimation(Motion.card) { opened = opened == item.id ? nil : item.id }
@@ -437,7 +437,7 @@ struct PeakingView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     ScreenHeader(
                         eyebrow: "после 12 недель",
                         title: "Пикирование",

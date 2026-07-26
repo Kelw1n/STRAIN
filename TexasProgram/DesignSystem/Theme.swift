@@ -13,6 +13,10 @@ enum Theme {
         LinearGradient(colors: [accent, accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
+    static var deepGradient: LinearGradient {
+        LinearGradient(colors: [accentDeep, accent], startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
     static var successGradient: LinearGradient {
         LinearGradient(colors: [success, accent], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
@@ -24,11 +28,17 @@ enum Theme {
     static func hairline(_ scheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: scheme == .dark
-                ? [.white.opacity(0.22), .white.opacity(0.04)]
+                ? [.white.opacity(0.16), .white.opacity(0.04)]
                 : [.white.opacity(0.95), .white.opacity(0.30)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    /// Заливка карточки. Раньше здесь был `.ultraThinMaterial`: каждая карточка
+    /// заставляла систему размывать фон под собой на каждом кадре прокрутки.
+    static func surface(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.78)
     }
 }
 
@@ -47,46 +57,45 @@ enum Motion {
 
 // MARK: - Фон приложения
 
+/// Статичные радиальные градиенты вместо размытых кругов с бесконечной анимацией:
+/// `blur(radius: 120)` по трём слоям рендерился вне экрана каждый кадр, и так на каждой вкладке.
 struct AppBackground: View {
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var drift = false
 
     private var base: Color {
         scheme == .dark ? Color(red: 0.043, green: 0.055, blue: 0.075) : Color(red: 0.945, green: 0.957, blue: 0.973)
     }
 
-    private var glowOpacity: Double { scheme == .dark ? 0.30 : 0.22 }
+    private var glow: Double { scheme == .dark ? 0.26 : 0.20 }
 
     var body: some View {
         ZStack {
             base
-            Circle()
-                .fill(Theme.accent.opacity(glowOpacity))
-                .frame(width: 340, height: 340)
-                .blur(radius: 120)
-                .offset(x: drift ? -120 : -160, y: drift ? -300 : -350)
-            Circle()
-                .fill(Theme.accentDeep.opacity(glowOpacity))
-                .frame(width: 380, height: 380)
-                .blur(radius: 140)
-                .offset(x: drift ? 150 : 120, y: drift ? 330 : 390)
-            Circle()
-                .fill(Theme.record.opacity(glowOpacity * 0.5))
-                .frame(width: 260, height: 260)
-                .blur(radius: 130)
-                .offset(x: drift ? 170 : 130, y: drift ? -180 : -140)
+            RadialGradient(
+                colors: [Theme.accent.opacity(glow), .clear],
+                center: UnitPoint(x: 0.08, y: 0.02),
+                startRadius: 0,
+                endRadius: 430
+            )
+            RadialGradient(
+                colors: [Theme.accentDeep.opacity(glow), .clear],
+                center: UnitPoint(x: 0.98, y: 1.0),
+                startRadius: 0,
+                endRadius: 470
+            )
+            RadialGradient(
+                colors: [Theme.record.opacity(glow * 0.45), .clear],
+                center: UnitPoint(x: 1.0, y: 0.12),
+                startRadius: 0,
+                endRadius: 320
+            )
         }
         .ignoresSafeArea()
-        .onAppear {
-            guard !reduceMotion, !drift else { return }
-            withAnimation(.easeInOut(duration: 11).repeatForever(autoreverses: true)) { drift = true }
-        }
     }
 }
 
 extension View {
-    /// Общий фон экрана вместо системного systemGroupedBackground.
+    /// Общий фон экрана.
     func screenBackground() -> some View {
         background(AppBackground())
     }

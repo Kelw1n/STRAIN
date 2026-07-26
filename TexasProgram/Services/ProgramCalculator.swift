@@ -8,12 +8,15 @@ struct ProgramCalculator {
         return rounded * 2.5
     }
 
+    private static let baseMemo = PlanMemo<ProgramInput, WorkoutPlan>()
+    private static let peakMemo = PlanMemo<ProgramInput, WorkoutPlan>()
+
     static func generate(input: ProgramInput) -> WorkoutPlan {
-        generateWeeks(input: input, peaking: false)
+        baseMemo.resolve(input) { generateWeeks(input: $0, peaking: false) }
     }
 
     static func generatePeaking(input: ProgramInput) -> WorkoutPlan {
-        generateWeeks(input: input, peaking: true)
+        peakMemo.resolve(input) { generateWeeks(input: $0, peaking: true) }
     }
 
     private static func generateWeeks(input: ProgramInput, peaking: Bool) -> WorkoutPlan {

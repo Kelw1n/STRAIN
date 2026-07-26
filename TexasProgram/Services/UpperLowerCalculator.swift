@@ -22,8 +22,15 @@ struct UpperLowerCalculator {
         return floor(scaled + 0.5) * 5
     }
 
+    private static let planMemo = PlanMemo<UpperLowerInput, WorkoutPlan>()
+    private static let waveMemo = PlanMemo<UpperLowerInput, [BenchSessionPlan]>()
+
     /// Полная волна из 14 жимовых тренировок с посчитанными весами.
     static func benchWave(input: UpperLowerInput) -> [BenchSessionPlan] {
+        waveMemo.resolve(input) { buildWave(input: $0) }
+    }
+
+    private static func buildWave(input: UpperLowerInput) -> [BenchSessionPlan] {
         benchSessions.enumerated().map { index, sets in
             let number = index + 1
             let isFirstOfWeek = number % 2 == 1
@@ -46,6 +53,10 @@ struct UpperLowerCalculator {
     }
 
     static func generate(input: UpperLowerInput) -> WorkoutPlan {
+        planMemo.resolve(input) { buildPlan(input: $0) }
+    }
+
+    private static func buildPlan(input: UpperLowerInput) -> WorkoutPlan {
         let wave = benchWave(input: input)
         let weeks = (1...7).map { week in
             let firstBenchSession = (week - 1) * 2 + 1

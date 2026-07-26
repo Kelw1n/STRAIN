@@ -100,6 +100,43 @@ final class ProgramCalculatorTests: XCTestCase {
         XCTAssertEqual(profile.nextBenchSession, 1)
     }
 
+    func testExerciseIdentityIsStableAcrossRegeneration() {
+        let first = ProgramCalculator.generate(input: .demo).weeks[0].days[0].exercises.map(\.id)
+        var other = ProgramInput.demo
+        other.squat5RM = 120
+        _ = ProgramCalculator.generate(input: other)
+        let second = ProgramCalculator.generate(input: .demo).weeks[0].days[0].exercises.map(\.id)
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(Set(first).count, first.count)
+    }
+
+    func testDayAndBenchCompletionStayInSync() {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+
+        profile.toggleCompleted(week: 1, day: 1)
+        XCTAssertTrue(profile.isBenchCompleted(1))
+
+        profile.toggleBenchCompleted(2)
+        XCTAssertTrue(profile.isCompleted(week: 1, day: 3))
+        XCTAssertEqual(profile.completedDayCount, 2)
+        XCTAssertEqual(profile.nextBenchSession, 3)
+
+        profile.toggleBenchCompleted(2)
+        XCTAssertFalse(profile.isCompleted(week: 1, day: 3))
+        XCTAssertEqual(profile.nextBenchSession, 2)
+
+        // Дни низа с волной жима не связаны.
+        profile.toggleCompleted(week: 1, day: 2)
+        XCTAssertEqual(profile.completedBenchCount, 1)
+    }
+
+    func testTexasCompletionDoesNotTouchBenchWave() {
+        let profile = ProgramProfile(input: .demo)
+        profile.toggleCompleted(week: 1, day: 1)
+        XCTAssertTrue(profile.isCompleted(week: 1, day: 1))
+        XCTAssertTrue(profile.completedBenchSessions.isEmpty)
+    }
+
     func testUpperLowerBenchWaveComesFromFourteenSessionSheet() {
         let plan = UpperLowerCalculator.generate(input: .demo)
         let firstBench = plan.weeks[0].days[0].exercises[0]

@@ -53,8 +53,6 @@ struct MainTabView: View {
                 .tag(AppTab.guide)
         }
         .tint(Theme.accent)
-        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
-        .animation(Motion.maybe(Motion.smooth, reduce: reduceMotion), value: selectedTab)
         .sheet(isPresented: $showingSettings) {
             SettingsView(profile: profile, onResetApplication: onResetApplication)
         }
@@ -86,9 +84,12 @@ struct TodayView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // План берётся один раз за проход body — раньше он пересобирался
+        // на каждое обращение к next / totalDays.
+        let next = self.next
+        return NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     if let next {
                         hero(week: next.week, day: next.day).appearIn(0)
 
@@ -194,21 +195,28 @@ struct BenchTeaser: View {
         profile.benchWave.first { $0.id == session }
     }
 
+    private var isDone: Bool { profile.isBenchCompleted(session) }
+
     var body: some View {
         Button(action: action) {
             CardView(padding: 16) {
                 HStack(spacing: 14) {
-                    Image(systemName: "waveform.path.ecg")
+                    Image(systemName: isDone ? "checkmark" : "waveform.path.ecg")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
-                        .background(plan?.accent ?? Theme.accentGradient, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        .background(isDone ? Theme.successGradient : (plan?.accent ?? Theme.accentGradient),
+                                    in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Жим 14 · тренировка \(session) из \(UpperLowerCalculator.benchSessionCount)")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
-                        if let plan {
-                            Text("Верх до \(plan.topWeight.formatted(.number.precision(.fractionLength(0)))) кг · \(plan.sets.count) подходов")
+                        if isDone {
+                            Text("Уже отмечена в разделе «Жим 14»")
+                                .font(.caption)
+                                .foregroundStyle(Theme.success)
+                        } else if let plan {
+                            Text("Верх до \(plan.topWeightText) · \(plan.sets.count) подходов")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -231,7 +239,6 @@ struct PlanView: View {
 
     @State private var selectedWeek = 1
     @Namespace private var weekPill
-    @Namespace private var dayAnimation
 
     private var plan: WorkoutPlan { profile.workoutPlan }
 
@@ -244,9 +251,9 @@ struct PlanView: View {
                         VStack(spacing: 14) {
                             ForEach(Array(week.days.enumerated()), id: \.element.id) { index, day in
                                 NavigationLink {
-                                    DayDetailView(profile: profile, week: week.number, day: day, namespace: dayAnimation, onOpenBench: onOpenBench)
+                                    DayDetailView(profile: profile, week: week.number, day: day, onOpenBench: onOpenBench)
                                 } label: {
-                                    DaySummaryCard(profile: profile, week: week.number, day: day, namespace: dayAnimation)
+                                    DaySummaryCard(profile: profile, week: week.number, day: day)
                                 }
                                 .buttonStyle(.pressable)
                                 .appearIn(index)
@@ -307,12 +314,11 @@ struct PlanView: View {
             .foregroundStyle(selected ? Color.white : (done ? Theme.success : Color.primary))
             .background {
                 ZStack {
-                    Capsule().fill(.ultraThinMaterial)
+                    Capsule().fill(Color.primary.opacity(0.06))
                     if selected {
                         Capsule()
                             .fill(Theme.accentGradient)
                             .matchedGeometryEffect(id: "weekPill", in: weekPill)
-                            .shadow(color: Theme.accent.opacity(0.4), radius: 10, y: 4)
                     }
                 }
             }
@@ -326,7 +332,6 @@ struct DaySummaryCard: View {
     let profile: ProgramProfile
     let week: Int
     let day: WorkoutDayPlan
-    let namespace: Namespace.ID
 
     private var isDone: Bool { profile.isCompleted(week: week, day: day.number) }
     private var benchSession: Int? { day.exercises.compactMap(\.benchSession).first }
@@ -360,7 +365,6 @@ struct DaySummaryCard: View {
                 Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(.secondary)
             }
         }
-        .matchedGeometryEffect(id: "day-\(day.id)", in: namespace)
     }
 }
 
@@ -369,12 +373,11 @@ struct DayDetailView: View {
     @Bindable var profile: ProgramProfile
     let week: Int
     let day: WorkoutDayPlan
-    let namespace: Namespace.ID
     var onOpenBench: ((Int) -> Void)?
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            LazyVStack(alignment: .leading, spacing: 14) {
                 ForEach(Array(day.exercises.enumerated()), id: \.element.id) { index, exercise in
                     ExerciseCard(exercise: exercise, onOpenBench: onOpenBench)
                         .appearIn(index)
@@ -390,7 +393,6 @@ struct DayDetailView: View {
             }
             .padding(.horizontal)
             .padding(.bottom, 28)
-            .matchedGeometryEffect(id: "day-\(day.id)", in: namespace)
         }
         .scrollIndicators(.hidden)
         .screenBackground()

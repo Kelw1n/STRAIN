@@ -20,10 +20,13 @@ struct BenchWaveView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        let sessions = self.sessions
+        let completed = self.completed
+        let next = nextSession
+        return NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(spacing: 16) {
+                    LazyVStack(spacing: 16) {
                         header.appearIn(0).id("bench-header")
                         chartCard.appearIn(1)
                         legend.appearIn(2)
@@ -32,7 +35,7 @@ struct BenchWaveView: View {
                             BenchSessionCard(
                                 session: session,
                                 isDone: completed.contains(session.id),
-                                isNext: nextSession == session.id,
+                                isNext: next == session.id,
                                 isExpanded: expanded == session.id,
                                 isPulsing: pulsing == session.id,
                                 onTap: { toggleExpanded(session.id) },
@@ -131,7 +134,7 @@ struct BenchWaveView: View {
     private func benchStat(title: String, value: Double, gradient: LinearGradient = Theme.accentGradient) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
-            Text(value.formatted(.number.precision(.fractionLength(0))) + " кг")
+            Text(WeightFormat.kilograms(value))
                 .font(.system(size: 19, weight: .bold, design: .rounded))
                 .foregroundStyle(gradient)
                 .contentTransition(.numericText())
@@ -168,7 +171,7 @@ struct BenchWaveView: View {
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
+                .background(Color.primary.opacity(0.06), in: Capsule())
             }
             Spacer(minLength: 0)
         }
@@ -256,7 +259,7 @@ struct BenchSessionCard: View {
     var body: some View {
         Group {
             if isNext && !isDone {
-                HighlightCard(gradient: session.accent) { content }
+                HighlightCard(gradient: session.accent, glow: session.accentColor) { content }
             } else {
                 CardView { content }
             }
@@ -285,7 +288,7 @@ struct BenchSessionCard: View {
                 }
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(session.topWeight.formatted(.number.precision(.fractionLength(0))) + " кг")
+                    Text(session.topWeightText)
                         .font(.system(size: 17, weight: .bold, design: .rounded))
                         .foregroundStyle(session.accent)
                     Text("\(session.sets.count) подх.")

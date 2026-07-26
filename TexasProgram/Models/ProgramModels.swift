@@ -105,7 +105,7 @@ enum LoadPrescription: Equatable, Hashable, Codable, Sendable {
     var displayText: String {
         switch self {
         case .kilograms(let value):
-            return value.formatted(.number.precision(.fractionLength(value.rounded() == value ? 0 : 1))) + " кг"
+            return WeightFormat.kilogramsPrecise(value)
         case .rpe(let value): return value
         case .repRange(let value): return value
         case .testOneRepMax: return "Тест 1ПМ"
@@ -114,7 +114,9 @@ enum LoadPrescription: Equatable, Hashable, Codable, Sendable {
 }
 
 struct ExercisePrescription: Identifiable, Equatable, Hashable, Codable, Sendable {
-    let id: UUID
+    /// Стабильный идентификатор: имя упражнения уникально внутри дня.
+    /// Случайный UUID здесь ломал бы identity во ForEach при каждом пересчёте плана.
+    let id: String
     let name: String
     let sets: Int
     let reps: String
@@ -123,8 +125,8 @@ struct ExercisePrescription: Identifiable, Equatable, Hashable, Codable, Sendabl
     /// Номер тренировки в волне «Жим 14», если упражнение — часть жимовой волны.
     let benchSession: Int?
 
-    init(id: UUID = UUID(), name: String, sets: Int, reps: String, load: LoadPrescription, isOptional: Bool = false, benchSession: Int? = nil) {
-        self.id = id; self.name = name; self.sets = sets; self.reps = reps; self.load = load; self.isOptional = isOptional; self.benchSession = benchSession
+    init(id: String? = nil, name: String, sets: Int, reps: String, load: LoadPrescription, isOptional: Bool = false, benchSession: Int? = nil) {
+        self.id = id ?? name; self.name = name; self.sets = sets; self.reps = reps; self.load = load; self.isOptional = isOptional; self.benchSession = benchSession
     }
 }
 
@@ -212,9 +214,21 @@ final class ProgramProfile {
     var totalDays: Int { workoutPlan.weeks.reduce(0) { $0 + $1.days.count } }
 
     func isCompleted(week: Int, day: Int) -> Bool { completedDayKeys.contains("\(week)-\(day)") }
+
+    /// Отметка дня. Для «Верх / Низ» синхронно двигает связанную тренировку волны жима.
     func toggleCompleted(week: Int, day: Int) {
+        let done = !isCompleted(week: week, day: day)
+        setDayCompleted(week: week, day: day, done)
+        if let session = benchSession(week: week, day: day) { setBenchCompleted(session, done) }
+    }
+
+    private func setDayCompleted(week: Int, day: Int, _ done: Bool) {
         let key = "\(week)-\(day)"
-        if let index = completedDayKeys.firstIndex(of: key) { completedDayKeys.remove(at: index) } else { completedDayKeys.append(key) }
+        if done {
+            if !completedDayKeys.contains(key) { completedDayKeys.append(key) }
+        } else {
+            completedDayKeys.removeAll { $0 == key }
+        }
     }
 
     // MARK: - Волна «Жим 14»
@@ -224,13 +238,37 @@ final class ProgramProfile {
         return UpperLowerCalculator.benchWave(input: upperLowerInput)
     }
 
+    /// Номер жимовой тренировки волны для дня программы «Верх / Низ».
+    /// Понедельник (день 1) — нечётные номера, четверг (день 3) — чётные.
+    func benchSession(week: Int, day: Int) -> Int? {
+        guard programKind == .upperLower else { return nil }
+        switch day {
+        case 1: return (week - 1) * 2 + 1
+        case 3: return (week - 1) * 2 + 2
+        default: return nil
+        }
+    }
+
+    /// День программы, которому принадлежит тренировка волны жима.
+    func day(forBenchSession session: Int) -> (week: Int, day: Int) {
+        ((session + 1) / 2, session % 2 == 1 ? 1 : 3)
+    }
+
     func isBenchCompleted(_ session: Int) -> Bool { completedBenchSessions.contains(session) }
 
+    /// Отметка жимовой тренировки синхронно отмечает соответствующий день программы.
     func toggleBenchCompleted(_ session: Int) {
-        if let index = completedBenchSessions.firstIndex(of: session) {
-            completedBenchSessions.remove(at: index)
+        let done = !isBenchCompleted(session)
+        setBenchCompleted(session, done)
+        let target = day(forBenchSession: session)
+        setDayCompleted(week: target.week, day: target.day, done)
+    }
+
+    private func setBenchCompleted(_ session: Int, _ done: Bool) {
+        if done {
+            if !completedBenchSessions.contains(session) { completedBenchSessions.append(session) }
         } else {
-            completedBenchSessions.append(session)
+            completedBenchSessions.removeAll { $0 == session }
         }
     }
 

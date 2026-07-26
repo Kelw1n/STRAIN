@@ -22,22 +22,22 @@ struct CardView<Content: View>: View {
         VStack(alignment: .leading, spacing: spacing) { content }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial, in: shape)
+            .background(Theme.surface(scheme), in: shape)
             .overlay(shape.strokeBorder(Theme.hairline(scheme), lineWidth: 1))
-            .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.09), radius: 18, y: 10)
     }
 }
 
 /// Карточка с подсвеченной градиентной рамкой — для «следующего» элемента.
+/// Свечение статичное: анимация радиуса тени пересобирала слой на каждом кадре.
 struct HighlightCard<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let gradient: LinearGradient
+    private let glow: Color
     private let content: Content
-    @State private var pulse = false
 
-    init(gradient: LinearGradient = Theme.accentGradient, @ViewBuilder content: () -> Content) {
+    init(gradient: LinearGradient = Theme.accentGradient, glow: Color = Theme.accent, @ViewBuilder content: () -> Content) {
         self.gradient = gradient
+        self.glow = glow
         self.content = content()
     }
 
@@ -47,13 +47,9 @@ struct HighlightCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 14) { content }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial, in: shape)
+            .background(Theme.surface(scheme), in: shape)
             .overlay(shape.strokeBorder(gradient, lineWidth: 1.6))
-            .shadow(color: Theme.accent.opacity(pulse ? 0.34 : 0.16), radius: pulse ? 26 : 14, y: 8)
-            .onAppear {
-                guard !reduceMotion, !pulse else { return }
-                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { pulse = true }
-            }
+            .shadow(color: glow.opacity(scheme == .dark ? 0.28 : 0.16), radius: 14, y: 6)
     }
 }
 
@@ -119,7 +115,6 @@ struct RingProgress<Label: View>: View {
                 .trim(from: 0, to: animated)
                 .stroke(gradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .shadow(color: Theme.accent.opacity(0.4), radius: 8)
             label
         }
         .onAppear {
@@ -222,6 +217,8 @@ struct ScreenHeader: View {
 
 // MARK: - Появление и прокрутка
 
+/// Каскадное появление. Без `blur`: размытие рендерится вне экрана и на списке
+/// из десятка карточек съедает кадры ровно в момент открытия экрана.
 private struct AppearIn: ViewModifier {
     let index: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -230,19 +227,21 @@ private struct AppearIn: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 18)
-            .blur(radius: shown ? 0 : 5)
+            .offset(y: shown ? 0 : 14)
             .onAppear {
                 guard !shown else { return }
                 if reduceMotion {
                     shown = true
                 } else {
-                    withAnimation(.spring(response: 0.55, dampingFraction: 0.85).delay(Double(index) * 0.05)) { shown = true }
+                    let delay = Double(min(index, 6)) * 0.045
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.86).delay(delay)) { shown = true }
                 }
             }
     }
 }
 
+/// Затухание карточек у края экрана. Только opacity и scale — обе операции
+/// выполняет композитор, в отличие от размытия.
 private struct SoftScroll: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -253,9 +252,8 @@ private struct SoftScroll: ViewModifier {
         } else {
             content.scrollTransition(.interactive, axis: .vertical) { view, phase in
                 view
-                    .opacity(phase.isIdentity ? 1 : 0.3)
-                    .scaleEffect(phase.isIdentity ? 1 : 0.94)
-                    .blur(radius: phase.isIdentity ? 0 : 2.5)
+                    .opacity(phase.isIdentity ? 1 : 0.35)
+                    .scaleEffect(phase.isIdentity ? 1 : 0.95)
             }
         }
     }

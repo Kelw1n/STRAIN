@@ -75,8 +75,8 @@ struct ProgramSelectionView: View {
                             .foregroundStyle(.white)
                             .frame(width: 78, height: 78)
                             .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                            .shadow(color: Theme.accent.opacity(breathe ? 0.55 : 0.25), radius: breathe ? 28 : 14, y: 10)
-                            .scaleEffect(breathe ? 1.04 : 1)
+                            .shadow(color: Theme.accent.opacity(0.35), radius: 18, y: 10)
+                            .scaleEffect(breathe ? 1.05 : 1)
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Выбери программу")
                                 .font(.system(size: 34, weight: .bold, design: .rounded))
