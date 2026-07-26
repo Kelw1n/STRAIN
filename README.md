@@ -37,7 +37,7 @@ xcodebuild test \
 3. После завершения откройте запущенный workflow и скачайте artifact `TexasProgram-unsigned`.
 4. Распакуйте ZIP artifact — внутри будет `TexasProgram-unsigned.ipa`.
 
-Workflow не хранит сертификаты, provisioning profile или пароль Apple ID. IPA специально остаётся неподписанным.
+Workflow не хранит сертификаты, provisioning profile или пароль Apple ID. IPA специально остаётся неподписанным. В CI asset catalog временно исключается из сборки, чтобы unsigned-сборка не зависела от версии `actool` на GitHub runner; это не влияет на расчёты и экраны приложения.
 
 ## Установка через Sideloadly
 
