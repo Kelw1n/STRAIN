@@ -394,6 +394,20 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Порядок", selection: $profile.useQueueSchedule) {
+                        Text("Очередь").tag(true)
+                        Text("По дням недели").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Порядок тренировок")
+                } footer: {
+                    Text(profile.useQueueSchedule
+                         ? "Невыполненные тренировки идут подряд по ближайшим тренировочным дням. Пропустил — ничего не теряется, очередь просто сдвигается."
+                         : "Каждый день программы закреплён за своим днём недели. Пропущенные дни остаются в списке пропущенных и ждут этого дня на следующей неделе.")
+                }
+
+                Section {
                     ForEach(1...profile.trainingDayCount, id: \.self) { day in
                         Picker(dayLabel(day), selection: weekdayBinding(for: day)) {
                             ForEach(RuDate.weekOrder, id: \.self) { weekday in
@@ -404,7 +418,9 @@ struct SettingsView: View {
                 } header: {
                     Text("Дни недели")
                 } footer: {
-                    Text("По этим дням экран «Сегодня» определяет, какая тренировка идёт сегодня и когда следующая.")
+                    Text(profile.useQueueSchedule
+                         ? "Дни, в которые ты ходишь в зал. Очередь раздаёт тренировки именно по ним."
+                         : "По этим дням экран «Сегодня» определяет, какая тренировка идёт сегодня и когда следующая.")
                 }
 
                 if profile.programKind == .upperLower {

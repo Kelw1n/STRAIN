@@ -210,7 +210,7 @@ struct TodayView: View {
                     Text("Неделя \(workout.week)")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .contentTransition(.numericText())
-                    Text(profile.fullTitle(forDay: workout.day))
+                    Text(workout.fullTitle)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -309,7 +309,12 @@ struct PlanView: View {
     private var plan: WorkoutPlan { profile.workoutPlan }
 
     var body: some View {
-        NavigationStack {
+        // Даты берём из расписания: в режиме очереди день недели у тренировки
+        // определяется её местом в очереди, а не номером дня.
+        let dates = Dictionary(
+            uniqueKeysWithValues: profile.schedule.allPending.map { ($0.id, $0) }
+        )
+        return NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
                     weekSelector
@@ -319,7 +324,12 @@ struct PlanView: View {
                                 NavigationLink {
                                     DayDetailView(profile: profile, week: week.number, day: day, onOpenBench: onOpenBench)
                                 } label: {
-                                    DaySummaryCard(profile: profile, week: week.number, day: day)
+                                    DaySummaryCard(
+                                        profile: profile,
+                                        week: week.number,
+                                        day: day,
+                                        scheduled: dates["\(week.number)-\(day.number)"]
+                                    )
                                 }
                                 .buttonStyle(.pressable)
                                 .contextMenu {
@@ -407,9 +417,16 @@ struct DaySummaryCard: View {
     let profile: ProgramProfile
     let week: Int
     let day: WorkoutDayPlan
+    var scheduled: ScheduledWorkout?
 
     private var isDone: Bool { profile.isCompleted(week: week, day: day.number) }
     private var benchSession: Int? { day.exercises.compactMap(\.benchSession).first }
+
+    /// Выполненный день показываем без дня недели, невыполненный — с реальной датой.
+    private var title: String {
+        if let scheduled { return scheduled.fullTitle }
+        return isDone ? day.title : profile.fullTitle(forDay: day)
+    }
 
     var body: some View {
         CardView {
@@ -424,13 +441,16 @@ struct DaySummaryCard: View {
                         .symbolEffect(.bounce, value: isDone)
                 }
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(profile.fullTitle(forDay: day))
+                    Text(title)
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 6) {
                         Text("\(day.exercises.count) упражнений").font(.caption).foregroundStyle(.secondary)
+                        if let scheduled {
+                            Text("· \(RuDate.dayMonth(scheduled.date))").font(.caption).foregroundStyle(.secondary)
+                        }
                         if let benchSession {
                             OutlineBadge(text: "Жим №\(benchSession)")
                         }
@@ -471,7 +491,10 @@ struct DayDetailView: View {
         }
         .scrollIndicators(.hidden)
         .screenBackground()
-        .navigationTitle("Неделя \(week) · \(profile.shortWeekdayName(forDay: day.number).uppercased())")
+        // В очереди день недели зависит от места в очереди, поэтому в заголовке его нет.
+        .navigationTitle(profile.useQueueSchedule
+                         ? "Неделя \(week)"
+                         : "Неделя \(week) · \(profile.shortWeekdayName(forDay: day.number).uppercased())")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

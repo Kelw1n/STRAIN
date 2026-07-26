@@ -168,8 +168,14 @@ final class ProgramProfile {
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
     /// Явная привязка недели плана к календарю: номер недели и понедельник её календарной недели.
+    /// Используется только в режиме «по дням недели».
     var scheduleAnchorWeek: Int = 0
     var scheduleAnchorDate: Date?
+    /// Очередь: невыполненные тренировки идут подряд по ближайшим тренировочным дням.
+    /// Выключено — каждый день плана жёстко привязан к своему дню недели.
+    var useQueueSchedule: Bool = true
+    /// Дата последней отметки. В режиме очереди по ней видно, что сегодня уже тренировались.
+    var lastCompletionDate: Date?
     var cycleStartedAt: Date
     var peakingActive: Bool
     var peakSquat5RM: Double?
@@ -226,10 +232,11 @@ final class ProgramProfile {
     func isCompleted(week: Int, day: Int) -> Bool { completedDayKeys.contains("\(week)-\(day)") }
 
     /// Отметка дня. Для «Верх / Низ» синхронно двигает связанную тренировку волны жима.
-    func toggleCompleted(week: Int, day: Int) {
+    func toggleCompleted(week: Int, day: Int, now: Date = Date()) {
         let done = !isCompleted(week: week, day: day)
         setDayCompleted(week: week, day: day, done)
         if let session = benchSession(week: week, day: day) { setBenchCompleted(session, done) }
+        if done { lastCompletionDate = now }
     }
 
     private func setDayCompleted(week: Int, day: Int, _ done: Bool) {
@@ -288,9 +295,15 @@ final class ProgramProfile {
         return calendar.date(byAdding: .weekOfYear, value: 1, to: candidate) ?? candidate
     }
 
+    /// Дата, на которую встанет день плана, если сделать его текущим.
+    /// В режиме очереди это ближайший свободный тренировочный день, иначе — свой день недели.
+    func plannedStartDate(forDay day: Int, now: Date = Date(), calendar: Calendar = .current) -> Date {
+        guard useQueueSchedule else { return nextOccurrence(ofDay: day, now: now, calendar: calendar) }
+        return WorkoutScheduler.nextTrainingSlot(profile: self, now: now, calendar: calendar)
+    }
+
     /// «Я сейчас здесь»: всё до выбранного дня отмечается выполненным, выбранный день
-    /// становится следующим и встаёт на ближайшую дату своего дня недели.
-    /// Нужно после переустановки, когда история отметок потеряна.
+    /// становится следующим. Нужно после переустановки, когда история отметок потеряна.
     func setCurrentWorkout(week: Int, day: Int, now: Date = Date(), calendar: Calendar = .current) {
         completedDayKeys = []
         completedBenchSessions = []
@@ -301,6 +314,14 @@ final class ProgramProfile {
                     setBenchCompleted(session, true)
                 }
             }
+        }
+        // Отметки проставлены задним числом — сегодняшней тренировки среди них нет.
+        lastCompletionDate = nil
+        guard !useQueueSchedule else {
+            // В очереди привязка не нужна: выбранный день сам станет первым в списке.
+            scheduleAnchorWeek = 0
+            scheduleAnchorDate = nil
+            return
         }
         let target = nextOccurrence(ofDay: day, now: now, calendar: calendar)
         let trainingCalendar = WorkoutScheduler.trainingCalendar(calendar)
@@ -340,11 +361,12 @@ final class ProgramProfile {
     func isBenchCompleted(_ session: Int) -> Bool { completedBenchSessions.contains(session) }
 
     /// Отметка жимовой тренировки синхронно отмечает соответствующий день программы.
-    func toggleBenchCompleted(_ session: Int) {
+    func toggleBenchCompleted(_ session: Int, now: Date = Date()) {
         let done = !isBenchCompleted(session)
         setBenchCompleted(session, done)
         let target = day(forBenchSession: session)
         setDayCompleted(week: target.week, day: target.day, done)
+        if done { lastCompletionDate = now }
     }
 
     private func setBenchCompleted(_ session: Int, _ done: Bool) {

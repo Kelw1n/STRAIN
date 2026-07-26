@@ -90,7 +90,7 @@ struct BenchWaveView: View {
 
     /// Текст подтверждения: что будет отмечено и на какую дату встанет тренировка.
     private func startMessage(for session: BenchSessionPlan) -> String {
-        let date = profile.nextOccurrence(ofDay: session.dayNumber)
+        let date = profile.plannedStartDate(forDay: session.dayNumber)
         let calendar = WorkoutScheduler.trainingCalendar()
         let weekday = RuDate.full(weekday: calendar.component(.weekday, from: date))
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: Date()), to: date).day ?? 0

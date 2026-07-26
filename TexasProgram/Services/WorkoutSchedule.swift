@@ -36,6 +36,10 @@ struct ScheduledWorkout: Identifiable, Equatable {
     var id: String { "\(week)-\(day.number)" }
     var weekdayName: String { RuDate.full(weekday: weekday) }
     var shortWeekday: String { RuDate.short(weekday: weekday) }
+
+    /// Заголовок по реальной дате: в режиме очереди день недели берётся отсюда,
+    /// а не из номера дня в программе.
+    var fullTitle: String { weekdayName.uppercased() + " · " + day.title }
 }
 
 struct WorkoutSchedule {
@@ -47,6 +51,8 @@ struct WorkoutSchedule {
     let overdue: [ScheduledWorkout]
     /// Сегодня по расписанию тренировка есть, и она уже отмечена.
     let todayAlreadyDone: Bool
+    /// Все невыполненные тренировки с назначенными датами — для экрана «План».
+    let allPending: [ScheduledWorkout]
     let referenceDate: Date
 
     /// Что показывать на экране «Сегодня».
@@ -74,13 +80,99 @@ enum WorkoutScheduler {
         return calendar
     }
 
+    static func build(profile: ProgramProfile, plan: WorkoutPlan, now: Date = Date(), calendar base: Calendar = .current) -> WorkoutSchedule {
+        profile.useQueueSchedule
+            ? buildQueue(profile: profile, plan: plan, now: now, calendar: base)
+            : buildByWeekday(profile: profile, plan: plan, now: now, calendar: base)
+    }
+
+    // MARK: - Очередь
+
+    /// Невыполненные тренировки раздаются подряд по ближайшим тренировочным дням.
+    ///
+    /// День плана здесь не привязан к своему дню недели: пропустил четверг — тренировка
+    /// не ждёт следующего четверга, а просто становится первой в очереди. Ничего не
+    /// теряется и не копится в «пропущено», сдвигается только календарь.
+    private static func buildQueue(profile: ProgramProfile, plan: WorkoutPlan, now: Date, calendar base: Calendar) -> WorkoutSchedule {
+        let calendar = trainingCalendar(base)
+        let startOfToday = calendar.startOfDay(for: now)
+        let weekdays = Set(profile.weekdays)
+
+        var pending: [(week: Int, day: WorkoutDayPlan)] = []
+        for week in plan.weeks {
+            for day in week.days where !profile.isCompleted(week: week.number, day: day.number) {
+                pending.append((week.number, day))
+            }
+        }
+
+        let trainedToday = profile.lastCompletionDate.map { calendar.isDate($0, inSameDayAs: startOfToday) } ?? false
+        let todayIsTrainingDay = weekdays.contains(calendar.component(.weekday, from: startOfToday))
+
+        var entries: [ScheduledWorkout] = []
+        entries.reserveCapacity(pending.count)
+
+        if !weekdays.isEmpty {
+            // Если сегодня уже отметились, очередь начинается с завтра.
+            var cursor = trainedToday ? (calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday) : startOfToday
+            var index = 0
+            var guardCounter = 0
+            let limit = pending.count * 7 + 14
+
+            while index < pending.count, guardCounter < limit {
+                guardCounter += 1
+                let weekday = calendar.component(.weekday, from: cursor)
+                if weekdays.contains(weekday) {
+                    let item = pending[index]
+                    entries.append(ScheduledWorkout(
+                        week: item.week,
+                        day: item.day,
+                        date: cursor,
+                        weekday: weekday,
+                        isCompleted: false
+                    ))
+                    index += 1
+                }
+                cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? cursor
+            }
+        }
+
+        let todayEntry = entries.first { calendar.isDate($0.date, inSameDayAs: startOfToday) }
+
+        return WorkoutSchedule(
+            today: todayEntry,
+            upcoming: entries.first { $0.date > startOfToday },
+            overdue: [],
+            todayAlreadyDone: trainedToday && todayIsTrainingDay,
+            allPending: entries,
+            referenceDate: now
+        )
+    }
+
+    /// Ближайший тренировочный день, на который встанет первая тренировка очереди.
+    static func nextTrainingSlot(profile: ProgramProfile, now: Date = Date(), calendar base: Calendar = .current) -> Date {
+        let calendar = trainingCalendar(base)
+        let startOfToday = calendar.startOfDay(for: now)
+        let weekdays = Set(profile.weekdays)
+        guard !weekdays.isEmpty else { return startOfToday }
+
+        let trainedToday = profile.lastCompletionDate.map { calendar.isDate($0, inSameDayAs: startOfToday) } ?? false
+        var cursor = trainedToday ? (calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday) : startOfToday
+        for _ in 0..<14 {
+            if weekdays.contains(calendar.component(.weekday, from: cursor)) { return cursor }
+            cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? cursor
+        }
+        return cursor
+    }
+
+    // MARK: - По дням недели
+
     /// Раскладывает план по календарю.
     ///
     /// Текущая неделя плана — первая, в которой остались невыполненные дни. Она ложится
     /// на календарную неделю из явной привязки профиля, а если её нет — на текущую.
     /// Неделя, которая целиком в прошлом, переносится вперёд: иначе новый пользователь
     /// сразу видел бы «пропущено» за дни, когда приложения у него ещё не было.
-    static func build(profile: ProgramProfile, plan: WorkoutPlan, now: Date = Date(), calendar base: Calendar = .current) -> WorkoutSchedule {
+    private static func buildByWeekday(profile: ProgramProfile, plan: WorkoutPlan, now: Date, calendar base: Calendar) -> WorkoutSchedule {
         let calendar = trainingCalendar(base)
         let startOfToday = calendar.startOfDay(for: now)
         let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: startOfToday)?.start ?? startOfToday
@@ -131,6 +223,7 @@ enum WorkoutScheduler {
             upcoming: pending.filter { $0.date > startOfToday }.min { $0.date < $1.date },
             overdue: pending.filter { $0.date < startOfToday && $0.date >= cycleStart }.sorted { $0.date < $1.date },
             todayAlreadyDone: todayEntry?.isCompleted ?? false,
+            allPending: pending.sorted { $0.date < $1.date },
             referenceDate: now
         )
     }
