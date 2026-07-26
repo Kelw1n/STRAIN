@@ -120,9 +120,11 @@ struct ExercisePrescription: Identifiable, Equatable, Hashable, Codable, Sendabl
     let reps: String
     let load: LoadPrescription
     let isOptional: Bool
+    /// Номер тренировки в волне «Жим 14», если упражнение — часть жимовой волны.
+    let benchSession: Int?
 
-    init(id: UUID = UUID(), name: String, sets: Int, reps: String, load: LoadPrescription, isOptional: Bool = false) {
-        self.id = id; self.name = name; self.sets = sets; self.reps = reps; self.load = load; self.isOptional = isOptional
+    init(id: UUID = UUID(), name: String, sets: Int, reps: String, load: LoadPrescription, isOptional: Bool = false, benchSession: Int? = nil) {
+        self.id = id; self.name = name; self.sets = sets; self.reps = reps; self.load = load; self.isOptional = isOptional; self.benchSession = benchSession
     }
 }
 
@@ -157,6 +159,7 @@ final class ProgramProfile {
     var back: String?
     var press: String?
     var completedDayKeys: [String]
+    var completedBenchSessions: [Int] = []
     var cycleStartedAt: Date
     var peakingActive: Bool
     var peakSquat5RM: Double?
@@ -212,6 +215,30 @@ final class ProgramProfile {
     func toggleCompleted(week: Int, day: Int) {
         let key = "\(week)-\(day)"
         if let index = completedDayKeys.firstIndex(of: key) { completedDayKeys.remove(at: index) } else { completedDayKeys.append(key) }
+    }
+
+    // MARK: - Волна «Жим 14»
+
+    var benchWave: [BenchSessionPlan] {
+        guard programKind == .upperLower else { return [] }
+        return UpperLowerCalculator.benchWave(input: upperLowerInput)
+    }
+
+    func isBenchCompleted(_ session: Int) -> Bool { completedBenchSessions.contains(session) }
+
+    func toggleBenchCompleted(_ session: Int) {
+        if let index = completedBenchSessions.firstIndex(of: session) {
+            completedBenchSessions.remove(at: index)
+        } else {
+            completedBenchSessions.append(session)
+        }
+    }
+
+    var completedBenchCount: Int { Set(completedBenchSessions).count }
+
+    /// Первая неотмеченная жимовая тренировка волны.
+    var nextBenchSession: Int? {
+        (1...UpperLowerCalculator.benchSessionCount).first { !isBenchCompleted($0) }
     }
 
     var peakingInput: ProgramInput {

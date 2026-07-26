@@ -61,6 +61,45 @@ final class ProgramCalculatorTests: XCTestCase {
         XCTAssertEqual(plan.weeks[0].days[3].exercises[1].load, .kilograms(100))
     }
 
+    func testBenchWaveHasFourteenSessionsMappedToUpperDays() {
+        let wave = UpperLowerCalculator.benchWave(input: .demo)
+        XCTAssertEqual(wave.count, 14)
+        XCTAssertEqual(wave.map(\.id), Array(1...14))
+        XCTAssertEqual(wave.map(\.week), [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7])
+        XCTAssertEqual(wave[0].dayNumber, 1)
+        XCTAssertEqual(wave[1].dayNumber, 3)
+    }
+
+    func testBenchWaveWeightsAreRoundedToFive() {
+        let wave = UpperLowerCalculator.benchWave(input: .demo)
+        XCTAssertEqual(wave[0].sets.map(\.weight), [80, 85, 85, 85, 85])
+        XCTAssertEqual(wave[1].highlight, .negative)
+        XCTAssertEqual(wave[13].highlight, .record)
+        XCTAssertEqual(wave[13].topWeight, 110)
+    }
+
+    func testBenchWaveIsLinkedToDayPrescriptions() {
+        let wave = UpperLowerCalculator.benchWave(input: .demo)
+        let plan = UpperLowerCalculator.generate(input: .demo)
+        XCTAssertEqual(plan.weeks[0].days[0].exercises[0].benchSession, 1)
+        XCTAssertEqual(plan.weeks[0].days[2].exercises[0].benchSession, 2)
+        XCTAssertEqual(plan.weeks[6].days[2].exercises[0].benchSession, 14)
+        XCTAssertEqual(plan.weeks[0].days[0].exercises[0].load, .repRange(wave[0].weightsText))
+        XCTAssertNil(plan.weeks[0].days[1].exercises[0].benchSession)
+    }
+
+    func testBenchSessionCompletionTracking() {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        XCTAssertEqual(profile.nextBenchSession, 1)
+        profile.toggleBenchCompleted(1)
+        XCTAssertTrue(profile.isBenchCompleted(1))
+        XCTAssertEqual(profile.completedBenchCount, 1)
+        XCTAssertEqual(profile.nextBenchSession, 2)
+        profile.toggleBenchCompleted(1)
+        XCTAssertEqual(profile.completedBenchCount, 0)
+        XCTAssertEqual(profile.nextBenchSession, 1)
+    }
+
     func testUpperLowerBenchWaveComesFromFourteenSessionSheet() {
         let plan = UpperLowerCalculator.generate(input: .demo)
         let firstBench = plan.weeks[0].days[0].exercises[0]
