@@ -1,6 +1,12 @@
 import SwiftUI
 import SwiftData
 
+private struct RPEItem: Identifiable {
+    let id: String
+    let label: String
+    let detail: String
+}
+
 struct ProgressScreen: View {
     @Bindable var profile: ProgramProfile
     private var plan: WorkoutPlan { ProgramCalculator.generate(input: profile.input) }
@@ -44,7 +50,12 @@ struct InstructionsView: View {
                 Section("Пикирование") { Text("Пикирование — необязательная часть после основной 12-недельной программы. Используй его только если хочешь проверить 1ПМ или подготовиться к соревнованиям. Перед запуском внеси свежие 5ПМ.") }
                 Section("RPE") {
                     Text("RPE — субъективная оценка оставшихся повторов в запасе. RPE 8 означает примерно два повтора в запасе, RPE 9 — один. Записывай ощущения и регулируй нагрузку, если восстановление отличается от обычного.")
-                    ForEach([("RPE 7", "3 повтора в запасе"), ("RPE 8", "2 повтора в запасе"), ("RPE 9", "1 повтор в запасе"), ("RPE 10", "предел")], id: \.0) { item in HStack { Text(item.0).fontWeight(.semibold); Spacer(); Text(item.1).foregroundStyle(.secondary) } }
+                    ForEach([
+                        RPEItem(id: "7", label: "RPE 7", detail: "3 повтора в запасе"),
+                        RPEItem(id: "8", label: "RPE 8", detail: "2 повтора в запасе"),
+                        RPEItem(id: "9", label: "RPE 9", detail: "1 повтор в запасе"),
+                        RPEItem(id: "10", label: "RPE 10", detail: "предел")
+                    ]) { item in HStack { Text(item.label).fontWeight(.semibold); Spacer(); Text(item.detail).foregroundStyle(.secondary) } }
                 }
             }.navigationTitle("Инструкция")
         }
@@ -74,7 +85,15 @@ struct SettingsView: View {
         .confirmationDialog("Сбросить все отметки?", isPresented: $showReset) { Button("Сбросить", role: .destructive) { profile.completedDayKeys = [] }; Button("Отмена", role: .cancel) {} }
     }
     private func binding(for category: AdditionalExerciseCategory) -> Binding<String?> { Binding(get: { get(category) }, set: { set(category, $0) }) }
-    private func get(_ category: AdditionalExerciseCategory) -> String? { switch category { case .pull: profile.pull; case .arms: profile.arms; case .core: profile.core; case .back: profile.back; case .press: profile.press } }
+    private func get(_ category: AdditionalExerciseCategory) -> String? {
+        switch category {
+        case .pull: return profile.pull
+        case .arms: return profile.arms
+        case .core: return profile.core
+        case .back: return profile.back
+        case .press: return profile.press
+        }
+    }
     private func set(_ category: AdditionalExerciseCategory, _ value: String?) { switch category { case .pull: profile.pull = value; case .arms: profile.arms = value; case .core: profile.core = value; case .back: profile.back = value; case .press: profile.press = value } }
 }
 

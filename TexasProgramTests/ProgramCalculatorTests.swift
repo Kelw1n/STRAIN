@@ -5,7 +5,7 @@ final class ProgramCalculatorTests: XCTestCase {
     func testRoundToPlateMatchesExcelMROUND() {
         XCTAssertEqual(ProgramCalculator.roundToPlate(88), 87.5)
         XCTAssertEqual(ProgramCalculator.roundToPlate(89), 90)
-        XCTAssertEqual(ProgramCalculator.roundToPlate(91.25), 90)
+        XCTAssertEqual(ProgramCalculator.roundToPlate(91.25), 92.5)
     }
 
     func testBasePlanHasTwelveWeeksAndThreeDays() {
@@ -33,7 +33,7 @@ final class ProgramCalculatorTests: XCTestCase {
         input.pull = AdditionalExerciseCategory.pull.options[1]
         input.back = AdditionalExerciseCategory.back.options[0]
         let day = ProgramCalculator.generate(input: input).weeks[0].days[0]
-        XCTAssertTrue(day.exercises.contains { $0.name == input.pull })
+        XCTAssertTrue(day.exercises.contains { $0.name == input.pull! })
         XCTAssertFalse(day.exercises.contains { $0.name == input.back })
     }
 

@@ -20,13 +20,13 @@
 3. Выберите симулятор iPhone с iOS 17+ и схему `TexasProgram`.
 4. Нажмите Run. Для запуска на физическом iPhone выберите свою Development Team в Signing & Capabilities.
 
-Тесты запускаются через Product → Test или командой:
+Тесты запускаются через Product → Test. На Mac с установленным симулятором их можно запустить командой:
 
 ```bash
 xcodebuild test \
   -project TexasProgram.xcodeproj \
   -scheme TexasProgram \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+  -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
   CODE_SIGNING_ALLOWED=NO
 ```
 

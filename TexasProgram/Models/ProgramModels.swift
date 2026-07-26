@@ -8,7 +8,7 @@ enum TrainingLevel: String, CaseIterable, Codable, Identifiable, Sendable {
     var id: String { rawValue }
 }
 
-enum AdditionalExerciseCategory: String, CaseIterable, Identifiable {
+enum AdditionalExerciseCategory: String, CaseIterable, Identifiable, Hashable {
     case pull = "Дополнительная тяга"
     case arms = "Руки"
     case core = "Кор"
