@@ -33,7 +33,7 @@ xcodebuild test \
 ## Получение IPA через GitHub
 
 1. Создайте пустой репозиторий на GitHub и загрузите туда содержимое проекта.
-2. Откройте Actions → `iOS build` → Run workflow.
+2. Откройте Actions → `iOS build` → Run workflow. Ручной запуск собирает IPA сразу; тесты запускаются отдельно только для Pull Request и не блокируют сборку.
 3. После завершения откройте запущенный workflow и скачайте artifact `TexasProgram-unsigned`.
 4. Распакуйте ZIP artifact — внутри будет `TexasProgram-unsigned.ipa`.
 
