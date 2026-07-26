@@ -9,6 +9,7 @@ struct BenchWaveView: View {
 
     @State private var expanded: Int?
     @State private var pulsing: Int?
+    @State private var pendingStart: BenchSessionPlan?
 
     private var sessions: [BenchSessionPlan] { profile.benchWave }
     private var completed: Set<Int> { Set(profile.completedBenchSessions) }
@@ -44,7 +45,8 @@ struct BenchWaveView: View {
                                     withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
                                         profile.toggleBenchCompleted(session.id)
                                     }
-                                }
+                                },
+                                onSetCurrent: { pendingStart = session }
                             )
                             .id(session.id)
                             .appearIn(min(index + 3, 10))
@@ -66,7 +68,42 @@ struct BenchWaveView: View {
             }
             .screenBackground()
             .navigationTitle("Жим 14")
+            .confirmationDialog(
+                pendingStart.map { "Начать с тренировки \($0.id)?" } ?? "",
+                isPresented: Binding(get: { pendingStart != nil }, set: { if !$0 { pendingStart = nil } }),
+                titleVisibility: .visible,
+                presenting: pendingStart
+            ) { session in
+                Button("Сделать следующей") {
+                    withAnimation(Motion.maybe(Motion.card, reduce: reduceMotion)) {
+                        profile.setCurrentBenchSession(session.id)
+                        expanded = session.id
+                    }
+                    pendingStart = nil
+                }
+                Button("Отмена", role: .cancel) { pendingStart = nil }
+            } message: { session in
+                Text(startMessage(for: session))
+            }
         }
+    }
+
+    /// Текст подтверждения: что будет отмечено и на какую дату встанет тренировка.
+    private func startMessage(for session: BenchSessionPlan) -> String {
+        let date = profile.nextOccurrence(ofDay: session.dayNumber)
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let weekday = RuDate.full(weekday: calendar.component(.weekday, from: date))
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: Date()), to: date).day ?? 0
+        let when: String
+        switch days {
+        case 0: when = "сегодня"
+        case 1: when = "завтра"
+        default: when = "\(weekday), \(RuDate.dayMonth(date, calendar: calendar))"
+        }
+        let prefix = session.id > 1
+            ? "Тренировки 1–\(session.id - 1) будут отмечены выполненными вместе с их днями программы."
+            : "Прогресс волны будет сброшен к началу."
+        return prefix + " Тренировка \(session.id) станет следующей — \(when)."
     }
 
     private func toggleExpanded(_ id: Int) {
@@ -254,6 +291,7 @@ struct BenchSessionCard: View {
     let isPulsing: Bool
     let onTap: () -> Void
     let onToggleDone: () -> Void
+    let onSetCurrent: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var doneTrigger = 0
@@ -341,6 +379,18 @@ struct BenchSessionCard: View {
                     isDone ? SensoryFeedback.success : SensoryFeedback.impact(weight: .light)
                 }
                 .padding(.top, 4)
+
+                Button(action: onSetCurrent) {
+                    Label("Начать отсюда", systemImage: "flag.checkered")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(session.accentColor)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity)
+                        .background(session.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(session.accentColor.opacity(0.35), lineWidth: 1))
+                }
+                .buttonStyle(.pressable)
             }
             .transition(.asymmetric(
                 insertion: .opacity.combined(with: .offset(y: -10)),

@@ -316,14 +316,53 @@ private struct GuideCard: View {
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: [SortDescriptor(\ProgramProfile.createdAt)]) private var profiles: [ProgramProfile]
+    @AppStorage("activeProfileID") private var activeProfileID = ""
     @Bindable var profile: ProgramProfile
-    let onResetApplication: () -> Void
+    let onAddProfile: () -> Void
+    let onDeleteProfile: () -> Void
     @State private var showPeaking = false
     @State private var showReset = false
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    TextField("Имя профиля", text: $profile.name)
+                    ForEach(profiles) { item in
+                        Button {
+                            guard item.profileID != profile.profileID else { return }
+                            closeThen { activeProfileID = item.profileID.uuidString }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: item.profileID == profile.profileID ? "person.fill" : "person")
+                                    .font(.footnote.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 30, height: 30)
+                                    .background(item.profileID == profile.profileID ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Color.gray.opacity(0.4)),
+                                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.name).foregroundStyle(.primary)
+                                    Text(item.programKind.rawValue).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if item.profileID == profile.profileID {
+                                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Theme.accent)
+                                }
+                            }
+                        }
+                    }
+                    Button {
+                        closeThen(onAddProfile)
+                    } label: {
+                        Label("Добавить профиль", systemImage: "person.badge.plus")
+                    }
+                } header: {
+                    Text("Профили")
+                } footer: {
+                    Text("У каждого профиля своя программа, максимумы, расписание и отметки.")
+                }
+
                 Section(profile.maximumLabel) {
                     TextField("Приседания", value: $profile.squat5RM, format: .number).keyboardType(.decimalPad)
                     TextField("Жим лёжа", value: $profile.bench5RM, format: .number).keyboardType(.decimalPad)
@@ -387,8 +426,10 @@ struct SettingsView: View {
                 Section("Иконка приложения") { AlternateIconPicker() }
 
                 Section {
-                    Button("Сбросить приложение", role: .destructive) { showReset = true }
-                    Text("Удалит максимумы, выбранную программу и все отметки, затем вернёт на стартовый выбор.")
+                    Button(profiles.count > 1 ? "Удалить этот профиль" : "Сбросить профиль", role: .destructive) { showReset = true }
+                    Text(profiles.count > 1
+                         ? "Удалит максимумы, программу и отметки этого профиля. Остальные профили останутся."
+                         : "Удалит максимумы, выбранную программу и все отметки, затем вернёт на стартовый выбор.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -402,10 +443,18 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showPeaking) { PeakingView(profile: profile) }
-        .confirmationDialog("Полностью сбросить приложение?", isPresented: $showReset) {
-            Button("Сбросить приложение", role: .destructive) { dismiss(); onResetApplication() }
+        .confirmationDialog(profiles.count > 1 ? "Удалить профиль «\(profile.name)»?" : "Полностью сбросить профиль?",
+                            isPresented: $showReset, titleVisibility: .visible) {
+            Button(profiles.count > 1 ? "Удалить профиль" : "Сбросить", role: .destructive) { closeThen(onDeleteProfile) }
             Button("Отмена", role: .cancel) {}
         }
+    }
+
+    /// Сначала закрыть лист, потом менять профиль: иначе экран под ним пересобирается
+    /// прямо во время анимации закрытия.
+    private func closeThen(_ action: @escaping () -> Void) {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: action)
     }
 
     /// Название тренировочного дня в расписании: «День 1 · Верх тяжёлый».

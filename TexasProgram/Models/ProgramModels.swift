@@ -150,6 +150,9 @@ struct WorkoutPlan: Equatable, Codable, Sendable {
 
 @Model
 final class ProgramProfile {
+    var profileID: UUID = UUID()
+    var name: String = "Профиль"
+    var createdAt: Date = Date()
     var programKindRaw: String = TrainingProgramKind.texas.rawValue
     var squat5RM: Double
     var bench5RM: Double
@@ -164,20 +167,25 @@ final class ProgramProfile {
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
+    /// Явная привязка недели плана к календарю: номер недели и понедельник её календарной недели.
+    var scheduleAnchorWeek: Int = 0
+    var scheduleAnchorDate: Date?
     var cycleStartedAt: Date
     var peakingActive: Bool
     var peakSquat5RM: Double?
     var peakBench5RM: Double?
     var peakDeadlift5RM: Double?
 
-    init(input: ProgramInput = .demo) {
+    init(input: ProgramInput = .demo, name: String = "Профиль") {
+        profileID = UUID(); self.name = name; createdAt = .now
         programKindRaw = TrainingProgramKind.texas.rawValue
         squat5RM = input.squat5RM; bench5RM = input.bench5RM; deadlift5RM = input.deadlift5RM
         levelRaw = input.level.rawValue; pull = input.pull; arms = input.arms; core = input.core; back = input.back; press = input.press
         completedDayKeys = []; cycleStartedAt = .now; peakingActive = false
     }
 
-    init(upperLowerInput: UpperLowerInput) {
+    init(upperLowerInput: UpperLowerInput, name: String = "Профиль") {
+        profileID = UUID(); self.name = name; createdAt = .now
         programKindRaw = TrainingProgramKind.upperLower.rawValue
         squat5RM = upperLowerInput.squat1RM
         bench5RM = upperLowerInput.bench1RM
@@ -267,6 +275,43 @@ final class ProgramProfile {
 
     var schedule: WorkoutSchedule {
         WorkoutScheduler.build(profile: self, plan: workoutPlan)
+    }
+
+    /// Ближайшая дата, на которую попадёт тренировочный день с его днём недели.
+    func nextOccurrence(ofDay day: Int, now: Date = Date(), calendar base: Calendar = .current) -> Date {
+        let calendar = WorkoutScheduler.trainingCalendar(base)
+        let startOfToday = calendar.startOfDay(for: now)
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: startOfToday)?.start ?? startOfToday
+        let offset = (weekday(forDay: day) - 2 + 7) % 7
+        let candidate = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? startOfToday
+        guard candidate < startOfToday else { return candidate }
+        return calendar.date(byAdding: .weekOfYear, value: 1, to: candidate) ?? candidate
+    }
+
+    /// «Я сейчас здесь»: всё до выбранного дня отмечается выполненным, выбранный день
+    /// становится следующим и встаёт на ближайшую дату своего дня недели.
+    /// Нужно после переустановки, когда история отметок потеряна.
+    func setCurrentWorkout(week: Int, day: Int, now: Date = Date(), calendar: Calendar = .current) {
+        completedDayKeys = []
+        completedBenchSessions = []
+        for planWeek in workoutPlan.weeks {
+            for planDay in planWeek.days where planWeek.number < week || (planWeek.number == week && planDay.number < day) {
+                setDayCompleted(week: planWeek.number, day: planDay.number, true)
+                if let session = benchSession(week: planWeek.number, day: planDay.number) {
+                    setBenchCompleted(session, true)
+                }
+            }
+        }
+        let target = nextOccurrence(ofDay: day, now: now, calendar: calendar)
+        let trainingCalendar = WorkoutScheduler.trainingCalendar(calendar)
+        scheduleAnchorWeek = week
+        scheduleAnchorDate = trainingCalendar.dateInterval(of: .weekOfYear, for: target)?.start ?? target
+    }
+
+    /// То же самое, но по номеру тренировки волны жима.
+    func setCurrentBenchSession(_ session: Int, now: Date = Date(), calendar: Calendar = .current) {
+        let target = day(forBenchSession: session)
+        setCurrentWorkout(week: target.week, day: target.day, now: now, calendar: calendar)
     }
 
     // MARK: - Волна «Жим 14»

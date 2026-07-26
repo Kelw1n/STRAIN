@@ -76,17 +76,33 @@ enum WorkoutScheduler {
 
     /// Раскладывает план по календарю.
     ///
-    /// Текущая календарная неделя — это первая неделя плана, в которой остались
-    /// невыполненные дни. Если пользователь отстал, расписание едет вместе с ним,
-    /// а пропущенные дни этой недели показываются отдельно.
+    /// Текущая неделя плана — первая, в которой остались невыполненные дни. Она ложится
+    /// на календарную неделю из явной привязки профиля, а если её нет — на текущую.
+    /// Неделя, которая целиком в прошлом, переносится вперёд: иначе новый пользователь
+    /// сразу видел бы «пропущено» за дни, когда приложения у него ещё не было.
     static func build(profile: ProgramProfile, plan: WorkoutPlan, now: Date = Date(), calendar base: Calendar = .current) -> WorkoutSchedule {
         let calendar = trainingCalendar(base)
         let startOfToday = calendar.startOfDay(for: now)
-        let weekStart = calendar.dateInterval(of: .weekOfYear, for: startOfToday)?.start ?? startOfToday
+        let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: startOfToday)?.start ?? startOfToday
 
         let anchorWeek = plan.weeks.first { week in
             week.days.contains { !profile.isCompleted(week: week.number, day: $0.number) }
         }?.number ?? plan.weeks.first?.number ?? 1
+
+        let weekdays = plan.weeks.first?.days.map { profile.weekday(forDay: $0.number) } ?? []
+        var weekStart = anchoredWeekStart(profile: profile, anchorWeek: anchorWeek, fallback: thisWeekStart, calendar: calendar)
+
+        // Неделя ещё не начата, но её дни уже позади (свежая установка в конце недели) —
+        // переносим её вперёд, чтобы не показывать пропуски за дни без приложения.
+        // Начатую неделю не двигаем: её невыполненные дни — настоящие пропуски.
+        let weekStarted = plan.weeks.first { $0.number == anchorWeek }?.days
+            .contains { profile.isCompleted(week: anchorWeek, day: $0.number) } ?? false
+        if !weekStarted, lastTrainingDate(weekStart: weekStart, weekdays: weekdays, calendar: calendar) < startOfToday {
+            weekStart = thisWeekStart
+            if lastTrainingDate(weekStart: weekStart, weekdays: weekdays, calendar: calendar) < startOfToday {
+                weekStart = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart) ?? weekStart
+            }
+        }
 
         var entries: [ScheduledWorkout] = []
         entries.reserveCapacity(plan.weeks.count * 4)
@@ -107,14 +123,27 @@ enum WorkoutScheduler {
 
         let todayEntry = entries.first { calendar.isDate($0.date, inSameDayAs: startOfToday) }
         let pending = entries.filter { !$0.isCompleted }
+        // Дни до начала цикла пропущенными не считаются.
+        let cycleStart = calendar.startOfDay(for: profile.cycleStartedAt)
 
         return WorkoutSchedule(
             today: todayEntry.flatMap { $0.isCompleted ? nil : $0 },
             upcoming: pending.filter { $0.date > startOfToday }.min { $0.date < $1.date },
-            overdue: pending.filter { $0.date < startOfToday }.sorted { $0.date < $1.date },
+            overdue: pending.filter { $0.date < startOfToday && $0.date >= cycleStart }.sorted { $0.date < $1.date },
             todayAlreadyDone: todayEntry?.isCompleted ?? false,
             referenceDate: now
         )
+    }
+
+    private static func anchoredWeekStart(profile: ProgramProfile, anchorWeek: Int, fallback: Date, calendar: Calendar) -> Date {
+        guard profile.scheduleAnchorWeek > 0, let stored = profile.scheduleAnchorDate else { return fallback }
+        return calendar.date(byAdding: .weekOfYear, value: anchorWeek - profile.scheduleAnchorWeek, to: stored) ?? fallback
+    }
+
+    private static func lastTrainingDate(weekStart: Date, weekdays: [Int], calendar: Calendar) -> Date {
+        let offsets = weekdays.map { ($0 - 2 + 7) % 7 }
+        let last = offsets.max() ?? 0
+        return calendar.date(byAdding: .day, value: last, to: weekStart) ?? weekStart
     }
 
     private static func date(week: Int, weekday: Int, anchorWeek: Int, weekStart: Date, calendar: Calendar) -> Date? {

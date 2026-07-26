@@ -3,32 +3,54 @@ import SwiftData
 
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var profiles: [ProgramProfile]
-    @AppStorage("hasSeenSetup") private var hasSeenSetup = false
+    @Query(sort: [SortDescriptor(\ProgramProfile.createdAt)]) private var profiles: [ProgramProfile]
+    @AppStorage("activeProfileID") private var activeProfileID = ""
+    @State private var isAddingProfile = false
+
+    private var activeProfile: ProgramProfile? {
+        profiles.first { $0.profileID.uuidString == activeProfileID } ?? profiles.first
+    }
 
     var body: some View {
         Group {
-            if let profile = profiles.first {
-                MainTabView(profile: profile) {
-                    modelContext.delete(profile)
-                    try? modelContext.save()
-                    hasSeenSetup = false
-                }
-                .transition(.opacity.combined(with: .scale(scale: 1.03)))
+            if let profile = activeProfile, !isAddingProfile {
+                MainTabView(
+                    profile: profile,
+                    onAddProfile: { isAddingProfile = true },
+                    onDeleteProfile: { delete(profile) }
+                )
+                .id(profile.profileID)
+                .transition(.opacity.combined(with: .scale(scale: 1.02)))
             } else {
-                ProgramOnboardingView { profile in
+                ProgramOnboardingView(canCancel: !profiles.isEmpty, onCancel: { isAddingProfile = false }) { profile in
+                    profile.name = suggestedName()
                     modelContext.insert(profile)
-                    hasSeenSetup = true
+                    activeProfileID = profile.profileID.uuidString
+                    isAddingProfile = false
                 }
                 .transition(.opacity)
             }
         }
-        .animation(.spring(response: 0.5, dampingFraction: 0.9), value: profiles.isEmpty)
+        .animation(.spring(response: 0.5, dampingFraction: 0.9), value: activeProfile?.profileID)
+        .animation(.spring(response: 0.5, dampingFraction: 0.9), value: isAddingProfile)
         .tint(Theme.accent)
+    }
+
+    private func suggestedName() -> String {
+        profiles.isEmpty ? "Профиль" : "Профиль \(profiles.count + 1)"
+    }
+
+    private func delete(_ profile: ProgramProfile) {
+        let fallback = profiles.first { $0.profileID != profile.profileID }
+        modelContext.delete(profile)
+        try? modelContext.save()
+        activeProfileID = fallback?.profileID.uuidString ?? ""
     }
 }
 
 struct ProgramOnboardingView: View {
+    var canCancel: Bool = false
+    var onCancel: () -> Void = {}
     let onSave: (ProgramProfile) -> Void
     @State private var selectedProgram: TrainingProgramKind?
 
@@ -49,7 +71,7 @@ struct ProgramOnboardingView: View {
                 UpperLowerSetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(upperLowerInput: $0)) }
                     .transition(forward)
             case nil:
-                ProgramSelectionView(selection: $selectedProgram)
+                ProgramSelectionView(selection: $selectedProgram, canCancel: canCancel, onCancel: onCancel)
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
                         removal: .move(edge: .leading).combined(with: .opacity)
@@ -63,6 +85,8 @@ struct ProgramOnboardingView: View {
 struct ProgramSelectionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selection: TrainingProgramKind?
+    var canCancel: Bool = false
+    var onCancel: () -> Void = {}
     @State private var breathe = false
 
     var body: some View {
@@ -102,6 +126,13 @@ struct ProgramSelectionView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
+            .toolbar {
+                if canCancel {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Отмена", action: onCancel)
+                    }
+                }
+            }
             .onAppear {
                 guard !reduceMotion, !breathe else { return }
                 withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { breathe = true }

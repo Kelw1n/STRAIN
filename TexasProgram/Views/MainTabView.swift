@@ -11,7 +11,8 @@ struct MainTabView: View {
     @State private var selectedTab: AppTab = .today
     @State private var showingSettings = false
     @State private var benchFocus: Int?
-    let onResetApplication: () -> Void
+    let onAddProfile: () -> Void
+    let onDeleteProfile: () -> Void
 
     private var isUpperLower: Bool { profile.programKind == .upperLower }
 
@@ -54,7 +55,7 @@ struct MainTabView: View {
         }
         .tint(Theme.accent)
         .sheet(isPresented: $showingSettings) {
-            SettingsView(profile: profile, onResetApplication: onResetApplication)
+            SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
         }
     }
 }
@@ -321,6 +322,15 @@ struct PlanView: View {
                                     DaySummaryCard(profile: profile, week: week.number, day: day)
                                 }
                                 .buttonStyle(.pressable)
+                                .contextMenu {
+                                    Button {
+                                        withAnimation(Motion.maybe(Motion.card, reduce: reduceMotion)) {
+                                            profile.setCurrentWorkout(week: week.number, day: day.number)
+                                        }
+                                    } label: {
+                                        Label("Начать с этого дня", systemImage: "flag.checkered")
+                                    }
+                                }
                                 .appearIn(index)
                                 .softScroll()
                             }
