@@ -44,11 +44,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
-      - name: Exclude asset catalog from CI build
-        run: |
-          rm -rf TexasProgram/Assets.xcassets
       - name: Build unsigned app
         run: |
+          rm -rf TexasProgram/Assets.xcassets
+          rm -rf TexasProgram/AppIcon.appiconset TexasProgram/AppIconDark.appiconset TexasProgram/AppIconLight.appiconset
           xcodebuild build \
             -project TexasProgram.xcodeproj \
             -scheme TexasProgram \
