@@ -64,6 +64,7 @@ import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.ui.AppBackground
 import com.texasprogram.app.ui.BenchWaveScreen
+import com.texasprogram.app.ui.DayCustomizeScreen
 import com.texasprogram.app.ui.DayDetailScreen
 import com.texasprogram.app.ui.GuideScreen
 import com.texasprogram.app.service.RestTimer
@@ -148,6 +149,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     var benchFocus by remember { mutableStateOf<Int?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var dayDetail by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var customizing by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     val isUpperLower = profile.programKind == TrainingProgramKind.UPPER_LOWER
     val tabs = AppTab.entries.filter { it != AppTab.BENCH || isUpperLower }
@@ -194,8 +196,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
     val contentPadding = screenPadding(bottomExtra = 96.dp)
 
-    BackHandler(enabled = showSettings || dayDetail != null) {
+    BackHandler(enabled = showSettings || dayDetail != null || customizing != null) {
         when {
+            customizing != null -> customizing = null
             showSettings -> showSettings = false
             dayDetail != null -> dayDetail = null
         }
@@ -230,6 +233,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onSelectRest = { seconds -> store.updateActive { it.copy(defaultRestSeconds = seconds) } },
                     onOpenBench = openBench,
                     onOpenDay = { week, day -> dayDetail = week to day },
+                    onCustomize = { week, day -> customizing = week to day },
                     onSettings = { showSettings = true },
                     contentPadding = contentPadding
                 )
@@ -291,10 +295,37 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                                 if (adds) timer.start(profile.defaultRestSeconds.toLong())
                             },
                             onOpenBench = openBench,
+                            onCustomize = { customizing = week to dayNumber },
                             contentPadding = screenPadding(bottomExtra = 32.dp)
                         )
                         CloseButton(Modifier.align(Alignment.TopEnd)) { dayDetail = null }
                     }
+                }
+            }
+        }
+
+        AnimatedContent(
+            targetState = customizing,
+            transitionSpec = {
+                if (targetState != null) {
+                    (slideInVertically(tween(320)) { it / 3 } + fadeIn(tween(220))) togetherWith fadeOut(tween(180))
+                } else {
+                    fadeIn(tween(180)) togetherWith (slideOutVertically(tween(320)) { it / 3 } + fadeOut(tween(200)))
+                }
+            },
+            label = "customize"
+        ) { target ->
+            if (target != null) {
+                val (week, dayNumber) = target
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    DayCustomizeScreen(
+                        profile = profile,
+                        week = week,
+                        dayNumber = dayNumber,
+                        onUpdate = { updated -> store.update(updated.id) { updated } },
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { customizing = null }
                 }
             }
         }

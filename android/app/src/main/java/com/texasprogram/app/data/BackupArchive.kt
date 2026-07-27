@@ -1,6 +1,7 @@
 package com.texasprogram.app.data
 
 import com.texasprogram.app.model.CompletionRecord
+import com.texasprogram.app.model.PlanEdit
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.ScheduleMode
 import com.texasprogram.app.model.TrainingLevel
@@ -38,7 +39,10 @@ data class ProfileSnapshot(
     val peakSquat5RM: Double? = null,
     val peakBench5RM: Double? = null,
     val peakDeadlift5RM: Double? = null,
-    val completionLog: List<CompletionSnapshot> = emptyList()
+    val completionLog: List<CompletionSnapshot> = emptyList(),
+    /// Свои упражнения и правки дней. Значение по умолчанию нужно для копий,
+    /// снятых до появления правок, и для файлов со старых версий iOS.
+    val planEdits: List<PlanEdit> = emptyList()
 )
 
 @Serializable
@@ -99,7 +103,8 @@ object BackupService {
         peakDeadlift5RM = profile.peakDeadlift5RM,
         completionLog = profile.completionLog.map {
             CompletionSnapshot(it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift)
-        }
+        },
+        planEdits = profile.planEdits
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(
@@ -121,6 +126,7 @@ object BackupService {
         completionLog = snapshot.completionLog.map {
             CompletionRecord(it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift)
         },
+        planEdits = snapshot.planEdits,
         scheduleWeekdays = snapshot.scheduleWeekdays,
         scheduleMode = if (snapshot.scheduleMode == "QUEUE") ScheduleMode.QUEUE else ScheduleMode.WEEKDAY,
         cycleStartedEpochDay = snapshot.cycleStartedEpochDay,

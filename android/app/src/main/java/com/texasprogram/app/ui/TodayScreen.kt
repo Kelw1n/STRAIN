@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
@@ -52,6 +53,7 @@ fun TodayScreen(
     onSelectRest: (Int) -> Unit,
     onOpenBench: ((Int) -> Unit)?,
     onOpenDay: (Int, Int) -> Unit,
+    onCustomize: (Int, Int) -> Unit,
     onSettings: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -68,6 +70,26 @@ fun TodayScreen(
     ) {
         item(key = "title") {
             ScreenTitle("Сегодня") {
+                if (focus != null) {
+                    val edited = profile.edits(focus.week, focus.day.number).isNotEmpty()
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Theme.surfaceSoft)
+                            .pressable { onCustomize(focus.week, focus.day.number) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Изменённый день подсвечиваем цветом значка, а не отдельной меткой.
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = "Свои упражнения",
+                            tint = if (edited) Theme.warning else Theme.textPrimary,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
                 Box(
                     Modifier
                         .size(40.dp)

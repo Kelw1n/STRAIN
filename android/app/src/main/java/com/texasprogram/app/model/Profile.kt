@@ -63,7 +63,10 @@ data class ProgramProfile(
     val peakingActive: Boolean = false,
     val peakSquat5RM: Double? = null,
     val peakBench5RM: Double? = null,
-    val peakDeadlift5RM: Double? = null
+    val peakDeadlift5RM: Double? = null,
+    /// Свои упражнения и правки дней. Поле новое: у сохранённых профилей
+    /// подставится пустой список, и план останется прежним.
+    val planEdits: List<PlanEdit> = emptyList()
 ) {
 
     // MARK: - Входные данные и план
@@ -78,18 +81,151 @@ data class ProgramProfile(
     val isPeaking: Boolean
         get() = programKind == TrainingProgramKind.TEXAS && peakingActive
 
+    /// План программы с наложенными пользовательскими правками.
+    /// Правки входят в ключ кэша: иначе добавленное упражнение не появилось бы,
+    /// пока не поменяются максимумы.
     val workoutPlan: WorkoutPlan
         get() {
-            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM)
-            return PlanCache.resolve(key) {
-                when (programKind) {
-                    TrainingProgramKind.TEXAS ->
-                        if (isPeaking) ProgramCalculator.generatePeaking(peakingInput)
-                        else ProgramCalculator.generate(input)
-                    TrainingProgramKind.UPPER_LOWER -> UpperLowerCalculator.generate(upperLowerInput)
-                }
-            }
+            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits)
+            return PlanCache.resolve(key) { applyEdits(generatedPlan) }
         }
+
+    /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
+    /// что именно программа предлагала до вмешательства.
+    val generatedPlan: WorkoutPlan
+        get() = when (programKind) {
+            TrainingProgramKind.TEXAS ->
+                if (isPeaking) ProgramCalculator.generatePeaking(peakingInput)
+                else ProgramCalculator.generate(input)
+            TrainingProgramKind.UPPER_LOWER -> UpperLowerCalculator.generate(upperLowerInput)
+        }
+
+    private fun applyEdits(plan: WorkoutPlan): WorkoutPlan {
+        // Быстрый выход: у профиля без правок расчёт остаётся прежним.
+        if (planEdits.isEmpty()) return plan
+        val peaking = isPeaking
+        return plan.copy(weeks = plan.weeks.map { week ->
+            week.copy(days = week.days.map { day ->
+                val edits = planEdits.filter { it.matches(week.number, day.number, peaking) }
+                if (edits.isEmpty()) return@map day
+                val list = day.exercises.toMutableList()
+                // Порядок важен: сначала убираем и заменяем упражнения программы,
+                // и только потом дописываем свои — иначе замена могла бы попасть
+                // на только что добавленное упражнение.
+                edits.filter { it.kind == PlanEditKind.HIDE }.forEach { edit ->
+                    list.removeAll { it.key == edit.targetKey }
+                }
+                edits.filter { it.kind == PlanEditKind.REPLACE }.forEach { edit ->
+                    val index = list.indexOfFirst { it.key == edit.targetKey }
+                    if (index >= 0) list[index] = edit.prescription
+                }
+                edits.filter { it.kind == PlanEditKind.ADD }.forEach { list.add(it.prescription) }
+                day.copy(exercises = list)
+            })
+        })
+    }
+
+    // MARK: - Свои упражнения
+
+    /// Правки, которые действуют на конкретную тренировку.
+    fun edits(week: Int, day: Int): List<PlanEdit> =
+        planEdits.filter { it.matches(week, day, isPeaking) }
+
+    /// Упражнения дня, как их предлагает сама программа, без правок.
+    fun generatedExercises(week: Int, day: Int): List<ExercisePrescription> =
+        generatedPlan.weeks.firstOrNull { it.number == week }
+            ?.days?.firstOrNull { it.number == day }?.exercises.orEmpty()
+
+    fun addExercise(
+        name: String,
+        sets: Int,
+        reps: String,
+        kilograms: Double?,
+        loadText: String?,
+        week: Int,
+        day: Int,
+        scope: PlanEditScope
+    ): ProgramProfile = copy(
+        planEdits = planEdits + PlanEdit(
+            kind = PlanEditKind.ADD,
+            day = day,
+            week = if (scope == PlanEditScope.SINGLE) week else null,
+            isPeaking = isPeaking,
+            name = name,
+            sets = sets,
+            reps = reps,
+            kilograms = kilograms,
+            loadText = loadText
+        )
+    )
+
+    fun replaceExercise(
+        target: ExercisePrescription,
+        name: String,
+        sets: Int,
+        reps: String,
+        kilograms: Double?,
+        loadText: String?,
+        week: Int,
+        day: Int,
+        scope: PlanEditScope
+    ): ProgramProfile = dropEdits(target.key, day, week, scope).let { cleaned ->
+        cleaned.copy(
+            planEdits = cleaned.planEdits + PlanEdit(
+                kind = PlanEditKind.REPLACE,
+                day = day,
+                week = if (scope == PlanEditScope.SINGLE) week else null,
+                isPeaking = isPeaking,
+                targetKey = target.key,
+                name = name,
+                sets = sets,
+                reps = reps,
+                kilograms = kilograms,
+                loadText = loadText
+            )
+        )
+    }
+
+    fun hideExercise(
+        target: ExercisePrescription,
+        week: Int,
+        day: Int,
+        scope: PlanEditScope
+    ): ProgramProfile = dropEdits(target.key, day, week, scope).let { cleaned ->
+        cleaned.copy(
+            planEdits = cleaned.planEdits + PlanEdit(
+                kind = PlanEditKind.HIDE,
+                day = day,
+                week = if (scope == PlanEditScope.SINGLE) week else null,
+                isPeaking = isPeaking,
+                targetKey = target.key
+            )
+        )
+    }
+
+    /// Убирает правку и вместе с ней осиротевшие отметки подходов:
+    /// упражнения больше нет, а его закрытые подходы остались бы в хранилище.
+    fun removeEdit(edit: PlanEdit): ProgramProfile {
+        val suffix = "|" + edit.id
+        return copy(
+            planEdits = planEdits.filterNot { it.id == edit.id },
+            setProgress = setProgress.filterNot { it.key.endsWith(suffix) }
+        )
+    }
+
+    fun removeEdits(week: Int, day: Int): ProgramProfile =
+        edits(week, day).fold(this) { profile, edit -> profile.removeEdit(edit) }
+
+    /// Одно упражнение — одна правка. Иначе замена поверх замены накопила бы
+    /// цепочку, из которой не выбраться кнопкой «вернуть как было».
+    private fun dropEdits(targetKey: String, day: Int, week: Int, scope: PlanEditScope): ProgramProfile {
+        val peaking = isPeaking
+        val stale = planEdits.filter {
+            it.targetKey == targetKey && it.day == day && it.isPeaking == peaking &&
+                (scope == PlanEditScope.EVERY_WEEK || it.week == null || it.week == week)
+        }
+        return stale.fold(this) { profile, edit -> profile.removeEdit(edit) }
+    }
 
     val maximumLabel: String get() = if (programKind == TrainingProgramKind.TEXAS) "5ПМ" else "1ПМ"
 
@@ -164,7 +300,7 @@ data class ProgramProfile(
     // MARK: - Отметка по подходам
 
     private fun setKey(week: Int, day: Int, exercise: ExercisePrescription): String =
-        dayKey(week, day) + "|" + exercise.name
+        dayKey(week, day) + "|" + exercise.key
 
     fun completedSets(week: Int, day: Int, exercise: ExercisePrescription): Int =
         setProgress[setKey(week, day, exercise)] ?: 0
