@@ -26,14 +26,16 @@
 		B002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrainWidgetsBundle.swift; sourceTree = "<group>";};
 		B003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestLiveActivity.swift; sourceTree = "<group>";};
 		B004 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>";};
+		B006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrainHomeWidget.swift; sourceTree = "<group>";};
 		B005 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StrainWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR;};
-		B010 = {isa = PBXGroup; children = (B001, B003, B002, B004); path = StrainWidgets; sourceTree = "<group>";};
+		B010 = {isa = PBXGroup; children = (B001, B003, B006, B002, B004); path = StrainWidgets; sourceTree = "<group>";};
 		B020 = {isa = PBXBuildFile; fileRef = B001;};
 		B021 = {isa = PBXBuildFile; fileRef = B002;};
 		B022 = {isa = PBXBuildFile; fileRef = B003;};
 		B023 = {isa = PBXBuildFile; fileRef = B001;};
+		B025 = {isa = PBXBuildFile; fileRef = B006;};
 		B024 = {isa = PBXBuildFile; fileRef = B005; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, );};};
-		B030 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B020, B021, B022); runOnlyForDeploymentPostprocessing = 0;};
+		B030 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B020, B021, B022, B025); runOnlyForDeploymentPostprocessing = 0;};
 		B031 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
 		B032 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
 		B033 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (B024); name = "Embed Foundation Extensions"; runOnlyForDeploymentPostprocessing = 0;};
