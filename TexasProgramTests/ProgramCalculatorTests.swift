@@ -153,8 +153,9 @@ final class ProgramCalculatorTests: XCTestCase {
     // MARK: - Блины и разминка
 
     func testPlatesSplitEvenlyPerSide() {
-        XCTAssertEqual(PlateMath.perSide(for: 100), [20, 20])
-        XCTAssertEqual(PlateMath.perSide(for: 140), [25, 25, 5])
+        // Набор жадный, от тяжёлого к лёгкому: 40 на сторону — это 25 + 15, а не 20 + 20.
+        XCTAssertEqual(PlateMath.perSide(for: 100), [25, 15])
+        XCTAssertEqual(PlateMath.perSide(for: 140), [25, 25, 10])
         XCTAssertEqual(PlateMath.perSide(for: 20), [])
         XCTAssertEqual(PlateMath.perSide(for: 62.5), [20, 1.25])
     }
@@ -176,6 +177,174 @@ final class ProgramCalculatorTests: XCTestCase {
     func testWarmupsSkippedForLightWeights() {
         XCTAssertTrue(PlateMath.warmups(to: 20).isEmpty)
         XCTAssertTrue(PlateMath.warmups(to: 15).isEmpty)
+    }
+
+    // MARK: - Свои упражнения
+
+    /// Упражнения дня основной программы — короткая помощь тестам ниже.
+    private func exercises(_ profile: ProgramProfile, week: Int, day: Int) -> [ExercisePrescription] {
+        profile.workoutPlan.weeks.first { $0.number == week }?
+            .days.first { $0.number == day }?.exercises ?? []
+    }
+
+    func testAddedExerciseAppearsOnlyOnItsDay() {
+        let profile = ProgramProfile(input: .demo)
+        let before = exercises(profile, week: 1, day: 1).count
+
+        profile.addExercise(name: "Гиперэкстензия", sets: 3, reps: "12",
+                            kilograms: nil, loadText: "RPE 7",
+                            week: 1, day: 1, scope: .everyWeek)
+
+        XCTAssertEqual(exercises(profile, week: 1, day: 1).count, before + 1)
+        XCTAssertEqual(exercises(profile, week: 1, day: 1).last?.name, "Гиперэкстензия")
+        // Тот же день в другой неделе тоже получил упражнение.
+        XCTAssertEqual(exercises(profile, week: 7, day: 1).last?.name, "Гиперэкстензия")
+        // Соседний день — нет.
+        XCTAssertFalse(exercises(profile, week: 1, day: 2).contains { $0.name == "Гиперэкстензия" })
+    }
+
+    func testSingleScopeTouchesOneWorkoutOnly() {
+        let profile = ProgramProfile(input: .demo)
+        profile.addExercise(name: "Икры", sets: 4, reps: "15",
+                            kilograms: 40, loadText: nil,
+                            week: 3, day: 2, scope: .single)
+
+        XCTAssertTrue(exercises(profile, week: 3, day: 2).contains { $0.name == "Икры" })
+        XCTAssertFalse(exercises(profile, week: 4, day: 2).contains { $0.name == "Икры" })
+        XCTAssertEqual(exercises(profile, week: 3, day: 2).last?.load, .kilograms(40))
+    }
+
+    func testHiddenExerciseLeavesTheDay() {
+        let profile = ProgramProfile(input: .demo)
+        let target = exercises(profile, week: 1, day: 1)[0]
+        XCTAssertEqual(target.name, "Приседания")
+
+        profile.hideExercise(target, week: 1, day: 1, scope: .everyWeek)
+        XCTAssertFalse(exercises(profile, week: 1, day: 1).contains { $0.name == "Приседания" })
+        // День 3 приседания сохранил: правка привязана к дню 1.
+        XCTAssertTrue(exercises(profile, week: 1, day: 3).contains { $0.name == "Приседания" })
+    }
+
+    func testReplacementKeepsPositionInTheDay() {
+        let profile = ProgramProfile(input: .demo)
+        let target = exercises(profile, week: 1, day: 1)[1]
+        XCTAssertEqual(target.name, "Жим лёжа")
+
+        profile.replaceExercise(target, name: "Жим гантелей", sets: 4, reps: "8",
+                                kilograms: 30, loadText: nil,
+                                week: 1, day: 1, scope: .everyWeek)
+
+        let list = exercises(profile, week: 1, day: 1)
+        XCTAssertEqual(list[1].name, "Жим гантелей")
+        XCTAssertEqual(list[1].load, .kilograms(30))
+        XCTAssertEqual(list[0].name, "Приседания")
+    }
+
+    func testSecondReplacementDoesNotStack() {
+        let profile = ProgramProfile(input: .demo)
+        let target = exercises(profile, week: 1, day: 1)[1]
+
+        profile.replaceExercise(target, name: "Жим гантелей", sets: 4, reps: "8",
+                                kilograms: nil, loadText: nil,
+                                week: 1, day: 1, scope: .everyWeek)
+        profile.replaceExercise(target, name: "Отжимания на брусьях", sets: 3, reps: "10",
+                                kilograms: nil, loadText: nil,
+                                week: 1, day: 1, scope: .everyWeek)
+
+        XCTAssertEqual(profile.planEdits.count, 1)
+        XCTAssertEqual(exercises(profile, week: 1, day: 1)[1].name, "Отжимания на брусьях")
+    }
+
+    func testRemovingEditRestoresProgramAndClearsSets() {
+        let profile = ProgramProfile(input: .demo)
+        profile.addExercise(name: "Планка", sets: 3, reps: "60 с",
+                            kilograms: nil, loadText: nil,
+                            week: 1, day: 1, scope: .everyWeek)
+        let added = exercises(profile, week: 1, day: 1).last!
+        profile.toggleSet(week: 1, day: 1, exercise: added, index: 1)
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: added), 2)
+
+        profile.removeEdits(week: 1, day: 1)
+        XCTAssertTrue(profile.planEdits.isEmpty)
+        XCTAssertFalse(exercises(profile, week: 1, day: 1).contains { $0.name == "Планка" })
+        // Отметки исчезнувшего упражнения не должны оставаться в хранилище.
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: added), 0)
+    }
+
+    /// Пикирование нумерует недели с единицы: без разделения правка основной
+    /// программы легла бы и на пиковый цикл.
+    func testEditsDoNotLeakIntoPeaking() {
+        let profile = ProgramProfile(input: .demo)
+        profile.addExercise(name: "Шраги", sets: 3, reps: "12",
+                            kilograms: nil, loadText: nil,
+                            week: 1, day: 1, scope: .everyWeek)
+        XCTAssertTrue(exercises(profile, week: 1, day: 1).contains { $0.name == "Шраги" })
+
+        profile.peakingActive = true
+        XCTAssertFalse(exercises(profile, week: 1, day: 1).contains { $0.name == "Шраги" })
+
+        profile.peakingActive = false
+        XCTAssertTrue(exercises(profile, week: 1, day: 1).contains { $0.name == "Шраги" })
+    }
+
+    func testEditsSurviveMaximumChange() {
+        let profile = ProgramProfile(input: .demo)
+        profile.addExercise(name: "Тяга к поясу", sets: 4, reps: "10",
+                            kilograms: nil, loadText: nil,
+                            week: 1, day: 2, scope: .everyWeek)
+        profile.squat5RM = 140
+
+        XCTAssertTrue(exercises(profile, week: 1, day: 2).contains { $0.name == "Тяга к поясу" })
+    }
+
+    func testEditedDayCanStillBeCompletedBySets() {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        profile.addExercise(name: "Пресс", sets: 2, reps: "15",
+                            kilograms: nil, loadText: nil,
+                            week: 1, day: 1, scope: .everyWeek)
+        let workout = profile.schedule.focus!
+        let list = profile.exercises(for: workout)
+        XCTAssertTrue(list.contains { $0.name == "Пресс" })
+
+        for exercise in list where exercise.sets > 0 {
+            profile.toggleSet(week: workout.week, day: workout.day.number,
+                              exercise: exercise, index: exercise.sets - 1)
+        }
+        XCTAssertTrue(profile.allSetsDone(for: workout))
+    }
+
+    func testBackupCarriesPlanEdits() throws {
+        let profile = ProgramProfile(input: .demo)
+        profile.addExercise(name: "Прогулка фермера", sets: 3, reps: "30 м",
+                            kilograms: 40, loadText: nil,
+                            week: 2, day: 3, scope: .single)
+
+        let data = try BackupService.export([profile])
+        let archive = try BackupService.archive(from: data)
+        let restored = try XCTUnwrap(archive.profiles.first?.planEdits)
+
+        XCTAssertEqual(restored.count, 1)
+        XCTAssertEqual(restored[0].name, "Прогулка фермера")
+        XCTAssertEqual(restored[0].week, 2)
+        XCTAssertEqual(restored[0].day, 3)
+        XCTAssertEqual(restored[0].kilograms, 40)
+        XCTAssertEqual(restored[0].scope, .single)
+    }
+
+    /// Копии, снятые до появления правок, и файлы с Android поля не содержат.
+    func testBackupWithoutPlanEditsStillDecodes() throws {
+        let profile = ProgramProfile(input: .demo)
+        let data = try BackupService.export([profile])
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        var profiles = try XCTUnwrap(object["profiles"] as? [[String: Any]])
+        profiles[0].removeValue(forKey: "planEdits")
+        object["profiles"] = profiles
+
+        let trimmed = try JSONSerialization.data(withJSONObject: object)
+        let archive = try BackupService.archive(from: trimmed)
+        XCTAssertNil(archive.profiles[0].planEdits)
     }
 
     // MARK: - Отметка по подходам

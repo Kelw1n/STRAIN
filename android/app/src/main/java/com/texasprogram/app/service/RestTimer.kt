@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -94,12 +95,28 @@ class RestTimer(private val context: Context) {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
 
+    /// С Android 12 точный будильник требует особого разрешения, а при targetSdk 33+
+    /// его больше не выдают при установке. Вызов без разрешения бросает
+    /// SecurityException — именно это роняло приложение на тапе по кружку подхода.
+    /// Поэтому сначала спрашиваем систему, а если нельзя — ставим неточный.
     private fun scheduleAlarm() {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         val trigger = SystemClock.elapsedRealtime() + (endsAtMillis - System.currentTimeMillis())
-        // setExactAndAllowWhileIdle не требует особого разрешения для короткого таймера
-        // и переживает режим сна, в отличие от обычного set().
-        manager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, trigger, alarmIntent())
+        val intent = alarmIntent()
+        val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
+        try {
+            if (exact) {
+                manager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, trigger, intent)
+            } else {
+                // Неточный может опоздать на минуту, но это лучше падения:
+                // сам отсчёт в приложении идёт по часам и не зависит от будильника.
+                manager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, trigger, intent)
+            }
+        } catch (_: SecurityException) {
+            runCatching {
+                manager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, trigger, intent)
+            }
+        }
     }
 
     private fun cancelAlarm() {

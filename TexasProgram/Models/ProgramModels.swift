@@ -209,6 +209,9 @@ final class ProgramProfile {
     var setProgress: [String: Int] = [:]
     /// Длительность отдыха, который запускается сам после отметки подхода.
     var defaultRestSeconds: Int = 180
+    /// Свои упражнения и правки дней. Свойство новое: у существующих профилей
+    /// подставится пустой список, и план останется прежним.
+    var planEdits: [PlanEdit] = []
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -272,7 +275,12 @@ final class ProgramProfile {
     /// Идёт ли сейчас пиковый цикл. Только «Техас» — у «Верх / Низ» пикирования нет.
     var isPeaking: Bool { programKind == .texas && peakingActive }
 
-    var workoutPlan: WorkoutPlan {
+    /// План программы с наложенными пользовательскими правками.
+    var workoutPlan: WorkoutPlan { applyEdits(to: generatedPlan) }
+
+    /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
+    /// что именно программа предлагала до вмешательства.
+    var generatedPlan: WorkoutPlan {
         switch programKind {
         case .texas:
             return isPeaking
@@ -281,6 +289,141 @@ final class ProgramProfile {
         case .upperLower:
             return UpperLowerCalculator.generate(input: upperLowerInput)
         }
+    }
+
+    private func applyEdits(to plan: WorkoutPlan) -> WorkoutPlan {
+        // Быстрый выход: у профиля без правок расчёт остаётся прежним.
+        guard !planEdits.isEmpty else { return plan }
+        let peaking = isPeaking
+        let weeks = plan.weeks.map { week in
+            WorkoutWeekPlan(id: week.id, number: week.number, days: week.days.map { day in
+                let edits = planEdits.filter { $0.matches(week: week.number, day: day.number, isPeaking: peaking) }
+                guard !edits.isEmpty else { return day }
+                var list = day.exercises
+                // Порядок важен: сначала убираем и заменяем упражнения программы,
+                // и только потом дописываем свои — иначе замена могла бы попасть
+                // на только что добавленное упражнение.
+                for edit in edits where edit.kind == .hide {
+                    list.removeAll { $0.id == edit.targetID }
+                }
+                for edit in edits where edit.kind == .replace {
+                    guard let index = list.firstIndex(where: { $0.id == edit.targetID }) else { continue }
+                    list[index] = edit.prescription
+                }
+                for edit in edits where edit.kind == .add {
+                    list.append(edit.prescription)
+                }
+                return WorkoutDayPlan(id: day.id, number: day.number, title: day.title, exercises: list)
+            })
+        }
+        return WorkoutPlan(weeks: weeks, isPeaking: plan.isPeaking)
+    }
+
+    // MARK: - Свои упражнения
+
+    /// Правки, которые действуют на конкретную тренировку.
+    func edits(week: Int, day: Int) -> [PlanEdit] {
+        planEdits.filter { $0.matches(week: week, day: day, isPeaking: isPeaking) }
+    }
+
+    /// Упражнения дня, как их предлагает сама программа, без правок.
+    func generatedExercises(week: Int, day: Int) -> [ExercisePrescription] {
+        generatedPlan.weeks.first { $0.number == week }?
+            .days.first { $0.number == day }?.exercises ?? []
+    }
+
+    @discardableResult
+    func addExercise(
+        name: String,
+        sets: Int,
+        reps: String,
+        kilograms: Double?,
+        loadText: String?,
+        week: Int,
+        day: Int,
+        scope: PlanEditScope
+    ) -> PlanEdit {
+        let edit = PlanEdit(
+            kind: .add,
+            day: day,
+            week: scope == .single ? week : nil,
+            isPeaking: isPeaking,
+            name: name,
+            sets: sets,
+            reps: reps,
+            kilograms: kilograms,
+            loadText: loadText
+        )
+        planEdits.append(edit)
+        return edit
+    }
+
+    @discardableResult
+    func replaceExercise(
+        _ target: ExercisePrescription,
+        name: String,
+        sets: Int,
+        reps: String,
+        kilograms: Double?,
+        loadText: String?,
+        week: Int,
+        day: Int,
+        scope: PlanEditScope
+    ) -> PlanEdit {
+        dropEdits(targeting: target.id, day: day, week: week, scope: scope)
+        let edit = PlanEdit(
+            kind: .replace,
+            day: day,
+            week: scope == .single ? week : nil,
+            isPeaking: isPeaking,
+            targetID: target.id,
+            name: name,
+            sets: sets,
+            reps: reps,
+            kilograms: kilograms,
+            loadText: loadText
+        )
+        planEdits.append(edit)
+        return edit
+    }
+
+    @discardableResult
+    func hideExercise(_ target: ExercisePrescription, week: Int, day: Int, scope: PlanEditScope) -> PlanEdit {
+        dropEdits(targeting: target.id, day: day, week: week, scope: scope)
+        let edit = PlanEdit(
+            kind: .hide,
+            day: day,
+            week: scope == .single ? week : nil,
+            isPeaking: isPeaking,
+            targetID: target.id
+        )
+        planEdits.append(edit)
+        return edit
+    }
+
+    /// Убирает правку и вместе с ней осиротевшие отметки подходов:
+    /// упражнения больше нет, а его закрытые подходы остались бы в хранилище.
+    func removeEdit(_ edit: PlanEdit) {
+        planEdits.removeAll { $0.id == edit.id }
+        // Ключи снимаем заранее: словарь нельзя править, обходя его же ключи.
+        let suffix = "|" + edit.id
+        let orphaned = setProgress.keys.filter { $0.hasSuffix(suffix) }
+        for key in orphaned { setProgress[key] = nil }
+    }
+
+    func removeEdits(week: Int, day: Int) {
+        for edit in edits(week: week, day: day) { removeEdit(edit) }
+    }
+
+    /// Одно упражнение — одна правка. Иначе замена поверх замены накопила бы
+    /// цепочку, из которой не выбраться кнопкой «вернуть как было».
+    private func dropEdits(targeting targetID: String, day: Int, week: Int, scope: PlanEditScope) {
+        let peaking = isPeaking
+        let stale = planEdits.filter {
+            $0.targetID == targetID && $0.day == day && $0.isPeaking == peaking
+                && (scope == .everyWeek || $0.week == nil || $0.week == week)
+        }
+        for edit in stale { removeEdit(edit) }
     }
 
     var maximumLabel: String { programKind == .texas ? "5ПМ" : "1ПМ" }
@@ -388,11 +531,18 @@ final class ProgramProfile {
 
     /// Упражнения тренировки: вспомогательные — из дня программы, жим — из волны.
     func exercises(for workout: ScheduledWorkout) -> [ExercisePrescription] {
-        guard let session = workout.benchSession,
-              let wave = benchWave.first(where: { $0.id == session })
-        else { return workout.day.exercises }
+        exercises(day: workout.day, benchSession: workout.benchSession)
+    }
 
-        return workout.day.exercises.map { exercise in
+    /// То же самое, но по дню напрямую. Экран деталей берёт день из свежего плана,
+    /// а не из расписания, собранного до правки, — иначе добавленное упражнение
+    /// появлялось бы только после выхода и повторного захода.
+    func exercises(day: WorkoutDayPlan, benchSession: Int?) -> [ExercisePrescription] {
+        guard let session = benchSession,
+              let wave = benchWave.first(where: { $0.id == session })
+        else { return day.exercises }
+
+        return day.exercises.map { exercise in
             guard exercise.benchSession != nil else { return exercise }
             return ExercisePrescription(
                 id: exercise.id,

@@ -80,6 +80,7 @@ struct TodayView: View {
     @Bindable var profile: ProgramProfile
     let onSettings: () -> Void
     var onOpenBench: ((Int) -> Void)?
+    @State private var customizing: ScheduledWorkout?
 
     private var overallProgress: Double {
         guard profile.totalDays > 0 else { return 0 }
@@ -154,6 +155,21 @@ struct TodayView: View {
             .screenBackground()
             .navigationTitle("Сегодня")
             .toolbar {
+                if let focus {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            customizing = focus
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(profile.edits(week: focus.week, day: focus.day.number).isEmpty
+                                                 ? AnyShapeStyle(Theme.accent)
+                                                 : AnyShapeStyle(Theme.warning))
+                        }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Свои упражнения")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: onSettings) {
                         Image(systemName: "slider.horizontal.3").font(.body.weight(.semibold))
@@ -161,6 +177,9 @@ struct TodayView: View {
                     .buttonStyle(.pressable)
                     .accessibilityLabel("Настройки программы")
                 }
+            }
+            .sheet(item: $customizing) { workout in
+                DayCustomizeView(profile: profile, week: workout.week, day: workout.day)
             }
         }
     }
@@ -531,15 +550,25 @@ struct DayDetailView: View {
     let day: WorkoutDayPlan
     var scheduled: ScheduledWorkout?
     var onOpenBench: ((Int) -> Void)?
+    @State private var showCustomize = false
 
     /// У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
-    private var exercises: [ExercisePrescription] {
-        guard let scheduled else { return day.exercises }
-        return profile.exercises(for: scheduled)
+    ///
+    /// День приходит снаружи и мог быть собран до правки, поэтому берём его
+    /// заново из плана: иначе добавленное упражнение появилось бы только
+    /// после перезахода на экран.
+    private var currentDay: WorkoutDayPlan {
+        profile.workoutPlan.weeks.first { $0.number == week }?
+            .days.first { $0.number == day.number } ?? day
     }
 
     var body: some View {
-        ScrollView {
+        // План с правками собирается один раз за проход body: обращаться к
+        // `workoutPlan` из каждого вычисляемого свойства значило бы пересобирать
+        // все двенадцать недель по нескольку раз на кадр.
+        let currentDay = self.currentDay
+        let exercises = profile.exercises(day: currentDay, benchSession: scheduled?.benchSession)
+        return ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
                     ExerciseCard(
@@ -575,6 +604,25 @@ struct DayDetailView: View {
                          ? "Неделя \(week)"
                          : "Неделя \(week) · \(profile.shortWeekdayName(forDay: day.number).uppercased())")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showCustomize = true
+                } label: {
+                    // Изменённый день подсвечиваем цветом, а не другим значком:
+                    // имя символа с бейджем легко угадать неверно, и он молча пропадёт.
+                    Image(systemName: "square.and.pencil")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(profile.edits(week: week, day: day.number).isEmpty
+                                         ? AnyShapeStyle(Theme.accent)
+                                         : AnyShapeStyle(Theme.warning))
+                }
+                .accessibilityLabel("Свои упражнения")
+            }
+        }
+        .sheet(isPresented: $showCustomize) {
+            DayCustomizeView(profile: profile, week: week, day: currentDay)
+        }
     }
 }
 
