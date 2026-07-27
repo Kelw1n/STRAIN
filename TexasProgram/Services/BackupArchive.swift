@@ -30,6 +30,10 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var peakBench5RM: Double?
     var peakDeadlift5RM: Double?
     var completionLog: [CompletionSnapshot]
+    /// Свои упражнения и правки дней. Необязательное поле: в копиях, снятых до
+    /// появления правок, и в файлах с Android его нет, а синтезированный
+    /// декодер Swift не подставляет значения по умолчанию за отсутствующий ключ.
+    var planEdits: [PlanEdit]?
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -114,7 +118,8 @@ enum BackupService {
                     bench: $0.bench,
                     deadlift: $0.deadlift
                 )
-            }
+            },
+            planEdits: profile.planEdits
         )
     }
 
@@ -172,6 +177,7 @@ enum BackupService {
                 deadlift: $0.deadlift
             )
         }
+        result.planEdits = snapshot.planEdits ?? []
         return result
     }
 
