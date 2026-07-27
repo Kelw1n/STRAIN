@@ -1,0 +1,24 @@
+# Сборка Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/.kotlin/
+
+# Сборка Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+TexasProgram.xcodeproj/project.xcworkspace/
+TexasProgram.xcodeproj/*.backup
+
+# Готовые пакеты — их отдаёт CI, в репозитории они не нужны
+*.apk
+*.ipa
+Payload/
+
+# Системное
+.DS_Store
+Thumbs.db

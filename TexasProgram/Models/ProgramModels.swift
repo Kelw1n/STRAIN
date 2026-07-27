@@ -46,6 +46,23 @@ enum AdditionalExerciseCategory: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+/// Запись о выполненной тренировке: когда и с какими весами основных движений.
+///
+/// Веса сохраняем в момент отметки, а не считаем потом заново: максимумы можно
+/// поменять в настройках, и тогда история задним числом стала бы неверной.
+struct CompletionRecord: Codable, Equatable, Hashable, Sendable, Identifiable {
+    let key: String
+    let date: Date
+    let week: Int
+    let day: Int
+    /// Рабочие веса приседа, жима и тяги в этот день; нет упражнения — нет и веса.
+    var squat: Double?
+    var bench: Double?
+    var deadlift: Double?
+
+    var id: String { key + "-" + String(Int(date.timeIntervalSince1970)) }
+}
+
 /// Как невыполненные тренировки раскладываются по календарю.
 enum ScheduleMode: String, CaseIterable, Codable, Identifiable, Sendable {
     /// День недели задаёт тип тренировки: в понедельник — понедельничная,
@@ -185,6 +202,9 @@ final class ProgramProfile {
     var back: String?
     var press: String?
     var completedDayKeys: [String]
+    /// Когда какая тренировка была отмечена. Ключей в `completedDayKeys` мало
+    /// для графиков: там нет дат, а без них прогресс во времени не построить.
+    var completionLog: [CompletionRecord] = []
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -245,17 +265,30 @@ final class ProgramProfile {
         UpperLowerInput(squat1RM: squat5RM, bench1RM: bench5RM, deadlift1RM: deadlift5RM)
     }
 
+    /// Идёт ли сейчас пиковый цикл. Только «Техас» — у «Верх / Низ» пикирования нет.
+    var isPeaking: Bool { programKind == .texas && peakingActive }
+
     var workoutPlan: WorkoutPlan {
         switch programKind {
-        case .texas: return ProgramCalculator.generate(input: input)
-        case .upperLower: return UpperLowerCalculator.generate(input: upperLowerInput)
+        case .texas:
+            return isPeaking
+                ? ProgramCalculator.generatePeaking(input: peakingInput)
+                : ProgramCalculator.generate(input: input)
+        case .upperLower:
+            return UpperLowerCalculator.generate(input: upperLowerInput)
         }
     }
 
     var maximumLabel: String { programKind == .texas ? "5ПМ" : "1ПМ" }
     var totalDays: Int { workoutPlan.weeks.reduce(0) { $0 + $1.days.count } }
 
-    func isCompleted(week: Int, day: Int) -> Bool { completedDayKeys.contains("\(week)-\(day)") }
+    /// Ключ отметки. У пикового цикла своё пространство имён, иначе его дни
+    /// накладывались бы на дни основной программы — недели там нумеруются с единицы.
+    func dayKey(week: Int, day: Int) -> String {
+        isPeaking ? "peak-\(week)-\(day)" : "\(week)-\(day)"
+    }
+
+    func isCompleted(week: Int, day: Int) -> Bool { completedDayKeys.contains(dayKey(week: week, day: day)) }
 
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
@@ -269,7 +302,38 @@ final class ProgramProfile {
                 setBenchCompleted(last, false)
             }
         }
-        if done { lastCompletionDate = now }
+        if done {
+            lastCompletionDate = now
+            recordCompletion(week: week, day: day, now: now)
+        } else {
+            let key = dayKey(week: week, day: day)
+            completionLog.removeAll { $0.key == key }
+        }
+    }
+
+    /// Кладёт в историю дату и рабочие веса основных движений этого дня.
+    private func recordCompletion(week: Int, day: Int, now: Date) {
+        let key = dayKey(week: week, day: day)
+        completionLog.removeAll { $0.key == key }
+
+        let exercises = workoutPlan.weeks.first { $0.number == week }?
+            .days.first { $0.number == day }?.exercises ?? []
+
+        func weight(_ name: String) -> Double? {
+            guard let load = exercises.first(where: { $0.name == name })?.load,
+                  case .kilograms(let value) = load else { return nil }
+            return value
+        }
+
+        completionLog.append(CompletionRecord(
+            key: key,
+            date: now,
+            week: week,
+            day: day,
+            squat: weight("Приседания") ?? weight("Приседания со штангой"),
+            bench: weight("Жим лёжа"),
+            deadlift: weight("Становая тяга")
+        ))
     }
 
     /// Дни, которые несут волну жима: в «Верх / Низ» это верхние дни — первый и третий.
@@ -297,7 +361,7 @@ final class ProgramProfile {
     }
 
     private func setDayCompleted(week: Int, day: Int, _ done: Bool) {
-        let key = "\(week)-\(day)"
+        let key = dayKey(week: week, day: day)
         if done {
             if !completedDayKeys.contains(key) { completedDayKeys.append(key) }
         } else {
@@ -364,7 +428,11 @@ final class ProgramProfile {
     /// «Я сейчас здесь»: всё до выбранного дня отмечается выполненным, выбранный день
     /// становится следующим. Нужно после переустановки, когда история отметок потеряна.
     func setCurrentWorkout(week: Int, day: Int, now: Date = Date(), calendar: Calendar = .current) {
-        completedDayKeys = []
+        // Чужое пространство имён не трогаем: сброс внутри пикирования
+        // не должен стирать историю основного цикла и наоборот.
+        completedDayKeys = completedDayKeys.filter { isPeaking ? !$0.hasPrefix("peak-") : $0.hasPrefix("peak-") }
+        // История отмеченного задним числом недостоверна — у тех дней нет реальных дат.
+        completionLog.removeAll { isPeaking ? $0.key.hasPrefix("peak-") : !$0.key.hasPrefix("peak-") }
         completedBenchSessions = []
         // Волна остаётся непрерывной: сколько верхних дней закрыли, столько жимов и сделано.
         var benchDone = 0
@@ -446,5 +514,9 @@ final class ProgramProfile {
         return value
     }
 
-    var completedDayCount: Int { Set(completedDayKeys).count }
+    /// Считаем только текущий цикл: отметки пикирования лежат в своём пространстве имён.
+    var completedDayCount: Int {
+        let peakKeys = completedDayKeys.filter { $0.hasPrefix("peak-") }
+        return Set(isPeaking ? peakKeys : completedDayKeys.filter { !$0.hasPrefix("peak-") }).count
+    }
 }
