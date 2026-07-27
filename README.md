@@ -36,41 +36,10 @@
 
 ## Цели проекта
 
-- `TexasProgram` — приложение;
+- `STRAIN` — приложение;
 - `TexasProgramTests` — юнит-тесты;
 - `StrainWidgets` — расширение с Live Activity таймера отдыха и виджетами. Собирается автоматически как зависимость приложения и встраивается внутрь `.app`.
-
-Виджетам нужен общий контейнер `group.com.texasprogram.app`, объявленный в `TexasProgram.entitlements` и `StrainWidgets.entitlements`. Бесплатные учётные записи App Group обычно не выдают: тогда контейнер недоступен, виджет показывает заглушку, а всё остальное работает как прежде. Чтобы отказаться от него совсем, достаточно убрать `CODE_SIGN_ENTITLEMENTS` у обеих целей.
-
-Расширению нужен собственный bundle id `com.texasprogram.app.widgets`. При подписи бесплатным Apple ID это отдельный App ID, а их лимит — 10 за 7 дней; если Sideloadly откажется ставить сборку с расширением, цель `StrainWidgets` можно исключить из схемы.
-
-## Запуск в Xcode
-
-1. Клонируйте репозиторий на Mac.
-2. Откройте `TexasProgram.xcodeproj` в Xcode 16.2 или новее.
-3. Выберите симулятор iPhone с iOS 17+ и схему `TexasProgram`.
-4. Нажмите Run. Для запуска на физическом iPhone выберите свою Development Team в Signing & Capabilities.
-
-Тесты запускаются через Product → Test. На Mac с установленным симулятором их можно запустить командой:
-
-```bash
-xcodebuild test \
-  -project TexasProgram.xcodeproj \
-  -scheme TexasProgram \
-  -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
-  CODE_SIGNING_ALLOWED=NO
-```
-
-## Получение IPA через GitHub
-
-1. Создайте пустой репозиторий на GitHub и загрузите туда содержимое проекта.
-2. Откройте Actions → `iOS build` → Run workflow. Ручной запуск собирает IPA сразу; тесты запускаются отдельно только для Pull Request и не блокируют сборку.
-3. После завершения откройте запущенный workflow и скачайте artifact `TexasProgram-unsigned`.
-4. Распакуйте ZIP artifact — внутри будет `TexasProgram-unsigned.ipa`.
-
-Workflow не хранит сертификаты, provisioning profile или пароль Apple ID. IPA специально остаётся неподписанным. Старый каталог `TexasProgram/Assets.xcassets` удаляется только во временной копии GitHub runner перед сборкой; `AppIcons.xcassets` с пользовательскими иконками сохраняется и компилируется.
-
-## Установка через Sideloadly
+## Установка через Sideloadly or Iloader
 
 1. Установите Sideloadly на Windows или macOS и подключите iPhone кабелем.
 2. Перетащите `TexasProgram-unsigned.ipa` в окно Sideloadly.
@@ -81,4 +50,4 @@ Workflow не хранит сертификаты, provisioning profile или �
 
 ## Важное замечание
 
-Стартовые 100 кг — демонстрационные значения. Перед тренировками обязательно протестируйте реальный 5ПМ для приседаний, жима лёжа и становой тяги. Программа не заменяет консультацию тренера или врача.
+Стартовые 100 кг — демонстрационные значения. Перед тренировками обязательно протестируйте реальный 5ПМ либо 1ПМ в программе Верх-Вниз для приседаний, жима лёжа и становой тяги. Программа не заменяет консультацию тренера или врача.
