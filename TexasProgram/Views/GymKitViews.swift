@@ -136,7 +136,12 @@ struct RestTimerBar: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(timer.remainingText)
                         .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
-                    Text("отдых").font(.caption2).foregroundStyle(.secondary)
+                    // Пустой «остров» и несозданная активность выглядят одинаково,
+                    // поэтому причину отказа показываем прямо здесь.
+                    Text(timer.activityIssue ?? "отдых")
+                        .font(.caption2)
+                        .foregroundStyle(timer.activityIssue == nil ? Color.secondary : Theme.warning)
+                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 0)

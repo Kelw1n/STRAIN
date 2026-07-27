@@ -32,27 +32,21 @@ struct RestLiveActivity: Widget {
                         .font(.system(size: 17, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .multilineTextAlignment(.trailing)
-                        .frame(width: 62)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    ProgressView(timerInterval: context.state.range, countsDown: true) {
-                        EmptyView()
-                    } currentValueLabel: {
-                        EmptyView()
-                    }
-                    .progressViewStyle(.linear)
-                    .tint(WidgetPalette.accent)
+                    // Без своих меток и без принудительного стиля: системный
+                    // вариант таймерного индикатора надёжнее в «острове».
+                    ProgressView(timerInterval: context.state.range, countsDown: true)
+                        .tint(WidgetPalette.accent)
                 }
             } compactLeading: {
                 Image(systemName: "hourglass")
                     .foregroundStyle(WidgetPalette.accent)
             } compactTrailing: {
-                // Фиксированная ширина: без неё «остров» дёргается на смене цифр.
+                // Ширину не фиксируем: слишком узкая рамка обрезала цифры целиком.
                 Text(timerInterval: context.state.range, countsDown: true)
                     .font(.caption2.weight(.bold))
                     .monospacedDigit()
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 38)
                     .foregroundStyle(WidgetPalette.accent)
             } minimal: {
                 Image(systemName: "hourglass")
@@ -91,16 +85,11 @@ private struct LockScreenView: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .multilineTextAlignment(.trailing)
-                    .frame(width: 92)
+                    .fixedSize()
             }
 
-            ProgressView(timerInterval: state.range, countsDown: true) {
-                EmptyView()
-            } currentValueLabel: {
-                EmptyView()
-            }
-            .progressViewStyle(.linear)
-            .tint(WidgetPalette.accent)
+            ProgressView(timerInterval: state.range, countsDown: true)
+                .tint(WidgetPalette.accent)
         }
         .padding(16)
     }

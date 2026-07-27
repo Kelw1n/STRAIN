@@ -16,6 +16,9 @@ final class RestTimer {
     private(set) var endsAt: Date?
     private(set) var total: TimeInterval = 0
     private(set) var remaining: TimeInterval = 0
+    /// Почему не завелась Live Activity. Пусто — активность создана.
+    /// Нужно, чтобы отличать «система запретила» от «расширение молчит».
+    private(set) var activityIssue: String?
 
     @ObservationIgnored private var ticker: Timer?
     @ObservationIgnored private var notificationID: String?
@@ -106,13 +109,24 @@ final class RestTimer {
     /// диапазону дат, а ActivityKit ограничивает частоту обновлений.
     private func startActivity(from start: Date, to end: Date) {
         endActivity()
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        activityIssue = nil
+
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            activityIssue = "Живые активности выключены в настройках iOS"
+            return
+        }
+
         let state = RestActivityAttributes.ContentState(startedAt: start, endsAt: end)
-        activity = try? Activity.request(
-            attributes: RestActivityAttributes(),
-            content: ActivityContent(state: state, staleDate: end.addingTimeInterval(60)),
-            pushType: nil
-        )
+        do {
+            activity = try Activity.request(
+                attributes: RestActivityAttributes(),
+                content: ActivityContent(state: state, staleDate: end.addingTimeInterval(60)),
+                pushType: nil
+            )
+        } catch {
+            // Ошибку не глотаем: без неё пустой «остров» не отличить от несозданной активности.
+            activityIssue = "Активность не создана: \(error.localizedDescription)"
+        }
     }
 
     private func updateActivity(to end: Date) {
