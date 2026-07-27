@@ -120,7 +120,7 @@ final class RestTimer {
         do {
             activity = try Activity.request(
                 attributes: RestActivityAttributes(),
-                content: ActivityContent(state: state, staleDate: end.addingTimeInterval(60)),
+                content: ActivityContent(state: state, staleDate: end),
                 pushType: nil
             )
         } catch {
@@ -136,7 +136,7 @@ final class RestTimer {
             endsAt: end
         )
         Task {
-            await activity.update(ActivityContent(state: state, staleDate: end.addingTimeInterval(60)))
+            await activity.update(ActivityContent(state: state, staleDate: end))
         }
     }
 
