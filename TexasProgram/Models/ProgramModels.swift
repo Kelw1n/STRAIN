@@ -205,6 +205,10 @@ final class ProgramProfile {
     /// Когда какая тренировка была отмечена. Ключей в `completedDayKeys` мало
     /// для графиков: там нет дат, а без них прогресс во времени не построить.
     var completionLog: [CompletionRecord] = []
+    /// Сколько подходов закрыто в каждом упражнении: ключ «деньПлана|идентификаторУпражнения».
+    var setProgress: [String: Int] = [:]
+    /// Длительность отдыха, который запускается сам после отметки подхода.
+    var defaultRestSeconds: Int = 180
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -302,6 +306,7 @@ final class ProgramProfile {
                 setBenchCompleted(last, false)
             }
         }
+        syncSets(week: week, day: day, filled: done)
         if done {
             lastCompletionDate = now
             recordCompletion(week: week, day: day, now: now)
@@ -334,6 +339,46 @@ final class ProgramProfile {
             bench: weight("Жим лёжа"),
             deadlift: weight("Становая тяга")
         ))
+    }
+
+    // MARK: - Отметка по подходам
+
+    private func setKey(week: Int, day: Int, exercise: ExercisePrescription) -> String {
+        dayKey(week: week, day: day) + "|" + exercise.id
+    }
+
+    func completedSets(week: Int, day: Int, exercise: ExercisePrescription) -> Int {
+        setProgress[setKey(week: week, day: day, exercise: exercise)] ?? 0
+    }
+
+    /// Тап по точке доводит счётчик до неё; повторный тап по последней закрытой — снимает её.
+    /// Возвращает `true`, если подход добавлен, — по этому признаку запускается отдых.
+    @discardableResult
+    func toggleSet(week: Int, day: Int, exercise: ExercisePrescription, index: Int) -> Bool {
+        let key = setKey(week: week, day: day, exercise: exercise)
+        let current = setProgress[key] ?? 0
+        let target = current == index + 1 ? index : index + 1
+        setProgress[key] = target > 0 ? target : nil
+        return target > current
+    }
+
+    /// Упражнения без подходов (тест 1ПМ) в расчёт не идут — там нечего отмечать.
+    func allSetsDone(for workout: ScheduledWorkout) -> Bool {
+        let list = exercises(for: workout).filter { $0.sets > 0 }
+        guard !list.isEmpty else { return false }
+        return list.allSatisfy {
+            completedSets(week: workout.week, day: workout.day.number, exercise: $0) >= $0.sets
+        }
+    }
+
+    /// Точки и отметка дня не должны расходиться: закрыли день — гасим все точки.
+    private func syncSets(week: Int, day: Int, filled: Bool) {
+        let exercises = workoutPlan.weeks.first { $0.number == week }?
+            .days.first { $0.number == day }?.exercises ?? []
+        for exercise in exercises {
+            let key = setKey(week: week, day: day, exercise: exercise)
+            setProgress[key] = filled && exercise.sets > 0 ? exercise.sets : nil
+        }
     }
 
     /// Дни, которые несут волну жима: в «Верх / Низ» это верхние дни — первый и третий.

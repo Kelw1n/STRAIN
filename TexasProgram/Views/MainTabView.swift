@@ -63,6 +63,12 @@ struct MainTabView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
         }
+        // Виджет живёт в другой песочнице и сам данные не достанет — публикуем слепок.
+        .onAppear { WidgetBridge.publish(profile) }
+        .onChange(of: profile.completedDayKeys) { _, _ in WidgetBridge.publish(profile) }
+        .onChange(of: profile.scheduleModeRaw) { _, _ in WidgetBridge.publish(profile) }
+        .onChange(of: profile.scheduleWeekdays) { _, _ in WidgetBridge.publish(profile) }
+        .onChange(of: profile.peakingActive) { _, _ in WidgetBridge.publish(profile) }
     }
 }
 
@@ -70,6 +76,7 @@ struct MainTabView: View {
 
 struct TodayView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(RestTimer.self) private var restTimer
     @Bindable var profile: ProgramProfile
     let onSettings: () -> Void
     var onOpenBench: ((Int) -> Void)?
@@ -117,12 +124,16 @@ struct TodayView: View {
                         // Вспомогательные упражнения — из дня программы, жим — из волны.
                         let exercises = profile.exercises(for: focus)
                         ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
-                            ExerciseCard(exercise: exercise, onOpenBench: onOpenBench)
-                                .appearIn(index + 4)
-                                .softScroll()
+                            ExerciseCard(
+                                exercise: exercise,
+                                onOpenBench: onOpenBench,
+                                sets: tracker(for: exercise, in: focus)
+                            )
+                            .appearIn(index + 4)
+                            .softScroll()
                         }
 
-                        RestTimerLauncher()
+                        RestTimerLauncher(profile: profile)
                             .appearIn(exercises.count + 4)
 
                         CompleteButton(isCompleted: focus.isCompleted) {
@@ -150,6 +161,29 @@ struct TodayView: View {
                     .buttonStyle(.pressable)
                     .accessibilityLabel("Настройки программы")
                 }
+            }
+        }
+    }
+
+    /// Точки подхода: отметил — пошёл отдых, закрыл последний подход дня — день закрылся сам.
+    private func tracker(for exercise: ExercisePrescription, in workout: ScheduledWorkout) -> SetTracker {
+        SetTracker(
+            done: profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise)
+        ) { index in
+            let added = profile.toggleSet(
+                week: workout.week,
+                day: workout.day.number,
+                exercise: exercise,
+                index: index
+            )
+            guard added else { return }
+
+            if profile.allSetsDone(for: workout) {
+                // Тренировка закончена — отдыхать уже незачем.
+                restTimer.stop()
+                profile.toggleCompleted(week: workout.week, day: workout.day.number)
+            } else {
+                restTimer.start(TimeInterval(profile.defaultRestSeconds))
             }
         }
     }
@@ -491,6 +525,7 @@ struct DaySummaryCard: View {
 
 struct DayDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(RestTimer.self) private var restTimer
     @Bindable var profile: ProgramProfile
     let week: Int
     let day: WorkoutDayPlan
@@ -507,11 +542,20 @@ struct DayDetailView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
-                    ExerciseCard(exercise: exercise, onOpenBench: onOpenBench)
-                        .appearIn(index)
-                        .softScroll()
+                    ExerciseCard(
+                        exercise: exercise,
+                        onOpenBench: onOpenBench,
+                        sets: SetTracker(
+                            done: profile.completedSets(week: week, day: day.number, exercise: exercise)
+                        ) { dot in
+                            let added = profile.toggleSet(week: week, day: day.number, exercise: exercise, index: dot)
+                            if added { restTimer.start(TimeInterval(profile.defaultRestSeconds)) }
+                        }
+                    )
+                    .appearIn(index)
+                    .softScroll()
                 }
-                RestTimerLauncher().appearIn(exercises.count)
+                RestTimerLauncher(profile: profile).appearIn(exercises.count)
 
                 CompleteButton(isCompleted: profile.isCompleted(week: week, day: day.number)) {
                     withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
@@ -539,6 +583,8 @@ struct DayDetailView: View {
 struct ExerciseCard: View {
     let exercise: ExercisePrescription
     var onOpenBench: ((Int) -> Void)?
+    /// Нет трекера — карточка без точек, как на экране пикирования.
+    var sets: SetTracker?
 
     private var isBenchLink: Bool { exercise.benchSession != nil && onOpenBench != nil }
 
@@ -599,6 +645,10 @@ struct ExerciseCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
+            }
+
+            if let sets, exercise.sets > 0 {
+                SetDotsView(total: exercise.sets, tracker: sets)
             }
 
             // Блины и разминка есть только там, где задан конкретный вес.
