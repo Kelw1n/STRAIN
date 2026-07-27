@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 // MARK: - Прогресс
 
@@ -18,9 +19,11 @@ struct ProgressScreen: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     hero.appearIn(0)
+                    ProgressChartView(records: profile.completionLog).appearIn(1).softScroll()
                     maxes.appearIn(1)
                     if profile.programKind == .upperLower { benchCard.appearIn(2) }
                     heatmap.appearIn(3).softScroll()
+                    HistoryCard(records: profile.completionLog).appearIn(4).softScroll()
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 28)
@@ -321,8 +324,12 @@ struct SettingsView: View {
     @Bindable var profile: ProgramProfile
     let onAddProfile: () -> Void
     let onDeleteProfile: () -> Void
+    @Environment(\.modelContext) private var modelContext
     @State private var showPeaking = false
     @State private var showReset = false
+    @State private var showImporter = false
+    @State private var shareItem: ShareItem?
+    @State private var backupMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -437,6 +444,26 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        exportBackup()
+                    } label: {
+                        Label("Сохранить копию", systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        showImporter = true
+                    } label: {
+                        Label("Загрузить копию", systemImage: "square.and.arrow.down")
+                    }
+                    if let backupMessage {
+                        Text(backupMessage).font(.caption).foregroundStyle(Theme.success)
+                    }
+                } header: {
+                    Text("Резервная копия")
+                } footer: {
+                    Text("Файл со всеми профилями, максимумами, расписанием и историей. Тот же формат читает версия для Android.")
+                }
+
+                Section {
                     Button(profiles.count > 1 ? "Удалить этот профиль" : "Сбросить профиль", role: .destructive) { showReset = true }
                     Text(profiles.count > 1
                          ? "Удалит максимумы, программу и отметки этого профиля. Остальные профили останутся."
@@ -454,10 +481,44 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showPeaking) { PeakingView(profile: profile) }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(url: item.url).presentationDetents([.medium])
+        }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
+            importBackup(result)
+        }
         .confirmationDialog(profiles.count > 1 ? "Удалить профиль «\(profile.name)»?" : "Полностью сбросить профиль?",
                             isPresented: $showReset, titleVisibility: .visible) {
             Button(profiles.count > 1 ? "Удалить профиль" : "Сбросить", role: .destructive) { closeThen(onDeleteProfile) }
             Button("Отмена", role: .cancel) {}
+        }
+    }
+
+    // MARK: - Резервная копия
+
+    private func exportBackup() {
+        do {
+            shareItem = ShareItem(url: try BackupService.writeTemporaryFile(profiles))
+        } catch {
+            backupMessage = "Не удалось собрать копию"
+        }
+    }
+
+    private func importBackup(_ result: Result<URL, Error>) {
+        guard case .success(let url) = result else {
+            backupMessage = "Файл не выбран"
+            return
+        }
+        // Файл лежит вне песочницы приложения, доступ надо запросить явно.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            let archive = try BackupService.archive(from: try Data(contentsOf: url))
+            let count = BackupService.restore(archive, into: modelContext, existing: profiles)
+            backupMessage = "Восстановлено профилей: \(count)"
+        } catch {
+            backupMessage = "Файл не читается как копия STRAIN"
         }
     }
 
@@ -554,6 +615,11 @@ struct PeakingView: View {
                             gradient: profile.peakingActive ? Theme.successGradient : Theme.accentGradient,
                             glow: profile.peakingActive ? Theme.success : Theme.accent
                         ))
+                        .disabled(profile.peakingActive)
+                        Text(profile.peakingActive
+                             ? "«Сегодня» и «План» показывают пиковый цикл. Отметки основной программы сохранены отдельно и вернутся после отмены."
+                             : "После запуска «Сегодня» и «План» переключатся на пиковый цикл.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     .appearIn(1)
 
@@ -583,6 +649,9 @@ struct PeakingView: View {
                                 profile.peakSquat5RM = nil
                                 profile.peakBench5RM = nil
                                 profile.peakDeadlift5RM = nil
+                                // Отметки пикового цикла уходят вместе с ним,
+                                // основная программа остаётся нетронутой.
+                                profile.completedDayKeys.removeAll { $0.hasPrefix("peak-") }
                             }
                         }
                         .frame(maxWidth: .infinity)

@@ -150,6 +150,120 @@ final class ProgramCalculatorTests: XCTestCase {
         utcCalendar.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
+    // MARK: - Блины и разминка
+
+    func testPlatesSplitEvenlyPerSide() {
+        XCTAssertEqual(PlateMath.perSide(for: 100), [20, 20])
+        XCTAssertEqual(PlateMath.perSide(for: 140), [25, 25, 5])
+        XCTAssertEqual(PlateMath.perSide(for: 20), [])
+        XCTAssertEqual(PlateMath.perSide(for: 62.5), [20, 1.25])
+    }
+
+    func testPlatesRefuseImpossibleWeights() {
+        XCTAssertNil(PlateMath.perSide(for: 15))
+        XCTAssertNil(PlateMath.perSide(for: 21))
+    }
+
+    func testWarmupsRiseToWorkingWeight() {
+        let sets = PlateMath.warmups(to: 140)
+        XCTAssertEqual(sets.first?.weight, PlateMath.barWeight)
+        XCTAssertTrue(sets.allSatisfy { $0.weight < 140 })
+        // Вес каждой следующей ступени строго больше предыдущей.
+        XCTAssertEqual(sets.map(\.weight), sets.map(\.weight).sorted())
+        XCTAssertEqual(Set(sets.map(\.weight)).count, sets.count)
+    }
+
+    func testWarmupsSkippedForLightWeights() {
+        XCTAssertTrue(PlateMath.warmups(to: 20).isEmpty)
+        XCTAssertTrue(PlateMath.warmups(to: 15).isEmpty)
+    }
+
+    // MARK: - Пикирование
+
+    func testPeakingSwitchesPlanAndKeepsBaseMarks() {
+        let profile = ProgramProfile(input: .demo)
+        profile.toggleCompleted(week: 1, day: 1)
+        XCTAssertEqual(profile.workoutPlan.weeks.count, 12)
+        XCTAssertEqual(profile.completedDayCount, 1)
+
+        profile.peakingActive = true
+        XCTAssertTrue(profile.isPeaking)
+        // План стал пиковым, а отметки основного цикла в нём не видны.
+        XCTAssertEqual(profile.workoutPlan.weeks.count, 3)
+        XCTAssertEqual(profile.completedDayCount, 0)
+        XCTAssertFalse(profile.isCompleted(week: 1, day: 1))
+
+        profile.toggleCompleted(week: 1, day: 1)
+        XCTAssertTrue(profile.isCompleted(week: 1, day: 1))
+        XCTAssertTrue(profile.completedDayKeys.contains("peak-1-1"))
+
+        // Возврат к основной программе восстанавливает её отметки.
+        profile.peakingActive = false
+        XCTAssertEqual(profile.workoutPlan.weeks.count, 12)
+        XCTAssertTrue(profile.isCompleted(week: 1, day: 1))
+        XCTAssertEqual(profile.completedDayCount, 1)
+    }
+
+    func testPeakingIsIgnoredForUpperLower() {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        profile.peakingActive = true
+        XCTAssertFalse(profile.isPeaking)
+        XCTAssertEqual(profile.workoutPlan.weeks.count, 7)
+    }
+
+    // MARK: - История
+
+    func testCompletionIsLoggedWithDateAndWeights() {
+        let profile = ProgramProfile(input: .demo)
+        let day = date(27, 7, 2026)
+        profile.toggleCompleted(week: 1, day: 3, now: day)
+
+        XCTAssertEqual(profile.completionLog.count, 1)
+        let record = profile.completionLog[0]
+        XCTAssertEqual(record.date, day)
+        XCTAssertEqual(record.week, 1)
+        XCTAssertEqual(record.day, 3)
+        // Третий день техасской недели — все три движения с конкретными весами.
+        XCTAssertEqual(record.squat, 90)
+        XCTAssertEqual(record.bench, 90)
+        XCTAssertEqual(record.deadlift, 90)
+
+        profile.toggleCompleted(week: 1, day: 3, now: day)
+        XCTAssertTrue(profile.completionLog.isEmpty)
+    }
+
+    func testHistoryKeepsWeightsAfterMaxChange() {
+        let profile = ProgramProfile(input: .demo)
+        profile.toggleCompleted(week: 1, day: 3, now: date(27, 7, 2026))
+        profile.squat5RM = 200
+        // Запись отражает вес на момент тренировки, а не пересчитанный.
+        XCTAssertEqual(profile.completionLog.first?.squat, 90)
+    }
+
+    // MARK: - Резервная копия
+
+    func testBackupRoundTripKeepsEverything() throws {
+        let profile = ProgramProfile(upperLowerInput: .demo, name: "Основной")
+        profile.toggleCompleted(week: 1, day: 1, now: date(27, 7, 2026))
+        profile.setWeekday(4, forDay: 2)
+        profile.scheduleMode = .queue
+
+        let data = try BackupService.export([profile])
+        let archive = try BackupService.archive(from: data)
+
+        XCTAssertEqual(archive.version, 1)
+        XCTAssertEqual(archive.profiles.count, 1)
+        let snapshot = archive.profiles[0]
+        XCTAssertEqual(snapshot.name, "Основной")
+        XCTAssertEqual(snapshot.programKind, "UPPER_LOWER")
+        XCTAssertEqual(snapshot.scheduleMode, "QUEUE")
+        XCTAssertEqual(snapshot.scheduleWeekdays, [2, 4, 5, 6])
+        XCTAssertEqual(snapshot.completedDayKeys, ["1-1"])
+        XCTAssertEqual(snapshot.completedBenchSessions, [1])
+        XCTAssertEqual(snapshot.completionLog.count, 1)
+        XCTAssertEqual(snapshot.completionLog[0].week, 1)
+    }
+
     // MARK: - Режимы расписания
 
     /// Профиль в режиме «по дням недели» — значение по умолчанию.

@@ -7,6 +7,7 @@ enum AppTab: Hashable {
 
 struct MainTabView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(RestTimer.self) private var restTimer
     @Bindable var profile: ProgramProfile
     @State private var selectedTab: AppTab = .today
     @State private var showingSettings = false
@@ -54,6 +55,11 @@ struct MainTabView: View {
                 .tag(AppTab.guide)
         }
         .tint(Theme.accent)
+        // Плашка отдыха висит над вкладками и переживает переходы между ними.
+        .safeAreaInset(edge: .bottom) {
+            RestTimerBar()
+                .animation(Motion.maybe(Motion.card, reduce: reduceMotion), value: restTimer.isRunning)
+        }
         .sheet(isPresented: $showingSettings) {
             SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
         }
@@ -116,13 +122,16 @@ struct TodayView: View {
                                 .softScroll()
                         }
 
+                        RestTimerLauncher()
+                            .appearIn(exercises.count + 4)
+
                         CompleteButton(isCompleted: focus.isCompleted) {
                             withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
                                 profile.toggleCompleted(week: focus.week, day: focus.day.number)
                             }
                         }
                         .padding(.top, 4)
-                        .appearIn(exercises.count + 4)
+                        .appearIn(exercises.count + 5)
                     } else {
                         finished.appearIn(0)
                     }
@@ -209,9 +218,14 @@ struct TodayView: View {
                         .font(.caption2.weight(.bold))
                         .tracking(1.3)
                         .foregroundStyle(Theme.accentGradient)
-                    Text("Неделя \(workout.week)")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .contentTransition(.numericText())
+                    HStack(spacing: 8) {
+                        Text("Неделя \(workout.week)")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .contentTransition(.numericText())
+                        if profile.isPeaking {
+                            TagBadge(text: "Пик", systemImage: "mountain.2.fill", gradient: Theme.recordGradient)
+                        }
+                    }
                     Text(workout.fullTitle)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
@@ -497,13 +511,15 @@ struct DayDetailView: View {
                         .appearIn(index)
                         .softScroll()
                 }
+                RestTimerLauncher().appearIn(exercises.count)
+
                 CompleteButton(isCompleted: profile.isCompleted(week: week, day: day.number)) {
                     withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
                         profile.toggleCompleted(week: week, day: day.number)
                     }
                 }
                 .padding(.top, 4)
-                .appearIn(exercises.count)
+                .appearIn(exercises.count + 1)
             }
             .padding(.horizontal)
             .padding(.bottom, 28)
@@ -584,8 +600,12 @@ struct ExerciseCard: View {
                     Spacer(minLength: 0)
                 }
             }
+
+            // Блины и разминка есть только там, где задан конкретный вес.
+            if case .kilograms(let weight) = exercise.load {
+                LoadHelperView(weight: weight)
+            }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private var setsText: String {
