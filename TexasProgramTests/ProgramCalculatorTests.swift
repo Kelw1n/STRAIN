@@ -178,6 +178,66 @@ final class ProgramCalculatorTests: XCTestCase {
         XCTAssertTrue(PlateMath.warmups(to: 15).isEmpty)
     }
 
+    // MARK: - Отметка по подходам
+
+    func testTappingDotFillsUpToIt() {
+        let profile = ProgramProfile(input: .demo)
+        let squat = profile.workoutPlan.weeks[0].days[0].exercises[0]
+
+        // Тап по третьей точке закрывает сразу три подхода.
+        XCTAssertTrue(profile.toggleSet(week: 1, day: 1, exercise: squat, index: 2))
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: squat), 3)
+
+        // Повторный тап по последней закрытой — снимает её.
+        XCTAssertFalse(profile.toggleSet(week: 1, day: 1, exercise: squat, index: 2))
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: squat), 2)
+    }
+
+    func testAllSetsDoneRequiresEveryExercise() {
+        let profile = ProgramProfile(input: .demo)
+        let schedule = profile.schedule
+        let workout = schedule.focus!
+        let exercises = profile.exercises(for: workout)
+
+        XCTAssertFalse(profile.allSetsDone(for: workout))
+
+        for exercise in exercises where exercise.sets > 0 {
+            profile.toggleSet(
+                week: workout.week,
+                day: workout.day.number,
+                exercise: exercise,
+                index: exercise.sets - 1
+            )
+        }
+        XCTAssertTrue(profile.allSetsDone(for: workout))
+    }
+
+    func testCompletingDayFillsDotsAndUncompletingClearsThem() {
+        let profile = ProgramProfile(input: .demo)
+        let squat = profile.workoutPlan.weeks[0].days[0].exercises[0]
+
+        profile.toggleCompleted(week: 1, day: 1)
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: squat), squat.sets)
+
+        profile.toggleCompleted(week: 1, day: 1)
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: squat), 0)
+    }
+
+    /// Пикирование живёт в своём пространстве ключей — точки не должны смешиваться.
+    func testSetProgressIsSeparateForPeaking() {
+        let profile = ProgramProfile(input: .demo)
+        let squat = profile.workoutPlan.weeks[0].days[0].exercises[0]
+        profile.toggleSet(week: 1, day: 1, exercise: squat, index: 1)
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: squat), 2)
+
+        profile.peakingActive = true
+        let peakSquat = profile.workoutPlan.weeks[0].days[0].exercises[0]
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: peakSquat), 0)
+
+        profile.peakingActive = false
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: squat), 2)
+    }
+
     // MARK: - Пикирование
 
     func testPeakingSwitchesPlanAndKeepsBaseMarks() {

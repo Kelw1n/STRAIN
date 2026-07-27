@@ -76,11 +76,58 @@ struct LoadHelperView: View {
     }
 }
 
+// MARK: - Точки подходов
+
+/// Сколько подходов закрыто и что делать по тапу.
+/// Отдельная структура, чтобы карточка упражнения не знала про профиль.
+struct SetTracker {
+    let done: Int
+    let onTap: (Int) -> Void
+}
+
+struct SetDotsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let total: Int
+    let tracker: SetTracker
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<max(total, 0), id: \.self) { index in
+                let filled = index < tracker.done
+                Button {
+                    withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
+                        tracker.onTap(index)
+                    }
+                } label: {
+                    Circle()
+                        .fill(filled ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Color.primary.opacity(0.10)))
+                        .frame(width: 22, height: 22)
+                        .overlay {
+                            if filled {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .overlay(Circle().strokeBorder(Theme.accent.opacity(filled ? 0 : 0.28), lineWidth: 1))
+                }
+                .buttonStyle(.pressable)
+                .accessibilityLabel("Подход \(index + 1)")
+            }
+            Spacer(minLength: 0)
+            Text("\(tracker.done) / \(total)")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(tracker.done >= total ? Theme.success : .secondary)
+        }
+    }
+}
+
 // MARK: - Таймер отдыха
 
 /// Кнопки запуска отдыха под списком упражнений.
 struct RestTimerLauncher: View {
     @Environment(RestTimer.self) private var timer
+    @Bindable var profile: ProgramProfile
 
     var body: some View {
         CardView(padding: 16, spacing: 10) {
@@ -90,22 +137,26 @@ struct RestTimerLauncher: View {
             }
             HStack(spacing: 8) {
                 ForEach(RestTimer.presets, id: \.self) { preset in
+                    let selected = profile.defaultRestSeconds == Int(preset)
                     Button {
+                        // Выбранная длительность запоминается: с ней стартует
+                        // автоматический отдых после отметки подхода.
+                        profile.defaultRestSeconds = Int(preset)
                         timer.start(preset)
                     } label: {
                         Text(label(for: preset))
                             .font(.subheadline.weight(.bold).monospacedDigit())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
-                            .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(Theme.accent.opacity(selected ? 0.26 : 0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Theme.accent.opacity(0.32), lineWidth: 1))
+                                .strokeBorder(Theme.accent.opacity(selected ? 0.7 : 0.32), lineWidth: 1))
                             .foregroundStyle(Theme.accent)
                     }
                     .buttonStyle(.pressable)
                 }
             }
-            Text("Минимум три минуты; на тяжёлых подходах можно и больше.")
+            Text("Отмеченный подход запускает отдых сам — выбранной здесь длительности.")
                 .font(.caption2).foregroundStyle(.tertiary)
         }
     }
