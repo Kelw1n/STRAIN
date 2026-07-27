@@ -75,6 +75,13 @@ class AppStore(context: Context) {
         update(current.id, transform)
     }
 
+    /// Восстановление из копии: профиль с тем же идентификатором заменяется.
+    fun restore(profile: ProgramProfile) {
+        profiles = profiles.filterNot { it.id == profile.id } + profile
+        if (activeId.isEmpty()) activeId = profile.id
+        persist()
+    }
+
     fun suggestedName(): String = if (profiles.isEmpty()) "Профиль" else "Профиль ${profiles.size + 1}"
 
     private companion object {

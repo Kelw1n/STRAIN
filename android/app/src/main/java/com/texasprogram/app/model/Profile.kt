@@ -42,6 +42,12 @@ data class ProgramProfile(
     val press: String? = null,
     val completedDayKeys: List<String> = emptyList(),
     val completedBenchSessions: List<Int> = emptyList(),
+    /// Когда какая тренировка была отмечена и с какими весами — основа графика.
+    val completionLog: List<CompletionRecord> = emptyList(),
+    /// Сколько подходов закрыто: ключ «деньПлана|названиеУпражнения».
+    val setProgress: Map<String, Int> = emptyMap(),
+    /// Длительность отдыха, который запускается сам после отметки подхода.
+    val defaultRestSeconds: Int = 180,
     /// Дни недели тренировок в нумерации Calendar (1 — воскресенье). Пусто — значения по умолчанию.
     val scheduleWeekdays: List<Int> = emptyList(),
     /// Привязка недели плана к календарю больше не используется: оба режима считают
@@ -68,12 +74,18 @@ data class ProgramProfile(
     val upperLowerInput: UpperLowerInput
         get() = UpperLowerInput(squat5RM, bench5RM, deadlift5RM)
 
+    /// Идёт ли пиковый цикл. Только «Техас» — у «Верх / Низ» пикирования нет.
+    val isPeaking: Boolean
+        get() = programKind == TrainingProgramKind.TEXAS && peakingActive
+
     val workoutPlan: WorkoutPlan
         get() {
-            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press)
+            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM)
             return PlanCache.resolve(key) {
                 when (programKind) {
-                    TrainingProgramKind.TEXAS -> ProgramCalculator.generate(input)
+                    TrainingProgramKind.TEXAS ->
+                        if (isPeaking) ProgramCalculator.generatePeaking(peakingInput)
+                        else ProgramCalculator.generate(input)
                     TrainingProgramKind.UPPER_LOWER -> UpperLowerCalculator.generate(upperLowerInput)
                 }
             }
@@ -92,9 +104,17 @@ data class ProgramProfile(
 
     // MARK: - Отметки дней
 
-    fun isCompleted(week: Int, day: Int): Boolean = completedDayKeys.contains("$week-$day")
+    /// Ключ отметки. У пикового цикла своё пространство имён: недели там тоже
+    /// нумеруются с единицы и иначе накладывались бы на основную программу.
+    fun dayKey(week: Int, day: Int): String = if (isPeaking) "peak-$week-$day" else "$week-$day"
 
-    val completedDayCount: Int get() = completedDayKeys.toSet().size
+    fun isCompleted(week: Int, day: Int): Boolean = completedDayKeys.contains(dayKey(week, day))
+
+    /// Считаем только текущий цикл.
+    val completedDayCount: Int
+        get() = completedDayKeys
+            .filter { if (isPeaking) it.startsWith("peak-") else !it.startsWith("peak-") }
+            .toSet().size
 
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
@@ -108,8 +128,81 @@ data class ProgramProfile(
                 completedBenchSessions.maxOrNull()?.let { next.setBenchCompleted(it, false) } ?: next
             }
         }
-        if (done) next = next.copy(lastCompletionEpochDay = today.toEpochDay())
+        next = next.syncSets(week, day, done)
+        next = if (done) {
+            next.copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today)
+        } else {
+            val key = dayKey(week, day)
+            next.copy(completionLog = next.completionLog.filterNot { it.key == key })
+        }
         return next
+    }
+
+    /// Кладёт в историю дату и рабочие веса основных движений этого дня.
+    /// Веса сохраняем на момент отметки: правка максимумов не должна менять прошлое.
+    private fun recordCompletion(week: Int, day: Int, today: LocalDate): ProgramProfile {
+        val key = dayKey(week, day)
+        val exercises = workoutPlan.weeks.firstOrNull { it.number == week }
+            ?.days?.firstOrNull { it.number == day }?.exercises.orEmpty()
+
+        fun weight(vararg names: String): Double? = names.firstNotNullOfOrNull { name ->
+            (exercises.firstOrNull { it.name == name }?.load as? LoadPrescription.Kilograms)?.value
+        }
+
+        val record = CompletionRecord(
+            key = key,
+            epochDay = today.toEpochDay(),
+            week = week,
+            day = day,
+            squat = weight("Приседания", "Приседания со штангой"),
+            bench = weight("Жим лёжа"),
+            deadlift = weight("Становая тяга")
+        )
+        return copy(completionLog = completionLog.filterNot { it.key == key } + record)
+    }
+
+    // MARK: - Отметка по подходам
+
+    private fun setKey(week: Int, day: Int, exercise: ExercisePrescription): String =
+        dayKey(week, day) + "|" + exercise.name
+
+    fun completedSets(week: Int, day: Int, exercise: ExercisePrescription): Int =
+        setProgress[setKey(week, day, exercise)] ?: 0
+
+    /// Добавит ли тап подход — по этому признаку запускается отдых.
+    fun willAddSet(week: Int, day: Int, exercise: ExercisePrescription, index: Int): Boolean {
+        val current = completedSets(week, day, exercise)
+        val target = if (current == index + 1) index else index + 1
+        return target > current
+    }
+
+    /// Тап доводит счётчик до точки; повторный тап по последней закрытой — снимает её.
+    fun toggleSet(week: Int, day: Int, exercise: ExercisePrescription, index: Int): ProgramProfile {
+        val key = setKey(week, day, exercise)
+        val current = setProgress[key] ?: 0
+        val target = if (current == index + 1) index else index + 1
+        val updated = setProgress.toMutableMap()
+        if (target > 0) updated[key] = target else updated.remove(key)
+        return copy(setProgress = updated)
+    }
+
+    /// Упражнения без подходов (тест 1ПМ) не считаются — там нечего отмечать.
+    fun allSetsDone(workout: ScheduledWorkout): Boolean {
+        val list = exercises(workout).filter { it.sets > 0 }
+        if (list.isEmpty()) return false
+        return list.all { completedSets(workout.week, workout.day.number, it) >= it.sets }
+    }
+
+    /// Точки и отметка дня не расходятся: закрыли день — загорелись все точки.
+    private fun syncSets(week: Int, day: Int, filled: Boolean): ProgramProfile {
+        val exercises = workoutPlan.weeks.firstOrNull { it.number == week }
+            ?.days?.firstOrNull { it.number == day }?.exercises.orEmpty()
+        val updated = setProgress.toMutableMap()
+        for (exercise in exercises) {
+            val key = setKey(week, day, exercise)
+            if (filled && exercise.sets > 0) updated[key] = exercise.sets else updated.remove(key)
+        }
+        return copy(setProgress = updated)
     }
 
     /// Дни, которые несут волну жима: в «Верх / Низ» это верхние дни — первый и третий.
@@ -133,7 +226,7 @@ data class ProgramProfile(
     }
 
     private fun setDayCompleted(week: Int, day: Int, done: Boolean): ProgramProfile {
-        val key = "$week-$day"
+        val key = dayKey(week, day)
         val keys = if (done) {
             if (completedDayKeys.contains(key)) completedDayKeys else completedDayKeys + key
         } else {

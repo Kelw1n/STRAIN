@@ -3,7 +3,9 @@ package com.texasprogram.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -42,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,13 +57,16 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.texasprogram.app.data.AppStore
+import com.texasprogram.app.data.BackupService
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.ui.AppBackground
 import com.texasprogram.app.ui.BenchWaveScreen
 import com.texasprogram.app.ui.DayDetailScreen
 import com.texasprogram.app.ui.GuideScreen
+import com.texasprogram.app.service.RestTimer
 import com.texasprogram.app.ui.Motion
 import com.texasprogram.app.ui.OnboardingScreen
 import com.texasprogram.app.ui.PlanScreen
@@ -68,7 +74,9 @@ import com.texasprogram.app.ui.ProgressScreen
 import com.texasprogram.app.ui.SettingsScreen
 import com.texasprogram.app.ui.Theme
 import com.texasprogram.app.ui.TodayScreen
+import com.texasprogram.app.ui.RestTimerBar
 import com.texasprogram.app.ui.pressable
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +84,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val store = remember { AppStore(applicationContext) }
+            val timer = remember { RestTimer(applicationContext) }
+            // Отсчёт в интерфейсе: сам таймер считает от даты окончания,
+            // это лишь перерисовка раз в секунду.
+            LaunchedEffect(timer.isRunning) {
+                while (timer.isRunning) {
+                    timer.tick()
+                    delay(1000)
+                }
+            }
             MaterialTheme(
                 colorScheme = darkColorScheme(
                     primary = Theme.accent,
@@ -84,7 +101,7 @@ class MainActivity : ComponentActivity() {
                     onSurface = Theme.textPrimary
                 )
             ) {
-                AppBackground { AppRoot(store) }
+                AppBackground { AppRoot(store, timer) }
             }
         }
     }
@@ -99,7 +116,7 @@ private enum class AppTab(val title: String, val icon: ImageVector) {
 }
 
 @Composable
-private fun AppRoot(store: AppStore) {
+private fun AppRoot(store: AppStore, timer: RestTimer) {
     val active = store.active
     var addingProfile by remember { mutableStateOf(false) }
 
@@ -120,12 +137,13 @@ private fun AppRoot(store: AppStore) {
     MainScaffold(
         store = store,
         profile = active,
+        timer = timer,
         onAddProfile = { addingProfile = true }
     )
 }
 
 @Composable
-private fun MainScaffold(store: AppStore, profile: ProgramProfile, onAddProfile: () -> Unit) {
+private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTimer, onAddProfile: () -> Unit) {
     var tab by remember(profile.id) { mutableStateOf(AppTab.TODAY) }
     var benchFocus by remember { mutableStateOf<Int?>(null) }
     var showSettings by remember { mutableStateOf(false) }
@@ -141,6 +159,38 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, onAddProfile:
             tab = AppTab.BENCH
         }
     } else null
+
+    val context = LocalContext.current
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+
+    // Системные диалоги файлов: приложению не нужны разрешения на хранилище.
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        backupMessage = try {
+            context.contentResolver.openOutputStream(uri)?.use {
+                it.write(BackupService.export(store.profiles).toByteArray())
+            }
+            "Копия сохранена"
+        } catch (e: Exception) {
+            "Не удалось сохранить копию"
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        backupMessage = try {
+            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            val archive = BackupService.parse(text.orEmpty())
+            archive.profiles.forEach { store.restore(BackupService.profile(it)) }
+            "Восстановлено профилей: ${archive.profiles.size}"
+        } catch (e: Exception) {
+            "Файл не читается как копия STRAIN"
+        }
+    }
 
     val contentPadding = screenPadding(bottomExtra = 96.dp)
 
@@ -162,7 +212,22 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, onAddProfile:
             when (current) {
                 AppTab.TODAY -> TodayScreen(
                     profile = profile,
+                    timer = timer,
                     onToggleDay = { week, day -> store.updateActive { it.toggleCompleted(week, day) } },
+                    onToggleSet = { workout, exercise, dot ->
+                        val adds = profile.willAddSet(workout.week, workout.day.number, exercise, dot)
+                        store.updateActive { it.toggleSet(workout.week, workout.day.number, exercise, dot) }
+                        if (adds) {
+                            val updated = store.active
+                            if (updated != null && updated.allSetsDone(workout)) {
+                                timer.stop()
+                                store.updateActive { it.toggleCompleted(workout.week, workout.day.number) }
+                            } else {
+                                timer.start(profile.defaultRestSeconds.toLong())
+                            }
+                        }
+                    },
+                    onSelectRest = { seconds -> store.updateActive { it.copy(defaultRestSeconds = seconds) } },
                     onOpenBench = openBench,
                     onOpenDay = { week, day -> dayDetail = week to day },
                     onSettings = { showSettings = true },
@@ -187,11 +252,12 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, onAddProfile:
             }
         }
 
-        BottomBar(
-            tabs = tabs,
-            selected = tab,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) { tab = it }
+        Column(Modifier.align(Alignment.BottomCenter)) {
+            if (timer.isRunning) {
+                RestTimerBar(timer, Modifier.padding(bottom = 8.dp))
+            }
+            BottomBar(tabs = tabs, selected = tab) { tab = it }
+        }
 
         // Детали дня и настройки — поверх вкладок, как модальные экраны в iOS.
         AnimatedContent(
@@ -219,6 +285,11 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, onAddProfile:
                             day = day,
                             scheduled = scheduled,
                             onToggleDay = { w, d -> store.updateActive { it.toggleCompleted(w, d) } },
+                            onToggleSet = { exercise, dot ->
+                                val adds = profile.willAddSet(week, dayNumber, exercise, dot)
+                                store.updateActive { it.toggleSet(week, dayNumber, exercise, dot) }
+                                if (adds) timer.start(profile.defaultRestSeconds.toLong())
+                            },
                             onOpenBench = openBench,
                             contentPadding = screenPadding(bottomExtra = 32.dp)
                         )
@@ -243,6 +314,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, onAddProfile:
                 Box(Modifier.fillMaxSize().background(Theme.base)) {
                     SettingsScreen(
                         profile = profile,
+                        onExportBackup = { exportLauncher.launch(BackupService.FILE_NAME) },
+                        onImportBackup = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                        backupMessage = backupMessage,
                         profiles = store.profiles,
                         onUpdate = { updated -> store.update(updated.id) { updated } },
                         onSwitchProfile = { id ->

@@ -46,7 +46,10 @@ import java.time.LocalDate
 @Composable
 fun TodayScreen(
     profile: ProgramProfile,
+    timer: com.texasprogram.app.service.RestTimer,
     onToggleDay: (Int, Int) -> Unit,
+    onToggleSet: (ScheduledWorkout, com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
+    onSelectRest: (Int) -> Unit,
     onOpenBench: ((Int) -> Unit)?,
     onOpenDay: (Int, Int) -> Unit,
     onSettings: () -> Unit,
@@ -128,8 +131,15 @@ fun TodayScreen(
             ExerciseCard(
                 exercise = exercise,
                 modifier = Modifier.appearIn(index + 4),
-                onOpenBench = onOpenBench
+                onOpenBench = onOpenBench,
+                sets = SetTracker(
+                    done = profile.completedSets(focus.week, focus.day.number, exercise)
+                ) { dot -> onToggleSet(focus, exercise, dot) }
             )
+        }
+
+        item(key = "rest") {
+            RestTimerLauncher(timer, profile.defaultRestSeconds, onSelectRest, Modifier.appearIn(exercises.size + 4))
         }
 
         item(key = "complete") {

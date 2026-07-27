@@ -202,6 +202,7 @@ fun DayDetailScreen(
     day: WorkoutDayPlan,
     scheduled: ScheduledWorkout?,
     onToggleDay: (Int, Int) -> Unit,
+    onToggleSet: (com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onOpenBench: ((Int) -> Unit)?,
     contentPadding: PaddingValues
 ) {
@@ -225,7 +226,14 @@ fun DayDetailScreen(
             }
         }
         itemsIndexed(exercises, key = { index, item -> "d-$index-${item.name}" }) { index, exercise ->
-            ExerciseCard(exercise, Modifier.appearIn(index), onOpenBench)
+            ExerciseCard(
+                exercise = exercise,
+                modifier = Modifier.appearIn(index),
+                onOpenBench = onOpenBench,
+                sets = SetTracker(
+                    done = profile.completedSets(week, day.number, exercise)
+                ) { dot -> onToggleSet(exercise, dot) }
+            )
         }
         item(key = "complete") {
             CompleteButton(profile.isCompleted(week, day.number), Modifier.padding(top = 4.dp)) {

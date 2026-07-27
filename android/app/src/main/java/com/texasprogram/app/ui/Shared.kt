@@ -66,7 +66,9 @@ val BenchSetKind.icon
 fun ExerciseCard(
     exercise: ExercisePrescription,
     modifier: Modifier = Modifier,
-    onOpenBench: ((Int) -> Unit)? = null
+    onOpenBench: ((Int) -> Unit)? = null,
+    /// Нет трекера — карточка без точек, как на экране пикирования.
+    sets: SetTracker? = null
 ) {
     val isBenchLink = exercise.benchSession != null && onOpenBench != null
     val iconGradient = when {
@@ -135,6 +137,13 @@ fun ExerciseCard(
         if (isBenchLink) {
             GradientText(exercise.load.displayText, fontSize = 13.sp, weight = FontWeight.SemiBold)
         }
+
+        if (sets != null && exercise.sets > 0) {
+            SetDotsView(exercise.sets, sets)
+        }
+
+        // Блины и разминка есть только там, где задан конкретный вес.
+        (exercise.load as? LoadPrescription.Kilograms)?.let { LoadHelperView(it.value) }
     }
 }
 

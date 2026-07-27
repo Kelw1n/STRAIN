@@ -24,6 +24,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Terrain
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -66,6 +69,9 @@ fun SettingsScreen(
     onSwitchProfile: (String) -> Unit,
     onAddProfile: () -> Unit,
     onDeleteProfile: () -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
+    backupMessage: String?,
     onClose: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -238,8 +244,62 @@ fun SettingsScreen(
             }
         }
 
-        item(key = "delete") {
+        if (profile.programKind == TrainingProgramKind.TEXAS) {
+            item(key = "peaking") {
+                CardView(Modifier.appearIn(6)) {
+                    SectionLabel("Пикирование")
+                    Text(
+                        if (profile.peakingActive)
+                            "«Сегодня» и «План» показывают пиковый цикл. Отметки основной программы сохранены отдельно и вернутся после отмены."
+                        else
+                            "Три-четыре недели подготовки к тесту 1ПМ после основной программы.",
+                        color = Theme.textSecondary,
+                        fontSize = 12.sp
+                    )
+                    if (profile.peakingActive) {
+                        SecondaryButton("Отменить пикирование", tint = Theme.record) {
+                            onUpdate(
+                                profile.copy(
+                                    peakingActive = false,
+                                    completedDayKeys = profile.completedDayKeys.filterNot { it.startsWith("peak-") },
+                                    completionLog = profile.completionLog.filterNot { it.key.startsWith("peak-") }
+                                )
+                            )
+                        }
+                    } else {
+                        SecondaryButton("Запустить пикирование", icon = Icons.Filled.Terrain) {
+                            onUpdate(
+                                profile.copy(
+                                    peakingActive = true,
+                                    peakSquat5RM = profile.peakSquat5RM ?: profile.squat5RM,
+                                    peakBench5RM = profile.peakBench5RM ?: profile.bench5RM,
+                                    peakDeadlift5RM = profile.peakDeadlift5RM ?: profile.deadlift5RM
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item(key = "backup") {
             CardView(Modifier.appearIn(7)) {
+                SectionLabel("Резервная копия")
+                SecondaryButton("Сохранить копию", icon = Icons.Filled.Upload, onClick = onExportBackup)
+                SecondaryButton("Загрузить копию", icon = Icons.Filled.Download, onClick = onImportBackup)
+                if (backupMessage != null) {
+                    Text(backupMessage, color = Theme.success, fontSize = 12.sp)
+                }
+                Text(
+                    "Файл со всеми профилями, максимумами, расписанием и историей. Тот же формат читает версия для iPhone.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        item(key = "delete") {
+            CardView(Modifier.appearIn(8)) {
                 SecondaryButton(
                     if (profiles.size > 1) "Удалить этот профиль" else "Сбросить профиль",
                     icon = Icons.Filled.Delete,
