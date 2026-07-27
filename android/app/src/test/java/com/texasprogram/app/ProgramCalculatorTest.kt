@@ -7,6 +7,8 @@ import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.ScheduleMode
 import com.texasprogram.app.model.TrainingLevel
 import com.texasprogram.app.model.UpperLowerInput
+import com.texasprogram.app.data.BackupService
+import com.texasprogram.app.service.PlateMath
 import com.texasprogram.app.service.ProgramCalculator
 import com.texasprogram.app.service.UpperLowerCalculator
 import com.texasprogram.app.service.WorkoutScheduler
@@ -125,6 +127,122 @@ class ProgramCalculatorTest {
         assertTrue(profile.isCompleted(1, 3))
         profile = profile.toggleCompleted(1, 3)
         assertFalse(profile.isBenchCompleted(2))
+    }
+
+    // MARK: - Блины и разминка
+
+    @Test
+    fun platesSplitEvenlyPerSide() {
+        assertEquals(listOf(25.0, 15.0), PlateMath.perSide(100.0))
+        assertEquals(listOf(25.0, 25.0, 10.0), PlateMath.perSide(140.0))
+        assertEquals(emptyList<Double>(), PlateMath.perSide(20.0))
+        assertEquals(listOf(20.0, 1.25), PlateMath.perSide(62.5))
+    }
+
+    @Test
+    fun platesRefuseImpossibleWeights() {
+        assertNull(PlateMath.perSide(15.0))
+        assertNull(PlateMath.perSide(21.0))
+    }
+
+    @Test
+    fun warmupsRiseToWorkingWeight() {
+        val sets = PlateMath.warmups(140.0)
+        assertEquals(PlateMath.BAR_WEIGHT, sets.first().weight, 0.001)
+        assertTrue(sets.all { it.weight < 140.0 })
+        assertEquals(sets.map { it.weight }.sorted(), sets.map { it.weight })
+        assertEquals(sets.size, sets.map { it.weight }.toSet().size)
+    }
+
+    @Test
+    fun warmupsSkippedForLightWeights() {
+        assertTrue(PlateMath.warmups(20.0).isEmpty())
+    }
+
+    // MARK: - Пикирование
+
+    @Test
+    fun peakingSwitchesPlanAndKeepsBaseMarks() {
+        var profile = ProgramProfile.texas(ProgramInput.demo).toggleCompleted(1, 1)
+        assertEquals(12, profile.workoutPlan.weeks.size)
+        assertEquals(1, profile.completedDayCount)
+
+        profile = profile.copy(peakingActive = true)
+        assertTrue(profile.isPeaking)
+        assertEquals(4, profile.workoutPlan.weeks.size)
+        assertEquals(0, profile.completedDayCount)
+        assertFalse(profile.isCompleted(1, 1))
+
+        profile = profile.toggleCompleted(1, 1)
+        assertTrue(profile.completedDayKeys.contains("peak-1-1"))
+
+        profile = profile.copy(peakingActive = false)
+        assertEquals(12, profile.workoutPlan.weeks.size)
+        assertTrue(profile.isCompleted(1, 1))
+        assertEquals(1, profile.completedDayCount)
+    }
+
+    // MARK: - История и подходы
+
+    @Test
+    fun completionIsLoggedWithWeights() {
+        val day = date(27, 7, 2026)
+        var profile = ProgramProfile.texas(ProgramInput.demo).toggleCompleted(1, 3, day)
+
+        assertEquals(1, profile.completionLog.size)
+        val record = profile.completionLog[0]
+        assertEquals(day.toEpochDay(), record.epochDay)
+        assertEquals(90.0, record.squat!!, 0.001)
+        assertEquals(90.0, record.deadlift!!, 0.001)
+
+        profile = profile.toggleCompleted(1, 3, day)
+        assertTrue(profile.completionLog.isEmpty())
+    }
+
+    @Test
+    fun tappingDotFillsUpToIt() {
+        val base = ProgramProfile.texas(ProgramInput.demo)
+        val squat = base.workoutPlan.weeks[0].days[0].exercises[0]
+
+        var profile = base.toggleSet(1, 1, squat, 2)
+        assertEquals(3, profile.completedSets(1, 1, squat))
+
+        profile = profile.toggleSet(1, 1, squat, 2)
+        assertEquals(2, profile.completedSets(1, 1, squat))
+    }
+
+    @Test
+    fun completingDayFillsDotsAndUncompletingClearsThem() {
+        val base = ProgramProfile.texas(ProgramInput.demo)
+        val squat = base.workoutPlan.weeks[0].days[0].exercises[0]
+
+        var profile = base.toggleCompleted(1, 1)
+        assertEquals(squat.sets, profile.completedSets(1, 1, squat))
+
+        profile = profile.toggleCompleted(1, 1)
+        assertEquals(0, profile.completedSets(1, 1, squat))
+    }
+
+    // MARK: - Резервная копия
+
+    @Test
+    fun backupRoundTripKeepsEverything() {
+        val profile = ProgramProfile.upperLower(UpperLowerInput.demo, "Основной")
+            .toggleCompleted(1, 1, date(27, 7, 2026))
+            .setWeekday(4, 2)
+            .copy(scheduleMode = ScheduleMode.QUEUE)
+
+        val archive = BackupService.parse(BackupService.export(listOf(profile)))
+        assertEquals(1, archive.version)
+        assertEquals(1, archive.profiles.size)
+
+        val restored = BackupService.profile(archive.profiles[0])
+        assertEquals("Основной", restored.name)
+        assertEquals(ScheduleMode.QUEUE, restored.scheduleMode)
+        assertEquals(listOf(2, 4, 5, 6), restored.scheduleWeekdays)
+        assertEquals(listOf("1-1"), restored.completedDayKeys)
+        assertEquals(listOf(1), restored.completedBenchSessions)
+        assertEquals(1, restored.completionLog.size)
     }
 
     // MARK: - Режим очереди

@@ -69,6 +69,10 @@ fun ProgressScreen(profile: ProgramProfile, contentPadding: PaddingValues) {
             }
         }
 
+        item(key = "chart") {
+            ProgressChartView(profile.completionLog, Modifier.appearIn(1))
+        }
+
         item(key = "maxes") {
             CardView(Modifier.appearIn(1)) {
                 Text("Текущие ${profile.maximumLabel}", color = Theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -102,6 +106,10 @@ fun ProgressScreen(profile: ProgramProfile, contentPadding: PaddingValues) {
                     )
                 }
             }
+        }
+
+        item(key = "history") {
+            HistoryCard(profile.completionLog, Modifier.appearIn(3))
         }
 
         item(key = "weeks") {

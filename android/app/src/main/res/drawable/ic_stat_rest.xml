@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Значок в строке состояния: система красит его сама, поэтому только силуэт. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6,2 h12 v2 h-1.2 c0,3.2 -2.1,5.2 -3.6,6 c1.5,0.8 3.6,2.8 3.6,6 H18 v2 H6 v-2 h1.2 c0,-3.2 2.1,-5.2 3.6,-6 c-1.5,-0.8 -3.6,-2.8 -3.6,-6 H6 Z" />
+</vector>

@@ -78,6 +78,18 @@ enum class AdditionalExerciseCategory(val title: String) {
         }
 }
 
+/// Запись о выполненной тренировке: когда и с какими весами основных движений.
+@Serializable
+data class CompletionRecord(
+    val key: String,
+    val epochDay: Long,
+    val week: Int,
+    val day: Int,
+    val squat: Double? = null,
+    val bench: Double? = null,
+    val deadlift: Double? = null
+)
+
 data class ProgramInput(
     val squat5RM: Double,
     val bench5RM: Double,

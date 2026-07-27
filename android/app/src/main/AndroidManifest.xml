@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Уведомление об окончании отдыха; на Android 13+ спрашивается у пользователя. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Точный будильник на конец отдыха. С Android 13 выдаётся при установке
+         и предназначен как раз для таймеров; на Android 12 его ещё нет,
+         поэтому там просим второе и умеем обойтись без него. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -20,6 +31,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Срабатывает в момент окончания отдыха, когда приложение свёрнуто. -->
+        <receiver
+            android:name=".service.RestFinishedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.texasprogram.app.REST_FINISHED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
