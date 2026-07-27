@@ -154,8 +154,15 @@ data class ExercisePrescription(
     val load: LoadPrescription,
     val isOptional: Boolean = false,
     /// Номер тренировки в волне «Жим 14», если упражнение — часть волны.
-    val benchSession: Int? = null
-)
+    val benchSession: Int? = null,
+    /// Только у своих упражнений: имя можно поменять, а отметки подходов
+    /// должны остаться на месте, поэтому у них отдельный идентификатор.
+    val id: String? = null
+) {
+    /// Ключ идентичности. У упражнений программы это имя — так отметки,
+    /// сохранённые до появления правок, продолжают находиться.
+    val key: String get() = id ?: name
+}
 
 data class WorkoutDayPlan(
     val id: String,

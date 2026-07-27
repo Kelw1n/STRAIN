@@ -3,6 +3,7 @@ package com.texasprogram.app
 import com.texasprogram.app.model.AdditionalExerciseCategory
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.ProgramInput
+import com.texasprogram.app.model.PlanEditScope
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.ScheduleMode
 import com.texasprogram.app.model.TrainingLevel
@@ -127,6 +128,176 @@ class ProgramCalculatorTest {
         assertTrue(profile.isCompleted(1, 3))
         profile = profile.toggleCompleted(1, 3)
         assertFalse(profile.isBenchCompleted(2))
+    }
+
+    // MARK: - Свои упражнения
+
+    private fun exercisesOf(profile: ProgramProfile, week: Int, day: Int) =
+        profile.workoutPlan.weeks.firstOrNull { it.number == week }
+            ?.days?.firstOrNull { it.number == day }?.exercises.orEmpty()
+
+    @Test
+    fun addedExerciseAppearsOnlyOnItsDay() {
+        val base = ProgramProfile.texas(ProgramInput.demo)
+        val before = exercisesOf(base, 1, 1).size
+
+        val profile = base.addExercise(
+            "Гиперэкстензия", 3, "12", null, "RPE 7", 1, 1, PlanEditScope.EVERY_WEEK
+        )
+
+        assertEquals(before + 1, exercisesOf(profile, 1, 1).size)
+        assertEquals("Гиперэкстензия", exercisesOf(profile, 1, 1).last().name)
+        assertEquals("Гиперэкстензия", exercisesOf(profile, 7, 1).last().name)
+        assertFalse(exercisesOf(profile, 1, 2).any { it.name == "Гиперэкстензия" })
+    }
+
+    @Test
+    fun singleScopeTouchesOneWorkoutOnly() {
+        val profile = ProgramProfile.texas(ProgramInput.demo)
+            .addExercise("Икры", 4, "15", 40.0, null, 3, 2, PlanEditScope.SINGLE)
+
+        assertTrue(exercisesOf(profile, 3, 2).any { it.name == "Икры" })
+        assertFalse(exercisesOf(profile, 4, 2).any { it.name == "Икры" })
+        assertEquals(LoadPrescription.Kilograms(40.0), exercisesOf(profile, 3, 2).last().load)
+    }
+
+    @Test
+    fun hiddenExerciseLeavesTheDay() {
+        val base = ProgramProfile.texas(ProgramInput.demo)
+        val target = exercisesOf(base, 1, 1)[0]
+        assertEquals("Приседания", target.name)
+
+        val profile = base.hideExercise(target, 1, 1, PlanEditScope.EVERY_WEEK)
+        assertFalse(exercisesOf(profile, 1, 1).any { it.name == "Приседания" })
+        // День 3 приседания сохранил: правка привязана к дню 1.
+        assertTrue(exercisesOf(profile, 1, 3).any { it.name == "Приседания" })
+    }
+
+    @Test
+    fun replacementKeepsPositionInTheDay() {
+        val base = ProgramProfile.texas(ProgramInput.demo)
+        val target = exercisesOf(base, 1, 1)[1]
+        assertEquals("Жим лёжа", target.name)
+
+        val profile = base.replaceExercise(
+            target, "Жим гантелей", 4, "8", 30.0, null, 1, 1, PlanEditScope.EVERY_WEEK
+        )
+        val list = exercisesOf(profile, 1, 1)
+        assertEquals("Жим гантелей", list[1].name)
+        assertEquals(LoadPrescription.Kilograms(30.0), list[1].load)
+        assertEquals("Приседания", list[0].name)
+    }
+
+    @Test
+    fun secondReplacementDoesNotStack() {
+        val base = ProgramProfile.texas(ProgramInput.demo)
+        val target = exercisesOf(base, 1, 1)[1]
+
+        val profile = base
+            .replaceExercise(target, "Жим гантелей", 4, "8", null, null, 1, 1, PlanEditScope.EVERY_WEEK)
+            .replaceExercise(target, "Отжимания на брусьях", 3, "10", null, null, 1, 1, PlanEditScope.EVERY_WEEK)
+
+        assertEquals(1, profile.planEdits.size)
+        assertEquals("Отжимания на брусьях", exercisesOf(profile, 1, 1)[1].name)
+    }
+
+    @Test
+    fun removingEditRestoresProgramAndClearsSets() {
+        var profile = ProgramProfile.texas(ProgramInput.demo)
+            .addExercise("Планка", 3, "60 с", null, null, 1, 1, PlanEditScope.EVERY_WEEK)
+        val added = exercisesOf(profile, 1, 1).last()
+        profile = profile.toggleSet(1, 1, added, 1)
+        assertEquals(2, profile.completedSets(1, 1, added))
+
+        profile = profile.removeEdits(1, 1)
+        assertTrue(profile.planEdits.isEmpty())
+        assertFalse(exercisesOf(profile, 1, 1).any { it.name == "Планка" })
+        // Отметки исчезнувшего упражнения не должны оставаться в хранилище.
+        assertEquals(0, profile.completedSets(1, 1, added))
+    }
+
+    /// Пикирование нумерует недели с единицы: без разделения правка основной
+    /// программы легла бы и на пиковый цикл.
+    @Test
+    fun editsDoNotLeakIntoPeaking() {
+        var profile = ProgramProfile.texas(ProgramInput.demo)
+            .addExercise("Шраги", 3, "12", null, null, 1, 1, PlanEditScope.EVERY_WEEK)
+        assertTrue(exercisesOf(profile, 1, 1).any { it.name == "Шраги" })
+
+        profile = profile.copy(peakingActive = true)
+        assertFalse(exercisesOf(profile, 1, 1).any { it.name == "Шраги" })
+
+        profile = profile.copy(peakingActive = false)
+        assertTrue(exercisesOf(profile, 1, 1).any { it.name == "Шраги" })
+    }
+
+    @Test
+    fun editsSurviveMaximumChange() {
+        val profile = ProgramProfile.texas(ProgramInput.demo)
+            .addExercise("Тяга к поясу", 4, "10", null, null, 1, 2, PlanEditScope.EVERY_WEEK)
+            .copy(squat5RM = 140.0)
+
+        assertTrue(exercisesOf(profile, 1, 2).any { it.name == "Тяга к поясу" })
+    }
+
+    @Test
+    fun customExerciseKeepsItsOwnSetKey() {
+        // Своё упражнение носит собственный идентификатор: если назвать его так же,
+        // как программное, отметки подходов не должны слиться в одну.
+        var profile = ProgramProfile.texas(ProgramInput.demo)
+            .addExercise("Приседания", 2, "10", null, null, 1, 1, PlanEditScope.EVERY_WEEK)
+        val list = exercisesOf(profile, 1, 1)
+        val program = list.first { it.id == null }
+        val custom = list.first { it.id != null }
+
+        profile = profile.toggleSet(1, 1, custom, 1)
+        assertEquals(2, profile.completedSets(1, 1, custom))
+        assertEquals(0, profile.completedSets(1, 1, program))
+    }
+
+    @Test
+    fun editedDayCanStillBeCompletedBySets() {
+        var profile = ProgramProfile.upperLower(UpperLowerInput.demo)
+            .addExercise("Пресс", 2, "15", null, null, 1, 1, PlanEditScope.EVERY_WEEK)
+        val workout = profile.schedule().focus!!
+        val list = profile.exercises(workout)
+        assertTrue(list.any { it.name == "Пресс" })
+
+        list.filter { it.sets > 0 }.forEach { exercise ->
+            profile = profile.toggleSet(workout.week, workout.day.number, exercise, exercise.sets - 1)
+        }
+        assertTrue(profile.allSetsDone(workout))
+    }
+
+    @Test
+    fun backupCarriesPlanEdits() {
+        val profile = ProgramProfile.texas(ProgramInput.demo)
+            .addExercise("Прогулка фермера", 3, "30 м", 40.0, null, 2, 3, PlanEditScope.SINGLE)
+
+        val archive = BackupService.parse(BackupService.export(listOf(profile)))
+        val edits = archive.profiles[0].planEdits
+
+        assertEquals(1, edits.size)
+        assertEquals("Прогулка фермера", edits[0].name)
+        assertEquals(2, edits[0].week)
+        assertEquals(3, edits[0].day)
+        assertEquals(40.0, edits[0].kilograms!!, 0.001)
+        assertEquals(PlanEditScope.SINGLE, edits[0].scope)
+
+        val restored = BackupService.profile(archive.profiles[0])
+        assertTrue(exercisesOf(restored, 2, 3).any { it.name == "Прогулка фермера" })
+    }
+
+    /// Копии, снятые до появления правок, поля не содержат.
+    @Test
+    fun backupWithoutPlanEditsStillParses() {
+        val json = BackupService.export(listOf(ProgramProfile.texas(ProgramInput.demo)))
+        // Поле идёт последним, поэтому вырезаем его вместе с запятой перед ним:
+        // иначе останется висячая запятая и файл вообще перестанет быть JSON.
+        val trimmed = json.replace(Regex(",\\s*\"planEdits\"\\s*:\\s*\\[[^]]*]"), "")
+        assertFalse(trimmed.contains("planEdits"))
+        val archive = BackupService.parse(trimmed)
+        assertTrue(archive.profiles[0].planEdits.isEmpty())
     }
 
     // MARK: - Блины и разминка

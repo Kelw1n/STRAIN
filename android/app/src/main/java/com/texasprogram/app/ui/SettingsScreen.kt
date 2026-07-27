@@ -343,7 +343,7 @@ private fun dayLabel(profile: ProgramProfile, day: Int): String {
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+fun SectionLabel(text: String) {
     Text(text, color = Theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
 }
 

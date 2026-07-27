@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material3.Icon
@@ -204,6 +205,7 @@ fun DayDetailScreen(
     onToggleDay: (Int, Int) -> Unit,
     onToggleSet: (com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onOpenBench: ((Int) -> Unit)?,
+    onCustomize: () -> Unit,
     contentPadding: PaddingValues
 ) {
     // У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
@@ -214,15 +216,36 @@ fun DayDetailScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(key = "title") {
-            Column(Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-                Text("Неделя $week", color = Theme.textPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                // В очереди день недели зависит от места в очереди, поэтому здесь только тип дня.
-                Text(
-                    if (profile.scheduleMode == ScheduleMode.QUEUE) day.title else profile.fullTitle(day),
-                    color = Theme.textSecondary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Неделя $week", color = Theme.textPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    // В очереди день недели зависит от места в очереди, поэтому здесь только тип дня.
+                    Text(
+                        if (profile.scheduleMode == ScheduleMode.QUEUE) day.title else profile.fullTitle(day),
+                        color = Theme.textSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.width(44.dp))
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Theme.surfaceSoft)
+                        .pressable(onClick = onCustomize),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Edit,
+                        contentDescription = "Свои упражнения",
+                        tint = if (profile.edits(week, day.number).isNotEmpty()) Theme.warning else Theme.textPrimary,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
             }
         }
         itemsIndexed(exercises, key = { index, item -> "d-$index-${item.name}" }) { index, exercise ->
