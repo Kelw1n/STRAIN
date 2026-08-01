@@ -23,7 +23,7 @@ struct ProgressScreen: View {
                     ProgressChartView(records: profile.completionLog).appearIn(1).softScroll()
                     TonnageChartView(weeks: profile.weeklyTonnage).appearIn(1).softScroll()
                     maxes.appearIn(1)
-                    if profile.programKind == .upperLower { benchCard.appearIn(2) }
+                    if profile.programKind.hasBenchWave { benchCard.appearIn(2) }
                     heatmap.appearIn(3).softScroll()
                     HistoryCard(records: profile.completionLog).appearIn(4).softScroll()
                 }
@@ -373,6 +373,7 @@ struct SettingsView: View {
     let onDeleteProfile: () -> Void
     @Environment(\.modelContext) private var modelContext
     @State private var showPeaking = false
+    @State private var showNewCycle = false
     @State private var showReset = false
     @State private var showImporter = false
     @State private var shareItem: ShareItem?
@@ -449,6 +450,18 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        showNewCycle = true
+                    } label: {
+                        Label("Начать новый цикл", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                } header: {
+                    Text("Цикл \(profile.cycleNumber)")
+                } footer: {
+                    Text("Программа начнётся заново с новыми максимумами. Отметки прошлого цикла спрячутся, история и графики останутся сквозными.")
+                }
+
+                Section {
                     Toggle("Не гасить экран", isOn: $profile.keepScreenOn)
                 } header: {
                     Text("В зале")
@@ -507,7 +520,7 @@ struct SettingsView: View {
                          : "День недели задаёт тип тренировки. Поменяешь здесь — поменяется и то, что приложение предложит в этот день.")
                 }
 
-                if profile.programKind == .upperLower {
+                if profile.programKind.hasBenchWave {
                     Section("Жим 14") {
                         HStack {
                             Label("Отмечено тренировок", systemImage: "waveform.path.ecg")
@@ -561,6 +574,7 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showPeaking) { PeakingView(profile: profile) }
+        .sheet(isPresented: $showNewCycle) { NewCycleView(profile: profile) }
         .sheet(item: $shareItem) { item in
             ShareSheet(url: item.url).presentationDetents([.medium])
         }
@@ -612,7 +626,7 @@ struct SettingsView: View {
     /// Название тренировочного дня в расписании: «День 1 · Верх тяжёлый».
     private func dayLabel(_ day: Int) -> String {
         let title = profile.workoutPlan.weeks.first?.days.first { $0.number == day }?.title
-        guard let title, profile.programKind == .upperLower else { return "День \(day)" }
+        guard let title, profile.programKind.hasBenchWave else { return "День \(day)" }
         return "День \(day) · " + title.prefix(1) + title.dropFirst().lowercased()
     }
 
@@ -731,7 +745,7 @@ struct PeakingView: View {
                                 profile.peakDeadlift5RM = nil
                                 // Отметки пикового цикла уходят вместе с ним,
                                 // основная программа остаётся нетронутой.
-                                profile.completedDayKeys.removeAll { $0.hasPrefix("peak-") }
+                                profile.completedDayKeys.removeAll { profile.isOwnKey($0) }
                             }
                         }
                         .frame(maxWidth: .infinity)

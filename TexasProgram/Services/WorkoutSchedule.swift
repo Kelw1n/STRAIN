@@ -230,7 +230,7 @@ enum WorkoutScheduler {
     /// верхнему дню, каким бы он ни был. Так в понедельник получаются понедельничные
     /// вспомогательные упражнения и при этом правильный по счёту жим.
     private static func assignBenchSessions(_ entries: inout [ScheduledWorkout], profile: ProgramProfile) {
-        guard profile.programKind == .upperLower, var next = profile.nextBenchSession else { return }
+        guard profile.programKind.hasBenchWave, var next = profile.nextBenchSession else { return }
         let total = UpperLowerCalculator.benchSessionCount
         for index in entries.indices where profile.carriesBenchWave(day: entries[index].day.number) {
             guard next <= total else { return }

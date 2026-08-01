@@ -70,6 +70,14 @@ struct ProgramOnboardingView: View {
             case .upperLower:
                 UpperLowerSetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(upperLowerInput: $0)) }
                     .transition(forward)
+            case .fullBody:
+                // Фулбади считается от того же 1ПМ, что и «Верх / Низ»: жим там
+                // идёт по той же волне, поэтому и экран ввода тот же.
+                UpperLowerSetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(fullBodyInput: $0)) }
+                    .transition(forward)
+            case .custom:
+                CustomProgramBuilderView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(customProgram: $0)) }
+                    .transition(forward)
             case nil:
                 ProgramSelectionView(selection: $selectedProgram, canCancel: canCancel, onCancel: onCancel)
                     .transition(.asymmetric(
@@ -111,7 +119,7 @@ struct ProgramSelectionView: View {
                     .padding(.top, 12)
                     .appearIn(0)
 
-                    ForEach(Array(TrainingProgramKind.allCases.enumerated()), id: \.element.id) { index, kind in
+                    ForEach(Array(TrainingProgramKind.ready.enumerated()), id: \.element.id) { index, kind in
                         Button {
                             withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { selection = kind }
                         } label: {
@@ -120,6 +128,16 @@ struct ProgramSelectionView: View {
                         .buttonStyle(.pressable)
                         .appearIn(index + 1)
                     }
+
+                    // Своя программа стоит особняком: у неё нет готового расчёта,
+                    // сначала собираешь схему и упражнения.
+                    Button {
+                        withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { selection = .custom }
+                    } label: {
+                        ProgramOptionCard(kind: .custom)
+                    }
+                    .buttonStyle(.pressable)
+                    .appearIn(TrainingProgramKind.ready.count + 1)
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)
@@ -145,11 +163,20 @@ struct ProgramOptionCard: View {
     let kind: TrainingProgramKind
 
     private var gradient: LinearGradient {
-        kind == .texas ? Theme.accentGradient : Theme.recordGradient
+        switch kind {
+        case .texas: return Theme.accentGradient
+        case .upperLower, .fullBody: return Theme.recordGradient
+        case .custom: return Theme.deepGradient
+        }
     }
 
     private var symbol: String {
-        kind == .texas ? "chart.line.uptrend.xyaxis" : "square.split.2x1.fill"
+        switch kind {
+        case .texas: return "chart.line.uptrend.xyaxis"
+        case .upperLower: return "square.split.2x1.fill"
+        case .fullBody: return "figure.strengthtraining.traditional"
+        case .custom: return "slider.horizontal.3"
+        }
     }
 
     var body: some View {
@@ -168,7 +195,7 @@ struct ProgramOptionCard: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    if kind == .upperLower {
+                    if kind == .upperLower || kind == .fullBody {
                         TagBadge(text: "Раздел «Жим 14»", systemImage: "waveform.path.ecg", gradient: Theme.recordGradient)
                             .padding(.top, 2)
                     }

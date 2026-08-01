@@ -15,7 +15,8 @@ struct MainTabView: View {
     let onAddProfile: () -> Void
     let onDeleteProfile: () -> Void
 
-    private var isUpperLower: Bool { profile.programKind == .upperLower }
+    /// Вкладка «Жим 14» есть у всех программ с волной жима.
+    private var isUpperLower: Bool { profile.programKind.hasBenchWave }
 
     /// Переход в раздел «Жим 14» на конкретную тренировку волны.
     private var benchHandler: ((Int) -> Void)? {

@@ -4,12 +4,46 @@ import SwiftData
 enum TrainingProgramKind: String, CaseIterable, Codable, Identifiable, Sendable {
     case texas = "Техасский метод"
     case upperLower = "Верх / Низ"
+    case fullBody = "Фулбади"
+    case custom = "Своя программа"
 
     var id: String { rawValue }
+
+    /// Готовые программы предлагаются при первом запуске, своя собирается отдельно.
+    static var ready: [TrainingProgramKind] { [.texas, .upperLower, .fullBody] }
+
     var subtitle: String {
         switch self {
         case .texas: return "12 недель · 3 тренировки в неделю · расчёт по 5ПМ"
         case .upperLower: return "7 недель · 4 тренировки в неделю · расчёт по 1ПМ"
+        case .fullBody: return "7 недель · 3 тренировки в неделю · жим по волне из 14"
+        case .custom: return "Своя схема, свои упражнения, свои недели"
+        }
+    }
+
+    /// От какого максимума считается программа.
+    var usesFiveRepMax: Bool { self == .texas }
+
+    /// Идёт ли по программе волна «Жим 14».
+    var hasBenchWave: Bool { self == .upperLower || self == .fullBody }
+
+    /// Код в файле копии. Совпадает с Android-версией, поэтому строковый,
+    /// а не порядковый: перестановка вариантов не должна ломать старые файлы.
+    var backupCode: String {
+        switch self {
+        case .texas: return "TEXAS"
+        case .upperLower: return "UPPER_LOWER"
+        case .fullBody: return "FULL_BODY"
+        case .custom: return "CUSTOM"
+        }
+    }
+
+    init(backupCode: String) {
+        switch backupCode {
+        case "UPPER_LOWER": self = .upperLower
+        case "FULL_BODY": self = .fullBody
+        case "CUSTOM": self = .custom
+        default: self = .texas
         }
     }
 }
@@ -223,6 +257,10 @@ final class ProgramProfile {
     var deloads: [DeloadEvent] = []
     /// Не гасить экран, пока открыта тренировка.
     var keepScreenOn: Bool = true
+    /// Какой проход программы идёт. Первый цикл ключи не меняет.
+    var cycleNumber: Int = 1
+    /// Своя программа, если выбран этот вид. У остальных не используется.
+    var customProgram: CustomProgram?
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -258,6 +296,19 @@ final class ProgramProfile {
         levelRaw = TrainingLevel.beginner.rawValue
         pull = nil; arms = nil; core = nil; back = nil; press = nil
         completedDayKeys = []; cycleStartedAt = .now; peakingActive = false
+    }
+
+    /// Фулбади считается от 1ПМ — тех же чисел, что и «Верх / Низ».
+    convenience init(fullBodyInput: UpperLowerInput, name: String = "Профиль") {
+        self.init(upperLowerInput: fullBodyInput, name: name)
+        programKindRaw = TrainingProgramKind.fullBody.rawValue
+    }
+
+    /// Своя программа: максимумы ей не нужны, веса заданы прямо в упражнениях.
+    convenience init(customProgram program: CustomProgram, name: String = "Профиль") {
+        self.init(input: .demo, name: program.name.isEmpty ? name : program.name)
+        programKindRaw = TrainingProgramKind.custom.rawValue
+        customProgram = program
     }
 
     var programKind: TrainingProgramKind {
@@ -303,6 +354,10 @@ final class ProgramProfile {
                 : ProgramCalculator.generate(input: input)
         case .upperLower:
             return UpperLowerCalculator.generate(input: upperLowerInput)
+        case .fullBody:
+            return FullBodyCalculator.generate(input: upperLowerInput)
+        case .custom:
+            return customProgram?.plan ?? WorkoutPlan(weeks: [], isPeaking: false)
         }
     }
 
@@ -346,6 +401,33 @@ final class ProgramProfile {
             })
         }
         return WorkoutPlan(weeks: weeks, isPeaking: plan.isPeaking)
+    }
+
+    // MARK: - Новый цикл
+
+    /// Начинает программу заново с новыми максимумами.
+    ///
+    /// Отметки не стираются: они остаются под префиксом прошлого цикла и просто
+    /// перестают быть видимыми. История и графики от этого сквозные — видно, как
+    /// ты рос из цикла в цикл, а не только внутри одного.
+    ///
+    /// Максимумы приходят снаружи: основная программа считается от свежего
+    /// пятиповторного теста, а не от пересчёта прошлого результата.
+    func startNewCycle(squat: Double, bench: Double, deadlift: Double, now: Date = Date()) {
+        cycleNumber += 1
+        peakingActive = false
+        peakSquat5RM = nil
+        peakBench5RM = nil
+        peakDeadlift5RM = nil
+        squat5RM = squat
+        bench5RM = bench
+        deadlift5RM = deadlift
+        // Волна жима считается от нуля: её номера не привязаны к пространству имён.
+        completedBenchSessions = []
+        lastCompletionDate = nil
+        cycleStartedAt = now
+        scheduleAnchorWeek = 0
+        scheduleAnchorDate = nil
     }
 
     // MARK: - Серия без пропусков
@@ -469,7 +551,8 @@ final class ProgramProfile {
     var weeklyTonnage: [WeeklyTonnage] {
         var totals: [Int: (sum: Double, count: Int)] = [:]
         for (key, entry) in setLog {
-            guard let week = SetKeyParts.week(from: key, isPeaking: isPeaking) else { continue }
+            guard let day = SetKeyParts.dayKey(from: key), isOwnKey(day),
+                  let week = SetKeyParts.week(fromDayKey: day, prefix: keyPrefix) else { continue }
             let current = totals[week] ?? (0, 0)
             totals[week] = (current.sum + entry.tonnage, current.count + 1)
         }
@@ -606,13 +689,30 @@ final class ProgramProfile {
         for edit in stale { removeEdit(edit) }
     }
 
-    var maximumLabel: String { programKind == .texas ? "5ПМ" : "1ПМ" }
+    var maximumLabel: String { programKind.usesFiveRepMax ? "5ПМ" : "1ПМ" }
     var totalDays: Int { workoutPlan.weeks.reduce(0) { $0 + $1.days.count } }
 
     /// Ключ отметки. У пикового цикла своё пространство имён, иначе его дни
     /// накладывались бы на дни основной программы — недели там нумеруются с единицы.
-    func dayKey(week: Int, day: Int) -> String {
-        isPeaking ? "peak-\(week)-\(day)" : "\(week)-\(day)"
+    func dayKey(week: Int, day: Int) -> String { keyPrefix + "\(week)-\(day)" }
+
+    /// Пространство имён отметок: номер цикла и пиковый режим.
+    ///
+    /// Первый цикл не добавляет ничего — ключи сохранённых профилей остаются
+    /// прежними, миграция не нужна.
+    var keyPrefix: String {
+        let cycle = cycleNumber > 1 ? "c\(cycleNumber)-" : ""
+        return isPeaking ? cycle + "peak-" : cycle
+    }
+
+    /// Принадлежит ли ключ текущему пространству.
+    ///
+    /// Одной проверки префикса мало: у пустого префикса «peak-1-1» тоже
+    /// начинается с него, а у «c2-» внутри может лежать пиковый ключ.
+    func isOwnKey(_ key: String) -> Bool {
+        guard key.hasPrefix(keyPrefix) else { return false }
+        let rest = key.dropFirst(keyPrefix.count)
+        return !rest.contains("peak-") && !rest.hasPrefix("c")
     }
 
     func isCompleted(week: Int, day: Int) -> Bool { completedDayKeys.contains(dayKey(week: week, day: day)) }
@@ -718,7 +818,7 @@ final class ProgramProfile {
 
     /// Дни, которые несут волну жима: в «Верх / Низ» это верхние дни — первый и третий.
     func carriesBenchWave(day: Int) -> Bool {
-        programKind == .upperLower && (day == 1 || day == 3)
+        programKind.hasBenchWave && (day == 1 || day == 3)
     }
 
     /// Упражнения тренировки: вспомогательные — из дня программы, жим — из волны.
@@ -758,10 +858,26 @@ final class ProgramProfile {
 
     // MARK: - Расписание по дням недели
 
-    var trainingDayCount: Int { programKind == .texas ? 3 : 4 }
+    var trainingDayCount: Int {
+        switch programKind {
+        case .texas, .fullBody: return 3
+        case .upperLower: return 4
+        case .custom: return max(customProgram?.days.count ?? 3, 1)
+        }
+    }
 
     /// «Верх / Низ» — понедельник, вторник, четверг, пятница. Техас — понедельник, среда, пятница.
-    var defaultWeekdays: [Int] { programKind == .texas ? [2, 4, 6] : [2, 3, 5, 6] }
+    var defaultWeekdays: [Int] {
+        switch trainingDayCount {
+        case 1: return [2]
+        case 2: return [2, 5]
+        case 3: return [2, 4, 6]
+        case 4: return [2, 3, 5, 6]
+        case 5: return [2, 3, 4, 5, 6]
+        case 6: return [2, 3, 4, 5, 6, 7]
+        default: return Array(RuDate.weekOrder.prefix(max(trainingDayCount, 1)))
+        }
+    }
 
     var weekdays: [Int] {
         scheduleWeekdays.count == trainingDayCount ? scheduleWeekdays : defaultWeekdays
@@ -817,9 +933,9 @@ final class ProgramProfile {
     func setCurrentWorkout(week: Int, day: Int, now: Date = Date(), calendar: Calendar = .current) {
         // Чужое пространство имён не трогаем: сброс внутри пикирования
         // не должен стирать историю основного цикла и наоборот.
-        completedDayKeys = completedDayKeys.filter { isPeaking ? !$0.hasPrefix("peak-") : $0.hasPrefix("peak-") }
+        completedDayKeys = completedDayKeys.filter { !isOwnKey($0) }
         // История отмеченного задним числом недостоверна — у тех дней нет реальных дат.
-        completionLog.removeAll { isPeaking ? $0.key.hasPrefix("peak-") : !$0.key.hasPrefix("peak-") }
+        completionLog.removeAll { isOwnKey($0.key) }
         completedBenchSessions = []
         // Волна остаётся непрерывной: сколько верхних дней закрыли, столько жимов и сделано.
         var benchDone = 0
@@ -847,14 +963,14 @@ final class ProgramProfile {
     // MARK: - Волна «Жим 14»
 
     var benchWave: [BenchSessionPlan] {
-        guard programKind == .upperLower else { return [] }
+        guard programKind.hasBenchWave else { return [] }
         return UpperLowerCalculator.benchWave(input: upperLowerInput)
     }
 
     /// Номер жимовой тренировки волны для дня программы «Верх / Низ».
     /// Понедельник (день 1) — нечётные номера, четверг (день 3) — чётные.
     func benchSession(week: Int, day: Int) -> Int? {
-        guard programKind == .upperLower else { return nil }
+        guard programKind.hasBenchWave else { return nil }
         switch day {
         case 1: return (week - 1) * 2 + 1
         case 3: return (week - 1) * 2 + 2
@@ -903,7 +1019,6 @@ final class ProgramProfile {
 
     /// Считаем только текущий цикл: отметки пикирования лежат в своём пространстве имён.
     var completedDayCount: Int {
-        let peakKeys = completedDayKeys.filter { $0.hasPrefix("peak-") }
-        return Set(isPeaking ? peakKeys : completedDayKeys.filter { !$0.hasPrefix("peak-") }).count
+        Set(completedDayKeys.filter { isOwnKey($0) }).count
     }
 }
