@@ -16,16 +16,16 @@ enum TrainingProgramKind: String, CaseIterable, Codable, Identifiable, Sendable 
         switch self {
         case .texas: return "12 недель · 3 тренировки в неделю · расчёт по 5ПМ"
         case .upperLower: return "7 недель · 4 тренировки в неделю · расчёт по 1ПМ"
-        case .fullBody: return "7 недель · 3 тренировки в неделю · жим по волне из 14"
+        case .fullBody: return "12 недель · 3 тренировки в неделю · всё тело каждый раз"
         case .custom: return "Своя схема, свои упражнения, свои недели"
         }
     }
 
     /// От какого максимума считается программа.
-    var usesFiveRepMax: Bool { self == .texas }
+    var usesFiveRepMax: Bool { self == .texas || self == .fullBody }
 
     /// Идёт ли по программе волна «Жим 14».
-    var hasBenchWave: Bool { self == .upperLower || self == .fullBody }
+    var hasBenchWave: Bool { self == .upperLower }
 
     /// Код в файле копии. Совпадает с Android-версией, поэтому строковый,
     /// а не порядковый: перестановка вариантов не должна ломать старые файлы.
@@ -261,6 +261,8 @@ final class ProgramProfile {
     var cycleNumber: Int = 1
     /// Своя программа, если выбран этот вид. У остальных не используется.
     var customProgram: CustomProgram?
+    /// Стаж для фулбади: от него зависит схема прогрессии.
+    var fullBodyLevelRaw: String = FullBodyLevel.aboutYear.rawValue
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -298,10 +300,11 @@ final class ProgramProfile {
         completedDayKeys = []; cycleStartedAt = .now; peakingActive = false
     }
 
-    /// Фулбади считается от 1ПМ — тех же чисел, что и «Верх / Низ».
-    convenience init(fullBodyInput: UpperLowerInput, name: String = "Профиль") {
-        self.init(upperLowerInput: fullBodyInput, name: name)
+    /// Фулбади считается от 5ПМ, как и техас: прогрессия там та же линейная.
+    convenience init(fullBodyInput: ProgramInput, level: FullBodyLevel, name: String = "Профиль") {
+        self.init(input: fullBodyInput, name: name)
         programKindRaw = TrainingProgramKind.fullBody.rawValue
+        fullBodyLevelRaw = level.rawValue
     }
 
     /// Своя программа: максимумы ей не нужны, веса заданы прямо в упражнениях.
@@ -319,6 +322,11 @@ final class ProgramProfile {
     var level: TrainingLevel {
         get { TrainingLevel(rawValue: levelRaw) ?? .beginner }
         set { levelRaw = newValue.rawValue }
+    }
+
+    var fullBodyLevel: FullBodyLevel {
+        get { FullBodyLevel(rawValue: fullBodyLevelRaw) ?? .aboutYear }
+        set { fullBodyLevelRaw = newValue.rawValue }
     }
 
     var scheduleMode: ScheduleMode {
@@ -355,7 +363,7 @@ final class ProgramProfile {
         case .upperLower:
             return UpperLowerCalculator.generate(input: upperLowerInput)
         case .fullBody:
-            return FullBodyCalculator.generate(input: upperLowerInput)
+            return FullBodyCalculator.generate(input: input, level: fullBodyLevel)
         case .custom:
             return customProgram?.plan ?? WorkoutPlan(weeks: [], isPeaking: false)
         }

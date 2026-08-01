@@ -1,85 +1,181 @@
 import Foundation
 
-/// Фулбади на три тренировки в неделю, семь недель.
+/// Сколько человек тренируется — от этого зависит, какая схема ему подходит.
 ///
-/// Жим идёт по волне Лимара из четырнадцати тренировок — той же самой, что в
-/// «Верх / Низ», без изменений: два жимовых дня в неделю на семь недель дают
-/// ровно четырнадцать. Присед и тяга растут линейно, по 2,5 кг в неделю.
-///
-/// Средний день без жима — разгрузочный: он existует, чтобы неделя оставалась
-/// трёхдневной, а не чтобы добавить объёма.
-enum FullBodyCalculator {
-    static let weekCount = 7
-    /// Жимовые дни недели — первый и третий, как в волне.
-    static let benchDays = [1, 3]
+/// Новичок растёт от тренировки к тренировке, опытный — от недели к неделе,
+/// и чем дольше стаж, тем мельче шаг прибавки.
+enum FullBodyLevel: String, CaseIterable, Identifiable, Codable, Sendable {
+    case underYear = "Меньше года"
+    case aboutYear = "Около года"
+    case overYear = "Больше года"
+    case twoYears = "Два года и больше"
 
-    private static let memo = PlanMemo<UpperLowerInput, WorkoutPlan>()
+    var id: String { rawValue }
 
-    static func generate(input: UpperLowerInput) -> WorkoutPlan {
-        memo.resolve(input) { value in
-            WorkoutPlan(weeks: (1...weekCount).map { week($0, input: value) }, isPeaking: false)
+    var subtitle: String {
+        switch self {
+        case .underYear: return "Вес растёт каждую тренировку"
+        case .aboutYear: return "Недельная волна: объём, лёгкий, тяжёлый"
+        case .overYear: return "Та же волна и больше подсобки"
+        case .twoYears: return "Волна с прибавкой через неделю"
         }
     }
 
-    /// Волна жима целиком — её показывает раздел «Жим 14».
-    static func benchWave(input: UpperLowerInput) -> [BenchSessionPlan] {
-        UpperLowerCalculator.benchWave(input: input)
+    var explanation: String {
+        switch self {
+        case .underYear:
+            return "Линейная прогрессия: присед прибавляет 2,5 кг каждую тренировку, жим — раз в неделю. Пока это работает, ничего сложнее не нужно."
+        case .aboutYear:
+            return "Техасская волна внутри недели: тяжёлый объём, лёгкий день, один тяжёлый подход. Прибавка 2,5 кг в неделю."
+        case .overYear:
+            return "Та же волна, но подсобки больше: вертикальный жим и тяга каждый день. Восстановления хватает, объём можно держать выше."
+        case .twoYears:
+            return "Прибавка через неделю: 2,5 кг раз в две недели. На этом стаже линейно каждую неделю уже не растёт."
+        }
     }
 
-    private static func week(_ number: Int, input: UpperLowerInput) -> WorkoutWeekPlan {
-        // Проценты от 1ПМ: неделя за неделей тяжелее, объём падает.
-        let squatTop = ProgramCalculator.roundToPlate(input.squat1RM * squatPercent(number))
-        let deadTop = ProgramCalculator.roundToPlate(input.deadlift1RM * deadliftPercent(number))
+    /// Прибавка к тяжёлому подходу на неделе.
+    func increment(week: Int) -> Double {
+        switch self {
+        case .underYear, .aboutYear, .overYear:
+            return Double(week - 1) * 2.5
+        case .twoYears:
+            // Полблина в неделю не набрать: прибавляем 2,5 кг раз в две недели.
+            return Double((week - 1) / 2) * 2.5
+        }
+    }
+}
 
-        let day1 = [
-            benchSlot(week: number, dayNumber: 1),
-            ExercisePrescription(name: "Приседания", sets: 4, reps: "5", load: .kilograms(squatTop)),
-            ExercisePrescription(name: "Тяга в наклоне", sets: 3, reps: "8–12", load: .rpe("RPE 8"))
+/// Фулбади на три тренировки в неделю: каждый день присед, жим, тяга, руки и кор.
+///
+/// Прогрессия жима и приседа — линейная, как в техасском методе: расчёт идёт от
+/// пятиповторного максимума, тяжёлый подход прибавляет 2,5 кг, лёгкие дни считаются
+/// процентами от него. Волны из «Верх / Низ» здесь нет.
+enum FullBodyCalculator {
+    static let weekCount = 12
+
+    /// Только Equatable: `PlanMemo` большего не требует, а `ProgramInput`
+    /// хешируемым не объявлен.
+    private struct Key: Equatable {
+        let input: ProgramInput
+        let level: FullBodyLevel
+    }
+
+    private static let memo = PlanMemo<Key, WorkoutPlan>()
+
+    static func generate(input: ProgramInput, level: FullBodyLevel) -> WorkoutPlan {
+        memo.resolve(Key(input: input, level: level)) { key in
+            WorkoutPlan(
+                weeks: (1...weekCount).map { week(($0), input: key.input, level: key.level) },
+                isPeaking: false
+            )
+        }
+    }
+
+    private static func week(_ number: Int, input: ProgramInput, level: FullBodyLevel) -> WorkoutWeekPlan {
+        let days = level == .underYear
+            ? linearWeek(number, input: input)
+            : waveWeek(number, input: input, level: level)
+        return WorkoutWeekPlan(id: number, number: number, days: days)
+    }
+
+    // MARK: - Меньше года: вес растёт каждую тренировку
+
+    private static func linearWeek(_ week: Int, input: ProgramInput) -> [WorkoutDayPlan] {
+        // Присед прибавляет каждую тренировку, жим и тяга — раз в неделю:
+        // верх тела так быстро не растёт, и упереться в потолок можно за месяц.
+        let benchWeight = ProgramCalculator.roundToPlate(input.bench5RM * 0.85 + Double(week - 1) * 2.5)
+        let deadWeight = ProgramCalculator.roundToPlate(input.deadlift5RM * 0.85 + Double(week - 1) * 5)
+
+        return (1...3).map { dayNumber in
+            let session = (week - 1) * 3 + dayNumber
+            let squatWeight = ProgramCalculator.roundToPlate(input.squat5RM * 0.8 + Double(session - 1) * 2.5)
+
+            var exercises = [
+                ExercisePrescription(name: "Приседания", sets: 3, reps: "5", load: .kilograms(squatWeight)),
+                ExercisePrescription(name: "Жим лёжа", sets: 3, reps: "5", load: .kilograms(benchWeight))
+            ]
+            // Становая тяжело восстанавливается — один раз в неделю.
+            if dayNumber == 2 {
+                exercises.append(ExercisePrescription(name: "Становая тяга", sets: 1, reps: "5", load: .kilograms(deadWeight)))
+            }
+            exercises.append(contentsOf: accessories(input: input, dayNumber: dayNumber, extended: false))
+            return day(week, dayNumber, "ФУЛБАДИ " + letter(dayNumber), exercises)
+        }
+    }
+
+    // MARK: - Год и дальше: недельная волна техасского метода
+
+    private static func waveWeek(_ week: Int, input: ProgramInput, level: FullBodyLevel) -> [WorkoutDayPlan] {
+        let increment = level.increment(week: week)
+        let squatTop = ProgramCalculator.roundToPlate(input.squat5RM + increment)
+        let benchTop = ProgramCalculator.roundToPlate(input.bench5RM + increment)
+        let deadTop = ProgramCalculator.roundToPlate(input.deadlift5RM + increment)
+
+        // День объёма — 90 % от тяжёлого, лёгкий день — 80 % от дня объёма.
+        let squatVolume = ProgramCalculator.roundToPlate(squatTop * 0.9)
+        let benchVolume = ProgramCalculator.roundToPlate(benchTop * 0.9)
+        let squatLight = ProgramCalculator.roundToPlate(squatVolume * 0.8)
+        let benchLight = ProgramCalculator.roundToPlate(benchVolume * 0.8)
+
+        let extended = level != .aboutYear
+
+        var day1: [ExercisePrescription] = [
+            ExercisePrescription(name: "Приседания", sets: 5, reps: "5", load: .kilograms(squatVolume)),
+            ExercisePrescription(name: "Жим лёжа", sets: 5, reps: "5", load: .kilograms(benchVolume))
         ]
+        day1.append(contentsOf: accessories(input: input, dayNumber: 1, extended: extended))
 
-        let day2 = [
-            ExercisePrescription(name: "Приседания", sets: 3, reps: "5", load: .kilograms(ProgramCalculator.roundToPlate(squatTop * 0.85))),
-            ExercisePrescription(name: "Становая тяга", sets: 3, reps: "5", load: .kilograms(deadTop)),
-            ExercisePrescription(name: "Жим штанги стоя", sets: 3, reps: "6–8", load: .rpe("RPE 8")),
-            ExercisePrescription(name: "Подтягивания", sets: 3, reps: "8–12", load: .rpe("RPE 8"))
+        var day2: [ExercisePrescription] = [
+            ExercisePrescription(name: "Приседания", sets: 2, reps: "5", load: .kilograms(squatLight)),
+            ExercisePrescription(name: "Жим лёжа", sets: 3, reps: "5", load: .kilograms(benchLight)),
+            ExercisePrescription(name: "Становая тяга", sets: 1, reps: "5", load: .kilograms(deadTop))
         ]
+        day2.append(contentsOf: accessories(input: input, dayNumber: 2, extended: extended))
 
-        let day3 = [
-            benchSlot(week: number, dayNumber: 3),
-            ExercisePrescription(name: "Приседания", sets: 2, reps: "5", load: .kilograms(ProgramCalculator.roundToPlate(squatTop * 0.75))),
-            ExercisePrescription(name: "Румынская тяга", sets: 3, reps: "8", load: .rpe("RPE 8")),
-            ExercisePrescription(name: "Скручивания лёжа на полу", sets: 3, reps: "12–15", load: .rpe("RPE 9"))
+        var day3: [ExercisePrescription] = [
+            ExercisePrescription(name: "Приседания", sets: 1, reps: "5", load: .kilograms(squatTop)),
+            ExercisePrescription(name: "Жим лёжа", sets: 1, reps: "5", load: .kilograms(benchTop))
         ]
+        day3.append(contentsOf: accessories(input: input, dayNumber: 3, extended: extended))
 
-        return WorkoutWeekPlan(id: number, number: number, days: [
-            day(number, 1, "ФУЛБАДИ · ЖИМ", day1),
-            day(number, 2, "ФУЛБАДИ · НОГИ И СПИНА", day2),
-            day(number, 3, "ФУЛБАДИ · ЖИМ", day3)
-        ])
+        return [
+            day(week, 1, "ФУЛБАДИ · ОБЪЁМ", day1),
+            day(week, 2, "ФУЛБАДИ · ЛЁГКИЙ", day2),
+            day(week, 3, "ФУЛБАДИ · ТЯЖЁЛЫЙ", day3)
+        ]
     }
 
-    /// Приседания: от 70 % в первую неделю до 85 % в седьмую.
-    private static func squatPercent(_ week: Int) -> Double {
-        0.70 + Double(week - 1) * 0.025
+    // MARK: - Подсобка
+
+    /// Тяга, руки и кор есть в каждой тренировке — иначе это не фулбади, а сплит.
+    /// Выбранные в настройках упражнения подставляются вместо стандартных.
+    private static func accessories(input: ProgramInput, dayNumber: Int, extended: Bool) -> [ExercisePrescription] {
+        var result: [ExercisePrescription] = []
+
+        let pullName = input.back ?? (dayNumber == 2 ? "Тяга в наклоне" : "Подтягивания")
+        result.append(ExercisePrescription(name: pullName, sets: 3, reps: "8–12", load: .rpe("RPE 8"), isOptional: true))
+
+        if extended {
+            let pressName = input.press ?? "Жим штанги стоя"
+            result.append(ExercisePrescription(name: pressName, sets: 3, reps: "6–8", load: .rpe("RPE 8"), isOptional: true))
+        }
+
+        let armsName = input.arms ?? "Растянутый суперсет: бицепс + трицепс"
+        result.append(ExercisePrescription(name: armsName, sets: 3, reps: "8–12", load: .rpe("RPE 8–9"), isOptional: true))
+
+        let coreName = input.core ?? "Скручивания лёжа на полу"
+        result.append(ExercisePrescription(name: coreName, sets: 3, reps: "10–15", load: .rpe("RPE 9"), isOptional: true))
+
+        return result
     }
 
-    /// Тяга растёт медленнее — она тяжелее восстанавливается.
-    private static func deadliftPercent(_ week: Int) -> Double {
-        0.70 + Double(week - 1) * 0.02
-    }
-
-    /// Место жима в дне. Реальные подходы подставляются из волны при показе,
-    /// как и в «Верх / Низ», — здесь стоит только номер тренировки.
-    private static func benchSlot(week: Int, dayNumber: Int) -> ExercisePrescription {
-        let session = (week - 1) * 2 + (dayNumber == 1 ? 1 : 2)
-        return ExercisePrescription(
-            id: "bench-wave",
-            name: "Жим лёжа",
-            sets: 5,
-            reps: "по волне",
-            load: .repRange("волна " + String(session)),
-            benchSession: session
-        )
+    private static func letter(_ dayNumber: Int) -> String {
+        switch dayNumber {
+        case 1: return "A"
+        case 2: return "B"
+        default: return "C"
+        }
     }
 
     private static func day(_ week: Int, _ number: Int, _ title: String, _ exercises: [ExercisePrescription]) -> WorkoutDayPlan {
