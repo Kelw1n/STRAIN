@@ -59,6 +59,11 @@ struct CompletionRecord: Codable, Equatable, Hashable, Sendable, Identifiable {
     var squat: Double?
     var bench: Double?
     var deadlift: Double?
+    /// Что реально поднято в этот день, если подходы записывались.
+    /// Необязательные: у дней без записей факта просто нет.
+    var actualSquat: Double? = nil
+    var actualBench: Double? = nil
+    var actualDeadlift: Double? = nil
 
     var id: String { key + "-" + String(Int(date.timeIntervalSince1970)) }
 }
@@ -212,6 +217,12 @@ final class ProgramProfile {
     /// Свои упражнения и правки дней. Свойство новое: у существующих профилей
     /// подставится пустой список, и план останется прежним.
     var planEdits: [PlanEdit] = []
+    /// Что реально сделано в подходе: ключ «деньПлана|упражнение|номерПодхода».
+    var setLog: [String: SetEntry] = [:]
+    /// Откаты после несданных весов.
+    var deloads: [DeloadEvent] = []
+    /// Не гасить экран, пока открыта тренировка.
+    var keepScreenOn: Bool = true
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -275,8 +286,12 @@ final class ProgramProfile {
     /// Идёт ли сейчас пиковый цикл. Только «Техас» — у «Верх / Низ» пикирования нет.
     var isPeaking: Bool { programKind == .texas && peakingActive }
 
-    /// План программы с наложенными пользовательскими правками.
-    var workoutPlan: WorkoutPlan { applyEdits(to: generatedPlan) }
+    /// План программы с откатами и пользовательскими правками.
+    ///
+    /// Порядок обязателен: сначала откаты режут веса расчёта, потом правки
+    /// подставляют свои упражнения. Наоборот откат срезал бы вес, который
+    /// пользователь вписал руками.
+    var workoutPlan: WorkoutPlan { applyEdits(to: applyDeloads(to: generatedPlan)) }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
@@ -313,13 +328,141 @@ final class ProgramProfile {
                 for edit in edits where edit.kind == .add {
                     list.append(edit.prescription)
                 }
+                // Порядок применяем последним: к этому моменту состав дня уже
+                // окончательный. Упражнения, которых нет в списке, идут в конец —
+                // их могли добавить после перестановки.
+                if let order = edits.last(where: { $0.kind == .order })?.order {
+                    let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
+                    // Сортировка в Swift не обещает устойчивости, поэтому вторым
+                    // ключом идёт исходная позиция: упражнения вне списка сохранят ряд.
+                    list = list.enumerated()
+                        .sorted { left, right in
+                            (rank[left.element.id] ?? Int.max, left.offset)
+                                < (rank[right.element.id] ?? Int.max, right.offset)
+                        }
+                        .map(\.element)
+                }
                 return WorkoutDayPlan(id: day.id, number: day.number, title: day.title, exercises: list)
             })
         }
         return WorkoutPlan(weeks: weeks, isPeaking: plan.isPeaking)
     }
 
+    // MARK: - Откаты после несданного веса
+
+    /// Откаты, действующие на неделю: срабатывают все, объявленные не позже неё.
+    func activeDeloads(upTo week: Int) -> [DeloadEvent] {
+        deloads.filter { $0.isPeaking == isPeaking && $0.week <= week }
+    }
+
+    /// Во сколько раз урезаны веса этой недели. Несколько откатов перемножаются.
+    func deloadFactor(week: Int) -> Double {
+        activeDeloads(upTo: week).reduce(1.0) { $0 * $1.factor }
+    }
+
+    private func applyDeloads(to plan: WorkoutPlan) -> WorkoutPlan {
+        let active = deloads.filter { $0.isPeaking == isPeaking }
+        guard !active.isEmpty else { return plan }
+        return WorkoutPlan(weeks: plan.weeks.map { week in
+            let factor = deloadFactor(week: week.number)
+            guard factor < 1 else { return week }
+            return WorkoutWeekPlan(id: week.id, number: week.number, days: week.days.map { day in
+                WorkoutDayPlan(id: day.id, number: day.number, title: day.title, exercises: day.exercises.map { exercise in
+                    // Режем только конкретные килограммы: RPE и тест 1ПМ процентам не подчиняются.
+                    guard case .kilograms(let value) = exercise.load else { return exercise }
+                    return ExercisePrescription(
+                        id: exercise.id,
+                        name: exercise.name,
+                        sets: exercise.sets,
+                        reps: exercise.reps,
+                        load: .kilograms(ProgramCalculator.roundToPlate(value * factor)),
+                        isOptional: exercise.isOptional,
+                        benchSession: exercise.benchSession
+                    )
+                })
+            })
+        }, isPeaking: plan.isPeaking)
+    }
+
+    /// «Не взял вес»: с этой недели расчёт идёт от сниженных процентов.
+    func addDeload(fromWeek week: Int, percent: Double, now: Date = Date()) {
+        deloads.append(DeloadEvent(week: week, percent: percent, isPeaking: isPeaking, date: now))
+    }
+
+    func removeDeload(_ event: DeloadEvent) {
+        deloads.removeAll { $0.id == event.id }
+    }
+
+    // MARK: - Фактически выполненные подходы
+
+    private func logKey(week: Int, day: Int, exercise: ExercisePrescription, index: Int) -> String {
+        setKey(week: week, day: day, exercise: exercise) + "|\(index)"
+    }
+
+    func setEntry(week: Int, day: Int, exercise: ExercisePrescription, index: Int) -> SetEntry? {
+        setLog[logKey(week: week, day: day, exercise: exercise, index: index)]
+    }
+
+    /// Записывает факт подхода и заодно закрывает точку: отмечать дважды незачем.
+    func recordSet(week: Int, day: Int, exercise: ExercisePrescription, index: Int, reps: Int, weight: Double, now: Date = Date()) {
+        setLog[logKey(week: week, day: day, exercise: exercise, index: index)] = SetEntry(reps: reps, weight: weight)
+        let key = setKey(week: week, day: day, exercise: exercise)
+        if (setProgress[key] ?? 0) < index + 1 { setProgress[key] = index + 1 }
+        refreshCompletion(week: week, day: day, now: now)
+    }
+
+    func clearSetEntry(week: Int, day: Int, exercise: ExercisePrescription, index: Int, now: Date = Date()) {
+        setLog[logKey(week: week, day: day, exercise: exercise, index: index)] = nil
+        refreshCompletion(week: week, day: day, now: now)
+    }
+
+    /// Записанные подходы упражнения по порядку номеров.
+    func entries(week: Int, day: Int, exercise: ExercisePrescription) -> [(index: Int, entry: SetEntry)] {
+        (0..<max(exercise.sets, 0)).compactMap { index in
+            setEntry(week: week, day: day, exercise: exercise, index: index).map { (index, $0) }
+        }
+    }
+
+    /// Наибольший записанный вес движения за день — им факт попадает в график.
+    func actualWeight(week: Int, day: Int, exerciseNames: [String]) -> Double? {
+        let exercises = workoutPlan.weeks.first { $0.number == week }?
+            .days.first { $0.number == day }?.exercises ?? []
+        let matched = exercises.filter { exerciseNames.contains($0.name) }
+        let weights = matched.flatMap { entries(week: week, day: day, exercise: $0).map(\.entry.weight) }
+        return weights.max()
+    }
+
+    /// Тоннаж по неделям: только записанные подходы, без догадок по плану.
+    var weeklyTonnage: [WeeklyTonnage] {
+        var totals: [Int: (sum: Double, count: Int)] = [:]
+        for (key, entry) in setLog {
+            guard let week = SetKeyParts.week(from: key, isPeaking: isPeaking) else { continue }
+            let current = totals[week] ?? (0, 0)
+            totals[week] = (current.sum + entry.tonnage, current.count + 1)
+        }
+        return totals
+            .map { WeeklyTonnage(week: $0.key, total: $0.value.sum, setCount: $0.value.count) }
+            .sorted { $0.week < $1.week }
+    }
+
     // MARK: - Свои упражнения
+
+    /// Порядок упражнений дня. Пустой список убирает свою перестановку.
+    func setOrder(_ ids: [String], week: Int, day: Int, scope: PlanEditScope) {
+        let peaking = isPeaking
+        planEdits.removeAll {
+            $0.kind == .order && $0.day == day && $0.isPeaking == peaking
+                && (scope == .everyWeek || $0.week == nil || $0.week == week)
+        }
+        guard !ids.isEmpty else { return }
+        planEdits.append(PlanEdit(
+            kind: .order,
+            day: day,
+            week: scope == .single ? week : nil,
+            isPeaking: peaking,
+            order: ids
+        ))
+    }
 
     /// Правки, которые действуют на конкретную тренировку.
     func edits(week: Int, day: Int) -> [PlanEdit] {
@@ -409,6 +552,10 @@ final class ProgramProfile {
         let suffix = "|" + edit.id
         let orphaned = setProgress.keys.filter { $0.hasSuffix(suffix) }
         for key in orphaned { setProgress[key] = nil }
+        // У журнала факта ключ длиннее на номер подхода, поэтому ищем вхождение.
+        let inner = "|" + edit.id + "|"
+        let orphanedLog = setLog.keys.filter { $0.contains(inner) }
+        for key in orphanedLog { setLog[key] = nil }
     }
 
     func removeEdits(week: Int, day: Int) {
@@ -480,8 +627,20 @@ final class ProgramProfile {
             day: day,
             squat: weight("Приседания") ?? weight("Приседания со штангой"),
             bench: weight("Жим лёжа"),
-            deadlift: weight("Становая тяга")
+            deadlift: weight("Становая тяга"),
+            actualSquat: actualWeight(week: week, day: day, exerciseNames: ["Приседания", "Приседания со штангой"]),
+            actualBench: actualWeight(week: week, day: day, exerciseNames: ["Жим лёжа"]),
+            actualDeadlift: actualWeight(week: week, day: day, exerciseNames: ["Становая тяга"])
         ))
+    }
+
+    /// Обновляет запись истории, если день уже отмечен: факт мог появиться позже.
+    /// Дату оставляем исходную — тренировка была тогда, а не в момент правки.
+    private func refreshCompletion(week: Int, day: Int, now: Date) {
+        guard isCompleted(week: week, day: day) else { return }
+        let key = dayKey(week: week, day: day)
+        let original = completionLog.first { $0.key == key }?.date ?? now
+        recordCompletion(week: week, day: day, now: original)
     }
 
     // MARK: - Отметка по подходам

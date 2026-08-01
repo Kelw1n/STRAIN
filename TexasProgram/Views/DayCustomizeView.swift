@@ -36,6 +36,7 @@ struct DayCustomizeView: View {
 
     @State private var scope: PlanEditScope = .everyWeek
     @State private var draft: ExerciseDraft?
+    @State private var ordering: [ExercisePrescription] = []
 
     private var generated: [ExercisePrescription] {
         profile.generatedExercises(week: week, day: day.number)
@@ -49,10 +50,17 @@ struct DayCustomizeView: View {
         dayEdits.first { $0.targetID == target.id }
     }
 
+    /// Итоговый состав дня — то, что реально увидишь на тренировке.
+    private var current: [ExercisePrescription] {
+        profile.workoutPlan.weeks.first { $0.number == week }?
+            .days.first { $0.number == day.number }?.exercises ?? []
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 scopeSection
+                orderSection
                 programSection
                 addedSection
                 if !dayEdits.isEmpty { resetSection }
@@ -63,6 +71,12 @@ struct DayCustomizeView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { dismiss() }.font(.body.weight(.semibold))
                 }
+            }
+            .onAppear { ordering = current }
+            .onChange(of: current) { _, value in
+                // Состав дня поменялся — подхватываем, иначе список перестановки
+                // покажет упражнения, которых уже нет.
+                ordering = value
             }
             .navigationDestination(item: $draft) { value in
                 ExerciseFormView(draft: value, scope: scope) { saved in
@@ -85,6 +99,32 @@ struct DayCustomizeView: View {
             Text("Куда применить")
         } footer: {
             Text(scope.explanation)
+        }
+    }
+
+    /// Перестановка. Список отдельный: тянуть строки, у которых сбоку меню
+    /// с действиями, неудобно — палец попадает то туда, то сюда.
+    private var orderSection: some View {
+        Section {
+            ForEach(ordering) { exercise in
+                HStack(spacing: 10) {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.footnote).foregroundStyle(.tertiary)
+                    Text(exercise.name).lineLimit(1)
+                }
+            }
+            .onMove { source, destination in
+                ordering.move(fromOffsets: source, toOffset: destination)
+                profile.setOrder(ordering.map(\.id), week: week, day: day.number, scope: scope)
+            }
+        } header: {
+            HStack {
+                Text("Порядок")
+                Spacer()
+                EditButton().font(.footnote)
+            }
+        } footer: {
+            Text("Нажми «Изменить» и перетащи за полоски. Порядок сохранится по тому же правилу, что выбрано выше.")
         }
     }
 

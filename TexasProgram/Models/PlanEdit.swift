@@ -8,6 +8,8 @@ enum PlanEditKind: String, Codable, Sendable {
     case replace
     /// Упражнение программы убрано из дня.
     case hide
+    /// Свой порядок упражнений внутри дня.
+    case order
 }
 
 /// Насколько далеко расходится правка.
@@ -55,6 +57,9 @@ struct PlanEdit: Codable, Equatable, Hashable, Identifiable, Sendable {
     var kilograms: Double?
     /// Свободная подпись нагрузки, когда веса нет: «RPE 8», «до отказа».
     var loadText: String?
+    /// Порядок упражнений дня для правки вида `order`. Ключи, которых в списке
+    /// нет, остаются в конце: план мог измениться после перестановки.
+    var order: [String]?
 
     init(
         id: String = "custom-" + UUID().uuidString,
@@ -67,7 +72,8 @@ struct PlanEdit: Codable, Equatable, Hashable, Identifiable, Sendable {
         sets: Int = 3,
         reps: String = "8–12",
         kilograms: Double? = nil,
-        loadText: String? = nil
+        loadText: String? = nil,
+        order: [String]? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -80,6 +86,7 @@ struct PlanEdit: Codable, Equatable, Hashable, Identifiable, Sendable {
         self.reps = reps
         self.kilograms = kilograms
         self.loadText = loadText
+        self.order = order
     }
 
     var scope: PlanEditScope { week == nil ? .everyWeek : .single }
@@ -118,6 +125,7 @@ struct PlanEdit: Codable, Equatable, Hashable, Identifiable, Sendable {
         case .hide: return "Убрано"
         case .replace: return "Заменено на «\(name)»"
         case .add: return "Добавлено «\(name)»"
+        case .order: return "Свой порядок"
         }
     }
 }

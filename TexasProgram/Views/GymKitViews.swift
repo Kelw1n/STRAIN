@@ -83,6 +83,10 @@ struct LoadHelperView: View {
 struct SetTracker {
     let done: Int
     let onTap: (Int) -> Void
+    /// Долгий тап по точке: записать, что реально получилось.
+    var onHold: ((Int) -> Void)?
+    /// Номера подходов, у которых факт уже записан, — они помечаются точкой.
+    var logged: Set<Int> = []
 }
 
 struct SetDotsView: View {
@@ -94,6 +98,7 @@ struct SetDotsView: View {
         HStack(spacing: 8) {
             ForEach(0..<max(total, 0), id: \.self) { index in
                 let filled = index < tracker.done
+                let hasEntry = tracker.logged.contains(index)
                 Button {
                     withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
                         tracker.onTap(index)
@@ -110,9 +115,14 @@ struct SetDotsView: View {
                             }
                         }
                         .overlay(Circle().strokeBorder(Theme.accent.opacity(filled ? 0 : 0.28), lineWidth: 1))
+                        // Записанный факт помечаем ободком: видно, где цифры есть,
+                        // а где точка закрыта на глазок.
+                        .overlay(Circle().strokeBorder(Theme.warning, lineWidth: hasEntry ? 2 : 0))
                 }
                 .buttonStyle(.pressable)
+                .onLongPressGesture(minimumDuration: 0.4) { tracker.onHold?(index) }
                 .accessibilityLabel("Подход \(index + 1)")
+                .accessibilityHint(tracker.onHold == nil ? "" : "Удерживай, чтобы записать вес и повторы")
             }
             Spacer(minLength: 0)
             Text("\(tracker.done) / \(total)")

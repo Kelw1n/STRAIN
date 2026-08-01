@@ -56,6 +56,18 @@ enum WeightFormat {
         short(value) + " кг"
     }
 
+    /// Тоннаж: до тонны — в килограммах, дальше — в тоннах с одним знаком.
+    static func tonnage(_ value: Double) -> String {
+        if value < 1000 { return String(Int(value.rounded())) + " кг" }
+        return String(format: "%.1f", value / 1000).replacingOccurrences(of: ".", with: ",") + " т"
+    }
+
+    /// Число без единиц — для полей ввода, куда «кг» подставлять нельзя.
+    static func plain(_ value: Double) -> String {
+        if value == value.rounded() { return String(Int(value)) }
+        return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
+    }
+
     /// Веса основных программ идут с шагом 2,5 кг, поэтому дробная часть — только «,5».
     static func kilogramsPrecise(_ value: Double) -> String {
         if value.rounded() == value { return String(Int(value)) + " кг" }
