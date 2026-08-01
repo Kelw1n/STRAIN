@@ -7,6 +7,8 @@ import SwiftUI
 /// иначе правка 5ПМ в настройках задним числом переписывала бы весь график.
 struct ProgressChartView: View {
     let records: [CompletionRecord]
+    /// План или факт. Переключатель появляется, только когда факт вообще записан.
+    @State private var showActual = false
 
     private enum Lift: String, CaseIterable, Identifiable {
         case squat = "Присед"
@@ -30,6 +32,15 @@ struct ProgressChartView: View {
             case .deadlift: return record.deadlift
             }
         }
+
+        /// Что реально поднято. Пусто там, где подходы не записывали.
+        func actual(in record: CompletionRecord) -> Double? {
+            switch self {
+            case .squat: return record.actualSquat
+            case .bench: return record.actualBench
+            case .deadlift: return record.actualDeadlift
+            }
+        }
     }
 
     private struct Point: Identifiable {
@@ -44,20 +55,42 @@ struct ProgressChartView: View {
             .sorted { $0.date < $1.date }
             .flatMap { record in
                 Lift.allCases.compactMap { lift in
-                    guard let weight = lift.value(in: record) else { return nil }
+                    let weight = showActual ? lift.actual(in: record) : lift.value(in: record)
+                    guard let weight else { return nil }
                     return Point(lift: lift, date: record.date, weight: weight)
                 }
             }
     }
 
+    /// Есть ли хоть один записанный факт: без него переключатель ни к чему.
+    private var hasActuals: Bool {
+        records.contains { record in
+            Lift.allCases.contains { $0.actual(in: record) != nil }
+        }
+    }
+
     private var hasEnoughData: Bool {
         // По одной точке линия не строится, а обманывать пустым графиком не стоит.
-        Set(records.map { Calendar.current.startOfDay(for: $0.date) }).count >= 2
+        let dated = records.filter { record in
+            Lift.allCases.contains { showActual ? $0.actual(in: record) != nil : $0.value(in: record) != nil }
+        }
+        return Set(dated.map { Calendar.current.startOfDay(for: $0.date) }).count >= 2
     }
 
     var body: some View {
         CardView {
-            Text("Рабочие веса").font(.title3.weight(.bold))
+            HStack {
+                Text("Рабочие веса").font(.title3.weight(.bold))
+                Spacer(minLength: 8)
+            }
+
+            if hasActuals {
+                Picker("Источник", selection: $showActual) {
+                    Text("План").tag(false)
+                    Text("Факт").tag(true)
+                }
+                .pickerStyle(.segmented)
+            }
 
             if hasEnoughData {
                 Chart(points) { point in

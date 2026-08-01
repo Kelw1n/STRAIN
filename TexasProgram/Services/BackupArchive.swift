@@ -34,6 +34,11 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     /// появления правок, и в файлах с Android его нет, а синтезированный
     /// декодер Swift не подставляет значения по умолчанию за отсутствующий ключ.
     var planEdits: [PlanEdit]?
+    /// Фактически выполненные подходы и откаты. Тоже необязательные: в копиях,
+    /// снятых раньше, этих полей нет.
+    var setLog: [String: SetEntry]?
+    var deloads: [DeloadEvent]?
+    var keepScreenOn: Bool?
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -119,7 +124,10 @@ enum BackupService {
                     deadlift: $0.deadlift
                 )
             },
-            planEdits: profile.planEdits
+            planEdits: profile.planEdits,
+            setLog: profile.setLog,
+            deloads: profile.deloads,
+            keepScreenOn: profile.keepScreenOn
         )
     }
 
@@ -178,6 +186,9 @@ enum BackupService {
             )
         }
         result.planEdits = snapshot.planEdits ?? []
+        result.setLog = snapshot.setLog ?? [:]
+        result.deloads = snapshot.deloads ?? []
+        result.keepScreenOn = snapshot.keepScreenOn ?? true
         return result
     }
 

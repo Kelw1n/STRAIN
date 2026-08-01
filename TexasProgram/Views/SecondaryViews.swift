@@ -20,6 +20,7 @@ struct ProgressScreen: View {
                 LazyVStack(spacing: 16) {
                     hero.appearIn(0)
                     ProgressChartView(records: profile.completionLog).appearIn(1).softScroll()
+                    TonnageChartView(weeks: profile.weeklyTonnage).appearIn(1).softScroll()
                     maxes.appearIn(1)
                     if profile.programKind == .upperLower { benchCard.appearIn(2) }
                     heatmap.appearIn(3).softScroll()
@@ -397,6 +398,38 @@ struct SettingsView: View {
                         .disabled(profile.completedDayCount < 36)
                         Text("Сначала отметь все 36 дней основной программы.")
                             .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                Section {
+                    Toggle("Не гасить экран", isOn: $profile.keepScreenOn)
+                } header: {
+                    Text("В зале")
+                } footer: {
+                    Text("Пока открыта тренировка, экран не уходит в сон. Телефон на лавке между подходами перестанет тухнуть.")
+                }
+
+                if !profile.deloads.isEmpty {
+                    Section {
+                        ForEach(profile.deloads) { event in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(event.title)
+                                    Text(RuDate.dayMonth(event.date)).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button(role: .destructive) {
+                                    profile.removeDeload(event)
+                                } label: {
+                                    Image(systemName: "arrow.uturn.backward")
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    } header: {
+                        Text("Откаты")
+                    } footer: {
+                        Text("Веса расчёта урезаны с указанной недели. Отмена вернёт исходные — максимумы при откате не менялись.")
                     }
                 }
 

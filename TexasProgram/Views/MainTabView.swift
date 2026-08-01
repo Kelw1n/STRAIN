@@ -81,6 +81,7 @@ struct TodayView: View {
     let onSettings: () -> Void
     var onOpenBench: ((Int) -> Void)?
     @State private var customizing: ScheduledWorkout?
+    @State private var entryTarget: SetEntryTarget?
 
     private var overallProgress: Double {
         guard profile.totalDays > 0 else { return 0 }
@@ -144,6 +145,10 @@ struct TodayView: View {
                         }
                         .padding(.top, 4)
                         .appearIn(exercises.count + 5)
+
+                        DeloadButton(profile: profile, week: focus.week)
+                            .padding(.top, 2)
+                            .appearIn(exercises.count + 6)
                     } else {
                         finished.appearIn(0)
                     }
@@ -181,30 +186,42 @@ struct TodayView: View {
             .sheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)
             }
+            .sheet(item: $entryTarget) { target in
+                SetEntrySheet(profile: profile, target: target)
+            }
+            // Телефон лежит на лавке между подходами — гасить экран тут незачем.
+            .keepAwake(profile.keepScreenOn)
         }
     }
 
     /// Точки подхода: отметил — пошёл отдых, закрыл последний подход дня — день закрылся сам.
     private func tracker(for exercise: ExercisePrescription, in workout: ScheduledWorkout) -> SetTracker {
         SetTracker(
-            done: profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise)
-        ) { index in
-            let added = profile.toggleSet(
-                week: workout.week,
-                day: workout.day.number,
-                exercise: exercise,
-                index: index
-            )
-            guard added else { return }
+            done: profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise),
+            onTap: { index in
+                let added = profile.toggleSet(
+                    week: workout.week,
+                    day: workout.day.number,
+                    exercise: exercise,
+                    index: index
+                )
+                guard added else { return }
 
-            if profile.allSetsDone(for: workout) {
-                // Тренировка закончена — отдыхать уже незачем.
-                restTimer.stop()
-                profile.toggleCompleted(week: workout.week, day: workout.day.number)
-            } else {
-                restTimer.start(TimeInterval(profile.defaultRestSeconds))
-            }
-        }
+                if profile.allSetsDone(for: workout) {
+                    // Тренировка закончена — отдыхать уже незачем.
+                    restTimer.stop()
+                    profile.toggleCompleted(week: workout.week, day: workout.day.number)
+                } else {
+                    restTimer.start(TimeInterval(profile.defaultRestSeconds))
+                }
+            },
+            onHold: { index in
+                entryTarget = SetEntryTarget(
+                    week: workout.week, day: workout.day.number, exercise: exercise, index: index
+                )
+            },
+            logged: Set(profile.entries(week: workout.week, day: workout.day.number, exercise: exercise).map(\.index))
+        )
     }
 
     private func dateLine(for date: Date) -> String {
@@ -551,6 +568,7 @@ struct DayDetailView: View {
     var scheduled: ScheduledWorkout?
     var onOpenBench: ((Int) -> Void)?
     @State private var showCustomize = false
+    @State private var entryTarget: SetEntryTarget?
 
     /// У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
     ///
@@ -575,11 +593,16 @@ struct DayDetailView: View {
                         exercise: exercise,
                         onOpenBench: onOpenBench,
                         sets: SetTracker(
-                            done: profile.completedSets(week: week, day: day.number, exercise: exercise)
-                        ) { dot in
-                            let added = profile.toggleSet(week: week, day: day.number, exercise: exercise, index: dot)
-                            if added { restTimer.start(TimeInterval(profile.defaultRestSeconds)) }
-                        }
+                            done: profile.completedSets(week: week, day: day.number, exercise: exercise),
+                            onTap: { dot in
+                                let added = profile.toggleSet(week: week, day: day.number, exercise: exercise, index: dot)
+                                if added { restTimer.start(TimeInterval(profile.defaultRestSeconds)) }
+                            },
+                            onHold: { dot in
+                                entryTarget = SetEntryTarget(week: week, day: day.number, exercise: exercise, index: dot)
+                            },
+                            logged: Set(profile.entries(week: week, day: day.number, exercise: exercise).map(\.index))
+                        )
                     )
                     .appearIn(index)
                     .softScroll()
@@ -593,6 +616,10 @@ struct DayDetailView: View {
                 }
                 .padding(.top, 4)
                 .appearIn(exercises.count + 1)
+
+                DeloadButton(profile: profile, week: week)
+                    .padding(.top, 2)
+                    .appearIn(exercises.count + 2)
             }
             .padding(.horizontal)
             .padding(.bottom, 28)
@@ -623,6 +650,10 @@ struct DayDetailView: View {
         .sheet(isPresented: $showCustomize) {
             DayCustomizeView(profile: profile, week: week, day: currentDay)
         }
+        .sheet(item: $entryTarget) { target in
+            SetEntrySheet(profile: profile, target: target)
+        }
+        .keepAwake(profile.keepScreenOn)
     }
 }
 
@@ -750,6 +781,49 @@ struct CompleteButton: View {
         ))
         .sensoryFeedback(trigger: trigger) { _, _ in
             isCompleted ? SensoryFeedback.success : SensoryFeedback.impact(weight: .light)
+        }
+    }
+}
+
+// MARK: - Откат после несданного веса
+
+/// «Не взял вес» — техасский метод на этот случай предписывает сбросить проценты
+/// и пройти участок заново. Без этой кнопки приложение делает вид, что провалов
+/// не бывает: невыполненный день выглядит как просто пропущенный.
+struct DeloadButton: View {
+    @Bindable var profile: ProgramProfile
+    let week: Int
+    @State private var asking = false
+
+    private var active: [DeloadEvent] { profile.activeDeloads(upTo: week) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                asking = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.down.right.circle")
+                    Text("Не взял вес")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.warning)
+            }
+            .buttonStyle(.pressable)
+
+            if !active.isEmpty {
+                Text("Веса урезаны: " + active.map(\.title).joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .confirmationDialog("Сбросить веса с недели \(week)?", isPresented: $asking, titleVisibility: .visible) {
+            Button("Минус 5 %") { profile.addDeload(fromWeek: week, percent: 5) }
+            Button("Минус 10 %") { profile.addDeload(fromWeek: week, percent: 10) }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Расчёт этой и следующих недель пойдёт от сниженного веса. Максимумы в настройках останутся прежними, откат можно отменить.")
         }
     }
 }
