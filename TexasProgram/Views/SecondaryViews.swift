@@ -424,6 +424,18 @@ struct SettingsView: View {
                     TextField("Становая тяга", value: $profile.deadlift5RM, format: .number).keyboardType(.decimalPad)
                 }
 
+                if profile.programKind == .fullBody {
+                    Section {
+                        Picker("Стаж", selection: $profile.fullBodyLevel) {
+                            ForEach(FullBodyLevel.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                    } header: {
+                        Text("Сколько ходишь в зал")
+                    } footer: {
+                        Text(profile.fullBodyLevel.explanation)
+                    }
+                }
+
                 if profile.programKind == .texas {
                     Section("Уровень") {
                         Picker("Уровень", selection: $profile.level) {

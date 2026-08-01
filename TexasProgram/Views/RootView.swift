@@ -71,10 +71,10 @@ struct ProgramOnboardingView: View {
                 UpperLowerSetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(upperLowerInput: $0)) }
                     .transition(forward)
             case .fullBody:
-                // Фулбади считается от того же 1ПМ, что и «Верх / Низ»: жим там
-                // идёт по той же волне, поэтому и экран ввода тот же.
-                UpperLowerSetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(fullBodyInput: $0)) }
-                    .transition(forward)
+                FullBodySetupView(onBack: { selectedProgram = nil }) { input, level in
+                    onSave(ProgramProfile(fullBodyInput: input, level: level))
+                }
+                .transition(forward)
             case .custom:
                 CustomProgramBuilderView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(customProgram: $0)) }
                     .transition(forward)

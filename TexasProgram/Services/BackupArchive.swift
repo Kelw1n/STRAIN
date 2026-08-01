@@ -42,6 +42,7 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     /// Номер цикла и своя программа. Необязательные — в старых копиях их нет.
     var cycleNumber: Int?
     var customProgram: CustomProgram?
+    var fullBodyLevel: String?
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -132,7 +133,8 @@ enum BackupService {
             deloads: profile.deloads,
             keepScreenOn: profile.keepScreenOn,
             cycleNumber: profile.cycleNumber,
-            customProgram: profile.customProgram
+            customProgram: profile.customProgram,
+            fullBodyLevel: profile.fullBodyLevelRaw
         )
     }
 
@@ -196,6 +198,7 @@ enum BackupService {
         result.keepScreenOn = snapshot.keepScreenOn ?? true
         result.cycleNumber = snapshot.cycleNumber ?? 1
         result.customProgram = snapshot.customProgram
+        result.fullBodyLevelRaw = snapshot.fullBodyLevel ?? FullBodyLevel.aboutYear.rawValue
         return result
     }
 

@@ -365,41 +365,119 @@ final class TrainingLogTests: XCTestCase {
 
     // MARK: - Фулбади
 
-    func testFullBodyHasSevenWeeksAndThreeDays() {
-        let plan = FullBodyCalculator.generate(input: .demo)
-        XCTAssertEqual(plan.weeks.count, 7)
-        XCTAssertTrue(plan.weeks.allSatisfy { $0.days.count == 3 })
+    private func fullBodyPlan(_ level: FullBodyLevel) -> WorkoutPlan {
+        FullBodyCalculator.generate(input: .demo, level: level)
     }
 
-    /// Волна Лимара из четырнадцати тренировок ложится ровно: два жима в неделю.
-    func testFullBodyCoversAllFourteenBenchSessions() {
-        let plan = FullBodyCalculator.generate(input: .demo)
-        let sessions = plan.weeks.flatMap { week in
-            week.days.flatMap { $0.exercises.compactMap(\.benchSession) }
+    func testFullBodyIsTwelveWeeksOfThreeDays() {
+        for level in FullBodyLevel.allCases {
+            let plan = fullBodyPlan(level)
+            XCTAssertEqual(plan.weeks.count, 12, level.rawValue)
+            XCTAssertTrue(plan.weeks.allSatisfy { $0.days.count == 3 }, level.rawValue)
         }
-        XCTAssertEqual(sessions.count, 14)
-        XCTAssertEqual(Set(sessions).count, 14)
-        XCTAssertEqual(sessions.min(), 1)
-        XCTAssertEqual(sessions.max(), 14)
     }
 
-    func testFullBodyProfileUsesTheWaveAndOneRepMax() {
-        let profile = ProgramProfile(fullBodyInput: .demo)
+    /// Фулбади — это всё тело каждый раз, а не сплит: присед, жим, тяга,
+    /// руки и кор должны быть в каждой тренировке.
+    func testEveryFullBodySessionHitsEverything() {
+        for level in FullBodyLevel.allCases {
+            for week in fullBodyPlan(level).weeks {
+                for day in week.days {
+                    let names = day.exercises.map(\.name)
+                    XCTAssertTrue(names.contains("Приседания"), "\(level.rawValue) н\(week.number) д\(day.number)")
+                    XCTAssertTrue(names.contains("Жим лёжа"), "\(level.rawValue) н\(week.number) д\(day.number)")
+                    XCTAssertTrue(names.contains { $0.contains("бицепс") }, "руки: \(level.rawValue) д\(day.number)")
+                    XCTAssertTrue(names.contains { $0.contains("Подтягивания") || $0.contains("Тяга") },
+                                  "тяга: \(level.rawValue) д\(day.number)")
+                    // У demo кор выбран «Копенгагенская планка» — проверяем именно его.
+                    XCTAssertTrue(names.contains("Копенгагенская планка"), "кор: \(level.rawValue) д\(day.number)")
+                }
+            }
+        }
+    }
+
+    /// Волны из «Верх / Низ» в фулбади быть не должно — прогрессия линейная.
+    func testFullBodyHasNoBenchWave() {
+        for level in FullBodyLevel.allCases {
+            let sessions = fullBodyPlan(level).weeks.flatMap { week in
+                week.days.flatMap { $0.exercises.compactMap(\.benchSession) }
+            }
+            XCTAssertTrue(sessions.isEmpty, level.rawValue)
+        }
+        let profile = ProgramProfile(fullBodyInput: .demo, level: .aboutYear)
+        XCTAssertTrue(profile.benchWave.isEmpty)
+        XCTAssertFalse(profile.carriesBenchWave(day: 1))
+    }
+
+    /// У новичка вес приседа растёт от тренировки к тренировке, а не раз в неделю.
+    func testUnderYearGrowsEverySession() {
+        let plan = fullBodyPlan(.underYear)
+        func squat(_ week: Int, _ day: Int) -> LoadPrescription? {
+            plan.weeks[week - 1].days[day - 1].exercises.first { $0.name == "Приседания" }?.load
+        }
+        XCTAssertEqual(squat(1, 1), .kilograms(80))
+        XCTAssertEqual(squat(1, 2), .kilograms(82.5))
+        XCTAssertEqual(squat(1, 3), .kilograms(85))
+        XCTAssertEqual(squat(2, 1), .kilograms(87.5))
+    }
+
+    /// Со стажем от года идёт техасская волна: объём 90 %, лёгкий 80 % от объёма,
+    /// тяжёлый — сам максимум, плюс 2,5 кг в неделю.
+    func testAboutYearRepeatsTexasWave() {
+        let plan = fullBodyPlan(.aboutYear)
+        let week1 = plan.weeks[0].days
+        func squat(_ day: [ExercisePrescription]) -> ExercisePrescription? {
+            day.first { $0.name == "Приседания" }
+        }
+        XCTAssertEqual(squat(week1[0].exercises)?.load, .kilograms(90))
+        XCTAssertEqual(squat(week1[0].exercises)?.sets, 5)
+        XCTAssertEqual(squat(week1[1].exercises)?.load, .kilograms(72.5))
+        XCTAssertEqual(squat(week1[2].exercises)?.load, .kilograms(100))
+        XCTAssertEqual(squat(week1[2].exercises)?.sets, 1)
+
+        let week5 = plan.weeks[4].days
+        XCTAssertEqual(squat(week5[2].exercises)?.load, .kilograms(110))
+    }
+
+    /// На стаже два года прибавка идёт через неделю, а не каждую.
+    func testTwoYearsAddsWeightEveryOtherWeek() {
+        let plan = fullBodyPlan(.twoYears)
+        func top(_ week: Int) -> LoadPrescription? {
+            plan.weeks[week - 1].days[2].exercises.first { $0.name == "Приседания" }?.load
+        }
+        XCTAssertEqual(top(1), .kilograms(100))
+        XCTAssertEqual(top(2), .kilograms(100))
+        XCTAssertEqual(top(3), .kilograms(102.5))
+        XCTAssertEqual(top(4), .kilograms(102.5))
+        XCTAssertEqual(top(5), .kilograms(105))
+    }
+
+    /// Больше года — та же волна, но с вертикальным жимом в подсобке.
+    func testOverYearAddsVerticalPress() {
+        let about = fullBodyPlan(.aboutYear).weeks[0].days[0].exercises.map(\.name)
+        let over = fullBodyPlan(.overYear).weeks[0].days[0].exercises.map(\.name)
+        XCTAssertFalse(about.contains("Жим штанги стоя"))
+        XCTAssertTrue(over.contains("Жим штанги стоя"))
+    }
+
+    func testFullBodyProfileCountsFromFiveRepMax() {
+        let profile = ProgramProfile(fullBodyInput: .demo, level: .overYear)
         XCTAssertEqual(profile.programKind, .fullBody)
-        XCTAssertEqual(profile.maximumLabel, "1ПМ")
-        XCTAssertEqual(profile.benchWave.count, 14)
-        XCTAssertTrue(profile.carriesBenchWave(day: 1))
-        XCTAssertFalse(profile.carriesBenchWave(day: 2))
+        XCTAssertEqual(profile.maximumLabel, "5ПМ")
+        XCTAssertEqual(profile.fullBodyLevel, .overYear)
         XCTAssertEqual(profile.trainingDayCount, 3)
+        XCTAssertEqual(profile.totalDays, 36)
     }
 
-    /// Жим в дне подставляется из волны, как в «Верх / Низ».
-    func testFullBodySubstitutesBenchFromWave() throws {
-        let profile = ProgramProfile(fullBodyInput: .demo)
-        let workout = try XCTUnwrap(profile.schedule.focus)
-        let bench = profile.exercises(for: workout).first { $0.benchSession != nil }
-        XCTAssertNotNil(bench)
-        XCTAssertNotEqual(bench?.reps, "по волне")
+    /// Выбранная подсобка подставляется вместо стандартной.
+    func testFullBodyUsesChosenAccessories() {
+        var input = ProgramInput.demo
+        input.back = "Тяга Пендли"
+        input.core = "Подъём ног в висе"
+        let names = FullBodyCalculator.generate(input: input, level: .aboutYear)
+            .weeks[0].days[0].exercises.map(\.name)
+        XCTAssertTrue(names.contains("Тяга Пендли"))
+        XCTAssertTrue(names.contains("Подъём ног в висе"))
     }
 
     // MARK: - Своя программа
