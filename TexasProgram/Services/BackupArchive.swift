@@ -39,6 +39,9 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var setLog: [String: SetEntry]?
     var deloads: [DeloadEvent]?
     var keepScreenOn: Bool?
+    /// Номер цикла и своя программа. Необязательные — в старых копиях их нет.
+    var cycleNumber: Int?
+    var customProgram: CustomProgram?
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -93,7 +96,7 @@ enum BackupService {
             id: profile.profileID.uuidString,
             name: profile.name,
             createdAtEpochDay: epochDay(profile.createdAt),
-            programKind: profile.programKind == .texas ? "TEXAS" : "UPPER_LOWER",
+            programKind: profile.programKind.backupCode,
             squat5RM: profile.squat5RM,
             bench5RM: profile.bench5RM,
             deadlift5RM: profile.deadlift5RM,
@@ -127,7 +130,9 @@ enum BackupService {
             planEdits: profile.planEdits,
             setLog: profile.setLog,
             deloads: profile.deloads,
-            keepScreenOn: profile.keepScreenOn
+            keepScreenOn: profile.keepScreenOn,
+            cycleNumber: profile.cycleNumber,
+            customProgram: profile.customProgram
         )
     }
 
@@ -154,7 +159,7 @@ enum BackupService {
         let result = ProgramProfile(input: .demo, name: snapshot.name)
         result.profileID = UUID(uuidString: snapshot.id) ?? UUID()
         result.createdAt = date(snapshot.createdAtEpochDay)
-        result.programKind = snapshot.programKind == "UPPER_LOWER" ? .upperLower : .texas
+        result.programKind = TrainingProgramKind(backupCode: snapshot.programKind)
         result.squat5RM = snapshot.squat5RM
         result.bench5RM = snapshot.bench5RM
         result.deadlift5RM = snapshot.deadlift5RM
@@ -189,6 +194,8 @@ enum BackupService {
         result.setLog = snapshot.setLog ?? [:]
         result.deloads = snapshot.deloads ?? []
         result.keepScreenOn = snapshot.keepScreenOn ?? true
+        result.cycleNumber = snapshot.cycleNumber ?? 1
+        result.customProgram = snapshot.customProgram
         return result
     }
 

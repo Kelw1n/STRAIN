@@ -42,7 +42,7 @@ struct WeeklyTonnage: Identifiable, Equatable, Sendable {
     var id: Int { week }
 }
 
-/// Разбор ключа отметки подхода: «неделя-день|упражнение|номер».
+/// Разбор ключа отметки подхода: «префикс + неделя-день|упражнение|номер».
 ///
 /// Ключи собирались как строки задолго до тоннажа; разбирать их обратно надёжнее,
 /// чем держать рядом второй индекс, который может разъехаться с первым.
@@ -51,12 +51,10 @@ enum SetKeyParts {
         key.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init)
     }
 
-    /// Номер недели. У пикового цикла свой префикс, его сюда не пускаем.
-    static func week(from key: String, isPeaking: Bool) -> Int? {
-        guard let day = dayKey(from: key) else { return nil }
-        let peak = day.hasPrefix("peak-")
-        guard peak == isPeaking else { return nil }
-        let trimmed = peak ? String(day.dropFirst("peak-".count)) : day
-        return trimmed.split(separator: "-").first.flatMap { Int($0) }
+    /// Номер недели из ключа дня. Префикс задаёт цикл и пиковый режим,
+    /// поэтому чужие ключи сюда не попадают.
+    static func week(fromDayKey day: String, prefix: String) -> Int? {
+        guard day.hasPrefix(prefix) else { return nil }
+        return day.dropFirst(prefix.count).split(separator: "-").first.flatMap { Int($0) }
     }
 }

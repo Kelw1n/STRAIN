@@ -296,6 +296,175 @@ final class TrainingLogTests: XCTestCase {
         XCTAssertEqual(profile.weekStreak.current, 2)
     }
 
+    // MARK: - Новый цикл
+
+    func testNewCycleHidesMarksButKeepsHistory() {
+        let day = date(27, 7, 2026)
+        let profile = ProgramProfile(input: .demo)
+        profile.toggleCompleted(week: 1, day: 1, now: day)
+        XCTAssertEqual(profile.completedDayCount, 1)
+        XCTAssertEqual(profile.completionLog.count, 1)
+
+        profile.startNewCycle(squat: 110, bench: 105, deadlift: 130)
+
+        XCTAssertEqual(profile.cycleNumber, 2)
+        XCTAssertEqual(profile.squat5RM, 110)
+        // Отметки прошлого цикла больше не видны…
+        XCTAssertFalse(profile.isCompleted(week: 1, day: 1))
+        XCTAssertEqual(profile.completedDayCount, 0)
+        // …но история для графиков осталась.
+        XCTAssertEqual(profile.completionLog.count, 1)
+    }
+
+    func testNewCycleMarksDoNotCollideWithOld() {
+        let profile = ProgramProfile(input: .demo)
+        profile.toggleCompleted(week: 1, day: 1, now: date(27, 7, 2026))
+        profile.startNewCycle(squat: 110, bench: 105, deadlift: 130)
+        profile.toggleCompleted(week: 1, day: 1, now: date(10, 11, 2026))
+
+        // Два разных дня в истории, а не перезаписанный один.
+        XCTAssertEqual(profile.completionLog.count, 2)
+        XCTAssertEqual(profile.completedDayKeys.count, 2)
+        XCTAssertTrue(profile.completedDayKeys.contains("1-1"))
+        XCTAssertTrue(profile.completedDayKeys.contains("c2-1-1"))
+        XCTAssertEqual(profile.completedDayCount, 1)
+    }
+
+    /// Первый цикл ключи не меняет: сохранённые профили должны продолжать работать.
+    func testFirstCycleKeysAreUnchanged() {
+        let profile = ProgramProfile(input: .demo)
+        XCTAssertEqual(profile.dayKey(week: 2, day: 3), "2-3")
+        profile.peakingActive = true
+        XCTAssertEqual(profile.dayKey(week: 2, day: 3), "peak-2-3")
+    }
+
+    func testCycleAndPeakingNamespacesDoNotOverlap() {
+        let profile = ProgramProfile(input: .demo)
+        profile.startNewCycle(squat: 100, bench: 100, deadlift: 100)
+        XCTAssertEqual(profile.dayKey(week: 1, day: 1), "c2-1-1")
+        XCTAssertTrue(profile.isOwnKey("c2-1-1"))
+        XCTAssertFalse(profile.isOwnKey("1-1"))
+        XCTAssertFalse(profile.isOwnKey("c2-peak-1-1"))
+
+        profile.peakingActive = true
+        XCTAssertEqual(profile.dayKey(week: 1, day: 1), "c2-peak-1-1")
+        XCTAssertTrue(profile.isOwnKey("c2-peak-1-1"))
+        XCTAssertFalse(profile.isOwnKey("c2-1-1"))
+        XCTAssertFalse(profile.isOwnKey("peak-1-1"))
+    }
+
+    func testTonnageIgnoresPreviousCycle() {
+        let profile = ProgramProfile(input: .demo)
+        let squat = exercises(profile, week: 1, day: 1)[0]
+        profile.recordSet(week: 1, day: 1, exercise: squat, index: 0, reps: 5, weight: 80)
+        XCTAssertEqual(profile.weeklyTonnage.first?.total, 400)
+
+        profile.startNewCycle(squat: 110, bench: 105, deadlift: 130)
+        XCTAssertTrue(profile.weeklyTonnage.isEmpty)
+    }
+
+    // MARK: - Фулбади
+
+    func testFullBodyHasSevenWeeksAndThreeDays() {
+        let plan = FullBodyCalculator.generate(input: .demo)
+        XCTAssertEqual(plan.weeks.count, 7)
+        XCTAssertTrue(plan.weeks.allSatisfy { $0.days.count == 3 })
+    }
+
+    /// Волна Лимара из четырнадцати тренировок ложится ровно: два жима в неделю.
+    func testFullBodyCoversAllFourteenBenchSessions() {
+        let plan = FullBodyCalculator.generate(input: .demo)
+        let sessions = plan.weeks.flatMap { week in
+            week.days.flatMap { $0.exercises.compactMap(\.benchSession) }
+        }
+        XCTAssertEqual(sessions.count, 14)
+        XCTAssertEqual(Set(sessions).count, 14)
+        XCTAssertEqual(sessions.min(), 1)
+        XCTAssertEqual(sessions.max(), 14)
+    }
+
+    func testFullBodyProfileUsesTheWaveAndOneRepMax() {
+        let profile = ProgramProfile(fullBodyInput: .demo)
+        XCTAssertEqual(profile.programKind, .fullBody)
+        XCTAssertEqual(profile.maximumLabel, "1ПМ")
+        XCTAssertEqual(profile.benchWave.count, 14)
+        XCTAssertTrue(profile.carriesBenchWave(day: 1))
+        XCTAssertFalse(profile.carriesBenchWave(day: 2))
+        XCTAssertEqual(profile.trainingDayCount, 3)
+    }
+
+    /// Жим в дне подставляется из волны, как в «Верх / Низ».
+    func testFullBodySubstitutesBenchFromWave() throws {
+        let profile = ProgramProfile(fullBodyInput: .demo)
+        let workout = try XCTUnwrap(profile.schedule.focus)
+        let bench = profile.exercises(for: workout).first { $0.benchSession != nil }
+        XCTAssertNotNil(bench)
+        XCTAssertNotEqual(bench?.reps, "по волне")
+    }
+
+    // MARK: - Своя программа
+
+    func testCustomSkeletonMatchesTemplate() {
+        let program = CustomProgram.skeleton(template: .pushPullLegs, name: "Моя", weeks: 6)
+        XCTAssertEqual(program.days.count, 3)
+        XCTAssertEqual(program.days.map(\.title), ["ЖИМ", "ТЯГА", "НОГИ"])
+        XCTAssertFalse(program.isRunnable)
+    }
+
+    func testCustomProgramGrowsWeightByWeek() {
+        var program = CustomProgram.skeleton(template: .fullBody, name: "Моя", weeks: 4)
+        program.days[0].exercises = [
+            CustomExercise(name: "Приседания", sets: 3, reps: "5", kilograms: 100, loadText: nil, weeklyIncrement: 2.5)
+        ]
+        program.days[1].exercises = [
+            CustomExercise(name: "Планка", sets: 3, reps: "60 с", kilograms: nil, loadText: "свой вес", weeklyIncrement: 0)
+        ]
+        program.days[2].exercises = program.days[0].exercises
+
+        let plan = program.plan
+        XCTAssertEqual(plan.weeks.count, 4)
+        XCTAssertEqual(plan.weeks[0].days[0].exercises[0].load, .kilograms(100))
+        XCTAssertEqual(plan.weeks[3].days[0].exercises[0].load, .kilograms(107.5))
+        // Без веса прибавка не работает — подпись остаётся как есть.
+        XCTAssertEqual(plan.weeks[3].days[1].exercises[0].load, .repRange("свой вес"))
+    }
+
+    func testCustomProfileBuildsPlanAndDayCount() {
+        var program = CustomProgram.skeleton(template: .upperLower, name: "Моя", weeks: 5)
+        for index in program.days.indices {
+            program.days[index].exercises = [
+                CustomExercise(name: "Упражнение", sets: 3, reps: "8", kilograms: 50, loadText: nil, weeklyIncrement: 0)
+            ]
+        }
+        XCTAssertTrue(program.isRunnable)
+
+        let profile = ProgramProfile(customProgram: program)
+        XCTAssertEqual(profile.programKind, .custom)
+        XCTAssertEqual(profile.trainingDayCount, 4)
+        XCTAssertEqual(profile.workoutPlan.weeks.count, 5)
+        XCTAssertEqual(profile.totalDays, 20)
+        XCTAssertFalse(profile.carriesBenchWave(day: 1))
+        XCTAssertEqual(profile.defaultWeekdays.count, 4)
+    }
+
+    func testBackupKeepsCustomProgramAndCycle() throws {
+        var program = CustomProgram.skeleton(template: .fullBody, name: "Моя", weeks: 3)
+        for index in program.days.indices {
+            program.days[index].exercises = [
+                CustomExercise(name: "Тяга", sets: 4, reps: "6", kilograms: 60, loadText: nil, weeklyIncrement: 5)
+            ]
+        }
+        let profile = ProgramProfile(customProgram: program)
+        profile.startNewCycle(squat: 100, bench: 100, deadlift: 100)
+
+        let archive = try BackupService.archive(from: try BackupService.export([profile]))
+        let snapshot = try XCTUnwrap(archive.profiles.first)
+        XCTAssertEqual(snapshot.programKind, "CUSTOM")
+        XCTAssertEqual(snapshot.cycleNumber, 2)
+        XCTAssertEqual(snapshot.customProgram?.days.count, 3)
+        XCTAssertEqual(snapshot.customProgram?.weeks, 3)
+    }
+
     // MARK: - Резервная копия
 
     func testBackupCarriesLogAndDeloads() throws {
