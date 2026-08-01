@@ -348,6 +348,39 @@ final class ProgramProfile {
         return WorkoutPlan(weeks: weeks, isPeaking: plan.isPeaking)
     }
 
+    // MARK: - Серия без пропусков
+
+    /// Недели подряд, закрытые полностью.
+    ///
+    /// Считаем по отметкам, а не по календарю: тренировка, пропущенная и позже
+    /// наверстанная, серию не рвёт — важно, что неделя в итоге закрыта.
+    /// Незаконченная последняя неделя серию тоже не обрывает, она просто ещё идёт.
+    var weekStreak: (current: Int, best: Int) {
+        let weeks = workoutPlan.weeks
+        guard !weeks.isEmpty else { return (0, 0) }
+
+        let closed = weeks.map { week in
+            week.days.allSatisfy { isCompleted(week: week.number, day: $0.number) }
+        }
+
+        var best = 0
+        var run = 0
+        for done in closed {
+            run = done ? run + 1 : 0
+            best = max(best, run)
+        }
+
+        // Текущая серия — та, что упирается в последнюю закрытую неделю.
+        var current = 0
+        var index = closed.count - 1
+        while index >= 0, !closed[index] { index -= 1 }
+        while index >= 0, closed[index] {
+            current += 1
+            index -= 1
+        }
+        return (current, best)
+    }
+
     // MARK: - Откаты после несданного веса
 
     /// Откаты, действующие на неделю: срабатывают все, объявленные не позже неё.

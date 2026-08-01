@@ -233,6 +233,69 @@ final class TrainingLogTests: XCTestCase {
         XCTAssertTrue(profile.weeklyTonnage.isEmpty)
     }
 
+    // MARK: - Серия без пропусков
+
+    private func closeWeek(_ profile: ProgramProfile, _ week: Int) {
+        for day in 1...3 { profile.toggleCompleted(week: week, day: day) }
+    }
+
+    func testStreakCountsFullyClosedWeeks() {
+        let profile = ProgramProfile(input: .demo)
+        XCTAssertEqual(profile.weekStreak.current, 0)
+        XCTAssertEqual(profile.weekStreak.best, 0)
+
+        closeWeek(profile, 1)
+        closeWeek(profile, 2)
+        XCTAssertEqual(profile.weekStreak.current, 2)
+        XCTAssertEqual(profile.weekStreak.best, 2)
+    }
+
+    func testUnfinishedWeekDoesNotCount() {
+        let profile = ProgramProfile(input: .demo)
+        closeWeek(profile, 1)
+        // Вторая неделя начата, но не закрыта — серия остаётся равной единице.
+        profile.toggleCompleted(week: 2, day: 1)
+        XCTAssertEqual(profile.weekStreak.current, 1)
+    }
+
+    /// Незакрытая последняя неделя серию не рвёт: она просто ещё идёт.
+    func testCurrentStreakLooksBackFromLastClosedWeek() {
+        let profile = ProgramProfile(input: .demo)
+        closeWeek(profile, 1)
+        closeWeek(profile, 2)
+        closeWeek(profile, 3)
+        profile.toggleCompleted(week: 4, day: 1)
+
+        XCTAssertEqual(profile.weekStreak.current, 3)
+        XCTAssertEqual(profile.weekStreak.best, 3)
+    }
+
+    func testGapBreaksCurrentStreakButKeepsBest() {
+        let profile = ProgramProfile(input: .demo)
+        closeWeek(profile, 1)
+        closeWeek(profile, 2)
+        closeWeek(profile, 3)
+        // Четвёртую пропустили целиком, пятую закрыли.
+        closeWeek(profile, 5)
+
+        XCTAssertEqual(profile.weekStreak.current, 1)
+        XCTAssertEqual(profile.weekStreak.best, 3)
+    }
+
+    /// У пикирования свои недели и свои отметки — серия считается отдельно.
+    func testStreakIsSeparateForPeaking() {
+        let profile = ProgramProfile(input: .demo)
+        closeWeek(profile, 1)
+        closeWeek(profile, 2)
+        XCTAssertEqual(profile.weekStreak.current, 2)
+
+        profile.peakingActive = true
+        XCTAssertEqual(profile.weekStreak.current, 0)
+
+        profile.peakingActive = false
+        XCTAssertEqual(profile.weekStreak.current, 2)
+    }
+
     // MARK: - Резервная копия
 
     func testBackupCarriesLogAndDeloads() throws {
