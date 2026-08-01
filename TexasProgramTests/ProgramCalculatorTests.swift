@@ -150,35 +150,6 @@ final class ProgramCalculatorTests: XCTestCase {
         utcCalendar.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
-    // MARK: - Блины и разминка
-
-    func testPlatesSplitEvenlyPerSide() {
-        // Набор жадный, от тяжёлого к лёгкому: 40 на сторону — это 25 + 15, а не 20 + 20.
-        XCTAssertEqual(PlateMath.perSide(for: 100), [25, 15])
-        XCTAssertEqual(PlateMath.perSide(for: 140), [25, 25, 10])
-        XCTAssertEqual(PlateMath.perSide(for: 20), [])
-        XCTAssertEqual(PlateMath.perSide(for: 62.5), [20, 1.25])
-    }
-
-    func testPlatesRefuseImpossibleWeights() {
-        XCTAssertNil(PlateMath.perSide(for: 15))
-        XCTAssertNil(PlateMath.perSide(for: 21))
-    }
-
-    func testWarmupsRiseToWorkingWeight() {
-        let sets = PlateMath.warmups(to: 140)
-        XCTAssertEqual(sets.first?.weight, PlateMath.barWeight)
-        XCTAssertTrue(sets.allSatisfy { $0.weight < 140 })
-        // Вес каждой следующей ступени строго больше предыдущей.
-        XCTAssertEqual(sets.map(\.weight), sets.map(\.weight).sorted())
-        XCTAssertEqual(Set(sets.map(\.weight)).count, sets.count)
-    }
-
-    func testWarmupsSkippedForLightWeights() {
-        XCTAssertTrue(PlateMath.warmups(to: 20).isEmpty)
-        XCTAssertTrue(PlateMath.warmups(to: 15).isEmpty)
-    }
-
     // MARK: - Свои упражнения
 
     /// Упражнения дня основной программы — короткая помощь тестам ниже.

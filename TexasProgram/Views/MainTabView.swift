@@ -730,10 +730,6 @@ struct ExerciseCard: View {
                 SetDotsView(total: exercise.sets, tracker: sets)
             }
 
-            // Блины и разминка есть только там, где задан конкретный вес.
-            if case .kilograms(let weight) = exercise.load {
-                LoadHelperView(weight: weight)
-            }
         }
     }
 

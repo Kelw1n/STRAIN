@@ -19,6 +19,7 @@ struct ProgressScreen: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     hero.appearIn(0)
+                    streak.appearIn(0)
                     ProgressChartView(records: profile.completionLog).appearIn(1).softScroll()
                     TonnageChartView(weeks: profile.weeklyTonnage).appearIn(1).softScroll()
                     maxes.appearIn(1)
@@ -63,6 +64,51 @@ struct ProgressScreen: View {
                 }
                 Spacer(minLength: 0)
             }
+        }
+    }
+
+    /// Серия закрытых недель. Показываем только когда есть что показать:
+    /// нули на пустом профиле выглядят как упрёк.
+    @ViewBuilder
+    private var streak: some View {
+        let streakValue = profile.weekStreak
+        if streakValue.best > 0 {
+            CardView {
+                HStack(spacing: 18) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("СЕРИЯ")
+                            .font(.caption2.weight(.bold)).tracking(1.3)
+                            .foregroundStyle(Theme.accentGradient)
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            Text("\(streakValue.current)")
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .contentTransition(.numericText())
+                            Text(weekWord(streakValue.current)).foregroundStyle(.secondary)
+                        }
+                        Text("подряд без пропусков")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("ЛУЧШАЯ").font(.caption2.weight(.bold)).tracking(1.3)
+                            .foregroundStyle(.secondary)
+                        Text("\(streakValue.best)")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(streakValue.current >= streakValue.best ? AnyShapeStyle(Theme.success) : AnyShapeStyle(.secondary))
+                    }
+                }
+            }
+        }
+    }
+
+    /// «1 неделя», «2 недели», «5 недель» — без этого счётчик читается коряво.
+    private func weekWord(_ count: Int) -> String {
+        let tens = count % 100
+        if (11...14).contains(tens) { return "недель" }
+        switch count % 10 {
+        case 1: return "неделя"
+        case 2, 3, 4: return "недели"
+        default: return "недель"
         }
     }
 
@@ -395,8 +441,9 @@ struct SettingsView: View {
                         } label: {
                             Label("Открыть модуль пикирования", systemImage: "mountain.2.fill")
                         }
-                        .disabled(profile.completedDayCount < 36)
-                        Text("Сначала отметь все 36 дней основной программы.")
+                        Text(profile.completedDayCount >= 36
+                             ? "Основная программа пройдена — можно запускать."
+                             : "Рассчитано на тех, кто прошёл основную программу: отмечено \(profile.completedDayCount) из 36. Запустить можно и раньше, отметки основного цикла сохранятся отдельно и вернутся после отмены.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
