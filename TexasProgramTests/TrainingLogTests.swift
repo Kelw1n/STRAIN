@@ -452,12 +452,52 @@ final class TrainingLogTests: XCTestCase {
         XCTAssertEqual(top(5), .kilograms(105))
     }
 
-    /// Больше года — та же волна, но с вертикальным жимом в подсобке.
-    func testOverYearAddsVerticalPress() {
-        let about = fullBodyPlan(.aboutYear).weeks[0].days[0].exercises.map(\.name)
-        let over = fullBodyPlan(.overYear).weeks[0].days[0].exercises.map(\.name)
-        XCTAssertFalse(about.contains("Жим штанги стоя"))
-        XCTAssertTrue(over.contains("Жим штанги стоя"))
+    /// Объём должен расти со стажем — это и есть разница между уровнями.
+    func testVolumeGrowsWithExperience() {
+        let sets = FullBodyLevel.allCases.map { $0.volume }
+        // День объёма: 3 → 5 → 5 → 6 подходов.
+        XCTAssertEqual(sets.map(\.volumeSets), [3, 5, 5, 6])
+        // Подсобка на руки и тягу тоже прибавляет.
+        XCTAssertEqual(sets.map(\.pullSets), [2, 3, 4, 4])
+        XCTAssertEqual(sets.map(\.armSets), [2, 3, 3, 4])
+        // Добивка появляется только с опытом.
+        XCTAssertEqual(sets.map(\.backoffSets), [0, 0, 1, 2])
+    }
+
+    /// Набор упражнений меняется со стажем, а не только число подходов.
+    func testAccessorySlotsDependOnExperience() {
+        XCTAssertEqual(FullBodyLevel.underYear.accessorySlots, [.back, .arms, .core])
+        XCTAssertEqual(FullBodyLevel.aboutYear.accessorySlots, [.back, .arms, .core])
+        XCTAssertEqual(FullBodyLevel.overYear.accessorySlots, [.back, .pull, .press, .arms, .core])
+        XCTAssertEqual(FullBodyLevel.twoYears.accessorySlots, [.back, .pull, .press, .arms, .core])
+    }
+
+    func testVerticalPressAndExtraPullAppearOnlyWithExperience() {
+        let about = fullBodyPlan(.aboutYear).weeks[0].days
+        let over = fullBodyPlan(.overYear).weeks[0].days
+
+        XCTAssertFalse(about.flatMap { $0.exercises.map(\.name) }.contains("Жим штанги стоя"))
+        XCTAssertTrue(over[0].exercises.map(\.name).contains("Жим штанги стоя"))
+        // Дополнительная тяга только в лёгкий день: в остальные спина уже загружена.
+        XCTAssertTrue(over[1].exercises.map(\.name).contains("Румынская тяга"))
+        XCTAssertFalse(over[0].exercises.map(\.name).contains("Румынская тяга"))
+    }
+
+    /// У добивки своё имя и свой идентификатор: иначе она слилась бы с рабочим
+    /// подходом в отметках и подменила бы вес в истории.
+    func testBackoffIsASeparateExercise() {
+        let heavy = fullBodyPlan(.twoYears).weeks[0].days[2].exercises
+        let working = heavy.first { $0.name == "Приседания" }
+        let backoff = heavy.first { $0.name == "Приседания · добивка" }
+
+        XCTAssertEqual(working?.load, .kilograms(100))
+        XCTAssertEqual(working?.sets, 1)
+        XCTAssertEqual(backoff?.load, .kilograms(90))
+        XCTAssertEqual(backoff?.sets, 2)
+        XCTAssertEqual(backoff?.id, "squat-backoff")
+        XCTAssertNotEqual(working?.id, backoff?.id)
+
+        XCTAssertNil(fullBodyPlan(.aboutYear).weeks[0].days[2].exercises.first { $0.name.contains("добивка") })
     }
 
     func testFullBodyProfileCountsFromFiveRepMax() {

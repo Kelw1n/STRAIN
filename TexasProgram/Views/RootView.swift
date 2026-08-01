@@ -195,8 +195,11 @@ struct ProgramOptionCard: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    if kind == .upperLower || kind == .fullBody {
+                    if kind == .upperLower {
                         TagBadge(text: "Раздел «Жим 14»", systemImage: "waveform.path.ecg", gradient: Theme.recordGradient)
+                            .padding(.top, 2)
+                    } else if kind == .fullBody {
+                        TagBadge(text: "Расчёт по 5ПМ", systemImage: "chart.line.uptrend.xyaxis", gradient: Theme.accentGradient)
                             .padding(.top, 2)
                     }
                 }
