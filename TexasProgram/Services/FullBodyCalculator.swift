@@ -1,9 +1,26 @@
 import Foundation
 
-/// Сколько человек тренируется — от этого зависит, какая схема ему подходит.
+/// Объём и состав тренировки для конкретного стажа.
 ///
-/// Новичок растёт от тренировки к тренировке, опытный — от недели к неделе,
-/// и чем дольше стаж, тем мельче шаг прибавки.
+/// Различия между уровнями держим числами в одном месте, а не ветками по коду:
+/// так видно всю таблицу разом и её можно проверить тестом.
+struct FullBodyVolume: Equatable, Sendable {
+    /// Подходы основных движений в дни объёма, лёгкий и тяжёлый.
+    let volumeSets: Int
+    let lightSets: Int
+    let topSets: Int
+    /// Добивочные подходы после тяжёлого — 90 % от рабочего.
+    let backoffSets: Int
+    let deadliftSets: Int
+    /// Подсобка. Ноль означает, что слот на этом стаже не используется.
+    let pullSets: Int
+    let extraPullSets: Int
+    let verticalPressSets: Int
+    let armSets: Int
+    let coreSets: Int
+}
+
+/// Сколько человек тренируется — от этого зависит и объём, и набор упражнений.
 enum FullBodyLevel: String, CaseIterable, Identifiable, Codable, Sendable {
     case underYear = "Меньше года"
     case aboutYear = "Около года"
@@ -12,29 +29,32 @@ enum FullBodyLevel: String, CaseIterable, Identifiable, Codable, Sendable {
 
     var id: String { rawValue }
 
+    /// Растёт ли вес от тренировки к тренировке, а не от недели к неделе.
+    var isLinear: Bool { self == .underYear }
+
     var subtitle: String {
         switch self {
-        case .underYear: return "Вес растёт каждую тренировку"
-        case .aboutYear: return "Недельная волна: объём, лёгкий, тяжёлый"
-        case .overYear: return "Та же волна и больше подсобки"
-        case .twoYears: return "Волна с прибавкой через неделю"
+        case .underYear: return "Минимум объёма, вес растёт каждую тренировку"
+        case .aboutYear: return "Недельная волна, средний объём"
+        case .overYear: return "Больше подходов, добивка и вертикальный жим"
+        case .twoYears: return "Максимальный объём, прибавка через неделю"
         }
     }
 
     var explanation: String {
         switch self {
         case .underYear:
-            return "Линейная прогрессия: присед прибавляет 2,5 кг каждую тренировку, жим — раз в неделю. Пока это работает, ничего сложнее не нужно."
+            return "Три подхода в основных движениях, из подсобки только тяга, руки и кор по два подхода. Присед прибавляет 2,5 кг каждую тренировку, жим — раз в неделю. Пока растёт так, усложнять нечего."
         case .aboutYear:
-            return "Техасская волна внутри недели: тяжёлый объём, лёгкий день, один тяжёлый подход. Прибавка 2,5 кг в неделю."
+            return "Техасская волна внутри недели: пять подходов в день объёма, лёгкий день, один тяжёлый подход. Подсобка по три подхода. Прибавка 2,5 кг в неделю."
         case .overYear:
-            return "Та же волна, но подсобки больше: вертикальный жим и тяга каждый день. Восстановления хватает, объём можно держать выше."
+            return "Тот же каркас, но объёма больше: четыре подхода в тяге, добивка после тяжёлого подхода, добавляются вертикальный жим и дополнительная тяга."
         case .twoYears:
-            return "Прибавка через неделю: 2,5 кг раз в две недели. На этом стаже линейно каждую неделю уже не растёт."
+            return "Шесть подходов в день объёма, две добивки, подсобка по четыре подхода. Прибавка 2,5 кг раз в две недели: линейно каждую неделю на этом стаже уже не растёт."
         }
     }
 
-    /// Прибавка к тяжёлому подходу на неделе.
+    /// Прибавка к тяжёлому подходу на этой неделе.
     func increment(week: Int) -> Double {
         switch self {
         case .underYear, .aboutYear, .overYear:
@@ -44,13 +64,40 @@ enum FullBodyLevel: String, CaseIterable, Identifiable, Codable, Sendable {
             return Double((week - 1) / 2) * 2.5
         }
     }
+
+    var volume: FullBodyVolume {
+        switch self {
+        case .underYear:
+            return FullBodyVolume(volumeSets: 3, lightSets: 3, topSets: 3, backoffSets: 0, deadliftSets: 1,
+                                  pullSets: 2, extraPullSets: 0, verticalPressSets: 0, armSets: 2, coreSets: 2)
+        case .aboutYear:
+            return FullBodyVolume(volumeSets: 5, lightSets: 2, topSets: 1, backoffSets: 0, deadliftSets: 1,
+                                  pullSets: 3, extraPullSets: 0, verticalPressSets: 0, armSets: 3, coreSets: 3)
+        case .overYear:
+            return FullBodyVolume(volumeSets: 5, lightSets: 3, topSets: 1, backoffSets: 1, deadliftSets: 1,
+                                  pullSets: 4, extraPullSets: 3, verticalPressSets: 3, armSets: 3, coreSets: 3)
+        case .twoYears:
+            return FullBodyVolume(volumeSets: 6, lightSets: 3, topSets: 1, backoffSets: 2, deadliftSets: 2,
+                                  pullSets: 4, extraPullSets: 3, verticalPressSets: 4, armSets: 4, coreSets: 3)
+        }
+    }
+
+    /// Какие слоты подсобки предлагать при настройке. Остальные на этом стаже
+    /// в план не попадут, и спрашивать их незачем.
+    var accessorySlots: [AdditionalExerciseCategory] {
+        var result: [AdditionalExerciseCategory] = [.back]
+        if volume.extraPullSets > 0 { result.append(.pull) }
+        if volume.verticalPressSets > 0 { result.append(.press) }
+        result.append(contentsOf: [.arms, .core])
+        return result
+    }
 }
 
 /// Фулбади на три тренировки в неделю: каждый день присед, жим, тяга, руки и кор.
 ///
-/// Прогрессия жима и приседа — линейная, как в техасском методе: расчёт идёт от
-/// пятиповторного максимума, тяжёлый подход прибавляет 2,5 кг, лёгкие дни считаются
-/// процентами от него. Волны из «Верх / Низ» здесь нет.
+/// Прогрессия линейная, как в техасском методе: расчёт от пятиповторного максимума,
+/// тяжёлый подход прибавляет 2,5 кг, лёгкие дни — проценты от него. Стаж меняет
+/// объём и набор упражнений, а не только шаг прибавки.
 enum FullBodyCalculator {
     static let weekCount = 12
 
@@ -66,22 +113,23 @@ enum FullBodyCalculator {
     static func generate(input: ProgramInput, level: FullBodyLevel) -> WorkoutPlan {
         memo.resolve(Key(input: input, level: level)) { key in
             WorkoutPlan(
-                weeks: (1...weekCount).map { week(($0), input: key.input, level: key.level) },
+                weeks: (1...weekCount).map { week($0, input: key.input, level: key.level) },
                 isPeaking: false
             )
         }
     }
 
     private static func week(_ number: Int, input: ProgramInput, level: FullBodyLevel) -> WorkoutWeekPlan {
-        let days = level == .underYear
-            ? linearWeek(number, input: input)
+        let days = level.isLinear
+            ? linearWeek(number, input: input, level: level)
             : waveWeek(number, input: input, level: level)
         return WorkoutWeekPlan(id: number, number: number, days: days)
     }
 
     // MARK: - Меньше года: вес растёт каждую тренировку
 
-    private static func linearWeek(_ week: Int, input: ProgramInput) -> [WorkoutDayPlan] {
+    private static func linearWeek(_ week: Int, input: ProgramInput, level: FullBodyLevel) -> [WorkoutDayPlan] {
+        let volume = level.volume
         // Присед прибавляет каждую тренировку, жим и тяга — раз в неделю:
         // верх тела так быстро не растёт, и упереться в потолок можно за месяц.
         let benchWeight = ProgramCalculator.roundToPlate(input.bench5RM * 0.85 + Double(week - 1) * 2.5)
@@ -92,14 +140,14 @@ enum FullBodyCalculator {
             let squatWeight = ProgramCalculator.roundToPlate(input.squat5RM * 0.8 + Double(session - 1) * 2.5)
 
             var exercises = [
-                ExercisePrescription(name: "Приседания", sets: 3, reps: "5", load: .kilograms(squatWeight)),
-                ExercisePrescription(name: "Жим лёжа", sets: 3, reps: "5", load: .kilograms(benchWeight))
+                ExercisePrescription(name: "Приседания", sets: volume.volumeSets, reps: "5", load: .kilograms(squatWeight)),
+                ExercisePrescription(name: "Жим лёжа", sets: volume.volumeSets, reps: "5", load: .kilograms(benchWeight))
             ]
             // Становая тяжело восстанавливается — один раз в неделю.
             if dayNumber == 2 {
-                exercises.append(ExercisePrescription(name: "Становая тяга", sets: 1, reps: "5", load: .kilograms(deadWeight)))
+                exercises.append(ExercisePrescription(name: "Становая тяга", sets: volume.deadliftSets, reps: "5", load: .kilograms(deadWeight)))
             }
-            exercises.append(contentsOf: accessories(input: input, dayNumber: dayNumber, extended: false))
+            exercises.append(contentsOf: accessories(input: input, volume: volume, dayNumber: dayNumber))
             return day(week, dayNumber, "ФУЛБАДИ " + letter(dayNumber), exercises)
         }
     }
@@ -107,6 +155,7 @@ enum FullBodyCalculator {
     // MARK: - Год и дальше: недельная волна техасского метода
 
     private static func waveWeek(_ week: Int, input: ProgramInput, level: FullBodyLevel) -> [WorkoutDayPlan] {
+        let volume = level.volume
         let increment = level.increment(week: week)
         let squatTop = ProgramCalculator.roundToPlate(input.squat5RM + increment)
         let benchTop = ProgramCalculator.roundToPlate(input.bench5RM + increment)
@@ -118,26 +167,42 @@ enum FullBodyCalculator {
         let squatLight = ProgramCalculator.roundToPlate(squatVolume * 0.8)
         let benchLight = ProgramCalculator.roundToPlate(benchVolume * 0.8)
 
-        let extended = level != .aboutYear
-
         var day1: [ExercisePrescription] = [
-            ExercisePrescription(name: "Приседания", sets: 5, reps: "5", load: .kilograms(squatVolume)),
-            ExercisePrescription(name: "Жим лёжа", sets: 5, reps: "5", load: .kilograms(benchVolume))
+            ExercisePrescription(name: "Приседания", sets: volume.volumeSets, reps: "5", load: .kilograms(squatVolume)),
+            ExercisePrescription(name: "Жим лёжа", sets: volume.volumeSets, reps: "5", load: .kilograms(benchVolume))
         ]
-        day1.append(contentsOf: accessories(input: input, dayNumber: 1, extended: extended))
+        day1.append(contentsOf: accessories(input: input, volume: volume, dayNumber: 1))
 
         var day2: [ExercisePrescription] = [
-            ExercisePrescription(name: "Приседания", sets: 2, reps: "5", load: .kilograms(squatLight)),
-            ExercisePrescription(name: "Жим лёжа", sets: 3, reps: "5", load: .kilograms(benchLight)),
-            ExercisePrescription(name: "Становая тяга", sets: 1, reps: "5", load: .kilograms(deadTop))
+            ExercisePrescription(name: "Приседания", sets: volume.lightSets, reps: "5", load: .kilograms(squatLight)),
+            ExercisePrescription(name: "Жим лёжа", sets: volume.lightSets, reps: "5", load: .kilograms(benchLight)),
+            ExercisePrescription(name: "Становая тяга", sets: volume.deadliftSets, reps: "5", load: .kilograms(deadTop))
         ]
-        day2.append(contentsOf: accessories(input: input, dayNumber: 2, extended: extended))
+        day2.append(contentsOf: accessories(input: input, volume: volume, dayNumber: 2))
 
         var day3: [ExercisePrescription] = [
-            ExercisePrescription(name: "Приседания", sets: 1, reps: "5", load: .kilograms(squatTop)),
-            ExercisePrescription(name: "Жим лёжа", sets: 1, reps: "5", load: .kilograms(benchTop))
+            ExercisePrescription(name: "Приседания", sets: volume.topSets, reps: "5", load: .kilograms(squatTop)),
+            ExercisePrescription(name: "Жим лёжа", sets: volume.topSets, reps: "5", load: .kilograms(benchTop))
         ]
-        day3.append(contentsOf: accessories(input: input, dayNumber: 3, extended: extended))
+        // Добивка идёт отдельным упражнением: у неё своё имя и свой идентификатор,
+        // иначе она слилась бы с рабочим подходом в отметках и в истории.
+        if volume.backoffSets > 0 {
+            day3.append(ExercisePrescription(
+                id: "squat-backoff",
+                name: "Приседания · добивка",
+                sets: volume.backoffSets,
+                reps: "5",
+                load: .kilograms(ProgramCalculator.roundToPlate(squatTop * 0.9))
+            ))
+            day3.append(ExercisePrescription(
+                id: "bench-backoff",
+                name: "Жим лёжа · добивка",
+                sets: volume.backoffSets,
+                reps: "5",
+                load: .kilograms(ProgramCalculator.roundToPlate(benchTop * 0.9))
+            ))
+        }
+        day3.append(contentsOf: accessories(input: input, volume: volume, dayNumber: 3))
 
         return [
             day(week, 1, "ФУЛБАДИ · ОБЪЁМ", day1),
@@ -149,24 +214,32 @@ enum FullBodyCalculator {
     // MARK: - Подсобка
 
     /// Тяга, руки и кор есть в каждой тренировке — иначе это не фулбади, а сплит.
-    /// Выбранные в настройках упражнения подставляются вместо стандартных.
-    private static func accessories(input: ProgramInput, dayNumber: Int, extended: Bool) -> [ExercisePrescription] {
+    /// Число подходов и набор слотов задаёт стаж, названия — выбор в настройках.
+    private static func accessories(input: ProgramInput, volume: FullBodyVolume, dayNumber: Int) -> [ExercisePrescription] {
         var result: [ExercisePrescription] = []
 
-        let pullName = input.back ?? (dayNumber == 2 ? "Тяга в наклоне" : "Подтягивания")
-        result.append(ExercisePrescription(name: pullName, sets: 3, reps: "8–12", load: .rpe("RPE 8"), isOptional: true))
-
-        if extended {
-            let pressName = input.press ?? "Жим штанги стоя"
-            result.append(ExercisePrescription(name: pressName, sets: 3, reps: "6–8", load: .rpe("RPE 8"), isOptional: true))
+        if volume.pullSets > 0 {
+            let name = input.back ?? (dayNumber == 2 ? "Тяга в наклоне" : "Подтягивания")
+            result.append(ExercisePrescription(name: name, sets: volume.pullSets, reps: "8–12", load: .rpe("RPE 8"), isOptional: true))
         }
-
-        let armsName = input.arms ?? "Растянутый суперсет: бицепс + трицепс"
-        result.append(ExercisePrescription(name: armsName, sets: 3, reps: "8–12", load: .rpe("RPE 8–9"), isOptional: true))
-
-        let coreName = input.core ?? "Скручивания лёжа на полу"
-        result.append(ExercisePrescription(name: coreName, sets: 3, reps: "10–15", load: .rpe("RPE 9"), isOptional: true))
-
+        // Дополнительная тяга — только в лёгкий день: в остальные уже есть становая
+        // или тяжёлый присед, и спина не вывезет.
+        if volume.extraPullSets > 0, dayNumber == 2 {
+            let name = input.pull ?? "Румынская тяга"
+            result.append(ExercisePrescription(name: name, sets: volume.extraPullSets, reps: "5–8", load: .rpe("RPE 8"), isOptional: true))
+        }
+        if volume.verticalPressSets > 0 {
+            let name = input.press ?? "Жим штанги стоя"
+            result.append(ExercisePrescription(name: name, sets: volume.verticalPressSets, reps: "6–8", load: .rpe("RPE 8"), isOptional: true))
+        }
+        if volume.armSets > 0 {
+            let name = input.arms ?? "Растянутый суперсет: бицепс + трицепс"
+            result.append(ExercisePrescription(name: name, sets: volume.armSets, reps: "8–12", load: .rpe("RPE 8–9"), isOptional: true))
+        }
+        if volume.coreSets > 0 {
+            let name = input.core ?? "Скручивания лёжа на полу"
+            result.append(ExercisePrescription(name: name, sets: volume.coreSets, reps: "10–15", load: .rpe("RPE 9"), isOptional: true))
+        }
         return result
     }
 

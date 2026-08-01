@@ -434,6 +434,17 @@ struct SettingsView: View {
                     } footer: {
                         Text(profile.fullBodyLevel.explanation)
                     }
+                    Section {
+                        // Слоты зависят от стажа: сменил стаж — список меняется,
+                        // а выбранные названия остаются на своих местах.
+                        ForEach(profile.fullBodyLevel.accessorySlots) { category in
+                            ExercisePicker(category: category, value: binding(for: category))
+                        }
+                    } header: {
+                        Text("Подсобка")
+                    } footer: {
+                        Text("Эти упражнения идут в каждой тренировке.")
+                    }
                 }
 
                 if profile.programKind == .texas {

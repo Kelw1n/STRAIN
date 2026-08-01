@@ -11,10 +11,11 @@ struct FullBodySetupView: View {
     @State private var squat = "100"
     @State private var bench = "100"
     @State private var deadlift = "100"
-    @State private var back: String?
-    @State private var press: String?
-    @State private var arms: String?
-    @State private var core: String?
+    @State private var chosen: [AdditionalExerciseCategory: String] = [:]
+
+    private func binding(for category: AdditionalExerciseCategory) -> Binding<String?> {
+        Binding(get: { chosen[category] }, set: { chosen[category] = $0 })
+    }
 
     private func number(_ text: String) -> Double? {
         let cleaned = text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
@@ -62,14 +63,15 @@ struct FullBodySetupView: View {
                 }
 
                 Section {
-                    ExercisePicker(category: .back, value: $back)
-                    ExercisePicker(category: .press, value: $press)
-                    ExercisePicker(category: .arms, value: $arms)
-                    ExercisePicker(category: .core, value: $core)
+                    // Набор слотов задаёт стаж: на меньшем объёме вертикального
+                    // жима и дополнительной тяги в плане нет, спрашивать их незачем.
+                    ForEach(level.accessorySlots) { category in
+                        ExercisePicker(category: category, value: binding(for: category))
+                    }
                 } header: {
                     Text("Подсобка")
                 } footer: {
-                    Text("Тяга, руки и кор идут в каждой тренировке. Не выберешь — подставятся стандартные.")
+                    Text("Идёт в каждой тренировке. Не выберешь — подставятся стандартные. На другом стаже набор слотов другой.")
                 }
 
                 Section {
@@ -83,11 +85,11 @@ struct FullBodySetupView: View {
                                 bench5RM: benchValue,
                                 deadlift5RM: deadliftValue,
                                 level: .beginner,
-                                pull: nil,
-                                arms: arms,
-                                core: core,
-                                back: back,
-                                press: press
+                                pull: chosen[.pull],
+                                arms: chosen[.arms],
+                                core: chosen[.core],
+                                back: chosen[.back],
+                                press: chosen[.press]
                             ),
                             level
                         )
