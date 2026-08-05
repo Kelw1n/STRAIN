@@ -4,13 +4,28 @@ import kotlinx.serialization.Serializable
 
 enum class TrainingProgramKind(val title: String) {
     TEXAS("Техасский метод"),
-    UPPER_LOWER("Верх / Низ");
+    UPPER_LOWER("Верх / Низ"),
+    FULL_BODY("Фулбади"),
+    CUSTOM("Своя программа");
 
     val subtitle: String
         get() = when (this) {
             TEXAS -> "12 недель · 3 тренировки в неделю · расчёт по 5ПМ"
             UPPER_LOWER -> "7 недель · 4 тренировки в неделю · расчёт по 1ПМ"
+            FULL_BODY -> "12 недель · 3 тренировки в неделю · всё тело каждый раз"
+            CUSTOM -> "Своя схема, свои упражнения, свои недели"
         }
+
+    /// От какого максимума считается программа.
+    val usesFiveRepMax: Boolean get() = this == TEXAS || this == FULL_BODY
+
+    /// Идёт ли по программе волна «Жим 14».
+    val hasBenchWave: Boolean get() = this == UPPER_LOWER
+
+    companion object {
+        /// Готовые программы предлагаются при первом запуске, своя собирается отдельно.
+        val ready = listOf(TEXAS, UPPER_LOWER, FULL_BODY)
+    }
 }
 
 enum class TrainingLevel(val title: String) {
@@ -87,7 +102,11 @@ data class CompletionRecord(
     val day: Int,
     val squat: Double? = null,
     val bench: Double? = null,
-    val deadlift: Double? = null
+    val deadlift: Double? = null,
+    /// Что реально поднято в этот день, если подходы записывались.
+    val actualSquat: Double? = null,
+    val actualBench: Double? = null,
+    val actualDeadlift: Double? = null
 )
 
 data class ProgramInput(

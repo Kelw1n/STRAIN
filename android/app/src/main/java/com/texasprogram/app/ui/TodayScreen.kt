@@ -54,6 +54,8 @@ fun TodayScreen(
     onOpenBench: ((Int) -> Unit)?,
     onOpenDay: (Int, Int) -> Unit,
     onCustomize: (Int, Int) -> Unit,
+    onHoldSet: (ScheduledWorkout, com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
+    onUpdateProfile: (com.texasprogram.app.model.ProgramProfile) -> Unit,
     onSettings: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -155,6 +157,8 @@ fun TodayScreen(
                 modifier = Modifier.appearIn(index + 4),
                 onOpenBench = onOpenBench,
                 sets = SetTracker(
+                    onHold = { dot -> onHoldSet(focus, exercise, dot) },
+                    logged = profile.loggedSets(focus.week, focus.day.number, exercise),
                     done = profile.completedSets(focus.week, focus.day.number, exercise)
                 ) { dot -> onToggleSet(focus, exercise, dot) }
             )
@@ -162,6 +166,10 @@ fun TodayScreen(
 
         item(key = "rest") {
             RestTimerLauncher(timer, profile.defaultRestSeconds, onSelectRest, Modifier.appearIn(exercises.size + 4))
+        }
+
+        item(key = "skip") {
+            SkipCard(profile, focus.week, focus.day.number, Modifier.padding(top = 4.dp), onUpdateProfile)
         }
 
         item(key = "complete") {

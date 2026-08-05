@@ -143,7 +143,6 @@ fun ExerciseCard(
         }
 
         // Блины и разминка есть только там, где задан конкретный вес.
-        (exercise.load as? LoadPrescription.Kilograms)?.let { LoadHelperView(it.value) }
     }
 }
 

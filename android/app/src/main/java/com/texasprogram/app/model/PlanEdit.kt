@@ -15,7 +15,10 @@ enum class PlanEditKind {
     @SerialName("replace") REPLACE,
 
     /// Упражнение программы убрано из дня.
-    @SerialName("hide") HIDE
+    @SerialName("hide") HIDE,
+
+    /// Свой порядок упражнений внутри дня.
+    @SerialName("order") ORDER
 }
 
 /// Насколько далеко расходится правка.
@@ -58,7 +61,10 @@ data class PlanEdit(
     /// Конкретный вес в килограммах, если он задан.
     val kilograms: Double? = null,
     /// Свободная подпись нагрузки, когда веса нет: «RPE 8», «до отказа».
-    val loadText: String? = null
+    val loadText: String? = null,
+    /// Порядок упражнений дня для правки вида ORDER. Ключи, которых в списке
+    /// нет, остаются в конце: план мог измениться после перестановки.
+    val order: List<String>? = null
 ) {
     val scope: PlanEditScope
         get() = if (week == null) PlanEditScope.EVERY_WEEK else PlanEditScope.SINGLE
@@ -94,6 +100,7 @@ data class PlanEdit(
             PlanEditKind.HIDE -> "Убрано"
             PlanEditKind.REPLACE -> "Заменено на «$name»"
             PlanEditKind.ADD -> "Добавлено «$name»"
+            PlanEditKind.ORDER -> "Свой порядок"
         }
 
     val detail: String

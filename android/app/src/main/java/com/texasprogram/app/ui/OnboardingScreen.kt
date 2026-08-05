@@ -83,6 +83,12 @@ fun OnboardingScreen(
             TrainingProgramKind.UPPER_LOWER -> UpperLowerSetup(contentPadding, onBack = { selected = null }) {
                 onSave(ProgramProfile.upperLower(it))
             }
+            TrainingProgramKind.FULL_BODY -> FullBodySetup(contentPadding, onBack = { selected = null }) { input, level ->
+                onSave(ProgramProfile.fullBody(input, level))
+            }
+            TrainingProgramKind.CUSTOM -> CustomProgramBuilder(contentPadding, onBack = { selected = null }) {
+                onSave(ProgramProfile.custom(it))
+            }
         }
     }
 }
@@ -123,7 +129,7 @@ private fun ProgramSelection(
             }
         }
 
-        TrainingProgramKind.entries.forEachIndexed { index, kind ->
+        TrainingProgramKind.ready.forEachIndexed { index, kind ->
             item(key = kind.name) {
                 ProgramOptionCard(kind, Modifier.appearIn(index + 1)) { onPick(kind) }
             }

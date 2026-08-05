@@ -67,6 +67,7 @@ import com.texasprogram.app.ui.BenchWaveScreen
 import com.texasprogram.app.ui.DayCustomizeScreen
 import com.texasprogram.app.ui.DayDetailScreen
 import com.texasprogram.app.ui.GuideScreen
+import com.texasprogram.app.ui.KeepScreenOn
 import com.texasprogram.app.service.RestTimer
 import com.texasprogram.app.ui.Motion
 import com.texasprogram.app.ui.OnboardingScreen
@@ -150,6 +151,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     var showSettings by remember { mutableStateOf(false) }
     var dayDetail by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var customizing by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var entryTarget by remember { mutableStateOf<com.texasprogram.app.ui.SetEntryTarget?>(null) }
 
     val isUpperLower = profile.programKind == TrainingProgramKind.UPPER_LOWER
     val tabs = AppTab.entries.filter { it != AppTab.BENCH || isUpperLower }
@@ -204,6 +206,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         }
     }
 
+    // Телефон лежит на лавке между подходами — гасить экран тут незачем.
+    KeepScreenOn(profile.keepScreenOn)
+
     Box(Modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = tab,
@@ -234,6 +239,12 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onOpenBench = openBench,
                     onOpenDay = { week, day -> dayDetail = week to day },
                     onCustomize = { week, day -> customizing = week to day },
+                    onUpdateProfile = { updated -> store.update(updated.id) { updated } },
+                    onHoldSet = { workout, exercise, dot ->
+                        entryTarget = com.texasprogram.app.ui.SetEntryTarget(
+                            workout.week, workout.day.number, exercise, dot
+                        )
+                    },
                     onSettings = { showSettings = true },
                     contentPadding = contentPadding
                 )
@@ -296,12 +307,25 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             },
                             onOpenBench = openBench,
                             onCustomize = { customizing = week to dayNumber },
+                            onUpdateProfile = { updated -> store.update(updated.id) { updated } },
+                            onHoldSet = { exercise, dot ->
+                                entryTarget = com.texasprogram.app.ui.SetEntryTarget(week, dayNumber, exercise, dot)
+                            },
                             contentPadding = screenPadding(bottomExtra = 32.dp)
                         )
                         CloseButton(Modifier.align(Alignment.TopEnd)) { dayDetail = null }
                     }
                 }
             }
+        }
+
+        entryTarget?.let { target ->
+            com.texasprogram.app.ui.SetEntryDialog(
+                profile = profile,
+                target = target,
+                onDismiss = { entryTarget = null },
+                onUpdate = { updated -> store.update(updated.id) { updated } }
+            )
         }
 
         AnimatedContent(

@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Refresh
+import com.texasprogram.app.service.FullBodyLevel
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -76,6 +78,7 @@ fun SettingsScreen(
     contentPadding: PaddingValues
 ) {
     var showDelete by remember { mutableStateOf(false) }
+    var showNewCycle by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -196,7 +199,95 @@ fun SettingsScreen(
                 }
             }
 
-            item(key = "extra") {
+            item(key = "cycle") {
+            CardView(Modifier.appearIn(5)) {
+                SectionLabel("Цикл ${profile.cycleNumber}")
+                SecondaryButton("Начать новый цикл", icon = Icons.Filled.Refresh) { showNewCycle = true }
+                Text(
+                    "Программа начнётся заново с новыми максимумами. Отметки прошлого цикла спрячутся, история и графики останутся сквозными.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        item(key = "screen") {
+            CardView(Modifier.appearIn(5)) {
+                SectionLabel("В зале")
+                SegmentedControl(
+                    options = listOf("Не гасить экран", "Гасить как обычно"),
+                    selectedIndex = if (profile.keepScreenOn) 0 else 1
+                ) { onUpdate(profile.copy(keepScreenOn = it == 0)) }
+                Text(
+                    "Пока приложение открыто, экран не уходит в сон. Телефон на лавке между подходами перестанет тухнуть.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        if (profile.activeSkips.isNotEmpty()) {
+            item(key = "skips") {
+                CardView(Modifier.appearIn(5)) {
+                    SectionLabel("Пропущено")
+                    profile.activeSkips.forEach { item ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(item.title, color = Theme.textPrimary, fontSize = 13.sp)
+                                Text(
+                                    if (item.holdsProgression) "веса задержаны" else "без задержки",
+                                    color = Theme.textSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            SecondaryButton("Убрать", tint = Theme.record) { onUpdate(profile.removeSkip(item)) }
+                        }
+                    }
+                    Text(
+                        "Пока пропуск с задержкой не закрыт, веса следующих недель стоят на месте. Отметишь тренировку — задержка снимется сама.",
+                        color = Theme.textTertiary,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        if (profile.programKind == TrainingProgramKind.FULL_BODY) {
+            item(key = "fullBodyLevel") {
+                CardView(Modifier.appearIn(5)) {
+                    SectionLabel("Сколько ходишь в зал")
+                    SegmentedControl(
+                        options = FullBodyLevel.entries.map { it.title },
+                        selectedIndex = FullBodyLevel.entries.indexOf(profile.fullBodyLevel)
+                    ) { onUpdate(profile.copy(fullBodyLevel = FullBodyLevel.entries[it])) }
+                    Text(profile.fullBodyLevel.explanation, color = Theme.textTertiary, fontSize = 11.sp)
+                    // Слоты зависят от стажа: сменил стаж — список меняется,
+                    // а выбранные названия остаются на своих местах.
+                    profile.fullBodyLevel.accessorySlots.forEach { category ->
+                        val current = when (category) {
+                            AdditionalExerciseCategory.PULL -> profile.pull
+                            AdditionalExerciseCategory.ARMS -> profile.arms
+                            AdditionalExerciseCategory.CORE -> profile.core
+                            AdditionalExerciseCategory.BACK -> profile.back
+                            AdditionalExerciseCategory.PRESS -> profile.press
+                        }
+                        ExercisePicker(category, current) { value ->
+                            onUpdate(
+                                when (category) {
+                                    AdditionalExerciseCategory.PULL -> profile.copy(pull = value)
+                                    AdditionalExerciseCategory.ARMS -> profile.copy(arms = value)
+                                    AdditionalExerciseCategory.CORE -> profile.copy(core = value)
+                                    AdditionalExerciseCategory.BACK -> profile.copy(back = value)
+                                    AdditionalExerciseCategory.PRESS -> profile.copy(press = value)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item(key = "extra") {
                 CardView(Modifier.appearIn(5)) {
                     SectionLabel("Дополнительные упражнения")
                     AdditionalExerciseCategory.entries.forEach { category ->
@@ -315,6 +406,10 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (showNewCycle) {
+        NewCycleDialog(profile, onDismiss = { showNewCycle = false }, onUpdate = onUpdate)
     }
 
     if (showDelete) {

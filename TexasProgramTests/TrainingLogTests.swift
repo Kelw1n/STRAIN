@@ -1,7 +1,7 @@
 import XCTest
 @testable import TexasProgram
 
-/// Факт подхода, откат после несданного веса, свой порядок и тоннаж.
+/// Факт подхода, пропуск тренировки, свой порядок и тоннаж.
 final class TrainingLogTests: XCTestCase {
 
     private var utcCalendar: Calendar {
@@ -80,60 +80,108 @@ final class TrainingLogTests: XCTestCase {
         XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: squat), 1)
     }
 
-    // MARK: - Откат после несданного веса
+    // MARK: - Пропуск тренировки
 
-    func testDeloadCutsWeightsFromItsWeekOnward() {
+    func testSkipDoesNotCompleteTheDay() {
         let profile = ProgramProfile(input: .demo)
-        XCTAssertEqual(exercises(profile, week: 5, day: 3)[0].load, .kilograms(100))
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
 
-        profile.addDeload(fromWeek: 5, percent: 10)
-
-        // Недели до отката не тронуты.
-        XCTAssertEqual(exercises(profile, week: 4, day: 3)[0].load, .kilograms(97.5))
-        // С пятой — минус десять процентов, округлённые до блина.
-        XCTAssertEqual(exercises(profile, week: 5, day: 3)[0].load, .kilograms(90))
-        XCTAssertEqual(exercises(profile, week: 6, day: 3)[0].load, .kilograms(92.5))
+        XCTAssertTrue(profile.isSkipped(week: 1, day: 1))
+        // Тренировка остаётся в расписании: её ещё можно закрыть.
+        XCTAssertFalse(profile.isCompleted(week: 1, day: 1))
+        XCTAssertEqual(profile.completedDayCount, 0)
     }
 
-    func testDeloadsCompoundAndCanBeUndone() {
+    /// Пропущенная неделя остаётся со своими весами, а замирает следующая:
+    /// стимул был у той, которую отработали, а не у той, что пропустили.
+    func testHoldFreezesTheNextWeek() {
         let profile = ProgramProfile(input: .demo)
-        profile.addDeload(fromWeek: 3, percent: 10)
-        profile.addDeload(fromWeek: 6, percent: 10)
+        XCTAssertEqual(exercises(profile, week: 1, day: 3)[0].load, .kilograms(90))
+        XCTAssertEqual(exercises(profile, week: 2, day: 3)[0].load, .kilograms(92.5))
 
-        XCTAssertEqual(profile.deloadFactor(week: 2), 1, accuracy: 0.0001)
-        XCTAssertEqual(profile.deloadFactor(week: 3), 0.9, accuracy: 0.0001)
-        XCTAssertEqual(profile.deloadFactor(week: 6), 0.81, accuracy: 0.0001)
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
 
-        profile.removeDeload(profile.deloads[0])
-        XCTAssertEqual(profile.deloadFactor(week: 6), 0.9, accuracy: 0.0001)
-        // Максимумы откат не трогает — снятие возвращает исходный расчёт.
-        profile.removeDeload(profile.deloads[0])
-        XCTAssertEqual(exercises(profile, week: 5, day: 3)[0].load, .kilograms(100))
+        XCTAssertEqual(exercises(profile, week: 1, day: 3)[0].load, .kilograms(90))
+        XCTAssertEqual(exercises(profile, week: 2, day: 3)[0].load, .kilograms(90))
+        XCTAssertEqual(exercises(profile, week: 3, day: 3)[0].load, .kilograms(92.5))
     }
 
-    /// Откат режет только килограммы: RPE и тест 1ПМ процентам не подчиняются.
-    func testDeloadLeavesNonNumericLoadsAlone() {
-        var input = ProgramInput.demo
-        input.pull = AdditionalExerciseCategory.pull.options[0]
-        let profile = ProgramProfile(input: input)
-        profile.addDeload(fromWeek: 1, percent: 10)
+    func testTwoHeldWeeksShiftProgressionTwice() {
+        let profile = ProgramProfile(input: .demo)
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
+        profile.markSkipped(week: 3, day: 2, holdsProgression: true)
 
-        let pull = exercises(profile, week: 1, day: 1).first { $0.name == input.pull }
-        XCTAssertEqual(pull?.load, .rpe("RPE 8"))
+        XCTAssertEqual(profile.holdCount(before: 2), 1)
+        XCTAssertEqual(profile.holdCount(before: 4), 2)
+        XCTAssertEqual(profile.effectiveWeek(for: 5), 3)
+        XCTAssertEqual(exercises(profile, week: 5, day: 3)[0].load, .kilograms(95))
     }
 
-    /// Пикирование нумерует недели с единицы: без разделения откат основной
-    /// программы срезал бы и пиковый цикл.
-    func testDeloadDoesNotLeakIntoPeaking() {
+    /// Несколько пропусков одной недели задерживают её только один раз.
+    func testSameWeekCountsOnce() {
         let profile = ProgramProfile(input: .demo)
-        profile.addDeload(fromWeek: 1, percent: 10)
-        let base = exercises(profile, week: 1, day: 3)[0].load
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
+        profile.markSkipped(week: 1, day: 2, holdsProgression: true)
+
+        XCTAssertEqual(profile.holdCount(before: 2), 1)
+        XCTAssertEqual(exercises(profile, week: 2, day: 3)[0].load, .kilograms(90))
+    }
+
+    func testSkipWithoutHoldLeavesWeightsAlone() {
+        let profile = ProgramProfile(input: .demo)
+        profile.markSkipped(week: 1, day: 1, holdsProgression: false)
+
+        XCTAssertTrue(profile.isSkipped(week: 1, day: 1))
+        XCTAssertEqual(profile.holdCount(before: 2), 0)
+        XCTAssertEqual(exercises(profile, week: 2, day: 3)[0].load, .kilograms(92.5))
+    }
+
+    /// Возместил пропущенное — задержка снимается сама.
+    func testCompletingSkippedWorkoutReleasesTheHold() {
+        let profile = ProgramProfile(input: .demo)
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
+        XCTAssertEqual(exercises(profile, week: 2, day: 3)[0].load, .kilograms(90))
+
+        profile.toggleCompleted(week: 1, day: 1)
+
+        XCTAssertFalse(profile.isSkipped(week: 1, day: 1))
+        XCTAssertEqual(exercises(profile, week: 2, day: 3)[0].load, .kilograms(92.5))
+    }
+
+    func testSkipCanBeRemovedByHand() {
+        let profile = ProgramProfile(input: .demo)
+        profile.markSkipped(week: 2, day: 1, holdsProgression: true)
+        XCTAssertEqual(profile.activeSkips.count, 1)
+
+        profile.removeSkip(profile.activeSkips[0])
+        XCTAssertTrue(profile.activeSkips.isEmpty)
+        XCTAssertEqual(exercises(profile, week: 3, day: 3)[0].load, .kilograms(95))
+    }
+
+    /// Пикирование нумерует недели с единицы: без разделения пропуск основной
+    /// программы заморозил бы и пиковый цикл.
+    func testSkipDoesNotLeakIntoPeaking() {
+        let profile = ProgramProfile(input: .demo)
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
+        XCTAssertEqual(profile.holdCount(before: 2), 1)
 
         profile.peakingActive = true
-        XCTAssertEqual(profile.deloadFactor(week: 1), 1)
+        XCTAssertEqual(profile.holdCount(before: 2), 0)
+        XCTAssertTrue(profile.activeSkips.isEmpty)
 
         profile.peakingActive = false
-        XCTAssertEqual(exercises(profile, week: 1, day: 3)[0].load, base)
+        XCTAssertEqual(profile.holdCount(before: 2), 1)
+    }
+
+    /// Задержка подменяет только веса: номера дней и заголовки остаются своими,
+    /// иначе отметки поехали бы в чужую неделю.
+    func testHoldKeepsDayIdentity() {
+        let profile = ProgramProfile(input: .demo)
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
+
+        let week2 = profile.workoutPlan.weeks.first { $0.number == 2 }
+        XCTAssertEqual(week2?.days.map(\.id), ["2-1", "2-2", "2-3"])
+        XCTAssertEqual(week2?.days.map(\.number), [1, 2, 3])
     }
 
     // MARK: - Свой порядок упражнений
@@ -585,11 +633,11 @@ final class TrainingLogTests: XCTestCase {
 
     // MARK: - Резервная копия
 
-    func testBackupCarriesLogAndDeloads() throws {
+    func testBackupCarriesLogAndSkips() throws {
         let profile = ProgramProfile(input: .demo)
         let squat = exercises(profile, week: 1, day: 1)[0]
         profile.recordSet(week: 1, day: 1, exercise: squat, index: 0, reps: 4, weight: 75)
-        profile.addDeload(fromWeek: 4, percent: 5)
+        profile.markSkipped(week: 4, day: 2, holdsProgression: true)
         profile.keepScreenOn = false
 
         let archive = try BackupService.archive(from: try BackupService.export([profile]))
@@ -597,8 +645,9 @@ final class TrainingLogTests: XCTestCase {
 
         XCTAssertEqual(snapshot.setLog?.count, 1)
         XCTAssertEqual(snapshot.setLog?.values.first?.reps, 4)
-        XCTAssertEqual(snapshot.deloads?.count, 1)
-        XCTAssertEqual(snapshot.deloads?.first?.percent, 5)
+        XCTAssertEqual(snapshot.skipped?.count, 1)
+        XCTAssertEqual(snapshot.skipped?.first?.week, 4)
+        XCTAssertEqual(snapshot.skipped?.first?.holdsProgression, true)
         XCTAssertEqual(snapshot.keepScreenOn, false)
     }
 
@@ -608,7 +657,7 @@ final class TrainingLogTests: XCTestCase {
         let data = try BackupService.export([profile])
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         var profiles = try XCTUnwrap(object["profiles"] as? [[String: Any]])
-        for key in ["setLog", "deloads", "keepScreenOn", "planEdits"] {
+        for key in ["setLog", "skipped", "keepScreenOn", "planEdits"] {
             profiles[0].removeValue(forKey: key)
         }
         object["profiles"] = profiles
@@ -616,7 +665,7 @@ final class TrainingLogTests: XCTestCase {
         let trimmed = try JSONSerialization.data(withJSONObject: object)
         let archive = try BackupService.archive(from: trimmed)
         XCTAssertNil(archive.profiles[0].setLog)
-        XCTAssertNil(archive.profiles[0].deloads)
+        XCTAssertNil(archive.profiles[0].skipped)
         XCTAssertNil(archive.profiles[0].keepScreenOn)
     }
 
