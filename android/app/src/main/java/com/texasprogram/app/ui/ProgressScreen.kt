@@ -69,6 +69,15 @@ fun ProgressScreen(profile: ProgramProfile, contentPadding: PaddingValues) {
             }
         }
 
+        item(key = "streak") {
+            val streak = profile.weekStreak
+            StreakCard(streak.first, streak.second, Modifier.appearIn(1))
+        }
+
+        item(key = "tonnage") {
+            TonnageCard(profile.weeklyTonnage, Modifier.appearIn(1))
+        }
+
         item(key = "chart") {
             ProgressChartView(profile.completionLog, Modifier.appearIn(1))
         }

@@ -253,8 +253,8 @@ final class ProgramProfile {
     var planEdits: [PlanEdit] = []
     /// Что реально сделано в подходе: ключ «деньПлана|упражнение|номерПодхода».
     var setLog: [String: SetEntry] = [:]
-    /// Откаты после несданных весов.
-    var deloads: [DeloadEvent] = []
+    /// Пропущенные тренировки.
+    var skipped: [SkippedWorkout] = []
     /// Не гасить экран, пока открыта тренировка.
     var keepScreenOn: Bool = true
     /// Какой проход программы идёт. Первый цикл ключи не меняет.
@@ -347,10 +347,10 @@ final class ProgramProfile {
 
     /// План программы с откатами и пользовательскими правками.
     ///
-    /// Порядок обязателен: сначала откаты режут веса расчёта, потом правки
-    /// подставляют свои упражнения. Наоборот откат срезал бы вес, который
-    /// пользователь вписал руками.
-    var workoutPlan: WorkoutPlan { applyEdits(to: applyDeloads(to: generatedPlan)) }
+    /// Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
+    /// правки подставляют свои упражнения. Наоборот задержка стёрла бы то,
+    /// что пользователь вписал руками.
+    var workoutPlan: WorkoutPlan { applyEdits(to: applyHolds(to: generatedPlan)) }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
@@ -471,49 +471,59 @@ final class ProgramProfile {
         return (current, best)
     }
 
-    // MARK: - Откаты после несданного веса
+    // MARK: - Пропущенные тренировки
 
-    /// Откаты, действующие на неделю: срабатывают все, объявленные не позже неё.
-    func activeDeloads(upTo week: Int) -> [DeloadEvent] {
-        deloads.filter { $0.isPeaking == isPeaking && $0.week <= week }
+    func isSkipped(week: Int, day: Int) -> Bool {
+        skipped.contains { $0.week == week && $0.day == day && $0.isPeaking == isPeaking }
     }
 
-    /// Во сколько раз урезаны веса этой недели. Несколько откатов перемножаются.
-    func deloadFactor(week: Int) -> Double {
-        activeDeloads(upTo: week).reduce(1.0) { $0 * $1.factor }
+    /// Сколько недель прогрессия стоит на месте к началу указанной недели.
+    ///
+    /// Считаем пропуски строго раньше этой недели: неделя, которую пропустили,
+    /// должна остаться со своими весами, а замереть должна следующая.
+    func holdCount(before week: Int) -> Int {
+        Set(skipped.filter { $0.isPeaking == isPeaking && $0.holdsProgression && $0.week < week }
+            .map(\.week)).count
     }
 
-    private func applyDeloads(to plan: WorkoutPlan) -> WorkoutPlan {
-        let active = deloads.filter { $0.isPeaking == isPeaking }
-        guard !active.isEmpty else { return plan }
+    /// Какая неделя расчёта достаётся календарной неделе.
+    func effectiveWeek(for week: Int) -> Int {
+        max(week - holdCount(before: week), 1)
+    }
+
+    /// Задержка прогрессии: неделя берёт веса более ранней.
+    ///
+    /// Веса не пересчитываем формулой — подставляем упражнения нужной недели
+    /// целиком. Так арифметика остаётся в одном месте, в самом калькуляторе.
+    private func applyHolds(to plan: WorkoutPlan) -> WorkoutPlan {
+        guard skipped.contains(where: { $0.isPeaking == isPeaking && $0.holdsProgression }) else { return plan }
+        let byNumber = Dictionary(uniqueKeysWithValues: plan.weeks.map { ($0.number, $0) })
         return WorkoutPlan(weeks: plan.weeks.map { week in
-            let factor = deloadFactor(week: week.number)
-            guard factor < 1 else { return week }
-            return WorkoutWeekPlan(id: week.id, number: week.number, days: week.days.map { day in
-                WorkoutDayPlan(id: day.id, number: day.number, title: day.title, exercises: day.exercises.map { exercise in
-                    // Режем только конкретные килограммы: RPE и тест 1ПМ процентам не подчиняются.
-                    guard case .kilograms(let value) = exercise.load else { return exercise }
-                    return ExercisePrescription(
-                        id: exercise.id,
-                        name: exercise.name,
-                        sets: exercise.sets,
-                        reps: exercise.reps,
-                        load: .kilograms(ProgramCalculator.roundToPlate(value * factor)),
-                        isOptional: exercise.isOptional,
-                        benchSession: exercise.benchSession
-                    )
-                })
+            let source = effectiveWeek(for: week.number)
+            guard source != week.number, let donor = byNumber[source] else { return week }
+            // Номер и идентификаторы дней остаются своими: по ним считаются отметки.
+            return WorkoutWeekPlan(id: week.id, number: week.number, days: zip(week.days, donor.days).map { own, borrowed in
+                WorkoutDayPlan(id: own.id, number: own.number, title: own.title, exercises: borrowed.exercises)
             })
         }, isPeaking: plan.isPeaking)
     }
 
-    /// «Не взял вес»: с этой недели расчёт идёт от сниженных процентов.
-    func addDeload(fromWeek week: Int, percent: Double, now: Date = Date()) {
-        deloads.append(DeloadEvent(week: week, percent: percent, isPeaking: isPeaking, date: now))
+    /// «Не пришёл на тренировку». Пропуск не отмечает день выполненным —
+    /// тренировка остаётся в расписании, её ещё можно закрыть.
+    func markSkipped(week: Int, day: Int, holdsProgression: Bool, now: Date = Date()) {
+        guard !isSkipped(week: week, day: day) else { return }
+        skipped.append(SkippedWorkout(
+            week: week, day: day, isPeaking: isPeaking, date: now, holdsProgression: holdsProgression
+        ))
     }
 
-    func removeDeload(_ event: DeloadEvent) {
-        deloads.removeAll { $0.id == event.id }
+    func removeSkip(_ item: SkippedWorkout) {
+        skipped.removeAll { $0.id == item.id }
+    }
+
+    /// Пропуски текущего пространства имён — их показывают настройки.
+    var activeSkips: [SkippedWorkout] {
+        skipped.filter { $0.isPeaking == isPeaking }.sorted { ($0.week, $0.day) < ($1.week, $1.day) }
     }
 
     // MARK: - Фактически выполненные подходы
@@ -738,6 +748,8 @@ final class ProgramProfile {
             }
         }
         syncSets(week: week, day: day, filled: done)
+        // Возместил пропущенное — задержка снимается сама.
+        if done { skipped.removeAll { $0.week == week && $0.day == day && $0.isPeaking == isPeaking } }
         if done {
             lastCompletionDate = now
             recordCompletion(week: week, day: day, now: now)

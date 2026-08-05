@@ -147,7 +147,7 @@ struct TodayView: View {
                         .padding(.top, 4)
                         .appearIn(exercises.count + 5)
 
-                        DeloadButton(profile: profile, week: focus.week)
+                        SkipButton(profile: profile, week: focus.week, day: focus.day.number)
                             .padding(.top, 2)
                             .appearIn(exercises.count + 6)
                     } else {
@@ -618,7 +618,7 @@ struct DayDetailView: View {
                 .padding(.top, 4)
                 .appearIn(exercises.count + 1)
 
-                DeloadButton(profile: profile, week: week)
+                SkipButton(profile: profile, week: week, day: day.number)
                     .padding(.top, 2)
                     .appearIn(exercises.count + 2)
             }
@@ -782,45 +782,58 @@ struct CompleteButton: View {
     }
 }
 
-// MARK: - Откат после несданного веса
+// MARK: - Пропуск тренировки
 
-/// «Не взял вес» — техасский метод на этот случай предписывает сбросить проценты
-/// и пройти участок заново. Без этой кнопки приложение делает вид, что провалов
-/// не бывает: невыполненный день выглядит как просто пропущенный.
-struct DeloadButton: View {
+/// «Не пришёл на тренировку».
+///
+/// Пропуск сам по себе расписание не ломает — невыполненное едет вперёд. Ломает
+/// то, что веса растут по календарю: после перерыва штанга тяжелее, хотя стимула
+/// не было. Поэтому пропуск умеет задержать прогрессию до возмещения.
+struct SkipButton: View {
     @Bindable var profile: ProgramProfile
     let week: Int
+    let day: Int
     @State private var asking = false
 
-    private var active: [DeloadEvent] { profile.activeDeloads(upTo: week) }
+    private var held: Int { profile.holdCount(before: week + 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button {
-                asking = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.down.right.circle")
-                    Text("Не взял вес")
+            if profile.isSkipped(week: week, day: day) {
+                Label("Тренировка отмечена пропущенной", systemImage: "calendar.badge.exclamationmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.warning)
+            } else {
+                Button {
+                    asking = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "calendar.badge.minus")
+                        Text("Не пришёл на тренировку")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.warning)
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.warning)
+                .buttonStyle(.pressable)
             }
-            .buttonStyle(.pressable)
 
-            if !active.isEmpty {
-                Text("Веса урезаны: " + active.map(\.title).joined(separator: ", "))
+            if held > 0 {
+                Text("Прогрессия задержана на \(held) нед.: веса не растут, пока не закроешь пропущенное.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .confirmationDialog("Сбросить веса с недели \(week)?", isPresented: $asking, titleVisibility: .visible) {
-            Button("Минус 5 %") { profile.addDeload(fromWeek: week, percent: 5) }
-            Button("Минус 10 %") { profile.addDeload(fromWeek: week, percent: 10) }
+        .confirmationDialog("Пропустил эту тренировку?", isPresented: $asking, titleVisibility: .visible) {
+            Button("Пропустить и задержать веса") {
+                profile.markSkipped(week: week, day: day, holdsProgression: true)
+            }
+            Button("Просто пропустить") {
+                profile.markSkipped(week: week, day: day, holdsProgression: false)
+            }
             Button("Отмена", role: .cancel) {}
         } message: {
-            Text("Расчёт этой и следующих недель пойдёт от сниженного веса. Максимумы в настройках останутся прежними, откат можно отменить.")
+            Text("Тренировка останется в расписании, её можно закрыть позже. С задержкой следующие недели повторят текущие веса — вернёшься к той же штанге, а не к более тяжёлой.")
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -79,6 +80,21 @@ fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier =
             interactionSource = interaction,
             indication = null,
             enabled = enabled,
+            onClick = onClick
+        )
+}
+
+/// Тап и долгое нажатие с той же анимацией. Отдельная функция нужна потому,
+/// что `clickable` и `combinedClickable` — разные модификаторы.
+fun Modifier.combinedPressable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier = composed {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.snappy(), label = "press")
+    graphicsLayer { scaleX = scale; scaleY = scale }
+        .combinedClickable(
+            interactionSource = interaction,
+            indication = null,
+            onLongClick = onLongClick,
             onClick = onClick
         )
 }

@@ -206,6 +206,8 @@ fun DayDetailScreen(
     onToggleSet: (com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onOpenBench: ((Int) -> Unit)?,
     onCustomize: () -> Unit,
+    onHoldSet: (com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
+    onUpdateProfile: (com.texasprogram.app.model.ProgramProfile) -> Unit,
     contentPadding: PaddingValues
 ) {
     // У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
@@ -254,10 +256,16 @@ fun DayDetailScreen(
                 modifier = Modifier.appearIn(index),
                 onOpenBench = onOpenBench,
                 sets = SetTracker(
+                    onHold = { dot -> onHoldSet(exercise, dot) },
+                    logged = profile.loggedSets(week, day.number, exercise),
                     done = profile.completedSets(week, day.number, exercise)
                 ) { dot -> onToggleSet(exercise, dot) }
             )
         }
+        item(key = "skip") {
+            SkipCard(profile, week, day.number, Modifier.padding(top = 4.dp), onUpdateProfile)
+        }
+
         item(key = "complete") {
             CompleteButton(profile.isCompleted(week, day.number), Modifier.padding(top = 4.dp)) {
                 onToggleDay(week, day.number)

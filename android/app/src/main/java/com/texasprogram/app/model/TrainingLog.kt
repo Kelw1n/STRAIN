@@ -1,15 +1,19 @@
-import Foundation
+package com.texasprogram.app.model
+
+import kotlinx.serialization.Serializable
+import java.util.UUID
 
 /// Фактически выполненный подход: сколько повторов и с каким весом.
 ///
 /// План говорит, что делать, а это — что получилось. Одно другое не заменяет:
 /// без факта график показывает расчёт, а не тренировки.
-struct SetEntry: Codable, Equatable, Hashable, Sendable {
-    var reps: Int
-    var weight: Double
-
+@Serializable
+data class SetEntry(
+    val reps: Int,
+    val weight: Double
+) {
     /// Тоннаж подхода — повторы на вес.
-    var tonnage: Double { Double(reps) * weight }
+    val tonnage: Double get() = reps * weight
 }
 
 /// Пропущенная тренировка.
@@ -17,42 +21,49 @@ struct SetEntry: Codable, Equatable, Hashable, Sendable {
 /// Пропуск сам по себе расписание не ломает — невыполненное просто едет вперёд.
 /// Ломает другое: веса растут по календарю, и после перерыва штанга оказывается
 /// тяжелее, хотя стимула не было. Поэтому пропуск умеет задержать прогрессию.
-struct SkippedWorkout: Codable, Equatable, Hashable, Identifiable, Sendable {
-    var id: String = UUID().uuidString
-    var week: Int
-    var day: Int
+@Serializable
+data class SkippedWorkout(
+    val id: String = UUID.randomUUID().toString(),
+    val week: Int,
+    val day: Int,
     /// Пикирование считает недели с единицы — его пропуски хранятся отдельно.
-    var isPeaking: Bool
-    var date: Date
+    val isPeaking: Boolean = false,
+    val epochDay: Long,
     /// Держит ли пропуск прогрессию: неделя повторяет веса предыдущей,
     /// пока пропущенное не закрыто.
-    var holdsProgression: Bool
-
-    var title: String { "Неделя \(week), день \(day)" }
+    val holdsProgression: Boolean
+) {
+    val title: String get() = "Неделя $week, день $day"
 }
 
 /// Тоннаж одной недели: сумма повторов на вес по всем записанным подходам.
-struct WeeklyTonnage: Identifiable, Equatable, Sendable {
-    let week: Int
-    let total: Double
-    let setCount: Int
-
-    var id: Int { week }
-}
+data class WeeklyTonnage(
+    val week: Int,
+    val total: Double,
+    val setCount: Int
+)
 
 /// Разбор ключа отметки подхода: «префикс + неделя-день|упражнение|номер».
 ///
 /// Ключи собирались как строки задолго до тоннажа; разбирать их обратно надёжнее,
 /// чем держать рядом второй индекс, который может разъехаться с первым.
-enum SetKeyParts {
-    static func dayKey(from key: String) -> String? {
-        key.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init)
-    }
+object SetKeyParts {
+    fun dayKey(key: String): String = key.substringBefore('|')
 
     /// Номер недели из ключа дня. Префикс задаёт цикл и пиковый режим,
     /// поэтому чужие ключи сюда не попадают.
-    static func week(fromDayKey day: String, prefix: String) -> Int? {
-        guard day.hasPrefix(prefix) else { return nil }
-        return day.dropFirst(prefix.count).split(separator: "-").first.flatMap { Int($0) }
+    fun week(dayKey: String, prefix: String): Int? {
+        if (!dayKey.startsWith(prefix)) return null
+        return dayKey.removePrefix(prefix).substringBefore('-').toIntOrNull()
     }
+}
+
+/// «87.5» вместо «87.50» — для полей ввода, куда «кг» подставлять нельзя.
+fun formatPlain(value: Double): String = formatWeight(value)
+
+/// Тоннаж: до тонны — в килограммах, дальше — в тоннах с одним знаком.
+fun formatTonnage(value: Double): String {
+    if (value < 1000) return "${Math.round(value)} кг"
+    val tons = Math.round(value / 100.0) / 10.0
+    return "${tons.toString().replace('.', ',')} т"
 }

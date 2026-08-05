@@ -270,9 +270,12 @@ final class ProgramCalculatorTests: XCTestCase {
 
     func testEditedDayCanStillBeCompletedBySets() {
         let profile = ProgramProfile(upperLowerInput: .demo)
+        // Добавляем в тот день, который сейчас в фокусе: иначе тест зависел бы
+        // от сегодняшней даты — в середине недели фокус указывает на другой день.
+        let target = profile.schedule.focus!
         profile.addExercise(name: "Пресс", sets: 2, reps: "15",
                             kilograms: nil, loadText: nil,
-                            week: 1, day: 1, scope: .everyWeek)
+                            week: target.week, day: target.day.number, scope: .everyWeek)
         let workout = profile.schedule.focus!
         let list = profile.exercises(for: workout)
         XCTAssertTrue(list.contains { $0.name == "Пресс" })

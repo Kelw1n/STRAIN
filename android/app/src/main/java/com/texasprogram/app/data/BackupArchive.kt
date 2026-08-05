@@ -1,7 +1,11 @@
 package com.texasprogram.app.data
 
 import com.texasprogram.app.model.CompletionRecord
+import com.texasprogram.app.model.CustomProgram
+import com.texasprogram.app.model.SkippedWorkout
 import com.texasprogram.app.model.PlanEdit
+import com.texasprogram.app.model.SetEntry
+import com.texasprogram.app.service.FullBodyLevel
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.ScheduleMode
 import com.texasprogram.app.model.TrainingLevel
@@ -42,7 +46,15 @@ data class ProfileSnapshot(
     val completionLog: List<CompletionSnapshot> = emptyList(),
     /// Свои упражнения и правки дней. Значение по умолчанию нужно для копий,
     /// снятых до появления правок, и для файлов со старых версий iOS.
-    val planEdits: List<PlanEdit> = emptyList()
+    val planEdits: List<PlanEdit> = emptyList(),
+    /// Факт подходов, откаты, цикл и своя программа. Значения по умолчанию нужны
+    /// для копий, снятых до появления этих полей, и для файлов со старых версий.
+    val setLog: Map<String, SetEntry> = emptyMap(),
+    val skipped: List<SkippedWorkout> = emptyList(),
+    val keepScreenOn: Boolean = true,
+    val cycleNumber: Int = 1,
+    val customProgram: CustomProgram? = null,
+    val fullBodyLevel: String? = null
 )
 
 @Serializable
@@ -81,7 +93,7 @@ object BackupService {
         id = profile.id,
         name = profile.name,
         createdAtEpochDay = profile.createdAtEpochDay,
-        programKind = if (profile.programKind == TrainingProgramKind.TEXAS) "TEXAS" else "UPPER_LOWER",
+        programKind = profile.programKind.name,
         squat5RM = profile.squat5RM,
         bench5RM = profile.bench5RM,
         deadlift5RM = profile.deadlift5RM,
@@ -104,14 +116,23 @@ object BackupService {
         completionLog = profile.completionLog.map {
             CompletionSnapshot(it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift)
         },
-        planEdits = profile.planEdits
+        planEdits = profile.planEdits,
+        setLog = profile.setLog,
+        skipped = profile.skipped,
+        keepScreenOn = profile.keepScreenOn,
+        cycleNumber = profile.cycleNumber,
+        customProgram = profile.customProgram,
+        fullBodyLevel = profile.fullBodyLevel.name
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(
         id = snapshot.id,
         name = snapshot.name,
         createdAtEpochDay = snapshot.createdAtEpochDay,
-        programKind = if (snapshot.programKind == "UPPER_LOWER") TrainingProgramKind.UPPER_LOWER else TrainingProgramKind.TEXAS,
+        // Код строковый и совпадает с iOS. Неизвестное имя — старый файл,
+        // такие всегда были техасом.
+        programKind = TrainingProgramKind.entries.firstOrNull { it.name == snapshot.programKind }
+            ?: TrainingProgramKind.TEXAS,
         squat5RM = snapshot.squat5RM,
         bench5RM = snapshot.bench5RM,
         deadlift5RM = snapshot.deadlift5RM,
@@ -127,6 +148,14 @@ object BackupService {
             CompletionRecord(it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift)
         },
         planEdits = snapshot.planEdits,
+        setLog = snapshot.setLog,
+        skipped = snapshot.skipped,
+        keepScreenOn = snapshot.keepScreenOn,
+        cycleNumber = snapshot.cycleNumber,
+        customProgram = snapshot.customProgram,
+        fullBodyLevel = snapshot.fullBodyLevel
+            ?.let { name -> FullBodyLevel.entries.firstOrNull { it.name == name } }
+            ?: FullBodyLevel.ABOUT_YEAR,
         scheduleWeekdays = snapshot.scheduleWeekdays,
         scheduleMode = if (snapshot.scheduleMode == "QUEUE") ScheduleMode.QUEUE else ScheduleMode.WEEKDAY,
         cycleStartedEpochDay = snapshot.cycleStartedEpochDay,

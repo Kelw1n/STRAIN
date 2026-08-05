@@ -40,27 +40,47 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.texasprogram.app.service.PlateMath
 import com.texasprogram.app.service.RestTimer
 
 // MARK: - Точки подходов
 
 /// Сколько подходов закрыто и что делать по тапу.
-data class SetTracker(val done: Int, val onTap: (Int) -> Unit)
+data class SetTracker(
+    val done: Int,
+    /// Долгий тап по точке: записать, что реально получилось.
+    val onHold: ((Int) -> Unit)? = null,
+    /// Номера подходов, у которых факт уже записан.
+    val logged: Set<Int> = emptySet(),
+    val onTap: (Int) -> Unit
+)
 
 @Composable
 fun SetDotsView(total: Int, tracker: SetTracker, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         for (index in 0 until total) {
             val filled = index < tracker.done
+            // Записанный факт помечаем ободком: видно, где цифры есть,
+            // а где точка закрыта на глазок.
+            val hasEntry = tracker.logged.contains(index)
             Box(
                 Modifier
                     .padding(end = 8.dp)
                     .size(22.dp)
                     .clip(CircleShape)
                     .background(if (filled) Theme.accentGradient else SolidColor(Color.White.copy(alpha = 0.10f)))
-                    .border(1.dp, if (filled) Color.Transparent else Theme.accent.copy(alpha = 0.28f), CircleShape)
-                    .pressable { tracker.onTap(index) },
+                    .border(
+                        if (hasEntry) 2.dp else 1.dp,
+                        when {
+                            hasEntry -> Theme.warning
+                            filled -> Color.Transparent
+                            else -> Theme.accent.copy(alpha = 0.28f)
+                        },
+                        CircleShape
+                    )
+                    .combinedPressable(
+                        onClick = { tracker.onTap(index) },
+                        onLongClick = { tracker.onHold?.invoke(index) }
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (filled) {
@@ -79,83 +99,6 @@ fun SetDotsView(total: Int, tracker: SetTracker, modifier: Modifier = Modifier) 
 }
 
 // MARK: - Блины и разминка
-
-@Composable
-fun LoadHelperView(weight: Double, modifier: Modifier = Modifier) {
-    val plates = remember(weight) { PlateMath.perSideText(weight) }
-    val warmups = remember(weight) { PlateMath.warmups(weight) }
-    if (plates == null && warmups.isEmpty()) return
-
-    var expanded by remember { mutableStateOf(false) }
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f, Motion.snappy(), label = "helper")
-
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-            Modifier.pressable { expanded = !expanded },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                if (expanded) "Скрыть разбор" else "Блины и разминка",
-                color = Theme.accent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Icon(
-                Icons.Filled.ExpandMore,
-                contentDescription = null,
-                tint = Theme.accent,
-                modifier = Modifier.size(14.dp).graphicsLayer { rotationZ = rotation }
-            )
-        }
-
-        AnimatedVisibility(
-            visible = expanded,
-            enter = fadeIn(Motion.fade()) + expandVertically(Motion.card()),
-            exit = fadeOut(Motion.fade(160)) + shrinkVertically(Motion.card())
-        ) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.04f))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (plates != null) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("НА СТОРОНУ", color = Theme.textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                        GradientText(plates, fontSize = 15.sp, weight = FontWeight.Bold)
-                        Text("гриф ${PlateMath.BAR_WEIGHT.toInt()} кг", color = Theme.textTertiary, fontSize = 10.sp)
-                    }
-                }
-                if (warmups.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("РАЗМИНКА", color = Theme.textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                        warmups.forEach { set ->
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "${set.weightText} кг",
-                                    color = Theme.textPrimary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.width(62.dp)
-                                )
-                                Text("× ${set.reps}", color = Theme.textSecondary, fontSize = 12.sp)
-                                Spacer(Modifier.weight(1f))
-                                PlateMath.perSideText(set.weight)?.let {
-                                    Text(it, color = Theme.textTertiary, fontSize = 10.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Таймер отдыха
 
 @Composable
 fun RestTimerLauncher(

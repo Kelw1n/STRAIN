@@ -13,8 +13,8 @@ android {
         applicationId = "com.texasprogram.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.8.0"
+        versionCode = 15
+        versionName = "2.1.0"
     }
 
     buildTypes {
@@ -31,6 +31,9 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        // combinedClickable из Compose Foundation помечен экспериментальным.
+        // Разрешаем его один раз здесь, чтобы не рассыпать аннотации по файлам.
+        freeCompilerArgs += "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
     }
 
     buildFeatures {

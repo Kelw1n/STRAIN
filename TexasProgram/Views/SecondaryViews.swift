@@ -492,17 +492,18 @@ struct SettingsView: View {
                     Text("Пока открыта тренировка, экран не уходит в сон. Телефон на лавке между подходами перестанет тухнуть.")
                 }
 
-                if !profile.deloads.isEmpty {
+                if !profile.activeSkips.isEmpty {
                     Section {
-                        ForEach(profile.deloads) { event in
+                        ForEach(profile.activeSkips) { item in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(event.title)
-                                    Text(RuDate.dayMonth(event.date)).font(.caption).foregroundStyle(.secondary)
+                                    Text(item.title)
+                                    Text(item.holdsProgression ? "веса задержаны" : "без задержки")
+                                        .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 Button(role: .destructive) {
-                                    profile.removeDeload(event)
+                                    profile.removeSkip(item)
                                 } label: {
                                     Image(systemName: "arrow.uturn.backward")
                                 }
@@ -510,9 +511,9 @@ struct SettingsView: View {
                             }
                         }
                     } header: {
-                        Text("Откаты")
+                        Text("Пропущено")
                     } footer: {
-                        Text("Веса расчёта урезаны с указанной недели. Отмена вернёт исходные — максимумы при откате не менялись.")
+                        Text("Пока пропуск с задержкой не закрыт, веса следующих недель стоят на месте. Отметишь тренировку — задержка снимется сама.")
                     }
                 }
 

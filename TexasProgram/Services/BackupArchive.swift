@@ -37,7 +37,7 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     /// Фактически выполненные подходы и откаты. Тоже необязательные: в копиях,
     /// снятых раньше, этих полей нет.
     var setLog: [String: SetEntry]?
-    var deloads: [DeloadEvent]?
+    var skipped: [SkippedWorkout]?
     var keepScreenOn: Bool?
     /// Номер цикла и своя программа. Необязательные — в старых копиях их нет.
     var cycleNumber: Int?
@@ -130,7 +130,7 @@ enum BackupService {
             },
             planEdits: profile.planEdits,
             setLog: profile.setLog,
-            deloads: profile.deloads,
+            skipped: profile.skipped,
             keepScreenOn: profile.keepScreenOn,
             cycleNumber: profile.cycleNumber,
             customProgram: profile.customProgram,
@@ -194,7 +194,7 @@ enum BackupService {
         }
         result.planEdits = snapshot.planEdits ?? []
         result.setLog = snapshot.setLog ?? [:]
-        result.deloads = snapshot.deloads ?? []
+        result.skipped = snapshot.skipped ?? []
         result.keepScreenOn = snapshot.keepScreenOn ?? true
         result.cycleNumber = snapshot.cycleNumber ?? 1
         result.customProgram = snapshot.customProgram
