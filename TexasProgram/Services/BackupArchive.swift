@@ -43,6 +43,7 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var cycleNumber: Int?
     var customProgram: CustomProgram?
     var fullBodyLevel: String?
+    var euthanasiaInput: EuthanasiaInput?
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -134,7 +135,8 @@ enum BackupService {
             keepScreenOn: profile.keepScreenOn,
             cycleNumber: profile.cycleNumber,
             customProgram: profile.customProgram,
-            fullBodyLevel: profile.fullBodyLevelRaw
+            fullBodyLevel: profile.fullBodyLevelRaw,
+            euthanasiaInput: profile.euthanasiaInput
         )
     }
 
@@ -199,6 +201,7 @@ enum BackupService {
         result.cycleNumber = snapshot.cycleNumber ?? 1
         result.customProgram = snapshot.customProgram
         result.fullBodyLevelRaw = snapshot.fullBodyLevel ?? FullBodyLevel.aboutYear.rawValue
+        result.euthanasiaInput = snapshot.euthanasiaInput
         return result
     }
 

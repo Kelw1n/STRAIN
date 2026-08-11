@@ -5,6 +5,7 @@ import com.texasprogram.app.model.CustomProgram
 import com.texasprogram.app.model.SkippedWorkout
 import com.texasprogram.app.model.PlanEdit
 import com.texasprogram.app.model.SetEntry
+import com.texasprogram.app.service.EuthanasiaInput
 import com.texasprogram.app.service.FullBodyLevel
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.ScheduleMode
@@ -54,7 +55,8 @@ data class ProfileSnapshot(
     val keepScreenOn: Boolean = true,
     val cycleNumber: Int = 1,
     val customProgram: CustomProgram? = null,
-    val fullBodyLevel: String? = null
+    val fullBodyLevel: String? = null,
+    val euthanasiaInput: EuthanasiaInput? = null
 )
 
 @Serializable
@@ -122,7 +124,8 @@ object BackupService {
         keepScreenOn = profile.keepScreenOn,
         cycleNumber = profile.cycleNumber,
         customProgram = profile.customProgram,
-        fullBodyLevel = profile.fullBodyLevel.name
+        fullBodyLevel = profile.fullBodyLevel.name,
+        euthanasiaInput = profile.euthanasiaInput
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(
@@ -156,6 +159,7 @@ object BackupService {
         fullBodyLevel = snapshot.fullBodyLevel
             ?.let { name -> FullBodyLevel.entries.firstOrNull { it.name == name } }
             ?: FullBodyLevel.ABOUT_YEAR,
+        euthanasiaInput = snapshot.euthanasiaInput,
         scheduleWeekdays = snapshot.scheduleWeekdays,
         scheduleMode = if (snapshot.scheduleMode == "QUEUE") ScheduleMode.QUEUE else ScheduleMode.WEEKDAY,
         cycleStartedEpochDay = snapshot.cycleStartedEpochDay,

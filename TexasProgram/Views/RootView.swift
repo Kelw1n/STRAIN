@@ -75,6 +75,14 @@ struct ProgramOnboardingView: View {
                     onSave(ProgramProfile(fullBodyInput: input, level: level))
                 }
                 .transition(forward)
+            case .proTexas:
+                // Продвинутый техас считается от того же 5ПМ, что и классический,
+                // поэтому экран ввода тот же.
+                SetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(proTexasInput: $0)) }
+                    .transition(forward)
+            case .euthanasia:
+                EuthanasiaSetupView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(euthanasia: $0)) }
+                    .transition(forward)
             case .custom:
                 CustomProgramBuilderView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(customProgram: $0)) }
                     .transition(forward)
@@ -164,8 +172,9 @@ struct ProgramOptionCard: View {
 
     private var gradient: LinearGradient {
         switch kind {
-        case .texas: return Theme.accentGradient
+        case .texas, .proTexas: return Theme.accentGradient
         case .upperLower, .fullBody: return Theme.recordGradient
+        case .euthanasia: return LinearGradient(colors: [Theme.warning, Theme.record], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .custom: return Theme.deepGradient
         }
     }
@@ -175,6 +184,8 @@ struct ProgramOptionCard: View {
         case .texas: return "chart.line.uptrend.xyaxis"
         case .upperLower: return "square.split.2x1.fill"
         case .fullBody: return "figure.strengthtraining.traditional"
+        case .proTexas: return "chart.xyaxis.line"
+        case .euthanasia: return "timer"
         case .custom: return "slider.horizontal.3"
         }
     }
@@ -198,8 +209,11 @@ struct ProgramOptionCard: View {
                     if kind == .upperLower {
                         TagBadge(text: "Раздел «Жим 14»", systemImage: "waveform.path.ecg", gradient: Theme.recordGradient)
                             .padding(.top, 2)
-                    } else if kind == .fullBody {
+                    } else if kind == .fullBody || kind == .proTexas {
                         TagBadge(text: "Расчёт по 5ПМ", systemImage: "chart.line.uptrend.xyaxis", gradient: Theme.accentGradient)
+                            .padding(.top, 2)
+                    } else if kind == .euthanasia {
+                        TagBadge(text: "Нужны два теста", systemImage: "timer", gradient: Theme.recordGradient)
                             .padding(.top, 2)
                     }
                 }

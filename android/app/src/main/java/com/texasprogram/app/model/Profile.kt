@@ -1,7 +1,10 @@
 package com.texasprogram.app.model
 
 import com.texasprogram.app.service.FullBodyCalculator
+import com.texasprogram.app.service.EuthanasiaCalculator
+import com.texasprogram.app.service.EuthanasiaInput
 import com.texasprogram.app.service.FullBodyLevel
+import com.texasprogram.app.service.ProTexasCalculator
 import com.texasprogram.app.service.ProgramCalculator
 import com.texasprogram.app.service.RuDate
 import com.texasprogram.app.service.ScheduledWorkout
@@ -80,7 +83,9 @@ data class ProgramProfile(
     /// Своя программа, если выбран этот вид. У остальных не используется.
     val customProgram: CustomProgram? = null,
     /// Стаж для фулбади: от него зависит схема прогрессии.
-    val fullBodyLevel: FullBodyLevel = FullBodyLevel.ABOUT_YEAR
+    val fullBodyLevel: FullBodyLevel = FullBodyLevel.ABOUT_YEAR,
+    /// Вход «Эвтаназии»: три движения с тестами. У остальных программ не используется.
+    val euthanasiaInput: EuthanasiaInput? = null
 ) {
 
     // MARK: - Входные данные и план
@@ -100,7 +105,7 @@ data class ProgramProfile(
     /// пока не поменяются максимумы.
     val workoutPlan: WorkoutPlan
         get() {
-            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel)
+            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput)
             // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
             // правки подставляют свои упражнения. Наоборот задержка стёрла бы
             // то, что пользователь вписал руками.
@@ -116,6 +121,9 @@ data class ProgramProfile(
                 else ProgramCalculator.generate(input)
             TrainingProgramKind.UPPER_LOWER -> UpperLowerCalculator.generate(upperLowerInput)
             TrainingProgramKind.FULL_BODY -> FullBodyCalculator.generate(input, fullBodyLevel)
+            TrainingProgramKind.PRO_TEXAS -> ProTexasCalculator.generate(input)
+            TrainingProgramKind.EUTHANASIA ->
+                euthanasiaInput?.let { EuthanasiaCalculator.generate(it) } ?: WorkoutPlan(emptyList(), false)
             TrainingProgramKind.CUSTOM -> customProgram?.plan ?: WorkoutPlan(emptyList(), false)
         }
 
@@ -663,7 +671,8 @@ data class ProgramProfile(
 
     val trainingDayCount: Int
         get() = when (programKind) {
-            TrainingProgramKind.TEXAS, TrainingProgramKind.FULL_BODY -> 3
+            TrainingProgramKind.TEXAS, TrainingProgramKind.FULL_BODY,
+            TrainingProgramKind.PRO_TEXAS, TrainingProgramKind.EUTHANASIA -> 3
             TrainingProgramKind.UPPER_LOWER -> 4
             TrainingProgramKind.CUSTOM -> maxOf(customProgram?.days?.size ?: 3, 1)
         }
@@ -791,6 +800,20 @@ data class ProgramProfile(
         /// Фулбади считается от 5ПМ, как и техас: прогрессия там та же линейная.
         fun fullBody(input: ProgramInput, level: FullBodyLevel, name: String = "Профиль") =
             texas(input, name).copy(programKind = TrainingProgramKind.FULL_BODY, fullBodyLevel = level)
+
+        /// Продвинутый техас считается от того же 5ПМ, что и классический.
+        fun proTexas(input: ProgramInput, name: String = "Профиль") =
+            texas(input, name).copy(programKind = TrainingProgramKind.PRO_TEXAS)
+
+        /// «Эвтаназия»: максимумы каждого движения лежат внутри её собственного входа.
+        fun euthanasia(input: EuthanasiaInput, name: String = "Профиль") = ProgramProfile(
+            name = name,
+            programKind = TrainingProgramKind.EUTHANASIA,
+            squat5RM = input.squat.oneRepMax,
+            bench5RM = input.press.oneRepMax,
+            deadlift5RM = input.pull.oneRepMax,
+            euthanasiaInput = input
+        )
 
         /// Своя программа: максимумы ей не нужны, веса заданы прямо в упражнениях.
         fun custom(program: CustomProgram) = ProgramProfile(

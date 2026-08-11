@@ -6,6 +6,8 @@ enum class TrainingProgramKind(val title: String) {
     TEXAS("Техасский метод"),
     UPPER_LOWER("Верх / Низ"),
     FULL_BODY("Фулбади"),
+    PRO_TEXAS("Продвинутый техас"),
+    EUTHANASIA("Эвтаназия худобы"),
     CUSTOM("Своя программа");
 
     val subtitle: String
@@ -13,18 +15,20 @@ enum class TrainingProgramKind(val title: String) {
             TEXAS -> "12 недель · 3 тренировки в неделю · расчёт по 5ПМ"
             UPPER_LOWER -> "7 недель · 4 тренировки в неделю · расчёт по 1ПМ"
             FULL_BODY -> "12 недель · 3 тренировки в неделю · всё тело каждый раз"
+            PRO_TEXAS -> "20 недель · 10 двухнедельных блоков · расчёт по 5ПМ"
+            EUTHANASIA -> "8 недель · 3 тренировки · прогрессия по плотности"
             CUSTOM -> "Своя схема, свои упражнения, свои недели"
         }
 
     /// От какого максимума считается программа.
-    val usesFiveRepMax: Boolean get() = this == TEXAS || this == FULL_BODY
+    val usesFiveRepMax: Boolean get() = this == TEXAS || this == FULL_BODY || this == PRO_TEXAS
 
     /// Идёт ли по программе волна «Жим 14».
     val hasBenchWave: Boolean get() = this == UPPER_LOWER
 
     companion object {
         /// Готовые программы предлагаются при первом запуске, своя собирается отдельно.
-        val ready = listOf(TEXAS, UPPER_LOWER, FULL_BODY)
+        val ready = listOf(TEXAS, UPPER_LOWER, FULL_BODY, PRO_TEXAS, EUTHANASIA)
     }
 }
 

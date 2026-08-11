@@ -5,24 +5,28 @@ enum TrainingProgramKind: String, CaseIterable, Codable, Identifiable, Sendable 
     case texas = "Техасский метод"
     case upperLower = "Верх / Низ"
     case fullBody = "Фулбади"
+    case proTexas = "Продвинутый техас"
+    case euthanasia = "Эвтаназия худобы"
     case custom = "Своя программа"
 
     var id: String { rawValue }
 
     /// Готовые программы предлагаются при первом запуске, своя собирается отдельно.
-    static var ready: [TrainingProgramKind] { [.texas, .upperLower, .fullBody] }
+    static var ready: [TrainingProgramKind] { [.texas, .upperLower, .fullBody, .proTexas, .euthanasia] }
 
     var subtitle: String {
         switch self {
         case .texas: return "12 недель · 3 тренировки в неделю · расчёт по 5ПМ"
         case .upperLower: return "7 недель · 4 тренировки в неделю · расчёт по 1ПМ"
         case .fullBody: return "12 недель · 3 тренировки в неделю · всё тело каждый раз"
+        case .proTexas: return "20 недель · 10 двухнедельных блоков · расчёт по 5ПМ"
+        case .euthanasia: return "8 недель · 3 тренировки · прогрессия по плотности"
         case .custom: return "Своя схема, свои упражнения, свои недели"
         }
     }
 
     /// От какого максимума считается программа.
-    var usesFiveRepMax: Bool { self == .texas || self == .fullBody }
+    var usesFiveRepMax: Bool { self == .texas || self == .fullBody || self == .proTexas }
 
     /// Идёт ли по программе волна «Жим 14».
     var hasBenchWave: Bool { self == .upperLower }
@@ -34,6 +38,8 @@ enum TrainingProgramKind: String, CaseIterable, Codable, Identifiable, Sendable 
         case .texas: return "TEXAS"
         case .upperLower: return "UPPER_LOWER"
         case .fullBody: return "FULL_BODY"
+        case .proTexas: return "PRO_TEXAS"
+        case .euthanasia: return "EUTHANASIA"
         case .custom: return "CUSTOM"
         }
     }
@@ -42,6 +48,8 @@ enum TrainingProgramKind: String, CaseIterable, Codable, Identifiable, Sendable 
         switch backupCode {
         case "UPPER_LOWER": self = .upperLower
         case "FULL_BODY": self = .fullBody
+        case "PRO_TEXAS": self = .proTexas
+        case "EUTHANASIA": self = .euthanasia
         case "CUSTOM": self = .custom
         default: self = .texas
         }
@@ -263,6 +271,8 @@ final class ProgramProfile {
     var customProgram: CustomProgram?
     /// Стаж для фулбади: от него зависит схема прогрессии.
     var fullBodyLevelRaw: String = FullBodyLevel.aboutYear.rawValue
+    /// Вход «Эвтаназии»: три движения с тестами. У остальных программ не используется.
+    var euthanasiaInput: EuthanasiaInput?
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -305,6 +315,22 @@ final class ProgramProfile {
         self.init(input: fullBodyInput, name: name)
         programKindRaw = TrainingProgramKind.fullBody.rawValue
         fullBodyLevelRaw = level.rawValue
+    }
+
+    /// Продвинутый техас считается от того же 5ПМ, что и классический.
+    convenience init(proTexasInput: ProgramInput, name: String = "Профиль") {
+        self.init(input: proTexasInput, name: name)
+        programKindRaw = TrainingProgramKind.proTexas.rawValue
+    }
+
+    /// «Эвтаназия»: максимумы каждого движения лежат внутри её собственного входа.
+    convenience init(euthanasia: EuthanasiaInput, name: String = "Профиль") {
+        self.init(input: .demo, name: name)
+        programKindRaw = TrainingProgramKind.euthanasia.rawValue
+        euthanasiaInput = euthanasia
+        squat5RM = euthanasia.squat.oneRepMax
+        bench5RM = euthanasia.press.oneRepMax
+        deadlift5RM = euthanasia.pull.oneRepMax
     }
 
     /// Своя программа: максимумы ей не нужны, веса заданы прямо в упражнениях.
@@ -364,6 +390,10 @@ final class ProgramProfile {
             return UpperLowerCalculator.generate(input: upperLowerInput)
         case .fullBody:
             return FullBodyCalculator.generate(input: input, level: fullBodyLevel)
+        case .proTexas:
+            return ProTexasCalculator.generate(input: input)
+        case .euthanasia:
+            return euthanasiaInput.map(EuthanasiaCalculator.generate) ?? WorkoutPlan(weeks: [], isPeaking: false)
         case .custom:
             return customProgram?.plan ?? WorkoutPlan(weeks: [], isPeaking: false)
         }
@@ -880,7 +910,7 @@ final class ProgramProfile {
 
     var trainingDayCount: Int {
         switch programKind {
-        case .texas, .fullBody: return 3
+        case .texas, .fullBody, .proTexas, .euthanasia: return 3
         case .upperLower: return 4
         case .custom: return max(customProgram?.days.count ?? 3, 1)
         }

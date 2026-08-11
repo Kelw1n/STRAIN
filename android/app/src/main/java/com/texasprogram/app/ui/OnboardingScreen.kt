@@ -86,6 +86,12 @@ fun OnboardingScreen(
             TrainingProgramKind.FULL_BODY -> FullBodySetup(contentPadding, onBack = { selected = null }) { input, level ->
                 onSave(ProgramProfile.fullBody(input, level))
             }
+            TrainingProgramKind.PRO_TEXAS -> TexasSetup(contentPadding, onBack = { selected = null }) {
+                onSave(ProgramProfile.proTexas(it))
+            }
+            TrainingProgramKind.EUTHANASIA -> EuthanasiaSetup(contentPadding, onBack = { selected = null }) {
+                onSave(ProgramProfile.euthanasia(it))
+            }
             TrainingProgramKind.CUSTOM -> CustomProgramBuilder(contentPadding, onBack = { selected = null }) {
                 onSave(ProgramProfile.custom(it))
             }
