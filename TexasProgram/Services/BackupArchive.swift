@@ -44,6 +44,9 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var customProgram: CustomProgram?
     var fullBodyLevel: String?
     var euthanasiaInput: EuthanasiaInput?
+    var autoregulationEnabled: Bool?
+    var liftReports: [LiftReport]?
+    var workoutNotes: [String: String]?
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -136,7 +139,10 @@ enum BackupService {
             cycleNumber: profile.cycleNumber,
             customProgram: profile.customProgram,
             fullBodyLevel: profile.fullBodyLevelRaw,
-            euthanasiaInput: profile.euthanasiaInput
+            euthanasiaInput: profile.euthanasiaInput,
+            autoregulationEnabled: profile.autoregulationEnabled,
+            liftReports: profile.liftReports,
+            workoutNotes: profile.workoutNotes
         )
     }
 
@@ -202,6 +208,9 @@ enum BackupService {
         result.customProgram = snapshot.customProgram
         result.fullBodyLevelRaw = snapshot.fullBodyLevel ?? FullBodyLevel.aboutYear.rawValue
         result.euthanasiaInput = snapshot.euthanasiaInput
+        result.autoregulationEnabled = snapshot.autoregulationEnabled ?? false
+        result.liftReports = snapshot.liftReports ?? []
+        result.workoutNotes = snapshot.workoutNotes ?? [:]
         return result
     }
 

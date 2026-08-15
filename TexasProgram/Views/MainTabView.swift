@@ -147,6 +147,11 @@ struct TodayView: View {
                         .padding(.top, 4)
                         .appearIn(exercises.count + 5)
 
+                        AutoregulationCard(profile: profile, week: focus.week, day: focus.day)
+                            .appearIn(exercises.count + 6)
+                        StallNotice(profile: profile).appearIn(exercises.count + 6)
+                        WorkoutNoteCard(profile: profile, week: focus.week, day: focus.day.number)
+                            .appearIn(exercises.count + 6)
                         SkipButton(profile: profile, week: focus.week, day: focus.day.number)
                             .padding(.top, 2)
                             .appearIn(exercises.count + 6)
@@ -618,6 +623,11 @@ struct DayDetailView: View {
                 .padding(.top, 4)
                 .appearIn(exercises.count + 1)
 
+                AutoregulationCard(profile: profile, week: week, day: currentDay)
+                    .appearIn(exercises.count + 2)
+                StallNotice(profile: profile).appearIn(exercises.count + 2)
+                WorkoutNoteCard(profile: profile, week: week, day: day.number)
+                    .appearIn(exercises.count + 2)
                 SkipButton(profile: profile, week: week, day: day.number)
                     .padding(.top, 2)
                     .appearIn(exercises.count + 2)

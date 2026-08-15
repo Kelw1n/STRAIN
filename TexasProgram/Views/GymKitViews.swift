@@ -90,6 +90,50 @@ struct RestTimerLauncher: View {
                     .buttonStyle(.pressable)
                 }
             }
+            // Кроме трёх заготовок можно набрать своё время: шаг в пятнадцать
+            // секунд достаточно мелкий, чтобы попасть в любую привычку.
+            HStack(spacing: 10) {
+                stepButton("minus") { change(-15) }
+                VStack(spacing: 1) {
+                    Text(timeText).font(.title3.weight(.bold).monospacedDigit())
+                    Text("своё время").font(.caption2).foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                stepButton("plus") { change(15) }
+                Button {
+                    timer.start(TimeInterval(profile.defaultRestSeconds))
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 36)
+                        .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+            }
+
+            // Кроме трёх заготовок можно набрать своё время: шаг в пятнадцать
+            // секунд достаточно мелкий, чтобы попасть в любую привычку.
+            HStack(spacing: 10) {
+                stepButton("minus") { change(-15) }
+                VStack(spacing: 1) {
+                    Text(timeText).font(.title3.weight(.bold).monospacedDigit())
+                    Text("своё время").font(.caption2).foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                stepButton("plus") { change(15) }
+                Button {
+                    timer.start(TimeInterval(profile.defaultRestSeconds))
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 36)
+                        .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+            }
+
             Text("Отмеченный подход запускает отдых сам — выбранной здесь длительности.")
                 .font(.caption2).foregroundStyle(.tertiary)
         }
@@ -98,6 +142,48 @@ struct RestTimerLauncher: View {
     private func label(for seconds: TimeInterval) -> String {
         let minutes = Int(seconds) / 60
         return "\(minutes) мин"
+    }
+
+    private var timeText: String {
+        let total = profile.defaultRestSeconds
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// Меньше пятнадцати секунд отдыхать бессмысленно, больше получаса — уже перерыв.
+    private func change(_ delta: Int) {
+        profile.defaultRestSeconds = min(max(profile.defaultRestSeconds + delta, 15), 1800)
+    }
+
+    private func stepButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 40, height: 36)
+                .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+    }
+
+    private var timeText: String {
+        let total = profile.defaultRestSeconds
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// Меньше пятнадцати секунд отдыхать бессмысленно, больше получаса — уже перерыв.
+    private func change(_ delta: Int) {
+        profile.defaultRestSeconds = min(max(profile.defaultRestSeconds + delta, 15), 1800)
+    }
+
+    private func stepButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 40, height: 36)
+                .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.pressable)
     }
 }
 

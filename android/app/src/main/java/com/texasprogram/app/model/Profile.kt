@@ -85,7 +85,18 @@ data class ProgramProfile(
     /// Стаж для фулбади: от него зависит схема прогрессии.
     val fullBodyLevel: FullBodyLevel = FullBodyLevel.ABOUT_YEAR,
     /// Вход «Эвтаназии»: три движения с тестами. У остальных программ не используется.
-    val euthanasiaInput: EuthanasiaInput? = null
+    val euthanasiaInput: EuthanasiaInput? = null,
+    /// Подстраивать ли веса под то, как прошёл тяжёлый день.
+    /// По умолчанию выключено: классический техас линеен по замыслу.
+    val autoregulationEnabled: Boolean = false,
+    /// Оценки тяжёлых дней по движениям.
+    val liftReports: List<LiftReport> = emptyList(),
+    /// Заметка к тренировке: ключ дня плана.
+    val workoutNotes: Map<String, String> = emptyMap(),
+    /// Последний разбор заметок и его дата: чтобы текст оставался на экране
+    /// после перезапуска и не тратил запрос при каждом открытии.
+    val lastAdvice: String? = null,
+    val lastAdviceEpochDay: Long? = null
 ) {
 
     // MARK: - Входные данные и план
@@ -105,11 +116,11 @@ data class ProgramProfile(
     /// пока не поменяются максимумы.
     val workoutPlan: WorkoutPlan
         get() {
-            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput)
+            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports)
             // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
             // правки подставляют свои упражнения. Наоборот задержка стёрла бы
             // то, что пользователь вписал руками.
-            return PlanCache.resolve(key) { applyEdits(applyHolds(generatedPlan)) }
+            return PlanCache.resolve(key) { applyEdits(applyAutoregulation(applyHolds(generatedPlan))) }
         }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
@@ -188,6 +199,107 @@ data class ProgramProfile(
         if (!key.startsWith(keyPrefix)) return false
         val rest = key.removePrefix(keyPrefix)
         return !rest.contains("peak-") && !rest.startsWith("c")
+    }
+
+    // MARK: - Авторегуляция
+
+    /// Умеет ли программа подстраиваться. Механизм завязан на тяжёлый день,
+    /// поэтому работает там, где он есть: у обоих техасов.
+    val supportsAutoregulation: Boolean
+        get() = programKind == TrainingProgramKind.TEXAS || programKind == TrainingProgramKind.PRO_TEXAS
+
+    private val autoregulationActive: Boolean get() = autoregulationEnabled && supportsAutoregulation
+
+    /// Ключ оценки: то же пространство имён, что у отметок, плюс номер недели.
+    fun reportKey(week: Int): String = keyPrefix + week
+
+    fun report(lift: MainLift, week: Int): LiftReport? =
+        liftReports.firstOrNull { it.key == reportKey(week) && it.lift == lift }
+
+    fun reports(week: Int): List<LiftReport> = liftReports.filter { it.key == reportKey(week) }
+
+    fun setReport(lift: MainLift, week: Int, outcome: LiftOutcome, today: LocalDate = LocalDate.now()): ProgramProfile {
+        val key = reportKey(week)
+        return copy(
+            liftReports = liftReports.filterNot { it.key == key && it.lift == lift } +
+                LiftReport(key, lift, outcome, today.toEpochDay())
+        )
+    }
+
+    fun clearReport(lift: MainLift, week: Int): ProgramProfile {
+        val key = reportKey(week)
+        return copy(liftReports = liftReports.filterNot { it.key == key && it.lift == lift })
+    }
+
+    /// Две неудачи подряд по движению — линейный рост кончился, пора сбрасывать цикл.
+    fun isStalled(lift: MainLift, upTo: Int): Boolean {
+        val recent = (1 until maxOf(upTo, 1)).mapNotNull { report(lift, it) }
+        if (recent.size < 2) return false
+        return recent.takeLast(2).all { it.outcome.isFailure }
+    }
+
+    val stalledLifts: List<MainLift>
+        get() {
+            if (!autoregulationActive) return emptyList()
+            val weeks = generatedPlan.weeks.size + 1
+            return MainLift.entries.filter { isStalled(it, weeks) }
+        }
+
+    /// Вес тяжёлого дня, каким его запланировал расчёт.
+    private fun plannedIntensity(lift: MainLift, week: WorkoutWeekPlan): Double? {
+        val day = week.days.lastOrNull() ?: return null
+        val load = day.exercises.firstOrNull { it.name == lift.title }?.load
+        return (load as? LoadPrescription.Kilograms)?.value
+    }
+
+    /// Вес тяжёлого дня с учётом того, как прошли прошлые недели.
+    ///
+    /// Недели без оценки идут с обычной прибавкой — поэтому включённый
+    /// переключатель сам по себе план не меняет, пока не начнёшь отвечать.
+    fun autoregulatedIntensity(lift: MainLift, week: Int, plan: WorkoutPlan): Double? {
+        val first = plan.weeks.firstOrNull() ?: return null
+        var value = plannedIntensity(lift, first) ?: return null
+        for (earlier in 1 until maxOf(week, 1)) {
+            val outcome = report(lift, earlier)?.outcome
+            value = outcome?.next(value, lift.isUpper) ?: (value + 2.5)
+        }
+        return ProgramCalculator.roundToPlate(value)
+    }
+
+    /// Масштабирует веса недели так, чтобы тяжёлый день попал в нужное число.
+    ///
+    /// Остальные дни считаются процентами от тяжёлого, поэтому достаточно
+    /// умножить их на то же отношение — арифметика остаётся в калькуляторе.
+    private fun applyAutoregulation(plan: WorkoutPlan): WorkoutPlan {
+        if (!autoregulationActive || liftReports.isEmpty()) return plan
+        return plan.copy(weeks = plan.weeks.map { week ->
+            val factors = mutableMapOf<String, Double>()
+            for (lift in MainLift.entries) {
+                val planned = plannedIntensity(lift, week) ?: continue
+                if (planned <= 0) continue
+                val target = autoregulatedIntensity(lift, week.number, plan) ?: continue
+                if (target != planned) factors[lift.title] = target / planned
+            }
+            if (factors.isEmpty()) return@map week
+            week.copy(days = week.days.map { day ->
+                day.copy(exercises = day.exercises.map { exercise ->
+                    val factor = factors[exercise.name]
+                    val load = exercise.load
+                    if (factor == null || load !is LoadPrescription.Kilograms) exercise
+                    else exercise.copy(load = LoadPrescription.Kilograms(ProgramCalculator.roundToPlate(load.value * factor)))
+                })
+            })
+        })
+    }
+
+    // MARK: - Заметки
+
+    fun note(week: Int, day: Int): String = workoutNotes[dayKey(week, day)] ?: ""
+
+    fun setNote(text: String, week: Int, day: Int): ProgramProfile {
+        val key = dayKey(week, day)
+        val trimmed = text.trim()
+        return copy(workoutNotes = if (trimmed.isEmpty()) workoutNotes - key else workoutNotes + (key to trimmed))
     }
 
     // MARK: - Пропущенные тренировки

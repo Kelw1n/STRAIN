@@ -61,6 +61,7 @@ import com.texasprogram.app.model.TrainingLevel
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.model.formatWeight
 import com.texasprogram.app.service.RuDate
+import com.texasprogram.app.service.CoachSecrets
 import com.texasprogram.app.service.UpperLowerCalculator
 
 @Composable
@@ -74,6 +75,10 @@ fun SettingsScreen(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     backupMessage: String?,
+    coachKey: String,
+    coachModel: String,
+    onCoachKey: (String) -> Unit,
+    onCoachModel: (String) -> Unit,
     onClose: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -205,6 +210,36 @@ fun SettingsScreen(
                 SecondaryButton("Начать новый цикл", icon = Icons.Filled.Refresh) { showNewCycle = true }
                 Text(
                     "Программа начнётся заново с новыми максимумами. Отметки прошлого цикла спрячутся, история и графики останутся сквозными.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        if (profile.supportsAutoregulation) {
+            item(key = "autoregulation") {
+                CardView(Modifier.appearIn(5)) {
+                    SectionLabel("Авторегуляция")
+                    SegmentedControl(
+                        options = listOf("Подстраивать веса", "Обычная прибавка"),
+                        selectedIndex = if (profile.autoregulationEnabled) 0 else 1
+                    ) { onUpdate(profile.copy(autoregulationEnabled = it == 0)) }
+                    Text(
+                        "После тяжёлого дня приложение спросит, как прошёл рабочий подход по каждому движению, и посчитает следующую неделю от ответа. Каждое движение идёт своим темпом. Пока не отвечаешь, прибавка обычная — 2,5 кг.",
+                        color = Theme.textTertiary,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        item(key = "coach") {
+            CardView(Modifier.appearIn(5)) {
+                SectionLabel("Разбор тренировок")
+                TextRow(coachKey, "Ключ доступа", onCoachKey)
+                TextRow(coachModel, CoachSecrets.DEFAULT_MODEL, onCoachModel)
+                Text(
+                    "Разбор заметок на вкладке «Прогресс» работает и так — ключ уже внутри приложения. Свой можно вписать сюда, тогда запросы пойдут через него. Вторая строка — название модели, менять её нужно, только если разбор перестал отвечать.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )

@@ -273,6 +273,17 @@ final class ProgramProfile {
     var fullBodyLevelRaw: String = FullBodyLevel.aboutYear.rawValue
     /// Вход «Эвтаназии»: три движения с тестами. У остальных программ не используется.
     var euthanasiaInput: EuthanasiaInput?
+    /// Подстраивать ли веса под то, как прошёл тяжёлый день.
+    /// По умолчанию выключено: классический техас линеен по замыслу.
+    var autoregulationEnabled: Bool = false
+    /// Оценки тяжёлых дней по движениям.
+    var liftReports: [LiftReport] = []
+    /// Заметка к тренировке: ключ дня плана.
+    var workoutNotes: [String: String] = [:]
+    /// Последний разбор заметок и его дата: чтобы текст оставался на экране
+    /// после перезапуска и не тратил запрос при каждом открытии.
+    var lastAdvice: String?
+    var lastAdviceDate: Date?
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -376,7 +387,7 @@ final class ProgramProfile {
     /// Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
     /// правки подставляют свои упражнения. Наоборот задержка стёрла бы то,
     /// что пользователь вписал руками.
-    var workoutPlan: WorkoutPlan { applyEdits(to: applyHolds(to: generatedPlan)) }
+    var workoutPlan: WorkoutPlan { applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan))) }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
@@ -499,6 +510,123 @@ final class ProgramProfile {
             index -= 1
         }
         return (current, best)
+    }
+
+    // MARK: - Авторегуляция
+
+    /// Умеет ли программа подстраиваться. Механизм завязан на тяжёлый день,
+    /// поэтому работает там, где он есть: у обоих техасов.
+    var supportsAutoregulation: Bool {
+        programKind == .texas || programKind == .proTexas
+    }
+
+    private var autoregulationActive: Bool { autoregulationEnabled && supportsAutoregulation }
+
+    /// Ключ оценки: то же пространство имён, что у отметок, плюс номер недели.
+    func reportKey(week: Int) -> String { keyPrefix + "\(week)" }
+
+    func report(lift: MainLift, week: Int) -> LiftReport? {
+        let key = reportKey(week: week)
+        return liftReports.first { $0.key == key && $0.lift == lift }
+    }
+
+    /// Оценки недели по всем движениям.
+    func reports(week: Int) -> [LiftReport] {
+        let key = reportKey(week: week)
+        return liftReports.filter { $0.key == key }
+    }
+
+    func setReport(lift: MainLift, week: Int, outcome: LiftOutcome, now: Date = Date()) {
+        let key = reportKey(week: week)
+        liftReports.removeAll { $0.key == key && $0.lift == lift }
+        liftReports.append(LiftReport(key: key, lift: lift, outcome: outcome, date: now))
+    }
+
+    func clearReport(lift: MainLift, week: Int) {
+        let key = reportKey(week: week)
+        liftReports.removeAll { $0.key == key && $0.lift == lift }
+    }
+
+    /// Две неудачи подряд по движению — линейный рост кончился, пора сбрасывать цикл.
+    func isStalled(_ lift: MainLift, upTo week: Int) -> Bool {
+        let recent = (1..<max(week, 1)).compactMap { report(lift: lift, week: $0) }
+        guard recent.count >= 2 else { return false }
+        return recent.suffix(2).allSatisfy(\.outcome.isFailure)
+    }
+
+    var stalledLifts: [MainLift] {
+        guard autoregulationActive else { return [] }
+        let weeks = generatedPlan.weeks.count + 1
+        return MainLift.allCases.filter { isStalled($0, upTo: weeks) }
+    }
+
+    /// Вес тяжёлого дня, каким его запланировал расчёт.
+    private func plannedIntensity(_ lift: MainLift, week: WorkoutWeekPlan) -> Double? {
+        guard let day = week.days.last else { return nil }
+        guard let exercise = day.exercises.first(where: { $0.name == lift.rawValue }),
+              case .kilograms(let value) = exercise.load else { return nil }
+        return value
+    }
+
+    /// Вес тяжёлого дня с учётом того, как прошли прошлые недели.
+    ///
+    /// Недели без оценки идут с обычной прибавкой — поэтому включённый
+    /// переключатель сам по себе план не меняет, пока не начнёшь отвечать.
+    func autoregulatedIntensity(_ lift: MainLift, week: Int, in plan: WorkoutPlan) -> Double? {
+        guard let first = plan.weeks.first, var value = plannedIntensity(lift, week: first) else { return nil }
+        for earlier in 1..<max(week, 1) {
+            if let outcome = report(lift: lift, week: earlier)?.outcome {
+                value = outcome.next(after: value, isUpper: lift.isUpper)
+            } else {
+                value += 2.5
+            }
+        }
+        return ProgramCalculator.roundToPlate(value)
+    }
+
+    /// Масштабирует веса недели так, чтобы тяжёлый день попал в нужное число.
+    ///
+    /// Остальные дни считаются процентами от тяжёлого, поэтому достаточно
+    /// умножить их на то же отношение — арифметика остаётся в калькуляторе.
+    private func applyAutoregulation(to plan: WorkoutPlan) -> WorkoutPlan {
+        guard autoregulationActive, !liftReports.isEmpty else { return plan }
+        return WorkoutPlan(weeks: plan.weeks.map { week in
+            var factors: [String: Double] = [:]
+            for lift in MainLift.allCases {
+                guard let planned = plannedIntensity(lift, week: week), planned > 0,
+                      let target = autoregulatedIntensity(lift, week: week.number, in: plan),
+                      target != planned else { continue }
+                factors[lift.rawValue] = target / planned
+            }
+            guard !factors.isEmpty else { return week }
+            return WorkoutWeekPlan(id: week.id, number: week.number, days: week.days.map { day in
+                WorkoutDayPlan(id: day.id, number: day.number, title: day.title, exercises: day.exercises.map { exercise in
+                    guard let factor = factors[exercise.name],
+                          case .kilograms(let value) = exercise.load else { return exercise }
+                    return ExercisePrescription(
+                        id: exercise.id,
+                        name: exercise.name,
+                        sets: exercise.sets,
+                        reps: exercise.reps,
+                        load: .kilograms(ProgramCalculator.roundToPlate(value * factor)),
+                        isOptional: exercise.isOptional,
+                        benchSession: exercise.benchSession
+                    )
+                })
+            })
+        }, isPeaking: plan.isPeaking)
+    }
+
+    // MARK: - Заметки
+
+    func note(week: Int, day: Int) -> String {
+        workoutNotes[dayKey(week: week, day: day)] ?? ""
+    }
+
+    func setNote(_ text: String, week: Int, day: Int) {
+        let key = dayKey(week: week, day: day)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        workoutNotes[key] = trimmed.isEmpty ? nil : trimmed
     }
 
     // MARK: - Пропущенные тренировки

@@ -262,6 +262,23 @@ fun DayDetailScreen(
                 ) { dot -> onToggleSet(exercise, dot) }
             )
         }
+        // Веса берём из того же списка, что показан выше: у запланированного
+        // дня жим приходит из волны, а не из плана.
+        val resolved = day.copy(exercises = exercises)
+        if (autoregulationLifts(profile, week, resolved).isNotEmpty()) {
+            item(key = "autoreg") {
+                AutoregulationCard(profile, week, resolved, Modifier.padding(top = 4.dp), onUpdateProfile)
+            }
+        }
+
+        if (profile.stalledLifts.isNotEmpty()) {
+            item(key = "stall") { StallNotice(profile) }
+        }
+
+        item(key = "note") {
+            WorkoutNoteCard(profile, week, day.number, Modifier, onUpdateProfile)
+        }
+
         item(key = "skip") {
             SkipCard(profile, week, day.number, Modifier.padding(top = 4.dp), onUpdateProfile)
         }

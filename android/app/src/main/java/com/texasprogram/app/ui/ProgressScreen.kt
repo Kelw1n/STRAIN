@@ -34,7 +34,13 @@ import com.texasprogram.app.model.formatWeight
 import com.texasprogram.app.service.UpperLowerCalculator
 
 @Composable
-fun ProgressScreen(profile: ProgramProfile, contentPadding: PaddingValues) {
+fun ProgressScreen(
+    profile: ProgramProfile,
+    contentPadding: PaddingValues,
+    coachKey: String = "",
+    coachModel: String = "",
+    onUpdate: (ProgramProfile) -> Unit = {}
+) {
     val plan = profile.workoutPlan
     val done = profile.completedDayCount
     val total = profile.totalDays
@@ -80,6 +86,10 @@ fun ProgressScreen(profile: ProgramProfile, contentPadding: PaddingValues) {
 
         item(key = "chart") {
             ProgressChartView(profile.completionLog, Modifier.appearIn(1))
+        }
+
+        item(key = "coach") {
+            CoachCard(profile, coachKey, coachModel, onUpdate = onUpdate)
         }
 
         item(key = "maxes") {

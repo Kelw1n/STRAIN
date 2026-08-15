@@ -168,6 +168,20 @@ fun TodayScreen(
             RestTimerLauncher(timer, profile.defaultRestSeconds, onSelectRest, Modifier.appearIn(exercises.size + 4))
         }
 
+        if (autoregulationLifts(profile, focus.week, focus.day).isNotEmpty()) {
+            item(key = "autoreg") {
+                AutoregulationCard(profile, focus.week, focus.day, Modifier.padding(top = 4.dp), onUpdateProfile)
+            }
+        }
+
+        if (profile.stalledLifts.isNotEmpty()) {
+            item(key = "stall") { StallNotice(profile) }
+        }
+
+        item(key = "note") {
+            WorkoutNoteCard(profile, focus.week, focus.day.number, Modifier, onUpdateProfile)
+        }
+
         item(key = "skip") {
             SkipCard(profile, focus.week, focus.day.number, Modifier.padding(top = 4.dp), onUpdateProfile)
         }

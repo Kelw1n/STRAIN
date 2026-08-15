@@ -20,10 +20,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -132,11 +135,47 @@ fun RestTimerLauncher(
                 }
             }
         }
+        // Кроме трёх заготовок можно набрать своё время: шаг в пятнадцать
+        // секунд мелкий настолько, чтобы попасть в любую привычку.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            StepSquare(Icons.Filled.Remove, "Меньше") { onSelect((selectedSeconds - 15).coerceIn(15, 1800)) }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "%d:%02d".format(selectedSeconds / 60, selectedSeconds % 60),
+                    color = Theme.textPrimary,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("своё время", color = Theme.textTertiary, fontSize = 10.sp)
+            }
+            StepSquare(Icons.Filled.Add, "Больше") { onSelect((selectedSeconds + 15).coerceIn(15, 1800)) }
+            Spacer(Modifier.width(8.dp))
+            StepSquare(Icons.Filled.PlayArrow, "Пуск") { timer.start(selectedSeconds.toLong()) }
+        }
         Text(
             "Отмеченный подход запускает отдых сам — выбранной здесь длительности.",
             color = Theme.textTertiary,
             fontSize = 10.sp
         )
+    }
+}
+
+/// Квадратная кнопка шага для таймера.
+@Composable
+private fun StepSquare(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit
+) {
+    Box(
+        Modifier
+            .size(width = 46.dp, height = 38.dp)
+            .clip(RoundedCornerShape(11.dp))
+            .background(Theme.accent.copy(alpha = 0.14f))
+            .pressable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = description, tint = Theme.accent, modifier = Modifier.size(18.dp))
     }
 }
 
