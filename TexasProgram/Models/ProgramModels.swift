@@ -625,6 +625,21 @@ final class ProgramProfile {
         workoutNotes[key] = trimmed.isEmpty ? nil : trimmed
     }
 
+    /// Неделя, на которой человек сейчас: первая, где остались незакрытые дни.
+    ///
+    /// Считаем по отметкам, а не по календарю. Пропущенная пятница не должна
+    /// перекидывать на следующую неделю только потому, что её день прошёл, —
+    /// незакрытая неделя остаётся текущей, пока в ней есть что делать.
+    /// Отмеченные пропуски в счёт не идут: их закрыли сознательно.
+    var currentWeek: Int {
+        let open = workoutPlan.weeks.first { week in
+            week.days.contains { day in
+                !isCompleted(week: week.number, day: day.number) && !isSkipped(week: week.number, day: day.number)
+            }
+        }
+        return open?.number ?? workoutPlan.weeks.last?.number ?? 1
+    }
+
     // MARK: - Пропущенные тренировки
 
     func isSkipped(week: Int, day: Int) -> Bool {

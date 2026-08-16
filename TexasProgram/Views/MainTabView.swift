@@ -403,12 +403,6 @@ struct PlanView: View {
 
     private var plan: WorkoutPlan { profile.workoutPlan }
 
-    /// Неделя, на которой человек сейчас: ближайшая невыполненная,
-    /// а если программа пройдена — последняя.
-    private var currentWeek: Int {
-        profile.schedule.focus?.week ?? plan.weeks.last?.number ?? 1
-    }
-
     var body: some View {
         // Даты берём из расписания: в режиме очереди день недели у тренировки
         // определяется её местом в очереди, а не номером дня.
@@ -468,7 +462,7 @@ struct PlanView: View {
             .onAppear {
                 guard !focusedOnOpen else { return }
                 focusedOnOpen = true
-                selectedWeek = currentWeek
+                selectedWeek = profile.currentWeek
             }
         }
     }

@@ -298,6 +298,21 @@ data class ProgramProfile(
         return copy(workoutNotes = if (trimmed.isEmpty()) workoutNotes - key else workoutNotes + (key to trimmed))
     }
 
+    /// Неделя, на которой человек сейчас: первая, где остались незакрытые дни.
+    ///
+    /// Считаем по отметкам, а не по календарю. Пропущенная пятница не должна
+    /// перекидывать на следующую неделю только потому, что её день прошёл, —
+    /// незакрытая неделя остаётся текущей, пока в ней есть что делать.
+    /// Отмеченные пропуски в счёт не идут: их закрыли сознательно.
+    val currentWeek: Int
+        get() {
+            val plan = workoutPlan
+            val open = plan.weeks.firstOrNull { week ->
+                week.days.any { !isCompleted(week.number, it.number) && !isSkipped(week.number, it.number) }
+            }
+            return open?.number ?: plan.weeks.lastOrNull()?.number ?: 1
+        }
+
     // MARK: - Пропущенные тренировки
 
     fun isSkipped(week: Int, day: Int): Boolean =
