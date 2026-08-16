@@ -25,7 +25,7 @@ struct TonnageChartView: View {
             }
 
             if weeks.isEmpty {
-                Text("Записывай подходы долгим нажатием на кружок — тоннаж считается по ним.")
+                Text("Тоннаж считается по записанным подходам. Нажми на счётчик подходов в карточке упражнения и впиши, сколько получилось.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

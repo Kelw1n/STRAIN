@@ -22,6 +22,10 @@ struct SetEntrySheet: View {
     @State private var repsText = ""
     @State private var weightText = ""
     @State private var loaded = false
+    /// У цифровых клавиатур нет клавиши возврата — убрать их можно только кнопкой.
+    @FocusState private var typing: Field?
+
+    private enum Field: Hashable { case reps, weight }
 
     private var existing: SetEntry? {
         profile.setEntry(week: target.week, day: target.day, exercise: target.exercise, index: target.index)
@@ -69,8 +73,12 @@ struct SetEntrySheet: View {
                 }
 
                 Section("Как получилось") {
-                    TextField("Повторов", text: $repsText).keyboardType(.numberPad)
-                    TextField("Вес, кг", text: $weightText).keyboardType(.decimalPad)
+                    TextField("Повторов", text: $repsText)
+                        .keyboardType(.numberPad)
+                        .focused($typing, equals: .reps)
+                    TextField("Вес, кг", text: $weightText)
+                        .keyboardType(.decimalPad)
+                        .focused($typing, equals: .weight)
                 }
 
                 Section {
@@ -107,6 +115,10 @@ struct SetEntrySheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Готово") { typing = nil }
                 }
             }
             .onAppear {

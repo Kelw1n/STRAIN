@@ -18,41 +18,94 @@ struct SetDotsView: View {
     let total: Int
     let tracker: SetTracker
 
+    /// Точка, которую сейчас держат: ради того же сжатия, что даёт `.pressable`.
+    @State private var pressing: Int?
+    /// Номер записанного долгим нажатием подхода — для отклика в палец.
+    @State private var holdTrigger = 0
+
     var body: some View {
-        HStack(spacing: 8) {
+        // Отступы у самих точек: они же задают область попадания,
+        // поэтому промежутка у стопки быть не должно.
+        HStack(spacing: 0) {
             ForEach(0..<max(total, 0), id: \.self) { index in
-                let filled = index < tracker.done
-                let hasEntry = tracker.logged.contains(index)
-                Button {
-                    withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
-                        tracker.onTap(index)
-                    }
-                } label: {
-                    Circle()
-                        .fill(filled ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Color.primary.opacity(0.10)))
-                        .frame(width: 22, height: 22)
-                        .overlay {
-                            if filled {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 10, weight: .black))
-                                    .foregroundStyle(.white)
-                            }
-                        }
-                        .overlay(Circle().strokeBorder(Theme.accent.opacity(filled ? 0 : 0.28), lineWidth: 1))
-                        // Записанный факт помечаем ободком: видно, где цифры есть,
-                        // а где точка закрыта на глазок.
-                        .overlay(Circle().strokeBorder(Theme.warning, lineWidth: hasEntry ? 2 : 0))
-                }
-                .buttonStyle(.pressable)
-                .onLongPressGesture(minimumDuration: 0.4) { tracker.onHold?(index) }
-                .accessibilityLabel("Подход \(index + 1)")
-                .accessibilityHint(tracker.onHold == nil ? "" : "Удерживай, чтобы записать вес и повторы")
+                dot(index)
             }
             Spacer(minLength: 0)
+            counter
+        }
+        .sensoryFeedback(trigger: holdTrigger) { _, _ in .impact(weight: .medium) }
+    }
+
+    /// Счётчик подходов, он же второй вход в запись факта.
+    ///
+    /// Долгое нажатие на точку — жест, которого не видно. Тут же написано
+    /// «записать», и попасть в него можно обычным тапом.
+    @ViewBuilder
+    private var counter: some View {
+        if let onHold = tracker.onHold, total > 0 {
+            Button {
+                onHold(min(tracker.done, total - 1))
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "square.and.pencil").font(.system(size: 10, weight: .bold))
+                    Text("\(tracker.done) / \(total)")
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                }
+                .foregroundStyle(tracker.done >= total ? Theme.success : Theme.accent)
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel("Записать подход")
+        } else {
             Text("\(tracker.done) / \(total)")
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(tracker.done >= total ? Theme.success : .secondary)
         }
+    }
+
+    /// Точка подхода. Намеренно не `Button`.
+    ///
+    /// Кнопка забирает касание себе целиком, и `onLongPressGesture` поверх неё
+    /// не срабатывает — именно поэтому запись факта долгим нажатием не работала.
+    /// У обычной вьюхи тап и удержание уживаются: система сама решает, что это
+    /// было, и короткое нажатие не проходит вслед за долгим.
+    private func dot(_ index: Int) -> some View {
+        let filled = index < tracker.done
+        let hasEntry = tracker.logged.contains(index)
+        return Circle()
+            .fill(filled ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Color.primary.opacity(0.10)))
+            .frame(width: 22, height: 22)
+            .overlay {
+                if filled {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(.white)
+                }
+            }
+            .overlay(Circle().strokeBorder(Theme.accent.opacity(filled ? 0 : 0.28), lineWidth: 1))
+            // Записанный факт помечаем ободком: видно, где цифры есть,
+            // а где точка закрыта на глазок.
+            .overlay(Circle().strokeBorder(Theme.warning, lineWidth: hasEntry ? 2 : 0))
+            .scaleEffect(pressing == index ? 0.88 : 1)
+            // Палец толще точки: рисуем 22, ловим 30. Соседние области при этом
+            // не перекрываются, иначе тап уходил бы не в ту точку.
+            .frame(width: 30, height: 30)
+            .contentShape(Circle())
+            .onTapGesture {
+                withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
+                    tracker.onTap(index)
+                }
+            }
+            .onLongPressGesture(minimumDuration: 0.35) {
+                guard tracker.onHold != nil else { return }
+                holdTrigger += 1
+                tracker.onHold?(index)
+            } onPressingChanged: { isPressing in
+                withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) {
+                    pressing = isPressing ? index : nil
+                }
+            }
+            .accessibilityLabel("Подход \(index + 1)")
+            .accessibilityHint(tracker.onHold == nil ? "" : "Удерживай, чтобы записать вес и повторы")
     }
 }
 

@@ -37,7 +37,7 @@ struct ExerciseHistoryView: View {
         CardView {
             Text("Здесь пока пусто")
                 .font(.headline)
-            Text("Долгое нажатие на кружок подхода записывает, сколько реально получилось. По этим записям и строится история.")
+            Text("Нажми на счётчик подходов справа в карточке упражнения — или удерживай кружок. Ещё быстрее: «Всё прошло по плану» под таймером отдыха закрывает день плановыми весами.")
                 .font(.footnote).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -182,7 +182,7 @@ struct ExerciseHistoryList: View {
                 if names.isEmpty {
                     CardView {
                         Text("Записей пока нет").font(.headline)
-                        Text("Долгое нажатие на кружок подхода записывает, сколько получилось. Как появятся записи, движения соберутся сюда.")
+                        Text("Нажми на счётчик подходов в карточке упражнения и впиши, сколько получилось. Как появятся записи, движения соберутся сюда.")
                             .font(.footnote).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
