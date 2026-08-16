@@ -47,6 +47,7 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var autoregulationEnabled: Bool?
     var liftReports: [LiftReport]?
     var workoutNotes: [String: String]?
+    var bodyWeightLog: [BodyWeightEntry]?
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -142,7 +143,8 @@ enum BackupService {
             euthanasiaInput: profile.euthanasiaInput,
             autoregulationEnabled: profile.autoregulationEnabled,
             liftReports: profile.liftReports,
-            workoutNotes: profile.workoutNotes
+            workoutNotes: profile.workoutNotes,
+            bodyWeightLog: profile.bodyWeightLog
         )
     }
 
@@ -211,6 +213,7 @@ enum BackupService {
         result.autoregulationEnabled = snapshot.autoregulationEnabled ?? false
         result.liftReports = snapshot.liftReports ?? []
         result.workoutNotes = snapshot.workoutNotes ?? [:]
+        result.bodyWeightLog = snapshot.bodyWeightLog ?? []
         return result
     }
 

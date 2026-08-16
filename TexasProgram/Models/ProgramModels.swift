@@ -213,6 +213,13 @@ struct ExercisePrescription: Identifiable, Equatable, Hashable, Codable, Sendabl
     init(id: String? = nil, name: String, sets: Int, reps: String, load: LoadPrescription, isOptional: Bool = false, benchSession: Int? = nil) {
         self.id = id ?? name; self.name = name; self.sets = sets; self.reps = reps; self.load = load; self.isOptional = isOptional; self.benchSession = benchSession
     }
+
+    /// Число повторов из плана. У диапазона «8-10» берём нижнюю границу:
+    /// записывать за человека верхнюю — приписывать ему работу, которой не было.
+    var plannedReps: Int? {
+        let digits = reps.split(whereSeparator: { !$0.isNumber })
+        return digits.first.flatMap { Int($0) }
+    }
 }
 
 struct WorkoutDayPlan: Identifiable, Equatable, Hashable, Codable, Sendable {
@@ -280,6 +287,12 @@ final class ProgramProfile {
     var liftReports: [LiftReport] = []
     /// Заметка к тренировке: ключ дня плана.
     var workoutNotes: [String: String] = [:]
+    /// Замеры веса тела, по одному на дату.
+    var bodyWeightLog: [BodyWeightEntry] = []
+    /// Напоминание о тренировке в дни расписания.
+    var reminderEnabled: Bool = false
+    var reminderHour: Int = 18
+    var reminderMinute: Int = 0
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []
@@ -732,6 +745,99 @@ final class ProgramProfile {
         let matched = exercises.filter { exerciseNames.contains($0.name) }
         let weights = matched.flatMap { entries(week: week, day: day, exercise: $0).map(\.entry.weight) }
         return weights.max()
+    }
+
+    // MARK: - История упражнения
+
+    /// Названия упражнений, по которым есть хоть один записанный подход.
+    ///
+    /// Берём из плана, а не из ключей: в ключе лежит идентификатор, а показать
+    /// нужно человеческое имя, и порядок должен совпадать с порядком в программе.
+    var loggedExerciseNames: [String] {
+        var names: [String] = []
+        for week in workoutPlan.weeks {
+            for day in week.days {
+                for exercise in day.exercises where !names.contains(exercise.name) {
+                    if !entries(week: week.number, day: day.number, exercise: exercise).isEmpty {
+                        names.append(exercise.name)
+                    }
+                }
+            }
+        }
+        return names
+    }
+
+    /// Весь путь одного движения по текущему циклу.
+    ///
+    /// Ключ отметки завязан на идентификатор упражнения, а он совпадает с именем,
+    /// поэтому замена упражнения в одном дне не смешивает историю разных движений.
+    func history(forExerciseNamed name: String) -> [ExerciseHistoryPoint] {
+        var points: [ExerciseHistoryPoint] = []
+        for week in workoutPlan.weeks {
+            for day in week.days {
+                for exercise in day.exercises where exercise.name == name {
+                    let logged = entries(week: week.number, day: day.number, exercise: exercise).map(\.entry)
+                    guard !logged.isEmpty else { continue }
+                    var planned: Double?
+                    if case .kilograms(let value) = exercise.load { planned = value }
+                    points.append(ExerciseHistoryPoint(week: week.number, day: day.number, planned: planned, entries: logged))
+                }
+            }
+        }
+        return points
+    }
+
+    // MARK: - Вес тела
+
+    var bodyWeightSeries: [BodyWeightEntry] {
+        bodyWeightLog.sorted { $0.date < $1.date }
+    }
+
+    var latestBodyWeight: Double? { bodyWeightSeries.last?.weight }
+
+    /// Записывает замер. День — единица измерения: второй замер за сутки заменяет первый.
+    func recordBodyWeight(_ value: Double, on date: Date = Date(), calendar: Calendar = .current) {
+        let day = calendar.startOfDay(for: date)
+        bodyWeightLog.removeAll { calendar.isDate($0.date, inSameDayAs: day) }
+        guard value > 0 else { return }
+        bodyWeightLog.append(BodyWeightEntry(date: day, weight: value))
+    }
+
+    func removeBodyWeight(_ entry: BodyWeightEntry) {
+        bodyWeightLog.removeAll { $0.date == entry.date }
+    }
+
+    /// Отношение максимума к своему весу: на сушке штанга стоит,
+    /// а это число растёт — и видно, что работа не впустую.
+    func relativeStrength(_ maximum: Double) -> Double? {
+        guard let weight = latestBodyWeight, weight > 0 else { return nil }
+        return maximum / weight
+    }
+
+    // MARK: - Закрыть день как по плану
+
+    /// Записывает все подходы дня плановыми весами.
+    ///
+    /// Для упражнений без конкретного веса (РПЕ, диапазон повторов, тест)
+    /// просто закрываем точки: придумывать за человека числа неправильно.
+    func completeAsPlanned(week: Int, day: Int, now: Date = Date()) {
+        guard let plan = workoutPlan.weeks.first(where: { $0.number == week })?
+            .days.first(where: { $0.number == day }) else { return }
+
+        for exercise in exercises(day: plan, benchSession: benchSession(week: week, day: day)) {
+            guard exercise.sets > 0 else { continue }
+            if case .kilograms(let value) = exercise.load, let reps = exercise.plannedReps {
+                for index in 0..<exercise.sets {
+                    recordSet(week: week, day: day, exercise: exercise, index: index, reps: reps, weight: value, now: now)
+                }
+            } else {
+                setProgress[setKey(week: week, day: day, exercise: exercise)] = exercise.sets
+            }
+        }
+
+        if !isCompleted(week: week, day: day) {
+            toggleCompleted(week: week, day: day, now: now)
+        }
     }
 
     /// Тоннаж по неделям: только записанные подходы, без догадок по плану.

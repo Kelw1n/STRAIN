@@ -22,6 +22,8 @@ struct ProgressScreen: View {
                     streak.appearIn(0)
                     ProgressChartView(records: profile.completionLog).appearIn(1).softScroll()
                     TonnageChartView(weeks: profile.weeklyTonnage).appearIn(1).softScroll()
+                    BodyWeightCard(profile: profile).appearIn(1).softScroll()
+                    links.appearIn(1)
                     maxes.appearIn(1)
                     if profile.programKind.hasBenchWave { benchCard.appearIn(2) }
                     heatmap.appearIn(3).softScroll()
@@ -34,6 +36,55 @@ struct ProgressScreen: View {
             .screenBackground()
             .navigationTitle("Прогресс")
         }
+    }
+
+    /// Входы в разделы, которые копят данные: история движений и заметки.
+    private var links: some View {
+        CardView(padding: 6, spacing: 0) {
+            NavigationLink { ExerciseHistoryList(profile: profile) } label: {
+                linkRow("История упражнений",
+                        subtitle: countText(profile.loggedExerciseNames.count, "движение", "движения", "движений"),
+                        symbol: "chart.xyaxis.line")
+            }
+            .buttonStyle(.pressable)
+            Divider().overlay(Color.primary.opacity(0.07)).padding(.horizontal, 12)
+            NavigationLink { NotesListView(profile: profile) } label: {
+                linkRow("Заметки",
+                        subtitle: countText(profile.workoutNotes.filter { profile.isOwnKey($0.key) }.count,
+                                            "запись", "записи", "записей"),
+                        symbol: "note.text")
+            }
+            .buttonStyle(.pressable)
+        }
+    }
+
+    private func linkRow(_ title: String, subtitle: String, symbol: String) -> some View {
+        HStack(spacing: 13) {
+            Image(systemName: symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .contentShape(Rectangle())
+    }
+
+    /// Русский счёт: одна запись, две записи, пять записей.
+    private func countText(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
+        guard count > 0 else { return "пока пусто" }
+        let last = count % 10, hundred = count % 100
+        if hundred >= 11 && hundred <= 14 { return "\(count) \(many)" }
+        if last == 1 { return "\(count) \(one)" }
+        if last >= 2 && last <= 4 { return "\(count) \(few)" }
+        return "\(count) \(many)"
     }
 
     private var hero: some View {
@@ -505,6 +556,19 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Напоминать о тренировке", isOn: $profile.reminderEnabled)
+                    if profile.reminderEnabled {
+                        DatePicker("Время", selection: reminderTime, displayedComponents: .hourAndMinute)
+                    }
+                } header: {
+                    Text("Напоминания")
+                } footer: {
+                    Text(profile.reminderEnabled
+                         ? "Придёт в дни расписания: \(profile.weekdays.map { RuDate.short(weekday: $0) }.joined(separator: ", ")). Меняешь дни ниже — напоминания переезжают за ними."
+                         : "Уведомление в дни, которые стоят в расписании. Веса в нём не пишутся: они меняются каждую неделю, а уведомление система повторяет одно и то же.")
+                }
+
+                Section {
                     Toggle("Не гасить экран", isOn: $profile.keepScreenOn)
                 } header: {
                     Text("В зале")
@@ -591,13 +655,18 @@ struct SettingsView: View {
                     } label: {
                         Label("Загрузить копию", systemImage: "square.and.arrow.down")
                     }
+                    Button {
+                        exportCSV()
+                    } label: {
+                        Label("Выгрузить таблицу", systemImage: "tablecells")
+                    }
                     if let backupMessage {
                         Text(backupMessage).font(.caption).foregroundStyle(Theme.success)
                     }
                 } header: {
                     Text("Резервная копия")
                 } footer: {
-                    Text("Файл со всеми профилями, максимумами, расписанием и историей. Тот же формат читает версия для Android.")
+                    Text("Копия — файл со всеми профилями, максимумами, расписанием и историей; тот же формат читает версия для Android. Таблица — записанные подходы в CSV, открывается в Excel.")
                 }
 
                 Section {
@@ -640,6 +709,30 @@ struct SettingsView: View {
         } catch {
             backupMessage = "Не удалось собрать копию"
         }
+    }
+
+    private func exportCSV() {
+        do {
+            shareItem = ShareItem(url: try CSVExport.writeTemporaryFile(profiles))
+        } catch {
+            backupMessage = "Не удалось собрать таблицу"
+        }
+    }
+
+    /// Часы и минуты хранятся числами: `Date` в модели тянул бы за собой дату,
+    /// которая напоминанию не нужна и только путала бы при переносе копии.
+    private var reminderTime: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(from: DateComponents(hour: profile.reminderHour, minute: profile.reminderMinute))
+                    ?? Date()
+            },
+            set: { value in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: value)
+                profile.reminderHour = parts.hour ?? 18
+                profile.reminderMinute = parts.minute ?? 0
+            }
+        )
     }
 
     private func importBackup(_ result: Result<URL, Error>) {

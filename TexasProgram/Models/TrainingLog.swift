@@ -31,6 +31,32 @@ struct SkippedWorkout: Codable, Equatable, Hashable, Identifiable, Sendable {
     var title: String { "Неделя \(week), день \(day)" }
 }
 
+/// Замер веса тела.
+///
+/// Вводится руками. «Здоровье» сюда не подключаем сознательно: сторонний
+/// доступ к нему требует прав, а с ними подпись сборки, которую ставят вручную,
+/// перестаёт устанавливаться.
+struct BodyWeightEntry: Codable, Equatable, Hashable, Identifiable, Sendable {
+    var date: Date
+    var weight: Double
+
+    var id: Date { date }
+}
+
+/// Одна тренировка в истории упражнения.
+struct ExerciseHistoryPoint: Identifiable, Equatable, Sendable {
+    let week: Int
+    let day: Int
+    let planned: Double?
+    let entries: [SetEntry]
+
+    var id: String { "\(week)-\(day)" }
+    /// Лучший подход дня: по нему и видно, растёт ли движение.
+    var best: Double { entries.map(\.weight).max() ?? 0 }
+    var tonnage: Double { entries.reduce(0) { $0 + $1.tonnage } }
+    var totalReps: Int { entries.reduce(0) { $0 + $1.reps } }
+}
+
 /// Тоннаж одной недели: сумма повторов на вес по всем записанным подходам.
 struct WeeklyTonnage: Identifiable, Equatable, Sendable {
     let week: Int

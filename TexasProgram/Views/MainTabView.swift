@@ -65,7 +65,16 @@ struct MainTabView: View {
             SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
         }
         // Виджет живёт в другой песочнице и сам данные не достанет — публикуем слепок.
-        .onAppear { WidgetBridge.publish(profile) }
+        .onAppear {
+            WidgetBridge.publish(profile)
+            ReminderScheduler.reschedule(for: profile)
+        }
+        // Расписание напоминаний собирается заново на каждое изменение, от которого
+        // оно зависит: день недели, время и сам переключатель.
+        .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }
+        .onChange(of: profile.reminderHour) { _, _ in ReminderScheduler.reschedule(for: profile) }
+        .onChange(of: profile.reminderMinute) { _, _ in ReminderScheduler.reschedule(for: profile) }
+        .onChange(of: profile.scheduleWeekdays) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.completedDayKeys) { _, _ in WidgetBridge.publish(profile) }
         .onChange(of: profile.scheduleModeRaw) { _, _ in WidgetBridge.publish(profile) }
         .onChange(of: profile.scheduleWeekdays) { _, _ in WidgetBridge.publish(profile) }
@@ -83,6 +92,8 @@ struct TodayView: View {
     var onOpenBench: ((Int) -> Void)?
     @State private var customizing: ScheduledWorkout?
     @State private var entryTarget: SetEntryTarget?
+    /// Имя движения, чью историю открыли: `navigationDestination` ждёт Hashable.
+    @State private var historyFor: String?
 
     private var overallProgress: Double {
         guard profile.totalDays > 0 else { return 0 }
@@ -130,7 +141,8 @@ struct TodayView: View {
                             ExerciseCard(
                                 exercise: exercise,
                                 onOpenBench: onOpenBench,
-                                sets: tracker(for: exercise, in: focus)
+                                sets: tracker(for: exercise, in: focus),
+                                onOpenHistory: { historyFor = exercise.name }
                             )
                             .appearIn(index + 4)
                             .softScroll()
@@ -138,6 +150,9 @@ struct TodayView: View {
 
                         RestTimerLauncher(profile: profile)
                             .appearIn(exercises.count + 4)
+
+                        AsPlannedButton(profile: profile, week: focus.week, day: focus.day.number)
+                            .appearIn(exercises.count + 5)
 
                         CompleteButton(isCompleted: focus.isCompleted) {
                             withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
@@ -194,6 +209,9 @@ struct TodayView: View {
             }
             .sheet(item: $entryTarget) { target in
                 SetEntrySheet(profile: profile, target: target)
+            }
+            .navigationDestination(item: $historyFor) { name in
+                ExerciseHistoryView(profile: profile, name: name)
             }
             // Телефон лежит на лавке между подходами — гасить экран тут незачем.
             .keepAwake(profile.keepScreenOn)
@@ -586,6 +604,7 @@ struct DayDetailView: View {
     var onOpenBench: ((Int) -> Void)?
     @State private var showCustomize = false
     @State private var entryTarget: SetEntryTarget?
+    @State private var historyFor: String?
 
     /// У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
     ///
@@ -619,12 +638,16 @@ struct DayDetailView: View {
                                 entryTarget = SetEntryTarget(week: week, day: day.number, exercise: exercise, index: dot)
                             },
                             logged: Set(profile.entries(week: week, day: day.number, exercise: exercise).map(\.index))
-                        )
+                        ),
+                        onOpenHistory: { historyFor = exercise.name }
                     )
                     .appearIn(index)
                     .softScroll()
                 }
                 RestTimerLauncher(profile: profile).appearIn(exercises.count)
+
+                AsPlannedButton(profile: profile, week: week, day: day.number)
+                    .appearIn(exercises.count + 1)
 
                 CompleteButton(isCompleted: profile.isCompleted(week: week, day: day.number)) {
                     withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
@@ -675,7 +698,65 @@ struct DayDetailView: View {
         .sheet(item: $entryTarget) { target in
             SetEntrySheet(profile: profile, target: target)
         }
+        .navigationDestination(item: $historyFor) { name in
+            ExerciseHistoryView(profile: profile, name: name)
+        }
         .keepAwake(profile.keepScreenOn)
+    }
+}
+
+// MARK: - Закрыть день как по плану
+
+/// Одна кнопка вместо десятка точек.
+///
+/// Если тренировка прошла ровно как написано, отмечать каждый подход руками —
+/// работа ради работы. Кнопка записывает плановые веса, а разошедшееся
+/// поправляется поверх долгим нажатием на кружок.
+struct AsPlannedButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Bindable var profile: ProgramProfile
+    let week: Int
+    let day: Int
+
+    @State private var confirming = false
+
+    /// Уже всё записано — предлагать нечего.
+    private var alreadyLogged: Bool {
+        let exercises = profile.workoutPlan.weeks.first { $0.number == week }?
+            .days.first { $0.number == day }?.exercises ?? []
+        guard !exercises.isEmpty else { return true }
+        return exercises.allSatisfy { exercise in
+            profile.completedSets(week: week, day: day, exercise: exercise) >= exercise.sets
+        }
+    }
+
+    var body: some View {
+        if !alreadyLogged {
+            Button { confirming = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "checklist.checked").font(.footnote.weight(.bold))
+                    Text("Всё прошло по плану").font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(Theme.accent)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Theme.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Theme.accent.opacity(0.3), lineWidth: 1))
+            }
+            .buttonStyle(.pressable)
+            .confirmationDialog("Записать все подходы плановыми весами?",
+                                isPresented: $confirming, titleVisibility: .visible) {
+                Button("Записать") {
+                    withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
+                        profile.completeAsPlanned(week: week, day: day)
+                    }
+                }
+                Button("Отмена", role: .cancel) {}
+            } message: {
+                Text("Повторы и веса возьмутся из плана. Что разошлось — поправишь долгим нажатием на кружок.")
+            }
+        }
     }
 }
 
@@ -686,6 +767,8 @@ struct ExerciseCard: View {
     var onOpenBench: ((Int) -> Void)?
     /// Нет трекера — карточка без точек, как на экране пикирования.
     var sets: SetTracker?
+    /// Открыть историю движения. Нет обработчика — карточка просто не нажимается.
+    var onOpenHistory: (() -> Void)?
 
     private var isBenchLink: Bool { exercise.benchSession != nil && onOpenBench != nil }
 
@@ -730,6 +813,20 @@ struct ExerciseCard: View {
                 }
 
                 Spacer(minLength: 6)
+
+                // Значок истории — рядом с названием, а не на всей карточке:
+                // внутри неё уже нажимаются точки подходов.
+                if let onOpenHistory {
+                    Button(action: onOpenHistory) {
+                        Image(systemName: "chart.xyaxis.line")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("История упражнения")
+                }
 
                 if isBenchLink {
                     Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(.secondary)
