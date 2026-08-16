@@ -127,6 +127,59 @@ final class HistoryAndExtrasTests: XCTestCase {
         XCTAssertNil(ExercisePrescription(name: "x", sets: 3, reps: "до отказа", load: .kilograms(50)).plannedReps)
     }
 
+    // MARK: - История по старым отметкам
+
+    func testBackfillFillsCompletedDaysWithPlannedWeights() throws {
+        let profile = texas()
+        let exercise = try squat(profile)
+        guard case .kilograms(let planned) = exercise.load else { return XCTFail("присед должен идти в килограммах") }
+
+        profile.toggleCompleted(week: 1, day: 1)
+        XCTAssertEqual(profile.backfillableWorkouts, 1)
+
+        XCTAssertEqual(profile.backfillHistoryFromMarks(), 1)
+
+        let entry = try XCTUnwrap(profile.setEntry(week: 1, day: 1, exercise: exercise, index: 0))
+        XCTAssertEqual(entry.weight, planned)
+        XCTAssertEqual(profile.entries(week: 1, day: 1, exercise: exercise).count, exercise.sets)
+        // Заполнять больше нечего — предложение уходит.
+        XCTAssertEqual(profile.backfillableWorkouts, 0)
+    }
+
+    /// Настоящие числа человека дороже плановых — их не трогаем.
+    func testBackfillNeverOverwritesRealEntries() throws {
+        let profile = texas()
+        let exercise = try squat(profile)
+        profile.recordSet(week: 1, day: 1, exercise: exercise, index: 0, reps: 3, weight: 60)
+        profile.toggleCompleted(week: 1, day: 1)
+
+        profile.backfillHistoryFromMarks()
+
+        let entry = try XCTUnwrap(profile.setEntry(week: 1, day: 1, exercise: exercise, index: 0))
+        XCTAssertEqual(entry.weight, 60)
+        XCTAssertEqual(entry.reps, 3)
+    }
+
+    /// Неотмеченный день выдумывать нечего.
+    func testBackfillIgnoresUntouchedDays() {
+        let profile = texas()
+        XCTAssertEqual(profile.backfillableWorkouts, 0)
+        XCTAssertEqual(profile.backfillHistoryFromMarks(), 0)
+        XCTAssertTrue(profile.setLog.isEmpty)
+    }
+
+    /// Половина точек — половина записей: приписывать недоделанное нельзя.
+    func testBackfillFollowsPartialDots() throws {
+        let profile = texas()
+        let exercise = try squat(profile)
+        _ = profile.toggleSet(week: 1, day: 1, exercise: exercise, index: 1)
+        XCTAssertEqual(profile.completedSets(week: 1, day: 1, exercise: exercise), 2)
+
+        profile.backfillHistoryFromMarks()
+
+        XCTAssertEqual(profile.entries(week: 1, day: 1, exercise: exercise).count, 2)
+    }
+
     // MARK: - Выгрузка
 
     func testCSVHasHeaderAndOneRowPerSet() throws {

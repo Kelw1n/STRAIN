@@ -820,11 +820,16 @@ final class ProgramProfile {
     ///
     /// Для упражнений без конкретного веса (РПЕ, диапазон повторов, тест)
     /// просто закрываем точки: придумывать за человека числа неправильно.
-    func completeAsPlanned(week: Int, day: Int, now: Date = Date()) {
+    /// Упражнения дня ровно в том виде, в каком они были на экране:
+    /// с правками, задержками и жимом из волны.
+    func plannedExercises(week: Int, day: Int) -> [ExercisePrescription] {
         guard let plan = workoutPlan.weeks.first(where: { $0.number == week })?
-            .days.first(where: { $0.number == day }) else { return }
+            .days.first(where: { $0.number == day }) else { return [] }
+        return exercises(day: plan, benchSession: benchSession(week: week, day: day))
+    }
 
-        for exercise in exercises(day: plan, benchSession: benchSession(week: week, day: day)) {
+    func completeAsPlanned(week: Int, day: Int, now: Date = Date()) {
+        for exercise in plannedExercises(week: week, day: day) {
             guard exercise.sets > 0 else { continue }
             if case .kilograms(let value) = exercise.load, let reps = exercise.plannedReps {
                 for index in 0..<exercise.sets {
@@ -838,6 +843,63 @@ final class ProgramProfile {
         if !isCompleted(week: week, day: day) {
             toggleCompleted(week: week, day: day, now: now)
         }
+    }
+
+    // MARK: - История по старым отметкам
+
+    /// Сколько уже отмеченных тренировок можно достроить до записей.
+    ///
+    /// Отметка говорит «подход сделан», но не говорит с каким весом. Раз вес
+    /// был плановым — а отмечают обычно именно так, — эти записи можно
+    /// восстановить, и история перестанет начинаться с сегодняшнего дня.
+    func backfillTargets() -> [(week: Int, day: Int)] {
+        var result: [(week: Int, day: Int)] = []
+        for week in workoutPlan.weeks {
+            for day in week.days {
+                let marked = isCompleted(week: week.number, day: day.number)
+                let list = plannedExercises(week: week.number, day: day.number)
+                let hasSomething = list.contains { completedSets(week: week.number, day: day.number, exercise: $0) > 0 }
+                guard marked || hasSomething else { continue }
+
+                let fillable = list.contains { exercise in
+                    guard case .kilograms = exercise.load, exercise.plannedReps != nil else { return false }
+                    let done = marked ? exercise.sets : completedSets(week: week.number, day: day.number, exercise: exercise)
+                    guard done > 0 else { return false }
+                    return entries(week: week.number, day: day.number, exercise: exercise).isEmpty
+                }
+                if fillable { result.append((week.number, day.number)) }
+            }
+        }
+        return result
+    }
+
+    var backfillableWorkouts: Int { backfillTargets().count }
+
+    /// Достраивает записи по отметкам. Возвращает число заполненных тренировок.
+    ///
+    /// Трогаем только пустое: если по упражнению уже есть хоть один записанный
+    /// подход, значит человек вводил настоящие числа, и подменять их плановыми
+    /// нельзя. Упражнения без веса в плане (РПЕ, «до отказа») пропускаем —
+    /// придумывать за человека килограммы неоткуда.
+    @discardableResult
+    func backfillHistoryFromMarks(now: Date = Date()) -> Int {
+        var filled = 0
+        for target in backfillTargets() {
+            let marked = isCompleted(week: target.week, day: target.day)
+            for exercise in plannedExercises(week: target.week, day: target.day) {
+                guard case .kilograms(let weight) = exercise.load, let reps = exercise.plannedReps else { continue }
+                guard entries(week: target.week, day: target.day, exercise: exercise).isEmpty else { continue }
+
+                let done = marked ? exercise.sets : completedSets(week: target.week, day: target.day, exercise: exercise)
+                guard done > 0 else { continue }
+                for index in 0..<done {
+                    recordSet(week: target.week, day: target.day, exercise: exercise,
+                              index: index, reps: reps, weight: weight, now: now)
+                }
+            }
+            filled += 1
+        }
+        return filled
     }
 
     /// Тоннаж по неделям: только записанные подходы, без догадок по плану.

@@ -173,12 +173,27 @@ struct ExerciseHistoryView: View {
 
 /// Список движений, по которым есть записи, — вход в историю с экрана прогресса.
 struct ExerciseHistoryList: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var profile: ProgramProfile
+
+    @State private var confirming = false
+    @State private var filledMessage: String?
 
     var body: some View {
         let names = profile.loggedExerciseNames
+        let pending = profile.backfillableWorkouts
         ScrollView {
             LazyVStack(spacing: 12) {
+                if pending > 0 {
+                    backfillCard(pending).appearIn(0)
+                }
+                if let filledMessage {
+                    Text(filledMessage)
+                        .font(.footnote)
+                        .foregroundStyle(Theme.success)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                }
                 if names.isEmpty {
                     CardView {
                         Text("Записей пока нет").font(.headline)
@@ -223,5 +238,52 @@ struct ExerciseHistoryList: View {
         let points = profile.history(forExerciseNamed: name)
         guard let best = points.map(\.best).max() else { return "нет записей" }
         return "\(points.count) трен. · лучший \(WeightFormat.kilogramsPrecise(best))"
+    }
+
+    /// Предложение достроить историю по уже проставленным отметкам.
+    ///
+    /// Показываем только когда есть что достраивать, и спрашиваем: это всё-таки
+    /// запись данных за человека, пусть и по его же отметкам.
+    private func backfillCard(_ pending: Int) -> some View {
+        HighlightCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Есть отмеченные тренировки", systemImage: "clock.arrow.circlepath")
+                    .font(.subheadline.weight(.bold))
+                Text("\(pending) \(workoutWord(pending)) отмечено, но веса в них не записаны. Можно проставить плановые — история и тоннаж посчитаются задним числом.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    confirming = true
+                } label: {
+                    Text("Заполнить по отметкам")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+            }
+        }
+        .confirmationDialog("Заполнить историю плановыми весами?",
+                            isPresented: $confirming, titleVisibility: .visible) {
+            Button("Заполнить") {
+                let filled = profile.backfillHistoryFromMarks()
+                withAnimation(Motion.maybe(Motion.card, reduce: reduceMotion)) {
+                    filledMessage = "Заполнено \(filled) \(workoutWord(filled)). Что помнишь иначе — поправь через счётчик подходов."
+                }
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Возьмутся веса из плана этих недель. Там, где ты уже вводил свои числа, ничего не изменится. Упражнения без веса в плане — по РПЕ и на количество — пропустятся.")
+        }
+    }
+
+    private func workoutWord(_ count: Int) -> String {
+        let last = count % 10, hundred = count % 100
+        if hundred >= 11 && hundred <= 14 { return "тренировок" }
+        if last == 1 { return "тренировка" }
+        if last >= 2 && last <= 4 { return "тренировки" }
+        return "тренировок"
     }
 }

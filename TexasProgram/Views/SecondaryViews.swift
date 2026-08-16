@@ -42,8 +42,13 @@ struct ProgressScreen: View {
     private var links: some View {
         CardView(padding: 6, spacing: 0) {
             NavigationLink { ExerciseHistoryList(profile: profile) } label: {
+                // Пока история пустая, а отметки есть, зовём именно достроить её:
+                // иначе про такую возможность никто не узнает.
+                let pending = profile.backfillableWorkouts
                 linkRow("История упражнений",
-                        subtitle: countText(profile.loggedExerciseNames.count, "движение", "движения", "движений"),
+                        subtitle: pending > 0
+                        ? "можно заполнить по отметкам"
+                        : countText(profile.loggedExerciseNames.count, "движение", "движения", "движений"),
                         symbol: "chart.xyaxis.line")
             }
             .buttonStyle(.pressable)
