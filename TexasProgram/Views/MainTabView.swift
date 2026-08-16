@@ -876,7 +876,6 @@ struct ExerciseCard: View {
         exercise.sets > 0 ? "\(exercise.sets) подходов × \(exercise.reps)" : exercise.reps
     }
 
-    @ViewBuilder
     /// Вес подсобки. Прибавку подсвечиваем зелёным — это маленькая победа,
     /// и она должна быть видна с первого взгляда.
     private func weightChip(_ weight: Double, stepUp: Bool) -> some View {
@@ -891,6 +890,7 @@ struct ExerciseCard: View {
         }
     }
 
+    @ViewBuilder
     private var loadChip: some View {
         switch exercise.load {
         case .kilograms:
