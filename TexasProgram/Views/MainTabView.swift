@@ -142,7 +142,8 @@ struct TodayView: View {
                                 exercise: exercise,
                                 onOpenBench: onOpenBench,
                                 sets: tracker(for: exercise, in: focus),
-                                onOpenHistory: { historyFor = exercise.name }
+                                onOpenHistory: { historyFor = exercise.name },
+                                hint: profile.accessoryHint(for: exercise, week: focus.week, day: focus.day.number)
                             )
                             .appearIn(index + 4)
                             .softScroll()
@@ -639,7 +640,8 @@ struct DayDetailView: View {
                             },
                             logged: Set(profile.entries(week: week, day: day.number, exercise: exercise).map(\.index))
                         ),
-                        onOpenHistory: { historyFor = exercise.name }
+                        onOpenHistory: { historyFor = exercise.name },
+                        hint: profile.accessoryHint(for: exercise, week: week, day: day.number)
                     )
                     .appearIn(index)
                     .softScroll()
@@ -769,6 +771,8 @@ struct ExerciseCard: View {
     var sets: SetTracker?
     /// Открыть историю движения. Нет обработчика — карточка просто не нажимается.
     var onOpenHistory: (() -> Void)?
+    /// Подсказка по весу подсобки. Нет — упражнение со своим весом в плане.
+    var hint: AccessoryHint?
 
     private var isBenchLink: Bool { exercise.benchSession != nil && onOpenBench != nil }
 
@@ -830,6 +834,9 @@ struct ExerciseCard: View {
 
                 if isBenchLink {
                     Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(.secondary)
+                } else if let weight = hint?.weight {
+                    // У подсобки вес ведёт прогрессия — он важнее, чем «РПЕ 8».
+                    weightChip(weight, stepUp: hint?.isStepUp ?? false)
                 } else {
                     loadChip
                 }
@@ -840,6 +847,19 @@ struct ExerciseCard: View {
                     Text(exercise.load.displayText)
                         .font(.footnote.weight(.semibold).monospacedDigit())
                         .foregroundStyle(Theme.accentGradient)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+            }
+
+            if let hint {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: hint.isStepUp ? "arrow.up.circle.fill" : "target")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(hint.isStepUp ? Theme.success : Theme.accent)
+                    Text(hint.text)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
@@ -857,6 +877,20 @@ struct ExerciseCard: View {
     }
 
     @ViewBuilder
+    /// Вес подсобки. Прибавку подсвечиваем зелёным — это маленькая победа,
+    /// и она должна быть видна с первого взгляда.
+    private func weightChip(_ weight: Double, stepUp: Bool) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            Text(WeightFormat.kilogramsPrecise(weight))
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(stepUp ? AnyShapeStyle(Theme.success) : AnyShapeStyle(Theme.accentGradient))
+            Text(exercise.load.displayText)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
     private var loadChip: some View {
         switch exercise.load {
         case .kilograms:

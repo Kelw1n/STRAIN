@@ -127,6 +127,103 @@ final class HistoryAndExtrasTests: XCTestCase {
         XCTAssertNil(ExercisePrescription(name: "x", sets: 3, reps: "до отказа", load: .kilograms(50)).plannedReps)
     }
 
+    // MARK: - Прогрессия подсобки
+
+    /// Подсобка из демо-профиля: упражнение с диапазоном повторов и без веса.
+    private func accessory(_ profile: ProgramProfile) throws -> (ExercisePrescription, week: Int, day: Int) {
+        for week in profile.workoutPlan.weeks {
+            for day in week.days {
+                if let found = day.exercises.first(where: { $0.needsOwnWeight && $0.topReps != nil }) {
+                    return (found, week.number, day.number)
+                }
+            }
+        }
+        throw XCTSkip("в демо-программе нет подсобки без веса")
+    }
+
+    func testFirstTimeAccessoryAsksForAWeight() throws {
+        let profile = texas()
+        let (exercise, week, day) = try accessory(profile)
+
+        let hint = try XCTUnwrap(profile.accessoryHint(for: exercise, week: week, day: day))
+        XCTAssertNil(hint.weight)
+        XCTAssertFalse(hint.isStepUp)
+    }
+
+    /// Верх диапазона во всех подходах — вес растёт на шаг.
+    func testAccessoryStepsUpWhenTopOfRangeIsHit() throws {
+        let profile = texas()
+        let (exercise, week, day) = try accessory(profile)
+        let top = try XCTUnwrap(exercise.topReps)
+
+        for index in 0..<exercise.sets {
+            profile.recordSet(week: week, day: day, exercise: exercise, index: index, reps: top, weight: 20)
+        }
+
+        let next = try XCTUnwrap(profile.accessoryHint(for: exercise, week: week + 1, day: day))
+        XCTAssertEqual(next.weight, 20 + AccessoryHint.step)
+        XCTAssertTrue(next.isStepUp)
+    }
+
+    /// Недобрал хоть в одном подходе — вес тот же, растут повторы.
+    func testAccessoryHoldsWeightUntilEverySetHitsTheTop() throws {
+        let profile = texas()
+        let (exercise, week, day) = try accessory(profile)
+        let top = try XCTUnwrap(exercise.topReps)
+
+        for index in 0..<exercise.sets {
+            profile.recordSet(week: week, day: day, exercise: exercise,
+                              index: index, reps: index == 0 ? top : top - 2, weight: 20)
+        }
+
+        let next = try XCTUnwrap(profile.accessoryHint(for: exercise, week: week + 1, day: day))
+        XCTAssertEqual(next.weight, 20)
+        XCTAssertFalse(next.isStepUp)
+    }
+
+    /// Незакрытые подходы — не повод прибавлять, даже если в сделанных верх диапазона.
+    func testAccessoryNeedsEverySetLogged() throws {
+        let profile = texas()
+        let (exercise, week, day) = try accessory(profile)
+        let top = try XCTUnwrap(exercise.topReps)
+        try XCTSkipIf(exercise.sets < 2)
+
+        profile.recordSet(week: week, day: day, exercise: exercise, index: 0, reps: top, weight: 20)
+
+        let next = try XCTUnwrap(profile.accessoryHint(for: exercise, week: week + 1, day: day))
+        XCTAssertEqual(next.weight, 20)
+        XCTAssertFalse(next.isStepUp)
+    }
+
+    func testAccessoryHintIsOffWhenSwitchedOff() throws {
+        let profile = texas()
+        let (exercise, week, day) = try accessory(profile)
+        profile.accessoryProgressionEnabled = false
+
+        XCTAssertNil(profile.accessoryHint(for: exercise, week: week, day: day))
+    }
+
+    /// Основные движения ведёт программа — подсказка им не нужна.
+    func testMainLiftsHaveNoAccessoryHint() throws {
+        let profile = texas()
+        XCTAssertNil(profile.accessoryHint(for: try squat(profile), week: 1, day: 1))
+    }
+
+    /// «Всё по плану» на подсобке берёт вес прогрессии, а не пропускает её.
+    func testAsPlannedUsesTheAccessoryWeight() throws {
+        let profile = texas()
+        let (exercise, week, day) = try accessory(profile)
+        let top = try XCTUnwrap(exercise.topReps)
+        for index in 0..<exercise.sets {
+            profile.recordSet(week: week, day: day, exercise: exercise, index: index, reps: top, weight: 20)
+        }
+
+        profile.completeAsPlanned(week: week + 1, day: day)
+
+        let entry = try XCTUnwrap(profile.setEntry(week: week + 1, day: day, exercise: exercise, index: 0))
+        XCTAssertEqual(entry.weight, 20 + AccessoryHint.step)
+    }
+
     // MARK: - История по старым отметкам
 
     func testBackfillFillsCompletedDaysWithPlannedWeights() throws {

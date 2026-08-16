@@ -220,6 +220,33 @@ struct ExercisePrescription: Identifiable, Equatable, Hashable, Codable, Sendabl
         let digits = reps.split(whereSeparator: { !$0.isNumber })
         return digits.first.flatMap { Int($0) }
     }
+
+    /// Верх диапазона повторов: из «8–12» это 12, из «5» — 5.
+    /// Именно его надо закрыть во всех подходах, чтобы прибавить вес.
+    var topReps: Int? {
+        reps.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }.max()
+    }
+
+    /// Упражнение без назначенного веса — подсобка, которую программа не считает.
+    var needsOwnWeight: Bool {
+        switch load {
+        case .kilograms, .testOneRepMax: return false
+        case .rpe, .repRange: return true
+        }
+    }
+}
+
+/// Подсказка по рабочему весу подсобки.
+struct AccessoryHint: Equatable, Sendable {
+    /// Шаг прибавки. Два блина по 1,25 — самая мелкая пара, которая есть
+    /// в обычном зале; меньше прибавить всё равно нечем.
+    static let step: Double = 2.5
+
+    /// Нет веса — упражнение делается впервые, число брать неоткуда.
+    let weight: Double?
+    /// Вес вырос по сравнению с прошлым разом.
+    let isStepUp: Bool
+    let text: String
 }
 
 struct WorkoutDayPlan: Identifiable, Equatable, Hashable, Codable, Sendable {
@@ -289,6 +316,8 @@ final class ProgramProfile {
     var workoutNotes: [String: String] = [:]
     /// Замеры веса тела, по одному на дату.
     var bodyWeightLog: [BodyWeightEntry] = []
+    /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
+    var accessoryProgressionEnabled: Bool = true
     /// Напоминание о тренировке в дни расписания.
     var reminderEnabled: Bool = false
     var reminderHour: Int = 18
@@ -831,9 +860,14 @@ final class ProgramProfile {
     func completeAsPlanned(week: Int, day: Int, now: Date = Date()) {
         for exercise in plannedExercises(week: week, day: day) {
             guard exercise.sets > 0 else { continue }
-            if case .kilograms(let value) = exercise.load, let reps = exercise.plannedReps {
+            // У подсобки своего веса в плане нет — берём тот, что ведёт прогрессия.
+            var weight: Double?
+            if case .kilograms(let value) = exercise.load { weight = value }
+            else { weight = accessoryHint(for: exercise, week: week, day: day)?.weight }
+
+            if let weight, let reps = exercise.plannedReps {
                 for index in 0..<exercise.sets {
-                    recordSet(week: week, day: day, exercise: exercise, index: index, reps: reps, weight: value, now: now)
+                    recordSet(week: week, day: day, exercise: exercise, index: index, reps: reps, weight: weight, now: now)
                 }
             } else {
                 setProgress[setKey(week: week, day: day, exercise: exercise)] = exercise.sets
@@ -843,6 +877,48 @@ final class ProgramProfile {
         if !isCompleted(week: week, day: day) {
             toggleCompleted(week: week, day: day, now: now)
         }
+    }
+
+    // MARK: - Прогрессия подсобки
+
+    /// Что делать с весом подсобки на этой тренировке.
+    ///
+    /// Двойная прогрессия: сначала растут повторы внутри диапазона, и только
+    /// когда верх диапазона закрыт во всех подходах — растёт вес. Так подсобка
+    /// не встаёт на одном весе годами и не скачет через силу.
+    func accessoryHint(for exercise: ExercisePrescription, week: Int, day: Int) -> AccessoryHint? {
+        guard accessoryProgressionEnabled, exercise.needsOwnWeight, let top = exercise.topReps else { return nil }
+
+        // Прошлые разы этого движения — строго раньше текущего дня.
+        let previous = history(forExerciseNamed: exercise.name)
+            .filter { ($0.week, $0.day) < (week, day) }
+
+        guard let last = previous.last, let working = last.entries.map(\.weight).max(), working > 0 else {
+            return AccessoryHint(
+                weight: nil,
+                isStepUp: false,
+                text: "Запиши вес, с которым \(top) повторений идут впритык — дальше прибавку ведёт приложение."
+            )
+        }
+
+        // Верх диапазона должен быть закрыт во всех подходах, а не в одном.
+        let allSets = last.entries.count >= exercise.sets
+        let allTop = last.entries.allSatisfy { $0.reps >= top }
+
+        if allSets && allTop {
+            let next = ProgramCalculator.roundToPlate(working + AccessoryHint.step)
+            return AccessoryHint(
+                weight: next,
+                isStepUp: next > working,
+                text: "В прошлый раз \(top) во всех подходах — прибавь до \(WeightFormat.kilogramsPrecise(next))."
+            )
+        }
+
+        return AccessoryHint(
+            weight: working,
+            isStepUp: false,
+            text: "Держи \(WeightFormat.kilogramsPrecise(working)) и добери до \(top) в каждом подходе — тогда вес вырастет."
+        )
     }
 
     // MARK: - История по старым отметкам

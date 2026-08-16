@@ -21,7 +21,6 @@ struct ProgressScreen: View {
                     hero.appearIn(0)
                     streak.appearIn(0)
                     ProgressChartView(records: profile.completionLog).appearIn(1).softScroll()
-                    TonnageChartView(weeks: profile.weeklyTonnage).appearIn(1).softScroll()
                     BodyWeightCard(profile: profile).appearIn(1).softScroll()
                     links.appearIn(1)
                     maxes.appearIn(1)
@@ -558,6 +557,14 @@ struct SettingsView: View {
                     } footer: {
                         Text("После тяжёлого дня приложение спросит, как прошёл рабочий подход по каждому движению, и посчитает следующую неделю от ответа. Каждое движение идёт своим темпом. Пока не отвечаешь, прибавка обычная — 2,5 кг.")
                     }
+                }
+
+                Section {
+                    Toggle("Вести вес подсобки", isOn: $profile.accessoryProgressionEnabled)
+                } header: {
+                    Text("Подсобка")
+                } footer: {
+                    Text("У подсобки в плане веса нет — только повторы. Приложение возьмёт вес из прошлой тренировки и подскажет, когда прибавить: сначала добираешь верх диапазона во всех подходах, потом растёт вес на 2,5 кг. Выключишь — вернутся просто РПЕ и повторы.")
                 }
 
                 Section {
