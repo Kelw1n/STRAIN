@@ -22,12 +22,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,6 +47,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.service.RestTimer
 
 // MARK: - Точки подходов
@@ -92,11 +97,90 @@ fun SetDotsView(total: Int, tracker: SetTracker, modifier: Modifier = Modifier) 
             }
         }
         Spacer(Modifier.weight(1f))
-        Text(
-            "${tracker.done} / $total",
-            color = if (tracker.done >= total) Theme.success else Theme.textSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
+        // Долгое нажатие на точку — жест, которого не видно. Тут же написано
+        // «записать», и попасть в него можно обычным тапом.
+        val onHold = tracker.onHold
+        if (onHold != null && total > 0) {
+            Row(
+                Modifier.pressable { onHold(minOf(tracker.done, total - 1)) },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    Icons.Filled.EditNote,
+                    contentDescription = "Записать подход",
+                    tint = if (tracker.done >= total) Theme.success else Theme.accent,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    "${tracker.done} / $total",
+                    color = if (tracker.done >= total) Theme.success else Theme.accent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        } else {
+            Text(
+                "${tracker.done} / $total",
+                color = if (tracker.done >= total) Theme.success else Theme.textSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+/// Закрыть день как по плану — одна кнопка вместо десятка точек.
+///
+/// Если тренировка прошла ровно как написано, отмечать каждый подход руками —
+/// работа ради работы. Кнопка записывает плановые веса, а разошедшееся
+/// правится поверх через счётчик подходов.
+@Composable
+fun AsPlannedButton(
+    profile: ProgramProfile,
+    week: Int,
+    day: Int,
+    modifier: Modifier = Modifier,
+    onUpdate: (ProgramProfile) -> Unit
+) {
+    val exercises = profile.plannedExercises(week, day)
+    val alreadyLogged = exercises.isEmpty() ||
+        exercises.all { profile.completedSets(week, day, it) >= it.sets }
+    if (alreadyLogged) return
+
+    var confirming by remember { mutableStateOf(false) }
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Theme.accent.copy(alpha = 0.13f))
+            .border(1.dp, Theme.accent.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .pressable { confirming = true }
+            .padding(vertical = 13.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.PlaylistAddCheck, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(17.dp))
+            Text("Всё прошло по плану", color = Theme.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text("Записать все подходы плановыми весами?") },
+            text = { Text("Повторы и веса возьмутся из плана. Что разошлось — поправишь через счётчик подходов.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onUpdate(profile.completeAsPlanned(week, day))
+                    confirming = false
+                }) { Text("Записать", color = Theme.accent) }
+            },
+            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Отмена") } },
+            containerColor = Theme.surface,
+            titleContentColor = Theme.textPrimary,
+            textContentColor = Theme.textSecondary
         )
     }
 }

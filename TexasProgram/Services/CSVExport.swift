@@ -54,8 +54,10 @@ enum CSVExport {
         return url
     }
 
+    /// Один знак после запятой: веса идут с шагом 2,5, тоннаж — их кратное,
+    /// так что второй знак всегда ноль и только мешает читать.
     private static func number(_ value: Double) -> String {
-        let text = value == value.rounded() ? String(Int(value)) : String(format: "%.2f", value)
+        let text = value == value.rounded() ? String(Int(value)) : String(format: "%.1f", value)
         return text.replacingOccurrences(of: ".", with: ",")
     }
 

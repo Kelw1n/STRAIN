@@ -36,6 +36,44 @@ data class SkippedWorkout(
     val title: String get() = "Неделя $week, день $day"
 }
 
+/// Замер веса тела.
+///
+/// Вводится руками. Google Fit сюда не подключаем: лишнее разрешение ради
+/// одного числа, которое проще вписать.
+@Serializable
+data class BodyWeightEntry(
+    val epochDay: Long,
+    val weight: Double
+)
+
+/// Одна тренировка в истории упражнения.
+data class ExerciseHistoryPoint(
+    val week: Int,
+    val day: Int,
+    val planned: Double?,
+    val entries: List<SetEntry>
+) {
+    /// Лучший подход дня: по нему и видно, растёт ли движение.
+    val best: Double get() = entries.maxOfOrNull { it.weight } ?: 0.0
+    val tonnage: Double get() = entries.sumOf { it.tonnage }
+    val totalReps: Int get() = entries.sumOf { it.reps }
+}
+
+/// Подсказка по рабочему весу подсобки.
+data class AccessoryHint(
+    /// Нет веса — упражнение делается впервые, число брать неоткуда.
+    val weight: Double?,
+    /// Вес вырос по сравнению с прошлым разом.
+    val isStepUp: Boolean,
+    val text: String
+) {
+    companion object {
+        /// Шаг прибавки. Два блина по 1,25 — самая мелкая пара, которая есть
+        /// в обычном зале; меньше прибавить всё равно нечем.
+        const val STEP = 2.5
+    }
+}
+
 /// Тоннаж одной недели: сумма повторов на вес по всем записанным подходам.
 data class WeeklyTonnage(
     val week: Int,

@@ -56,6 +56,7 @@ fun TodayScreen(
     onCustomize: (Int, Int) -> Unit,
     onHoldSet: (ScheduledWorkout, com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onUpdateProfile: (com.texasprogram.app.model.ProgramProfile) -> Unit,
+    onOpenHistory: (String) -> Unit,
     onSettings: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -160,12 +161,18 @@ fun TodayScreen(
                     onHold = { dot -> onHoldSet(focus, exercise, dot) },
                     logged = profile.loggedSets(focus.week, focus.day.number, exercise),
                     done = profile.completedSets(focus.week, focus.day.number, exercise)
-                ) { dot -> onToggleSet(focus, exercise, dot) }
+                ) { dot -> onToggleSet(focus, exercise, dot) },
+                onOpenHistory = { onOpenHistory(exercise.name) },
+                hint = profile.accessoryHint(exercise, focus.week, focus.day.number)
             )
         }
 
         item(key = "rest") {
             RestTimerLauncher(timer, profile.defaultRestSeconds, onSelectRest, Modifier.appearIn(exercises.size + 4))
+        }
+
+        item(key = "asplanned") {
+            AsPlannedButton(profile, focus.week, focus.day.number, Modifier, onUpdateProfile)
         }
 
         if (autoregulationLifts(profile, focus.week, focus.day).isNotEmpty()) {

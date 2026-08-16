@@ -210,6 +210,7 @@ fun DayDetailScreen(
     onCustomize: () -> Unit,
     onHoldSet: (com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onUpdateProfile: (com.texasprogram.app.model.ProgramProfile) -> Unit,
+    onOpenHistory: (String) -> Unit,
     contentPadding: PaddingValues
 ) {
     // У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
@@ -261,9 +262,15 @@ fun DayDetailScreen(
                     onHold = { dot -> onHoldSet(exercise, dot) },
                     logged = profile.loggedSets(week, day.number, exercise),
                     done = profile.completedSets(week, day.number, exercise)
-                ) { dot -> onToggleSet(exercise, dot) }
+                ) { dot -> onToggleSet(exercise, dot) },
+                onOpenHistory = { onOpenHistory(exercise.name) },
+                hint = profile.accessoryHint(exercise, week, day.number)
             )
         }
+        item(key = "asplanned") {
+            AsPlannedButton(profile, week, day.number, Modifier, onUpdateProfile)
+        }
+
         // Веса берём из того же списка, что показан выше: у запланированного
         // дня жим приходит из волны, а не из плана.
         val resolved = day.copy(exercises = exercises)

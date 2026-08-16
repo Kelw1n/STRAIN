@@ -185,6 +185,20 @@ data class ExercisePrescription(
     /// Ключ идентичности. У упражнений программы это имя — так отметки,
     /// сохранённые до появления правок, продолжают находиться.
     val key: String get() = id ?: name
+
+    /// Число повторов из плана. У диапазона «8-10» берём нижнюю границу:
+    /// записывать за человека верхнюю — приписывать ему работу, которой не было.
+    val plannedReps: Int?
+        get() = Regex("\\d+").find(reps)?.value?.toIntOrNull()
+
+    /// Верх диапазона повторов: из «8–12» это 12, из «5» — 5.
+    /// Именно его надо закрыть во всех подходах, чтобы прибавить вес.
+    val topReps: Int?
+        get() = Regex("\\d+").findAll(reps).mapNotNull { it.value.toIntOrNull() }.maxOrNull()
+
+    /// Упражнение без назначенного веса — подсобка, которую программа не считает.
+    val needsOwnWeight: Boolean
+        get() = load is LoadPrescription.Rpe || load is LoadPrescription.RepRange
 }
 
 data class WorkoutDayPlan(

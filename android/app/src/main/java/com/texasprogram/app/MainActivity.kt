@@ -66,11 +66,16 @@ import com.texasprogram.app.ui.AppBackground
 import com.texasprogram.app.ui.BenchWaveScreen
 import com.texasprogram.app.ui.DayCustomizeScreen
 import com.texasprogram.app.ui.DayDetailScreen
+import com.texasprogram.app.ui.ExerciseHistoryListScreen
+import com.texasprogram.app.ui.ExerciseHistoryScreen
 import com.texasprogram.app.ui.GuideScreen
 import com.texasprogram.app.ui.KeepScreenOn
+import com.texasprogram.app.service.CSVExport
+import com.texasprogram.app.service.ReminderScheduler
 import com.texasprogram.app.service.RestTimer
 import com.texasprogram.app.ui.Motion
 import com.texasprogram.app.ui.OnboardingScreen
+import com.texasprogram.app.ui.NotesListScreen
 import com.texasprogram.app.ui.PlanScreen
 import com.texasprogram.app.ui.ProgressScreen
 import com.texasprogram.app.ui.SettingsScreen
@@ -152,6 +157,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     var dayDetail by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var customizing by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var entryTarget by remember { mutableStateOf<com.texasprogram.app.ui.SetEntryTarget?>(null) }
+    // Разделы поверх вкладок: список движений, история одного и заметки.
+    var showHistoryList by remember { mutableStateOf(false) }
+    var historyFor by remember { mutableStateOf<String?>(null) }
+    var showNotes by remember { mutableStateOf(false) }
 
     val isUpperLower = profile.programKind == TrainingProgramKind.UPPER_LOWER
     val tabs = AppTab.entries.filter { it != AppTab.BENCH || isUpperLower }
@@ -182,6 +191,18 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         }
     }
 
+    val csvLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        backupMessage = try {
+            context.contentResolver.openOutputStream(uri)?.use { it.write(CSVExport.bytes(store.profiles)) }
+            "Таблица сохранена"
+        } catch (e: Exception) {
+            "Не удалось собрать таблицу"
+        }
+    }
+
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -198,9 +219,15 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
     val contentPadding = screenPadding(bottomExtra = 96.dp)
 
-    BackHandler(enabled = showSettings || dayDetail != null || customizing != null) {
+    BackHandler(
+        enabled = showSettings || dayDetail != null || customizing != null ||
+            showHistoryList || historyFor != null || showNotes
+    ) {
         when {
             customizing != null -> customizing = null
+            historyFor != null -> historyFor = null
+            showHistoryList -> showHistoryList = false
+            showNotes -> showNotes = false
             showSettings -> showSettings = false
             dayDetail != null -> dayDetail = null
         }
@@ -245,6 +272,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             workout.week, workout.day.number, exercise, dot
                         )
                     },
+                    onOpenHistory = { name -> historyFor = name },
                     onSettings = { showSettings = true },
                     contentPadding = contentPadding
                 )
@@ -262,7 +290,13 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onSetCurrentBench = { session -> store.updateActive { it.setCurrentBenchSession(session) } },
                     contentPadding = contentPadding
                 )
-                AppTab.PROGRESS -> ProgressScreen(profile, contentPadding)
+                AppTab.PROGRESS -> ProgressScreen(
+                    profile = profile,
+                    contentPadding = contentPadding,
+                    onOpenHistory = { showHistoryList = true },
+                    onOpenNotes = { showNotes = true },
+                    onUpdate = { updated -> store.update(updated.id) { updated } }
+                )
                 AppTab.GUIDE -> GuideScreen(profile.programKind, contentPadding)
             }
         }
@@ -311,6 +345,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             onHoldSet = { exercise, dot ->
                                 entryTarget = com.texasprogram.app.ui.SetEntryTarget(week, dayNumber, exercise, dot)
                             },
+                            onOpenHistory = { name -> historyFor = name },
                             contentPadding = screenPadding(bottomExtra = 32.dp)
                         )
                         CloseButton(Modifier.align(Alignment.TopEnd)) { dayDetail = null }
@@ -371,6 +406,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         profile = profile,
                         onExportBackup = { exportLauncher.launch(BackupService.FILE_NAME) },
                         onImportBackup = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                        onExportCsv = { csvLauncher.launch(CSVExport.FILE_NAME) },
                         backupMessage = backupMessage,
                         profiles = store.profiles,
                         onUpdate = { updated -> store.update(updated.id) { updated } },
@@ -392,6 +428,70 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                 }
             }
         }
+
+        // Список движений, история одного и заметки — тоже поверх вкладок.
+        AnimatedContent(
+            targetState = showHistoryList,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            label = "historyList"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    ExerciseHistoryListScreen(
+                        profile = profile,
+                        onOpen = { name -> historyFor = name },
+                        onUpdate = { updated -> store.update(updated.id) { updated } },
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showHistoryList = false }
+                }
+            }
+        }
+
+        AnimatedContent(
+            targetState = historyFor,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            label = "history"
+        ) { name ->
+            if (name != null) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    ExerciseHistoryScreen(
+                        profile = profile,
+                        name = name,
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { historyFor = null }
+                }
+            }
+        }
+
+        AnimatedContent(
+            targetState = showNotes,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            label = "notes"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    NotesListScreen(
+                        profile = profile,
+                        onUpdate = { updated -> store.update(updated.id) { updated } },
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showNotes = false }
+                }
+            }
+        }
+    }
+
+    // Напоминания пересобираем при запуске и на каждое изменение настроек:
+    // будильники не переживают перезагрузку телефона.
+    LaunchedEffect(
+        profile.reminderEnabled,
+        profile.reminderHour,
+        profile.reminderMinute,
+        profile.scheduleWeekdays
+    ) {
+        ReminderScheduler.reschedule(context, profile)
     }
 }
 

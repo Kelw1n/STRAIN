@@ -32,6 +32,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Напоминание о тренировке в назначенное время. -->
+        <receiver
+            android:name=".service.ReminderReceiver"
+            android:exported="false" />
+
         <!-- Срабатывает в момент окончания отдыха, когда приложение свёрнуто. -->
         <receiver
             android:name=".service.RestFinishedReceiver"

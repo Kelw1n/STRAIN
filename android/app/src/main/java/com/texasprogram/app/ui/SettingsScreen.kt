@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Refresh
 import com.texasprogram.app.service.FullBodyLevel
 import androidx.compose.material.icons.filled.Terrain
@@ -73,6 +74,7 @@ fun SettingsScreen(
     onDeleteProfile: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
+    onExportCsv: () -> Unit,
     backupMessage: String?,
     onClose: () -> Unit,
     contentPadding: PaddingValues
@@ -225,6 +227,77 @@ fun SettingsScreen(
                         fontSize = 11.sp
                     )
                 }
+            }
+        }
+
+        item(key = "accessory") {
+            CardView(Modifier.appearIn(5)) {
+                SectionLabel("Подсобка")
+                SegmentedControl(
+                    options = listOf("Вести вес", "Только повторы"),
+                    selectedIndex = if (profile.accessoryProgressionEnabled) 0 else 1
+                ) { onUpdate(profile.copy(accessoryProgressionEnabled = it == 0)) }
+                Text(
+                    "У подсобки в плане веса нет — только повторы. Приложение возьмёт вес из прошлой тренировки и подскажет, когда прибавить: сначала добираешь верх диапазона во всех подходах, потом растёт вес на 2,5 кг.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        item(key = "reminder") {
+            CardView(Modifier.appearIn(5)) {
+                SectionLabel("Напоминания")
+                SegmentedControl(
+                    options = listOf("Напоминать", "Не напоминать"),
+                    selectedIndex = if (profile.reminderEnabled) 0 else 1
+                ) { onUpdate(profile.copy(reminderEnabled = it == 0)) }
+                if (profile.reminderEnabled) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Время", color = Theme.textPrimary, fontSize = 14.sp)
+                        Spacer(Modifier.weight(1f))
+                        StepButton("−") {
+                            onUpdate(profile.copy(reminderHour = (profile.reminderHour + 23) % 24))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "%02d:%02d".format(profile.reminderHour, profile.reminderMinute),
+                            color = Theme.textPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        StepButton("+") {
+                            onUpdate(profile.copy(reminderHour = (profile.reminderHour + 1) % 24))
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Минуты", color = Theme.textPrimary, fontSize = 14.sp)
+                        Spacer(Modifier.weight(1f))
+                        StepButton("−") {
+                            onUpdate(profile.copy(reminderMinute = (profile.reminderMinute + 45) % 60))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "%02d".format(profile.reminderMinute),
+                            color = Theme.textPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        StepButton("+") {
+                            onUpdate(profile.copy(reminderMinute = (profile.reminderMinute + 15) % 60))
+                        }
+                    }
+                }
+                Text(
+                    if (profile.reminderEnabled)
+                        "Придёт в дни расписания: " + profile.weekdays.joinToString(", ") { RuDate.short(it) } +
+                            ". Меняешь дни ниже — напоминания переезжают за ними."
+                    else "Уведомление в дни, которые стоят в расписании. Веса в нём не пишутся: они меняются каждую неделю, а уведомление система повторяет одно и то же.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
             }
         }
 
@@ -395,11 +468,12 @@ fun SettingsScreen(
                 SectionLabel("Резервная копия")
                 SecondaryButton("Сохранить копию", icon = Icons.Filled.Upload, onClick = onExportBackup)
                 SecondaryButton("Загрузить копию", icon = Icons.Filled.Download, onClick = onImportBackup)
+                SecondaryButton("Выгрузить таблицу", icon = Icons.Filled.TableChart, onClick = onExportCsv)
                 if (backupMessage != null) {
                     Text(backupMessage, color = Theme.success, fontSize = 12.sp)
                 }
                 Text(
-                    "Файл со всеми профилями, максимумами, расписанием и историей. Тот же формат читает версия для iPhone.",
+                    "Копия — файл со всеми профилями, максимумами, расписанием и историей; тот же формат читает версия для iPhone. Таблица — записанные подходы в CSV, открывается в Excel.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )

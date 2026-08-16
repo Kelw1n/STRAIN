@@ -16,6 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ArrowCircleUp
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MonitorHeart
@@ -34,8 +37,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.BenchSetKind
+import com.texasprogram.app.model.AccessoryHint
 import com.texasprogram.app.model.ExercisePrescription
 import com.texasprogram.app.model.LoadPrescription
+import com.texasprogram.app.model.formatWeight
 
 /// Цвета и градиенты для типов подходов волны жима.
 val BenchSetKind.tint: Color
@@ -68,7 +73,11 @@ fun ExerciseCard(
     modifier: Modifier = Modifier,
     onOpenBench: ((Int) -> Unit)? = null,
     /// Нет трекера — карточка без точек, как на экране пикирования.
-    sets: SetTracker? = null
+    sets: SetTracker? = null,
+    /// Открыть историю движения. Нет обработчика — значка нет.
+    onOpenHistory: (() -> Unit)? = null,
+    /// Подсказка по весу подсобки. Нет — упражнение со своим весом в плане.
+    hint: AccessoryHint? = null
 ) {
     val isBenchLink = exercise.benchSession != null && onOpenBench != null
     val iconGradient = when {
@@ -113,6 +122,27 @@ fun ExerciseCard(
                     fontSize = 12.sp
                 )
             }
+            // Значок истории — рядом с названием, а не на всей карточке:
+            // внутри неё уже нажимаются точки подходов.
+            if (onOpenHistory != null) {
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Theme.accent.copy(alpha = 0.13f))
+                        .pressable(onClick = onOpenHistory),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.ShowChart,
+                        contentDescription = "История упражнения",
+                        tint = Theme.accent,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+            }
+
             Spacer(Modifier.width(8.dp))
             when {
                 isBenchLink -> Icon(
@@ -121,6 +151,16 @@ fun ExerciseCard(
                     tint = Theme.textSecondary,
                     modifier = Modifier.size(18.dp)
                 )
+                // У подсобки вес ведёт прогрессия — он важнее, чем «РПЕ 8».
+                hint?.weight != null -> Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${formatWeight(hint.weight)} кг",
+                        color = if (hint.isStepUp) Theme.success else Theme.accent,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(exercise.load.displayText, color = Theme.textTertiary, fontSize = 9.sp)
+                }
                 exercise.load is LoadPrescription.Kilograms -> GradientText(
                     exercise.load.displayText,
                     fontSize = 17.sp,
@@ -136,6 +176,19 @@ fun ExerciseCard(
         }
         if (isBenchLink) {
             GradientText(exercise.load.displayText, fontSize = 13.sp, weight = FontWeight.SemiBold)
+        }
+
+        if (hint != null) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Icon(
+                    if (hint.isStepUp) Icons.Filled.ArrowCircleUp else Icons.Filled.TrackChanges,
+                    contentDescription = null,
+                    tint = if (hint.isStepUp) Theme.success else Theme.accent,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(hint.text, color = Theme.textSecondary, fontSize = 11.sp)
+            }
         }
 
         if (sets != null && exercise.sets > 0) {

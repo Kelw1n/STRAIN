@@ -92,7 +92,15 @@ data class ProgramProfile(
     /// Оценки тяжёлых дней по движениям.
     val liftReports: List<LiftReport> = emptyList(),
     /// Заметка к тренировке: ключ дня плана.
-    val workoutNotes: Map<String, String> = emptyMap()
+    val workoutNotes: Map<String, String> = emptyMap(),
+    /// Замеры веса тела, по одному на дату.
+    val bodyWeightLog: List<BodyWeightEntry> = emptyList(),
+    /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
+    val accessoryProgressionEnabled: Boolean = true,
+    /// Напоминание о тренировке в дни расписания.
+    val reminderEnabled: Boolean = false,
+    val reminderHour: Int = 18,
+    val reminderMinute: Int = 0
 ) {
 
     // MARK: - Входные данные и план
@@ -397,6 +405,208 @@ data class ProgramProfile(
     /// Номера подходов, у которых факт записан.
     fun loggedSets(week: Int, day: Int, exercise: ExercisePrescription): Set<Int> =
         (0 until maxOf(exercise.sets, 0)).filter { setEntry(week, day, exercise, it) != null }.toSet()
+
+    /// Записанные подходы упражнения по порядку номеров.
+    fun entries(week: Int, day: Int, exercise: ExercisePrescription): List<SetEntry> =
+        (0 until maxOf(exercise.sets, 0)).mapNotNull { setEntry(week, day, exercise, it) }
+
+    // MARK: - История упражнения
+
+    /// Названия упражнений, по которым есть хоть один записанный подход.
+    ///
+    /// Берём из плана, а не из ключей: в ключе лежит идентификатор, а показать
+    /// нужно человеческое имя, и порядок должен совпадать с порядком в программе.
+    val loggedExerciseNames: List<String>
+        get() {
+            val names = mutableListOf<String>()
+            for (week in workoutPlan.weeks) {
+                for (day in week.days) {
+                    for (exercise in day.exercises) {
+                        if (names.contains(exercise.name)) continue
+                        if (entries(week.number, day.number, exercise).isNotEmpty()) names += exercise.name
+                    }
+                }
+            }
+            return names
+        }
+
+    /// Весь путь одного движения по текущему циклу.
+    fun history(exerciseName: String): List<ExerciseHistoryPoint> {
+        val points = mutableListOf<ExerciseHistoryPoint>()
+        for (week in workoutPlan.weeks) {
+            for (day in week.days) {
+                for (exercise in day.exercises) {
+                    if (exercise.name != exerciseName) continue
+                    val logged = entries(week.number, day.number, exercise)
+                    if (logged.isEmpty()) continue
+                    points += ExerciseHistoryPoint(
+                        week = week.number,
+                        day = day.number,
+                        planned = (exercise.load as? LoadPrescription.Kilograms)?.value,
+                        entries = logged
+                    )
+                }
+            }
+        }
+        return points
+    }
+
+    // MARK: - Вес тела
+
+    val bodyWeightSeries: List<BodyWeightEntry> get() = bodyWeightLog.sortedBy { it.epochDay }
+
+    val latestBodyWeight: Double? get() = bodyWeightSeries.lastOrNull()?.weight
+
+    /// Записывает замер. День — единица измерения: второй замер за сутки заменяет первый.
+    fun recordBodyWeight(value: Double, today: LocalDate = LocalDate.now()): ProgramProfile {
+        val day = today.toEpochDay()
+        val rest = bodyWeightLog.filterNot { it.epochDay == day }
+        return copy(bodyWeightLog = if (value > 0) rest + BodyWeightEntry(day, value) else rest)
+    }
+
+    /// Отношение максимума к своему весу: на сушке штанга стоит,
+    /// а это число растёт — и видно, что работа не впустую.
+    fun relativeStrength(maximum: Double): Double? {
+        val weight = latestBodyWeight ?: return null
+        return if (weight > 0) maximum / weight else null
+    }
+
+    // MARK: - Прогрессия подсобки
+
+    /// Что делать с весом подсобки на этой тренировке.
+    ///
+    /// Двойная прогрессия: сначала растут повторы внутри диапазона, и только
+    /// когда верх диапазона закрыт во всех подходах — растёт вес. Так подсобка
+    /// не встаёт на одном весе годами и не скачет через силу.
+    fun accessoryHint(exercise: ExercisePrescription, week: Int, day: Int): AccessoryHint? {
+        if (!accessoryProgressionEnabled || !exercise.needsOwnWeight) return null
+        val top = exercise.topReps ?: return null
+
+        // Прошлые разы этого движения — строго раньше текущего дня.
+        val last = history(exercise.name)
+            .filter { it.week < week || (it.week == week && it.day < day) }
+            .lastOrNull()
+        val working = last?.entries?.maxOfOrNull { it.weight }
+
+        if (last == null || working == null || working <= 0) {
+            return AccessoryHint(
+                weight = null,
+                isStepUp = false,
+                text = "Запиши вес, с которым $top повторений идут впритык — дальше прибавку ведёт приложение."
+            )
+        }
+
+        // Верх диапазона должен быть закрыт во всех подходах, а не в одном.
+        if (last.entries.size >= exercise.sets && last.entries.all { it.reps >= top }) {
+            val next = ProgramCalculator.roundToPlate(working + AccessoryHint.STEP)
+            return AccessoryHint(
+                weight = next,
+                isStepUp = next > working,
+                text = "В прошлый раз $top во всех подходах — прибавь до ${formatWeight(next)} кг."
+            )
+        }
+
+        return AccessoryHint(
+            weight = working,
+            isStepUp = false,
+            text = "Держи ${formatWeight(working)} кг и добери до $top в каждом подходе — тогда вес вырастет."
+        )
+    }
+
+    // MARK: - Закрыть день как по плану
+
+    /// Упражнения дня ровно в том виде, в каком они были на экране:
+    /// с правками, задержками и жимом из волны.
+    fun plannedExercises(week: Int, day: Int): List<ExercisePrescription> {
+        val plan = workoutPlan.weeks.firstOrNull { it.number == week }
+            ?.days?.firstOrNull { it.number == day } ?: return emptyList()
+        val session = benchSession(week, day) ?: return plan.exercises
+        val wave = benchWave.firstOrNull { it.id == session } ?: return plan.exercises
+        return plan.exercises.map { exercise ->
+            if (exercise.benchSession == null) exercise
+            else exercise.copy(name = wave.exerciseName, sets = wave.sets.size, reps = wave.repsText)
+        }
+    }
+
+    /// Записывает все подходы дня плановыми весами.
+    ///
+    /// Для упражнений без конкретного веса просто закрываем точки: придумывать
+    /// за человека числа неправильно.
+    fun completeAsPlanned(week: Int, day: Int, today: LocalDate = LocalDate.now()): ProgramProfile {
+        var next = this
+        for (exercise in plannedExercises(week, day)) {
+            if (exercise.sets <= 0) continue
+            // У подсобки своего веса в плане нет — берём тот, что ведёт прогрессия.
+            val weight = (exercise.load as? LoadPrescription.Kilograms)?.value
+                ?: next.accessoryHint(exercise, week, day)?.weight
+            val reps = exercise.plannedReps
+
+            next = if (weight != null && reps != null) {
+                (0 until exercise.sets).fold(next) { value, index ->
+                    value.recordSet(week, day, exercise, index, reps, weight, today)
+                }
+            } else {
+                next.copy(setProgress = next.setProgress + (setKey(week, day, exercise) to exercise.sets))
+            }
+        }
+        if (!next.isCompleted(week, day)) next = next.toggleCompleted(week, day, today)
+        return next
+    }
+
+    // MARK: - История по старым отметкам
+
+    /// Уже отмеченные тренировки, которые можно достроить до записей.
+    ///
+    /// Отметка говорит «подход сделан», но не говорит с каким весом. Раз вес
+    /// был плановым — а отмечают обычно именно так, — эти записи можно
+    /// восстановить, и история перестанет начинаться с сегодняшнего дня.
+    fun backfillTargets(): List<Pair<Int, Int>> {
+        val result = mutableListOf<Pair<Int, Int>>()
+        for (week in workoutPlan.weeks) {
+            for (day in week.days) {
+                val marked = isCompleted(week.number, day.number)
+                val list = plannedExercises(week.number, day.number)
+                val touched = list.any { completedSets(week.number, day.number, it) > 0 }
+                if (!marked && !touched) continue
+
+                val fillable = list.any { exercise ->
+                    if (exercise.load !is LoadPrescription.Kilograms || exercise.plannedReps == null) return@any false
+                    val done = if (marked) exercise.sets else completedSets(week.number, day.number, exercise)
+                    done > 0 && entries(week.number, day.number, exercise).isEmpty()
+                }
+                if (fillable) result += week.number to day.number
+            }
+        }
+        return result
+    }
+
+    val backfillableWorkouts: Int get() = backfillTargets().size
+
+    /// Достраивает записи по отметкам.
+    ///
+    /// Трогаем только пустое: если по упражнению уже есть хоть один записанный
+    /// подход, значит человек вводил настоящие числа, и подменять их плановыми
+    /// нельзя. Упражнения без веса в плане пропускаем — придумывать килограммы неоткуда.
+    fun backfillHistoryFromMarks(today: LocalDate = LocalDate.now()): Pair<ProgramProfile, Int> {
+        var next = this
+        var filled = 0
+        for ((week, day) in backfillTargets()) {
+            val marked = isCompleted(week, day)
+            for (exercise in plannedExercises(week, day)) {
+                val weight = (exercise.load as? LoadPrescription.Kilograms)?.value ?: continue
+                val reps = exercise.plannedReps ?: continue
+                if (next.entries(week, day, exercise).isNotEmpty()) continue
+
+                val done = if (marked) exercise.sets else completedSets(week, day, exercise)
+                if (done <= 0) continue
+                next = (0 until done).fold(next) { value, index ->
+                    value.recordSet(week, day, exercise, index, reps, weight, today)
+                }
+            }
+            filled += 1
+        }
+        return next to filled
+    }
 
     /// Наибольший записанный вес движения за день — им факт попадает в график.
     fun actualWeight(week: Int, day: Int, names: List<String>): Double? {

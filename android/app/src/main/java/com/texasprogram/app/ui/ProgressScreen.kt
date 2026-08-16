@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +36,13 @@ import com.texasprogram.app.model.formatWeight
 import com.texasprogram.app.service.UpperLowerCalculator
 
 @Composable
-fun ProgressScreen(profile: ProgramProfile, contentPadding: PaddingValues) {
+fun ProgressScreen(
+    profile: ProgramProfile,
+    contentPadding: PaddingValues,
+    onOpenHistory: () -> Unit = {},
+    onOpenNotes: () -> Unit = {},
+    onUpdate: (ProgramProfile) -> Unit = {}
+) {
     val plan = profile.workoutPlan
     val done = profile.completedDayCount
     val total = profile.totalDays
@@ -74,12 +82,43 @@ fun ProgressScreen(profile: ProgramProfile, contentPadding: PaddingValues) {
             StreakCard(streak.first, streak.second, Modifier.appearIn(1))
         }
 
-        item(key = "tonnage") {
-            TonnageCard(profile.weeklyTonnage, Modifier.appearIn(1))
-        }
-
         item(key = "chart") {
             ProgressChartView(profile.completionLog, Modifier.appearIn(1))
+        }
+
+        item(key = "bodyweight") {
+            BodyWeightCard(profile, Modifier.appearIn(1), onUpdate)
+        }
+
+        item(key = "links") {
+            CardView(Modifier.appearIn(1), padding = 6.dp, spacing = 0.dp) {
+                // Пока история пустая, а отметки есть, зовём именно достроить её:
+                // иначе про такую возможность никто не узнает.
+                val pending = profile.backfillableWorkouts
+                LinkRow(
+                    title = "История упражнений",
+                    subtitle = if (pending > 0) "можно заполнить по отметкам"
+                    else countText(profile.loggedExerciseNames.size, "движение", "движения", "движений"),
+                    icon = Icons.Filled.ShowChart,
+                    onClick = onOpenHistory
+                )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .height(1.dp)
+                        .background(Theme.hairline)
+                )
+                LinkRow(
+                    title = "Заметки",
+                    subtitle = countText(
+                        profile.workoutNotes.keys.count { profile.isOwnKey(it) },
+                        "запись", "записи", "записей"
+                    ),
+                    icon = Icons.Filled.Notes,
+                    onClick = onOpenNotes
+                )
+            }
         }
 
         item(key = "maxes") {
@@ -187,5 +226,51 @@ private fun PRRow(title: String, value: Double) {
         Text(title, color = Theme.textPrimary, fontSize = 14.sp)
         Spacer(Modifier.weight(1f))
         Text("${formatWeight(value)} кг", color = Theme.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/// Строка-вход в раздел: значок, название и подпись со счётчиком.
+@Composable
+private fun LinkRow(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .pressable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Theme.accentGradient),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = Theme.textPrimary, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(13.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Theme.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = Theme.textSecondary, fontSize = 11.sp)
+        }
+        Text("›", color = Theme.textSecondary, fontSize = 20.sp)
+    }
+}
+
+/// Русский счёт: одна запись, две записи, пять записей.
+private fun countText(count: Int, one: String, few: String, many: String): String {
+    if (count <= 0) return "пока пусто"
+    val last = count % 10
+    val hundred = count % 100
+    return when {
+        hundred in 11..14 -> "$count $many"
+        last == 1 -> "$count $one"
+        last in 2..4 -> "$count $few"
+        else -> "$count $many"
     }
 }
