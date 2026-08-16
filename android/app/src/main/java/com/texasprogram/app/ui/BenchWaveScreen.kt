@@ -164,7 +164,7 @@ fun BenchWaveScreen(
             dismissButton = {
                 TextButton(onClick = { pendingStart = null }) { Text("Отмена") }
             },
-            containerColor = Theme.surface,
+            containerColor = Theme.dialog,
             titleContentColor = Theme.textPrimary,
             textContentColor = Theme.textSecondary
         )

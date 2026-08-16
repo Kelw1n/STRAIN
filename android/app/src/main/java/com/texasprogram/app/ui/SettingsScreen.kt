@@ -515,7 +515,7 @@ fun SettingsScreen(
                 }) { Text("Удалить", color = Theme.record) }
             },
             dismissButton = { TextButton(onClick = { showDelete = false }) { Text("Отмена") } },
-            containerColor = Theme.surface,
+            containerColor = Theme.dialog,
             titleContentColor = Theme.textPrimary,
             textContentColor = Theme.textSecondary
         )

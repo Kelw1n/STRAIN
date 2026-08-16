@@ -249,7 +249,7 @@ struct ExerciseHistoryList: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Есть отмеченные тренировки", systemImage: "clock.arrow.circlepath")
                     .font(.subheadline.weight(.bold))
-                Text("\(pending) \(workoutWord(pending)) отмечено, но веса в них не записаны. Можно проставить плановые — история и тоннаж посчитаются задним числом.")
+                Text("\(pending) \(workoutWord(pending)) отмечено, но веса в них не записаны. Можно проставить плановые — история посчитается задним числом.")
                     .font(.footnote).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {

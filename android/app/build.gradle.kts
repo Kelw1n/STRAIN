@@ -13,8 +13,8 @@ android {
         applicationId = "com.texasprogram.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "2.7.0"
+        versionCode = 23
+        versionName = "2.7.2"
     }
 
     buildTypes {

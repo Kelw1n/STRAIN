@@ -32,8 +32,6 @@ import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ExercisePrescription
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.ProgramProfile
-import com.texasprogram.app.model.WeeklyTonnage
-import com.texasprogram.app.model.formatTonnage
 import com.texasprogram.app.model.formatWeight
 
 /// Какой подход записываем.
@@ -84,7 +82,7 @@ fun SetEntryDialog(
                 TextRow(reps, "Повторов") { reps = it }
                 DecimalField(value = weight, label = "Вес, кг", onValueChange = { weight = it })
                 Text(
-                    "Записанные подходы идут в тоннаж и во вторую линию графика — она показывает факт рядом с планом.",
+                    "Записанные подходы попадают в историю упражнения и в график рабочих весов.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
@@ -112,7 +110,7 @@ fun SetEntryDialog(
                 TextButton(onClick = onDismiss) { Text("Отмена") }
             }
         },
-        containerColor = Theme.surfaceSoft,
+        containerColor = Theme.dialog,
         titleContentColor = Theme.textPrimary,
         textContentColor = Theme.textPrimary
     )
@@ -183,69 +181,13 @@ fun SkipCard(
                     TextButton(onClick = { asking = false }) { Text("Отмена") }
                 }
             },
-            containerColor = Theme.surfaceSoft,
+            containerColor = Theme.dialog,
             titleContentColor = Theme.textPrimary,
             textContentColor = Theme.textPrimary
         )
     }
 }
 
-/// Тоннаж по неделям: сумма «повторы × вес» записанных подходов.
-///
-/// Считается только по факту. Догадываться по плану нельзя: повторы там бывают
-/// диапазоном и списком, и любая догадка дала бы выдуманное число.
-@Composable
-fun TonnageCard(weeks: List<WeeklyTonnage>, modifier: Modifier = Modifier) {
-    CardView(modifier) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Тоннаж", color = Theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.weight(1f))
-            if (weeks.isNotEmpty()) {
-                Text(
-                    formatTonnage(weeks.sumOf { it.total }),
-                    color = Theme.accent,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        if (weeks.isEmpty()) {
-            Text(
-                "Записывай подходы долгим нажатием на кружок — тоннаж считается по ним.",
-                color = Theme.textSecondary,
-                fontSize = 12.sp
-            )
-        } else {
-            val top = weeks.maxOf { it.total }.coerceAtLeast(1.0)
-            Canvas(
-                Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-                    .padding(top = 6.dp)
-            ) {
-                val gap = size.width / (weeks.size * 2f)
-                val barWidth = gap
-                weeks.forEachIndexed { index, item ->
-                    val height = (item.total / top * size.height).toFloat()
-                    drawRect(
-                        color = Theme.accent,
-                        topLeft = Offset(index * (barWidth + gap) + gap / 2, size.height - height),
-                        size = Size(barWidth, height)
-                    )
-                }
-            }
-            Text(
-                "${weeks.sumOf { it.setCount }} записанных подходов за ${weeks.size} нед.",
-                color = Theme.textSecondary,
-                fontSize = 11.sp
-            )
-        }
-    }
-}
-
-/// Серия закрытых недель. Показываем только когда есть что показать:
-/// нули на пустом профиле выглядят как упрёк.
 @Composable
 fun StreakCard(current: Int, best: Int, modifier: Modifier = Modifier) {
     if (best <= 0) return
@@ -334,7 +276,7 @@ fun NewCycleDialog(
             ) { Text("Начать цикл ${profile.cycleNumber + 1}") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-        containerColor = Theme.surfaceSoft,
+        containerColor = Theme.dialog,
         titleContentColor = Theme.textPrimary,
         textContentColor = Theme.textPrimary
     )

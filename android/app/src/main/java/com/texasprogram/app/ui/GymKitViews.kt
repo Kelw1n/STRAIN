@@ -178,7 +178,7 @@ fun AsPlannedButton(
                 }) { Text("Записать", color = Theme.accent) }
             },
             dismissButton = { TextButton(onClick = { confirming = false }) { Text("Отмена") } },
-            containerColor = Theme.surface,
+            containerColor = Theme.dialog,
             titleContentColor = Theme.textPrimary,
             textContentColor = Theme.textSecondary
         )
