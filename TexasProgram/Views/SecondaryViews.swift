@@ -22,7 +22,6 @@ struct ProgressScreen: View {
                     streak.appearIn(0)
                     ProgressChartView(records: profile.completionLog).appearIn(1).softScroll()
                     TonnageChartView(weeks: profile.weeklyTonnage).appearIn(1).softScroll()
-                    CoachCard(profile: profile).appearIn(1)
                     maxes.appearIn(1)
                     if profile.programKind.hasBenchWave { benchCard.appearIn(2) }
                     heatmap.appearIn(3).softScroll()
@@ -369,9 +368,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: [SortDescriptor(\ProgramProfile.createdAt)]) private var profiles: [ProgramProfile]
     @AppStorage("activeProfileID") private var activeProfileID = ""
-    /// Ключ и модель для разбора — общие для всех профилей, поэтому не в модели.
-    @AppStorage("coachKey") private var coachKey = ""
-    @AppStorage("coachModel") private var coachModel = ""
     @Bindable var profile: ProgramProfile
     let onAddProfile: () -> Void
     let onDeleteProfile: () -> Void
@@ -506,19 +502,6 @@ struct SettingsView: View {
                     } footer: {
                         Text("После тяжёлого дня приложение спросит, как прошёл рабочий подход по каждому движению, и посчитает следующую неделю от ответа. Каждое движение идёт своим темпом. Пока не отвечаешь, прибавка обычная — 2,5 кг.")
                     }
-                }
-
-                Section {
-                    TextField("Ключ доступа", text: $coachKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    TextField(CoachSecrets.defaultModel, text: $coachModel)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("Разбор тренировок")
-                } footer: {
-                    Text("Разбор заметок на вкладке «Прогресс» работает и так — ключ уже внутри приложения. Свой можно вписать сюда, тогда запросы пойдут через него. Вторая строка — название модели, менять её нужно, только если разбор перестал отвечать.")
                 }
 
                 Section {

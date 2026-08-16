@@ -262,13 +262,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onSetCurrentBench = { session -> store.updateActive { it.setCurrentBenchSession(session) } },
                     contentPadding = contentPadding
                 )
-                AppTab.PROGRESS -> ProgressScreen(
-                    profile = profile,
-                    contentPadding = contentPadding,
-                    coachKey = store.coachKey,
-                    coachModel = store.coachModel,
-                    onUpdate = { updated -> store.update(updated.id) { updated } }
-                )
+                AppTab.PROGRESS -> ProgressScreen(profile, contentPadding)
                 AppTab.GUIDE -> GuideScreen(profile.programKind, contentPadding)
             }
         }
@@ -380,10 +374,6 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         backupMessage = backupMessage,
                         profiles = store.profiles,
                         onUpdate = { updated -> store.update(updated.id) { updated } },
-                        coachKey = store.coachKey,
-                        coachModel = store.coachModel,
-                        onCoachKey = store::updateCoachKey,
-                        onCoachModel = store::updateCoachModel,
                         onSwitchProfile = { id ->
                             showSettings = false
                             store.setActive(id)

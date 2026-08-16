@@ -280,10 +280,6 @@ final class ProgramProfile {
     var liftReports: [LiftReport] = []
     /// Заметка к тренировке: ключ дня плана.
     var workoutNotes: [String: String] = [:]
-    /// Последний разбор заметок и его дата: чтобы текст оставался на экране
-    /// после перезапуска и не тратил запрос при каждом открытии.
-    var lastAdvice: String?
-    var lastAdviceDate: Date?
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []

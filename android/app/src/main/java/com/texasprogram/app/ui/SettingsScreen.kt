@@ -61,7 +61,6 @@ import com.texasprogram.app.model.TrainingLevel
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.model.formatWeight
 import com.texasprogram.app.service.RuDate
-import com.texasprogram.app.service.CoachSecrets
 import com.texasprogram.app.service.UpperLowerCalculator
 
 @Composable
@@ -75,10 +74,6 @@ fun SettingsScreen(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     backupMessage: String?,
-    coachKey: String,
-    coachModel: String,
-    onCoachKey: (String) -> Unit,
-    onCoachModel: (String) -> Unit,
     onClose: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -230,19 +225,6 @@ fun SettingsScreen(
                         fontSize = 11.sp
                     )
                 }
-            }
-        }
-
-        item(key = "coach") {
-            CardView(Modifier.appearIn(5)) {
-                SectionLabel("Разбор тренировок")
-                TextRow(coachKey, "Ключ доступа", onCoachKey)
-                TextRow(coachModel, CoachSecrets.DEFAULT_MODEL, onCoachModel)
-                Text(
-                    "Разбор заметок на вкладке «Прогресс» работает и так — ключ уже внутри приложения. Свой можно вписать сюда, тогда запросы пойдут через него. Вторая строка — название модели, менять её нужно, только если разбор перестал отвечать.",
-                    color = Theme.textTertiary,
-                    fontSize = 11.sp
-                )
             }
         }
 

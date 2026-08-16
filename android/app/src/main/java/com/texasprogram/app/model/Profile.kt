@@ -92,11 +92,7 @@ data class ProgramProfile(
     /// Оценки тяжёлых дней по движениям.
     val liftReports: List<LiftReport> = emptyList(),
     /// Заметка к тренировке: ключ дня плана.
-    val workoutNotes: Map<String, String> = emptyMap(),
-    /// Последний разбор заметок и его дата: чтобы текст оставался на экране
-    /// после перезапуска и не тратил запрос при каждом открытии.
-    val lastAdvice: String? = null,
-    val lastAdviceEpochDay: Long? = null
+    val workoutNotes: Map<String, String> = emptyMap()
 ) {
 
     // MARK: - Входные данные и план

@@ -84,31 +84,8 @@ class AppStore(context: Context) {
 
     fun suggestedName(): String = if (profiles.isEmpty()) "Профиль" else "Профиль ${profiles.size + 1}"
 
-    // MARK: - Разбор тренировок
-    //
-    // Ключ и модель общие для всех профилей, поэтому живут рядом со списком,
-    // а не внутри профиля.
-
-    var coachKey by mutableStateOf(prefs.getString(KEY_COACH_KEY, "").orEmpty())
-        private set
-
-    var coachModel by mutableStateOf(prefs.getString(KEY_COACH_MODEL, "").orEmpty())
-        private set
-
-    fun updateCoachKey(value: String) {
-        coachKey = value
-        prefs.edit().putString(KEY_COACH_KEY, value).apply()
-    }
-
-    fun updateCoachModel(value: String) {
-        coachModel = value
-        prefs.edit().putString(KEY_COACH_MODEL, value).apply()
-    }
-
     private companion object {
         const val KEY_PROFILES = "profiles"
         const val KEY_ACTIVE = "activeId"
-        const val KEY_COACH_KEY = "coachKey"
-        const val KEY_COACH_MODEL = "coachModel"
     }
 }

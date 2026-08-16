@@ -53,8 +53,14 @@ fun PlanScreen(
     onSetCurrent: (Int, Int) -> Unit,
     contentPadding: PaddingValues
 ) {
-    var selectedWeek by remember { mutableIntStateOf(1) }
     val plan = profile.workoutPlan
+    // Открываемся на текущей неделе, а не на первой: ближайшая невыполненная,
+    // а если программа пройдена — последняя. Дальше выбор за пользователем,
+    // поэтому пересчёта на каждый заход нет.
+    val currentWeek = remember(profile) {
+        profile.schedule().focus?.week ?: plan.weeks.lastOrNull()?.number ?: 1
+    }
+    var selectedWeek by remember { mutableIntStateOf(currentWeek) }
     val weekListState = rememberLazyListState()
     // Даты берём из расписания: в очереди день недели определяется местом в очереди,
     // а не номером дня в программе.

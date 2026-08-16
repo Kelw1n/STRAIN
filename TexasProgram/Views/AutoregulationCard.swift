@@ -105,18 +105,37 @@ struct WorkoutNoteCard: View {
 
     @State private var text = ""
     @State private var loaded = false
+    @FocusState private var typing: Bool
 
     var body: some View {
         CardView(padding: 16, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "note.text").font(.footnote.weight(.bold)).foregroundStyle(Theme.accent)
                 Text("Заметка").font(.subheadline.weight(.semibold))
+                Spacer(minLength: 6)
+                // Заметка многострочная, поэтому Return переносит строку и убрать
+                // клавиатуру им нельзя. Кнопка рядом с заголовком закрывает её
+                // одним касанием, не заставляя листать экран.
+                if typing {
+                    Button("Готово") { typing = false }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                        .buttonStyle(.plain)
+                }
             }
             TextField("Как прошло, что болело, как спал", text: $text, axis: .vertical)
                 .lineLimit(2...6)
                 .font(.footnote)
+                .focused($typing)
                 .onChange(of: text) { _, value in
                     profile.setNote(value, week: week, day: day)
+                }
+                .toolbar {
+                    // Панель над самой клавиатурой — привычное место для «Готово».
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Готово") { typing = false }
+                    }
                 }
             Text("Через месяц по этой строке будет понятно, почему неделя вышла такой.")
                 .font(.caption2).foregroundStyle(.tertiary)

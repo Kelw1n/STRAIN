@@ -396,9 +396,18 @@ struct PlanView: View {
     var onOpenBench: ((Int) -> Void)?
 
     @State private var selectedWeek = 1
+    /// Открываем план один раз за запуск — на текущей неделе. Дальше выбор
+    /// остаётся за пользователем: иначе возврат из дня сбрасывал бы просмотр.
+    @State private var focusedOnOpen = false
     @Namespace private var weekPill
 
     private var plan: WorkoutPlan { profile.workoutPlan }
+
+    /// Неделя, на которой человек сейчас: ближайшая невыполненная,
+    /// а если программа пройдена — последняя.
+    private var currentWeek: Int {
+        profile.schedule.focus?.week ?? plan.weeks.last?.number ?? 1
+    }
 
     var body: some View {
         // Даты берём из расписания: в режиме очереди день недели у тренировки
@@ -456,6 +465,11 @@ struct PlanView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle("План")
+            .onAppear {
+                guard !focusedOnOpen else { return }
+                focusedOnOpen = true
+                selectedWeek = currentWeek
+            }
         }
     }
 
@@ -476,6 +490,9 @@ struct PlanView: View {
                     proxy.scrollTo(newValue, anchor: .center)
                 }
             }
+            // Выбранная неделя могла встать до появления полосы — доводим её
+            // до центра без анимации, чтобы экран сразу открылся как надо.
+            .onAppear { proxy.scrollTo(selectedWeek, anchor: .center) }
         }
     }
 
