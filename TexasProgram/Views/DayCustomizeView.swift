@@ -256,7 +256,7 @@ struct DayCustomizeView: View {
     private var resetSection: some View {
         Section {
             Button("Вернуть стандартную программу дня", role: .destructive) {
-                profile.resetDayEdits(week: week, day: day.number)
+                profile.removeEdits(week: week, day: day.number)
             }
         } footer: {
             Text("Снимет все замены, убранные упражнения и добавленные движения этого дня.")
