@@ -45,19 +45,47 @@ enum BenchSetKind: String, Codable, Hashable, Sendable {
     }
 }
 
+/// Единица измерения веса
+public enum WeightUnit: String, CaseIterable, Identifiable, Codable {
+    case kg = "kg"
+    case lbs = "lbs"
+
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .kg: return "кг"
+        case .lbs: return "lbs"
+        }
+    }
+}
+
 /// Форматирование весов вынесено сюда: `Double.formatted` дорогой, и вызывать его
 /// на каждом кадре прокрутки нельзя. Все строки считаются один раз при сборке волны.
 enum WeightFormat {
+    static var unit: WeightUnit {
+        let raw = UserDefaults.standard.string(forKey: "weight_unit_preference") ?? "kg"
+        return WeightUnit(rawValue: raw) ?? .kg
+    }
+
     static func short(_ value: Double) -> String {
-        String(Int(value.rounded()))
+        switch unit {
+        case .kg:
+            return String(Int(value.rounded()))
+        case .lbs:
+            return String(Int((value * 2.20462).rounded()))
+        }
     }
 
     static func kilograms(_ value: Double) -> String {
-        short(value) + " кг"
+        short(value) + " " + unit.label
     }
 
-    /// Тоннаж: до тонны — в килограммах, дальше — в тоннах с одним знаком.
+    /// Тоннаж: до тонны — в базовых единицах, дальше — в тоннах с одним знаком.
     static func tonnage(_ value: Double) -> String {
+        if unit == .lbs {
+            let lbs = value * 2.20462
+            return String(Int(lbs.rounded())) + " lbs"
+        }
         if value < 1000 { return String(Int(value.rounded())) + " кг" }
         return String(format: "%.1f", value / 1000).replacingOccurrences(of: ".", with: ",") + " т"
     }
@@ -70,8 +98,15 @@ enum WeightFormat {
 
     /// Веса основных программ идут с шагом 2,5 кг, поэтому дробная часть — только «,5».
     static func kilogramsPrecise(_ value: Double) -> String {
-        if value.rounded() == value { return String(Int(value)) + " кг" }
-        return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",") + " кг"
+        switch unit {
+        case .kg:
+            if value.rounded() == value { return String(Int(value)) + " кг" }
+            return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",") + " кг"
+        case .lbs:
+            let lbs = (value * 2.20462 * 10).rounded() / 10
+            if lbs.rounded() == lbs { return String(Int(lbs)) + " lbs" }
+            return String(format: "%.1f", lbs).replacingOccurrences(of: ".", with: ",") + " lbs"
+        }
     }
 }
 

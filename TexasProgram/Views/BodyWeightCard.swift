@@ -10,6 +10,7 @@ struct BodyWeightCard: View {
     @Bindable var profile: ProgramProfile
 
     @State private var input = ""
+    @State private var isSyncingHealth = false
     @FocusState private var typing: Bool
 
     private var series: [BodyWeightEntry] { profile.bodyWeightSeries }
@@ -32,7 +33,7 @@ struct BodyWeightCard: View {
                 }
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 TextField("Сегодня, кг", text: $input)
                     .keyboardType(.decimalPad)
                     .focused($typing)
@@ -40,6 +41,30 @@ struct BodyWeightCard: View {
                     .padding(.vertical, 9)
                     .padding(.horizontal, 12)
                     .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+                if HealthKitService.shared.isAvailable {
+                    Button {
+                        Task {
+                            isSyncingHealth = true
+                            _ = await HealthKitService.shared.requestAuthorization()
+                            if let weight = await HealthKitService.shared.fetchLatestBodyWeight() {
+                                withAnimation(Motion.snappy) {
+                                    input = String(format: "%.1f", weight)
+                                }
+                            }
+                            isSyncingHealth = false
+                        }
+                    } label: {
+                        Image(systemName: isSyncingHealth ? "arrow.triangle.2.circlepath" : "heart.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.45))
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 11)
+                            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Button("Записать") { record() }
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(.white)

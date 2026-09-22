@@ -5,6 +5,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\ProgramProfile.createdAt)]) private var profiles: [ProgramProfile]
     @AppStorage("activeProfileID") private var activeProfileID = ""
+    @AppStorage("app_theme_style") private var themeStyle = AppThemeStyle.claude.rawValue
     @State private var isAddingProfile = false
 
     private var activeProfile: ProgramProfile? {

@@ -1,4 +1,5 @@
 import ActivityKit
+import AudioToolbox
 import Foundation
 import Observation
 import UIKit
@@ -16,6 +17,11 @@ final class RestTimer {
     private(set) var endsAt: Date?
     private(set) var total: TimeInterval = 0
     private(set) var remaining: TimeInterval = 0
+    /// Включён ли звуковой сигнал и отсчёт таймера.
+    var isSoundEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "rest_timer_sound_enabled") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "rest_timer_sound_enabled") }
+    }
     /// Почему не завелась Live Activity. Пусто — активность создана.
     /// Нужно, чтобы отличать «система запретила» от «расширение молчит».
     private(set) var activityIssue: String?
@@ -23,6 +29,7 @@ final class RestTimer {
     @ObservationIgnored private var ticker: Timer?
     @ObservationIgnored private var notificationID: String?
     @ObservationIgnored private var activity: Activity<RestActivityAttributes>?
+    @ObservationIgnored private var lastTickSecond: Int?
 
     var isRunning: Bool { endsAt != nil }
 
@@ -42,6 +49,7 @@ final class RestTimer {
         total = duration
         endsAt = started.addingTimeInterval(duration)
         remaining = duration
+        lastTickSecond = nil
         scheduleTicker()
         scheduleNotification(after: duration)
         startActivity(from: started, to: started.addingTimeInterval(duration))
@@ -55,6 +63,7 @@ final class RestTimer {
         self.endsAt = updated
         total += extra
         remaining = updated.timeIntervalSinceNow
+        lastTickSecond = nil
         scheduleNotification(after: max(0, remaining))
         updateActivity(to: updated)
     }
@@ -65,6 +74,7 @@ final class RestTimer {
         endsAt = nil
         remaining = 0
         total = 0
+        lastTickSecond = nil
         cancelNotification()
         endActivity()
     }
@@ -81,6 +91,14 @@ final class RestTimer {
         let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
             guard let self, let endsAt = self.endsAt else { return }
             self.remaining = endsAt.timeIntervalSinceNow
+
+            let secondsLeft = Int(ceil(self.remaining))
+            if self.isSoundEnabled && secondsLeft <= 3 && secondsLeft >= 1 && self.lastTickSecond != secondsLeft {
+                self.lastTickSecond = secondsLeft
+                AudioServicesPlaySystemSound(1057) // Короткий мягкий тик
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+
             if self.remaining <= 0 { self.finish() }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -93,10 +111,14 @@ final class RestTimer {
         endsAt = nil
         remaining = 0
         total = 0
+        lastTickSecond = nil
         endActivity()
         // Уведомление уже поставлено на этот момент, дублировать вибрацию не нужно,
         // если приложение в фоне.
         if UIApplication.shared.applicationState == .active {
+            if isSoundEnabled {
+                AudioServicesPlaySystemSound(1025) // Завершающий приятный аккорд
+            }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }

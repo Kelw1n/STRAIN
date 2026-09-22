@@ -433,6 +433,8 @@ struct SettingsView: View {
     @State private var showImporter = false
     @State private var shareItem: ShareItem?
     @State private var backupMessage: String?
+    @AppStorage("rest_timer_sound_enabled") private var restTimerSoundEnabled = true
+    @AppStorage("weight_unit_preference") private var weightUnitPreference = WeightUnit.kg.rawValue
 
     var body: some View {
         NavigationStack {
@@ -679,6 +681,64 @@ struct SettingsView: View {
                     Text("Резервная копия")
                 } footer: {
                     Text("Копия — файл со всеми профилями, максимумами, расписанием и историей; тот же формат читает версия для Android. Таблица — записанные подходы в CSV, открывается в Excel.")
+                }
+
+                Section {
+                    Picker("Стиль оформления", selection: Binding(
+                        get: { ThemeManager.shared.current },
+                        set: { newStyle in
+                            withAnimation(Motion.snappy) {
+                                ThemeManager.shared.current = newStyle
+                            }
+                        }
+                    )) {
+                        ForEach(AppThemeStyle.allCases) { style in
+                            Text(style.displayName).tag(style)
+                        }
+                    }
+                } header: {
+                    Text("Оформление")
+                } footer: {
+                    Text(ThemeManager.shared.current.description)
+                }
+
+                Section {
+                    Toggle("Звуковой сигнал отдыха", isOn: $restTimerSoundEnabled)
+                } header: {
+                    Text("Таймер отдыха")
+                } footer: {
+                    Text("Короткий звуковой отсчёт за 3, 2, 1 секунды до окончания отдыха и сигнал завершения.")
+                }
+
+                Section {
+                    Picker("Единицы веса", selection: $weightUnitPreference) {
+                        ForEach(WeightUnit.allCases) { unit in
+                            Text(unit == .kg ? "Килограммы (кг)" : "Фунты (lbs)").tag(unit.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Единицы измерения")
+                }
+
+                if HealthKitService.shared.isAvailable {
+                    Section {
+                        Toggle("Синхронизация с HealthKit", isOn: Binding(
+                            get: { HealthKitService.shared.isEnabled },
+                            set: { enabled in
+                                HealthKitService.shared.isEnabled = enabled
+                                if enabled {
+                                    Task {
+                                        _ = await HealthKitService.shared.requestAuthorization()
+                                    }
+                                }
+                            }
+                        ))
+                    } header: {
+                        Text("Apple Здоровье")
+                    } footer: {
+                        Text("Автоматически сохраняет тренировки в приложении «Здоровье» и позволяет подтягивать вес тела.")
+                    }
                 }
 
                 Section {

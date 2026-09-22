@@ -1166,6 +1166,13 @@ final class ProgramProfile {
         if done {
             lastCompletionDate = now
             recordCompletion(week: week, day: day, now: now)
+            Task {
+                await HealthKitService.shared.saveWorkout(
+                    startDate: now.addingTimeInterval(-3600),
+                    endDate: now,
+                    title: "\(self.name) · Неделя \(week), день \(day)"
+                )
+            }
         } else {
             let key = dayKey(week: week, day: day)
             completionLog.removeAll { $0.key == key }
