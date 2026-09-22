@@ -90,6 +90,7 @@ fun BroTrackerScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var addInputText by remember { mutableStateOf("") }
     var selectedBuddyForProgram by remember { mutableStateOf<BroProfileData?>(null) }
+    var selectedBuddyForChat by remember { mutableStateOf<BroProfileData?>(null) }
     var copyNotice by remember { mutableStateOf<String?>(null) }
     var scanNotice by remember { mutableStateOf<String?>(null) }
 
@@ -105,6 +106,16 @@ fun BroTrackerScreen(
     LaunchedEffect(Unit) {
         service.syncMyProfile(profile)
         service.refreshBuddies()
+    }
+
+    if (selectedBuddyForChat != null) {
+        BroChatScreen(
+            buddy = selectedBuddyForChat!!,
+            profile = profile,
+            service = service,
+            onBack = { selectedBuddyForChat = null }
+        )
+        return
     }
 
     LazyColumn(
@@ -329,6 +340,7 @@ fun BroTrackerScreen(
                 BuddyCard(
                     buddy = buddy,
                     onViewProgram = { selectedBuddyForProgram = buddy },
+                    onOpenChat = { selectedBuddyForChat = buddy },
                     onDelete = { service.removeBuddy(buddy.broId) }
                 )
             }
@@ -497,6 +509,7 @@ fun BroTrackerScreen(
 private fun BuddyCard(
     buddy: BroProfileData,
     onViewProgram: () -> Unit = {},
+    onOpenChat: () -> Unit = {},
     onDelete: () -> Unit
 ) {
     CardView {
@@ -578,16 +591,31 @@ private fun BuddyCard(
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
-                    .pressable(onClick = onViewProgram)
-                    .padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Посмотреть программу", color = Theme.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(16.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Theme.accentGradient)
+                        .pressable(onClick = onOpenChat)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("Чат с бро 💬", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .pressable(onClick = onViewProgram)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Программа", color = Theme.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(2.dp))
+                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(16.dp))
+                }
             }
         }
     }

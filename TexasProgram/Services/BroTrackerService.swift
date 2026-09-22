@@ -57,6 +57,13 @@ struct BroProfileData: Codable, Identifiable {
     let recentLifts: [BroLiftEntry]
     let programDays: [BroWorkoutDay]
     let rawProgramJson: String?
+    var recentChatMessages: [BroChatMessage]
+
+    enum CodingKeys: String, CodingKey {
+        case broId, name, programKind, programTitle, currentWeek, currentDay
+        case lastActiveEpoch, squat5RM, bench5RM, deadlift5RM, recentLifts, programDays, rawProgramJson
+        case recentChatMessages
+    }
 
     init(
         broId: String,
@@ -71,7 +78,8 @@ struct BroProfileData: Codable, Identifiable {
         deadlift5RM: Double,
         recentLifts: [BroLiftEntry],
         programDays: [BroWorkoutDay],
-        rawProgramJson: String? = nil
+        rawProgramJson: String? = nil,
+        recentChatMessages: [BroChatMessage] = []
     ) {
         self.broId = broId
         self.name = name
@@ -86,6 +94,25 @@ struct BroProfileData: Codable, Identifiable {
         self.recentLifts = recentLifts
         self.programDays = programDays
         self.rawProgramJson = rawProgramJson
+        self.recentChatMessages = recentChatMessages
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        broId = try container.decode(String.self, forKey: .broId)
+        name = try container.decode(String.self, forKey: .name)
+        programKind = try container.decode(String.self, forKey: .programKind)
+        programTitle = try container.decode(String.self, forKey: .programTitle)
+        currentWeek = try container.decode(Int.self, forKey: .currentWeek)
+        currentDay = try container.decode(Int.self, forKey: .currentDay)
+        lastActiveEpoch = try container.decode(Int64.self, forKey: .lastActiveEpoch)
+        squat5RM = try container.decode(Double.self, forKey: .squat5RM)
+        bench5RM = try container.decode(Double.self, forKey: .bench5RM)
+        deadlift5RM = try container.decode(Double.self, forKey: .deadlift5RM)
+        recentLifts = try container.decodeIfPresent([BroLiftEntry].self, forKey: .recentLifts) ?? []
+        programDays = try container.decodeIfPresent([BroWorkoutDay].self, forKey: .programDays) ?? []
+        rawProgramJson = try container.decodeIfPresent(String.self, forKey: .rawProgramJson)
+        recentChatMessages = try container.decodeIfPresent([BroChatMessage].self, forKey: .recentChatMessages) ?? []
     }
 
     func withBroId(_ newBroId: String) -> BroProfileData {
@@ -102,7 +129,8 @@ struct BroProfileData: Codable, Identifiable {
             deadlift5RM: deadlift5RM,
             recentLifts: recentLifts,
             programDays: programDays,
-            rawProgramJson: rawProgramJson
+            rawProgramJson: rawProgramJson,
+            recentChatMessages: recentChatMessages
         )
     }
 
@@ -258,7 +286,8 @@ final class BroTrackerService {
             bench5RM: profile.bench5RM,
             deadlift5RM: profile.deadlift5RM,
             recentLifts: lifts,
-            programDays: programDays
+            programDays: programDays,
+            recentChatMessages: loadOutbox()
         )
 
         let endpoint = "https://api.restful-api.dev/objects"
@@ -488,4 +517,98 @@ final class BroTrackerService {
             return nil
         }
     }
+
+    // MARK: - Chat Management
+
+    private let keyOutbox = "strain_my_outbox"
+
+    func channelId(for buddyId: String) -> String {
+        let ids = [myBroId, buddyId].sorted()
+        return "chat_\(ids[0])_\(ids[1])"
+    }
+
+    func loadLocalMessages(channelId: String) -> [BroChatMessage] {
+        guard let data = defaults.data(forKey: "strain_chat_\(channelId)"),
+              let msgs = try? JSONDecoder().decode([BroChatMessage].self, from: data) else {
+            return []
+        }
+        return msgs
+    }
+
+    func saveLocalMessages(_ messages: [BroChatMessage], channelId: String) {
+        if let data = try? JSONEncoder().encode(messages) {
+            defaults.set(data, forKey: "strain_chat_\(channelId)")
+        }
+    }
+
+    func loadOutbox() -> [BroChatMessage] {
+        guard let data = defaults.data(forKey: keyOutbox),
+              let msgs = try? JSONDecoder().decode([BroChatMessage].self, from: data) else {
+            return []
+        }
+        return msgs
+    }
+
+    func saveOutbox(_ msgs: [BroChatMessage]) {
+        if let data = try? JSONEncoder().encode(msgs) {
+            defaults.set(data, forKey: keyOutbox)
+        }
+    }
+
+    func getMessages(buddyId: String) -> [BroChatMessage] {
+        let chId = channelId(for: buddyId)
+        var local = loadLocalMessages(channelId: chId)
+
+        if let buddy = buddies.first(where: { $0.broId == buddyId }) {
+            let buddyMsgs = buddy.recentChatMessages.filter { $0.channelId == chId }
+            var existingIds = Set(local.map { $0.id })
+            for msg in buddyMsgs where !existingIds.contains(msg.id) {
+                local.append(msg)
+                existingIds.insert(msg.id)
+            }
+            local.sort { $0.timestamp < $1.timestamp }
+            saveLocalMessages(local, channelId: chId)
+        }
+        return local
+    }
+
+    @discardableResult
+    func sendMessage(
+        to buddyId: String,
+        text: String,
+        type: BroMessageType = .text,
+        workoutPayload: WorkoutSharePayload? = nil,
+        photoBase64: String? = nil,
+        profile: ProgramProfile? = nil
+    ) async -> BroChatMessage {
+        let chId = channelId(for: buddyId)
+        let senderName = (profile?.name.isEmpty == false) ? profile!.name : "Бро"
+        let msg = BroChatMessage(
+            channelId: chId,
+            senderId: myBroId,
+            senderName: senderName,
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+            text: text,
+            type: type,
+            workoutPayload: workoutPayload,
+            photoBase64: photoBase64
+        )
+
+        var current = loadLocalMessages(channelId: chId)
+        current.append(msg)
+        saveLocalMessages(current, channelId: chId)
+
+        var outbox = loadOutbox()
+        outbox.append(msg)
+        if outbox.count > 25 {
+            outbox.removeFirst(outbox.count - 25)
+        }
+        saveOutbox(outbox)
+
+        if let profile = profile {
+            await syncMyProfile(profile: profile)
+        }
+        return msg
+    }
 }
+

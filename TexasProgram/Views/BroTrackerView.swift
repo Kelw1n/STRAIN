@@ -13,6 +13,7 @@ struct BroTrackerView: View {
     @State private var showingManualInput = false
     @State private var manualInputText = ""
     @State private var selectedBuddyForProgram: BroProfileData?
+    @State private var selectedBuddyForChat: BroProfileData?
     @State private var copyAlertMessage: String?
     @State private var showingCopyAlert = false
     @State private var scanAlertMessage: String?
@@ -122,6 +123,9 @@ struct BroTrackerView: View {
                 BuddyProgramView(buddy: buddy) {
                     copyProgramFromBuddy(buddy)
                 }
+            }
+            .sheet(item: $selectedBuddyForChat) { buddy in
+                BroChatView(buddy: buddy, profile: profile)
             }
             .alert("Программа скопирована", isPresented: $showingCopyAlert) {
                 Button("ОК", role: .cancel) {}
@@ -233,6 +237,8 @@ struct BroTrackerView: View {
                 ForEach(service.buddies) { buddy in
                     BuddyCardView(buddy: buddy) {
                         selectedBuddyForProgram = buddy
+                    } onOpenChat: {
+                        selectedBuddyForChat = buddy
                     } onDelete: {
                         service.removeBuddy(id: buddy.broId)
                     }
@@ -269,6 +275,7 @@ struct BroTrackerView: View {
 private struct BuddyCardView: View {
     let buddy: BroProfileData
     let onOpenProgram: () -> Void
+    let onOpenChat: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -294,6 +301,7 @@ private struct BuddyCardView: View {
                     Spacer()
 
                     Menu {
+                        Button("Чат с бро", action: onOpenChat)
                         Button("Смотреть программу", action: onOpenProgram)
                         Button("Удалить из друзей", role: .destructive, action: onDelete)
                     } label: {
@@ -346,17 +354,32 @@ private struct BuddyCardView: View {
                     .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
                 }
 
-                Button(action: onOpenProgram) {
-                    HStack {
-                        Image(systemName: "list.clipboard")
-                        Text("Посмотреть программу")
-                        Spacer()
-                        Image(systemName: "chevron.right")
+                HStack(spacing: 10) {
+                    Button(action: onOpenChat) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                            Text("Чат с бро")
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Theme.accentGradient, in: Capsule())
                     }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+
+                    Spacer()
+
+                    Button(action: onOpenProgram) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "list.clipboard")
+                            Text("Программа")
+                            Image(systemName: "chevron.right")
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                    }
                 }
-                .padding(.top, 2)
+                .padding(.top, 4)
             }
         }
     }

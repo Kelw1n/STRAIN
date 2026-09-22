@@ -38,7 +38,8 @@ data class BroProfileData(
     val deadlift5RM: Double,
     val recentLifts: List<BroLiftEntry> = emptyList(),
     val programDays: List<BroWorkoutDay> = emptyList(),
-    val rawProgramJson: String? = null
+    val rawProgramJson: String? = null,
+    val recentChatMessages: List<BroChatMessage> = emptyList()
 ) {
     val isOnline: Boolean
         get() {

@@ -5,12 +5,15 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.texasprogram.app.model.BroChatMessage
 import com.texasprogram.app.model.BroExercise
 import com.texasprogram.app.model.BroLiftEntry
+import com.texasprogram.app.model.BroMessageType
 import com.texasprogram.app.model.BroProfileData
 import com.texasprogram.app.model.BroWorkoutDay
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.WorkoutSharePayload
 import com.texasprogram.app.model.formatWeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -166,7 +169,8 @@ class BroTrackerService(context: Context) {
                 bench5RM = profile.bench5RM,
                 deadlift5RM = profile.deadlift5RM,
                 recentLifts = lifts,
-                programDays = programDays
+                programDays = programDays,
+                recentChatMessages = loadOutbox()
             )
 
             val endpoint = "https://api.restful-api.dev/objects"
@@ -465,7 +469,105 @@ class BroTrackerService(context: Context) {
         }
     }
 
+    // MARK: - Chat Management
+
+    fun channelId(buddyId: String): String {
+        val ids = listOf(myBroId, buddyId).sorted()
+        return "chat_${ids[0]}_${ids[1]}"
+    }
+
+    fun loadLocalMessages(channelId: String): List<BroChatMessage> {
+        val raw = prefs.getString("strain_chat_$channelId", null) ?: return emptyList()
+        return try {
+            json.decodeFromString<List<BroChatMessage>>(raw)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveLocalMessages(messages: List<BroChatMessage>, channelId: String) {
+        try {
+            val raw = json.encodeToString(messages)
+            prefs.edit().putString("strain_chat_$channelId", raw).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun loadOutbox(): List<BroChatMessage> {
+        val raw = prefs.getString(KEY_OUTBOX, null) ?: return emptyList()
+        return try {
+            json.decodeFromString<List<BroChatMessage>>(raw)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveOutbox(messages: List<BroChatMessage>) {
+        try {
+            val raw = json.encodeToString(messages)
+            prefs.edit().putString(KEY_OUTBOX, raw).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun getMessages(buddyId: String): List<BroChatMessage> {
+        val chId = channelId(buddyId)
+        val local = loadLocalMessages(chId).toMutableList()
+        val buddy = buddies.firstOrNull { it.broId == buddyId }
+        if (buddy != null) {
+            val buddyMsgs = buddy.recentChatMessages.filter { it.channelId == chId }
+            val existingIds = local.map { it.id }.toSet()
+            for (msg in buddyMsgs) {
+                if (msg.id !in existingIds) {
+                    local.add(msg)
+                }
+            }
+            local.sortBy { it.timestamp }
+            saveLocalMessages(local, chId)
+        }
+        return local
+    }
+
+    suspend fun sendMessage(
+        toBuddyId: String,
+        text: String,
+        type: BroMessageType = BroMessageType.TEXT,
+        workoutPayload: WorkoutSharePayload? = null,
+        photoBase64: String? = null,
+        profile: ProgramProfile? = null
+    ): BroChatMessage = withContext(Dispatchers.IO) {
+        val chId = channelId(toBuddyId)
+        val senderName = profile?.name?.ifBlank { "Бро" } ?: "Бро"
+        val msg = BroChatMessage(
+            channelId = chId,
+            senderId = myBroId,
+            senderName = senderName,
+            timestamp = System.currentTimeMillis(),
+            text = text,
+            type = type,
+            workoutPayload = workoutPayload,
+            photoBase64 = photoBase64
+        )
+
+        val current = loadLocalMessages(chId).toMutableList()
+        current.add(msg)
+        saveLocalMessages(current, chId)
+
+        val outbox = loadOutbox().toMutableList()
+        outbox.add(msg)
+        if (outbox.size > 25) {
+            while (outbox.size > 25) {
+                outbox.removeAt(0)
+            }
+        }
+        saveOutbox(outbox)
+
+        if (profile != null) {
+            syncMyProfile(profile)
+        }
+        msg
+    }
+
     companion object {
+        private const val KEY_OUTBOX = "strain_my_outbox"
         private const val KEY_MY_ID = "my_bro_id"
         private const val KEY_BUDDY_IDS = "buddy_ids"
         private const val KEY_CACHED_BUDDIES = "cached_buddies"
