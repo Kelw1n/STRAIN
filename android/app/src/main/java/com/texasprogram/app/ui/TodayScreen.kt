@@ -67,6 +67,7 @@ fun TodayScreen(
     val schedule = remember(profile, today) { profile.schedule(today) }
     val focus = schedule.focus
     val listState = rememberLazyListState()
+    val exercises = remember(profile, focus) { focus?.let { profile.exercises(it) } ?: emptyList() }
 
     LazyColumn(
         state = listState,
@@ -165,7 +166,6 @@ fun TodayScreen(
         }
 
         // Вспомогательные упражнения — из дня программы, жим — из волны.
-        val exercises = remember(profile, focus) { profile.exercises(focus) }
         itemsIndexed(exercises, key = { _, item -> item.name }) { index, exercise ->
             ExerciseCard(
                 exercise = exercise,
