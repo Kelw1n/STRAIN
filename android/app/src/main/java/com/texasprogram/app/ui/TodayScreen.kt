@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
@@ -57,6 +58,7 @@ fun TodayScreen(
     onHoldSet: (ScheduledWorkout, com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onUpdateProfile: (com.texasprogram.app.model.ProgramProfile) -> Unit,
     onOpenHistory: (String) -> Unit,
+    onOpenBroTracker: () -> Unit = {},
     onSettings: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -93,6 +95,17 @@ fun TodayScreen(
                     }
                     Spacer(Modifier.width(8.dp))
                 }
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Theme.surfaceSoft)
+                        .pressable(onClick = onOpenBroTracker),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Group, contentDescription = "Бро-трекер", tint = Theme.accent, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
                         .size(40.dp)

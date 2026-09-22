@@ -315,10 +315,14 @@ data class ProgramProfile(
     val currentWeek: Int
         get() {
             val plan = workoutPlan
+            val maxCompletedWeek = plan.weeks
+                .filter { week -> week.days.any { isCompleted(week.number, it.number) } }
+                .maxOfOrNull { it.number } ?: 1
             val open = plan.weeks.firstOrNull { week ->
                 week.days.any { !isCompleted(week.number, it.number) && !isSkipped(week.number, it.number) }
             }
-            return open?.number ?: plan.weeks.lastOrNull()?.number ?: 1
+            val openWeek = open?.number ?: plan.weeks.lastOrNull()?.number ?: 1
+            return maxOf(openWeek, maxCompletedWeek)
         }
 
     // MARK: - Пропущенные тренировки

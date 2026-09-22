@@ -31,20 +31,29 @@ class AppStore(context: Context) {
         get() = profiles.firstOrNull { it.id == activeId } ?: profiles.firstOrNull()
 
     private fun loadProfiles(): List<ProgramProfile> {
-        val raw = prefs.getString(KEY_PROFILES, null) ?: return emptyList()
+        val raw = prefs.getString(KEY_PROFILES, null)
+            ?: prefs.getString(KEY_PROFILES_BACKUP, null)
+            ?: return emptyList()
         return try {
             json.decodeFromString<List<ProgramProfile>>(raw)
         } catch (_: Exception) {
-            // Повреждённые или устаревшие данные не должны валить запуск.
-            emptyList()
+            // Если основной повреждён, пробуем резервную копию
+            val backup = prefs.getString(KEY_PROFILES_BACKUP, null) ?: return emptyList()
+            try {
+                json.decodeFromString<List<ProgramProfile>>(backup)
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
     }
 
     private fun persist() {
+        val serialized = json.encodeToString<List<ProgramProfile>>(profiles)
         prefs.edit()
-            .putString(KEY_PROFILES, json.encodeToString<List<ProgramProfile>>(profiles))
+            .putString(KEY_PROFILES, serialized)
+            .putString(KEY_PROFILES_BACKUP, serialized)
             .putString(KEY_ACTIVE, activeId)
-            .apply()
+            .commit() // Синхронная запись на физический диск телефона без задержек
     }
 
     fun add(profile: ProgramProfile) {
@@ -86,6 +95,7 @@ class AppStore(context: Context) {
 
     private companion object {
         const val KEY_PROFILES = "profiles"
+        const val KEY_PROFILES_BACKUP = "profiles_backup"
         const val KEY_ACTIVE = "activeId"
     }
 }

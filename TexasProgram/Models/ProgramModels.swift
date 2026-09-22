@@ -674,12 +674,17 @@ final class ProgramProfile {
     /// незакрытая неделя остаётся текущей, пока в ней есть что делать.
     /// Отмеченные пропуски в счёт не идут: их закрыли сознательно.
     var currentWeek: Int {
+        let maxCompleted = workoutPlan.weeks
+            .filter { week in week.days.contains { isCompleted(week: week.number, day: $0.number) } }
+            .map(\.number)
+            .max() ?? 1
         let open = workoutPlan.weeks.first { week in
             week.days.contains { day in
                 !isCompleted(week: week.number, day: day.number) && !isSkipped(week: week.number, day: day.number)
             }
         }
-        return open?.number ?? workoutPlan.weeks.last?.number ?? 1
+        let openWeek = open?.number ?? workoutPlan.weeks.last?.number ?? 1
+        return max(openWeek, maxCompleted)
     }
 
     // MARK: - Пропущенные тренировки

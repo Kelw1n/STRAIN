@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,11 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Undo
@@ -45,8 +47,8 @@ import com.texasprogram.app.model.formatWeight
 
 /// Черновик своего упражнения: то, что пользователь набирает в форме.
 data class ExerciseDraft(
-    /// Что заменяем. `null` — добавляем новое упражнение.
     val target: ExercisePrescription? = null,
+    val existingEdit: PlanEdit? = null,
     val name: String = "",
     val sets: Int = 3,
     val reps: String = "8–12",
@@ -55,14 +57,13 @@ data class ExerciseDraft(
 ) {
     val trimmedName: String get() = name.trim()
 
-    /// Запятая как разделитель: на русской раскладке она под рукой.
     val kilograms: Double?
         get() = weightText.replace(',', '.').trim().toDoubleOrNull()?.takeIf { it > 0 }
 
     val load: String? get() = loadText.trim().ifBlank { null }
 }
 
-/// Настройка одного дня программы: заменить, убрать или дописать своё упражнение.
+/// Настройка одного дня программы: нажать на любое упражнение для правки/удаления или добавить своё.
 @Composable
 fun DayCustomizeScreen(
     profile: ProgramProfile,
@@ -88,22 +89,49 @@ fun DayCustomizeScreen(
             onSave = { value ->
                 if (value.trimmedName.isNotEmpty()) {
                     val target = value.target
-                    onUpdate(
-                        if (target != null) {
+                    if (target != null) {
+                        onUpdate(
                             profile.replaceExercise(
                                 target, value.trimmedName, value.sets, value.reps,
                                 value.kilograms, value.load, week, dayNumber, scope
                             )
-                        } else {
+                        )
+                    } else if (value.existingEdit != null) {
+                        // Редактирование уже добавленного упражнения: заменяем старый edit на новый
+                        val withoutOld = profile.removeEdit(value.existingEdit)
+                        onUpdate(
+                            withoutOld.addExercise(
+                                value.trimmedName, value.sets, value.reps,
+                                value.kilograms, value.load, week, dayNumber, scope
+                            )
+                        )
+                    } else {
+                        onUpdate(
                             profile.addExercise(
                                 value.trimmedName, value.sets, value.reps,
                                 value.kilograms, value.load, week, dayNumber, scope
                             )
-                        }
-                    )
+                        )
+                    }
                 }
                 draft = null
-            }
+            },
+            onDelete = {
+                val target = current.target
+                val edit = current.existingEdit
+                if (edit != null) {
+                    onUpdate(profile.removeEdit(edit))
+                } else if (target != null) {
+                    onUpdate(profile.hideExercise(target, week, dayNumber, scope))
+                }
+                draft = null
+            },
+            onReset = if (current.existingEdit != null) {
+                {
+                    onUpdate(profile.removeEdit(current.existingEdit))
+                    draft = null
+                }
+            } else null
         )
         return
     }
@@ -113,7 +141,7 @@ fun DayCustomizeScreen(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item(key = "title") { ScreenTitle("Свои упражнения") }
+        item(key = "title") { ScreenTitle("Настройка упражнений") }
 
         item(key = "scope") {
             CardView(Modifier.appearIn(0)) {
@@ -128,26 +156,27 @@ fun DayCustomizeScreen(
 
         item(key = "program") {
             CardView(Modifier.appearIn(1)) {
-                SectionLabel("Упражнения программы")
+                SectionLabel("Упражнения программы (нажми для изменения)")
                 generated.forEach { exercise ->
+                    val currentEdit = dayEdits.firstOrNull { it.targetKey == exercise.key }
                     ProgramExerciseRow(
                         exercise = exercise,
-                        edit = dayEdits.firstOrNull { it.targetKey == exercise.key },
-                        onReplace = {
+                        edit = currentEdit,
+                        onClick = {
                             draft = ExerciseDraft(
                                 target = exercise,
-                                name = exercise.name,
-                                sets = exercise.sets.coerceAtLeast(1),
-                                reps = exercise.reps,
-                                weightText = weightText(exercise)
+                                existingEdit = currentEdit,
+                                name = currentEdit?.name ?: exercise.name,
+                                sets = currentEdit?.sets ?: exercise.sets.coerceAtLeast(1),
+                                reps = currentEdit?.reps ?: exercise.reps,
+                                weightText = currentEdit?.kilograms?.let { formatWeight(it) } ?: weightText(exercise),
+                                loadText = currentEdit?.loadText ?: ""
                             )
-                        },
-                        onHide = { onUpdate(profile.hideExercise(exercise, week, dayNumber, scope)) },
-                        onRestore = { edit -> onUpdate(profile.removeEdit(edit)) }
+                        }
                     )
                 }
                 Text(
-                    "Приседания, жим и становая кормят график прогресса. Если заменить или убрать их, в графике за эти дни будет пусто.",
+                    "Нажми на любое упражнение, чтобы изменить название, число подходов, повторений, вес или удалить его из дня.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
@@ -158,7 +187,23 @@ fun DayCustomizeScreen(
             CardView(Modifier.appearIn(2)) {
                 SectionLabel("Свои упражнения")
                 added.forEach { edit ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .pressable {
+                                draft = ExerciseDraft(
+                                    existingEdit = edit,
+                                    name = edit.name,
+                                    sets = edit.sets,
+                                    reps = edit.reps,
+                                    weightText = edit.kilograms?.let { formatWeight(it) } ?: "",
+                                    loadText = edit.loadText ?: ""
+                                )
+                            }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Column(Modifier.weight(1f, fill = false)) {
                             Text(edit.name, color = Theme.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             Text(
@@ -176,13 +221,6 @@ fun DayCustomizeScreen(
                 SecondaryButton("Добавить своё упражнение", icon = Icons.Filled.Add) {
                     draft = ExerciseDraft()
                 }
-                if (added.isEmpty()) {
-                    Text(
-                        "Упражнение встанет в конец дня и будет отмечаться по подходам наравне с остальными.",
-                        color = Theme.textTertiary,
-                        fontSize = 11.sp
-                    )
-                }
             }
         }
 
@@ -193,7 +231,7 @@ fun DayCustomizeScreen(
                         onUpdate(profile.removeEdits(week, dayNumber))
                     }
                     Text(
-                        "Уберёт все правки этого дня и вернёт упражнения программы.",
+                        "Уберёт все правки этого дня и вернёт оригинальные упражнения программы.",
                         color = Theme.textTertiary,
                         fontSize = 11.sp
                     )
@@ -207,15 +245,20 @@ fun DayCustomizeScreen(
 private fun ProgramExerciseRow(
     exercise: ExercisePrescription,
     edit: PlanEdit?,
-    onReplace: () -> Unit,
-    onHide: () -> Unit,
-    onRestore: (PlanEdit) -> Unit
+    onClick: () -> Unit
 ) {
     val hidden = edit?.kind == PlanEditKind.HIDE
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f, fill = false)) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .pressable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
             Text(
-                exercise.name,
+                edit?.name ?: exercise.name,
                 color = if (hidden) Theme.textTertiary else Theme.textPrimary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -230,31 +273,12 @@ private fun ProgramExerciseRow(
             )
         }
         Spacer(Modifier.width(8.dp))
-        if (edit != null) {
-            IconAction(Icons.Filled.Undo, "Вернуть как было", Theme.accent) { onRestore(edit) }
-        } else {
-            IconAction(Icons.Filled.Refresh, "Заменить", Theme.accent, onClick = onReplace)
-            Spacer(Modifier.width(4.dp))
-            IconAction(Icons.Filled.VisibilityOff, "Убрать из дня", Theme.record, onClick = onHide)
-        }
-    }
-}
-
-@Composable
-private fun IconAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    description: String,
-    tint: Color,
-    onClick: () -> Unit
-) {
-    Box(
-        Modifier
-            .size(34.dp)
-            .clip(CircleShape)
-            .pressable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
+        Icon(
+            Icons.Filled.ChevronRight,
+            contentDescription = "Редактировать",
+            tint = Theme.textTertiary,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 
@@ -264,12 +288,12 @@ private fun ExerciseForm(
     scope: PlanEditScope,
     contentPadding: PaddingValues,
     onCancel: () -> Unit,
-    onSave: (ExerciseDraft) -> Unit
+    onSave: (ExerciseDraft) -> Unit,
+    onDelete: () -> Unit,
+    onReset: (() -> Unit)? = null
 ) {
     var value by remember(draft) { mutableStateOf(draft) }
     var setsText by remember(draft) { mutableStateOf(draft.sets.toString()) }
-    // Подходов не бывает ноль и не бывает двадцать: поле свободное, но при
-    // сохранении число зажимается в разумные границы.
     val sets = (setsText.toIntOrNull() ?: draft.sets).coerceIn(1, 12)
 
     LazyColumn(
@@ -278,7 +302,7 @@ private fun ExerciseForm(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(key = "title") {
-            ScreenTitle(if (draft.target != null) "Замена" else "Своё упражнение")
+            ScreenTitle(if (draft.target != null || draft.existingEdit != null) "Настройка упражнения" else "Своё упражнение")
         }
 
         item(key = "fields") {
@@ -300,7 +324,7 @@ private fun ExerciseForm(
                 )
                 TextRow(value.loadText, "Или подпись: RPE 8, до отказа") { value = value.copy(loadText = it) }
                 Text(
-                    "Если указать вес, приложение посчитает блины и разминку. Оставишь пусто — покажет подпись.",
+                    "Если указать вес, приложение посчитает разминку и подставит его в подходы.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
@@ -310,13 +334,50 @@ private fun ExerciseForm(
         item(key = "save") {
             CardView(Modifier.appearIn(2)) {
                 SecondaryButton(
-                    if (draft.target != null) "Заменить" else "Добавить",
+                    if (draft.target != null || draft.existingEdit != null) "Сохранить изменения" else "Добавить упражнение",
                     icon = Icons.Filled.Check
                 ) { onSave(value.copy(sets = sets)) }
+
+                if (draft.target != null || draft.existingEdit != null) {
+                    SecondaryButton(
+                        "Удалить упражнение",
+                        icon = Icons.Filled.Delete,
+                        tint = Theme.record,
+                        onClick = onDelete
+                    )
+                }
+
+                if (onReset != null) {
+                    SecondaryButton(
+                        "Вернуть как было",
+                        icon = Icons.Filled.Undo,
+                        tint = Theme.warning,
+                        onClick = onReset
+                    )
+                }
+
                 SecondaryButton("Отмена", tint = Theme.textSecondary, onClick = onCancel)
                 Text(scope.explanation, color = Theme.textTertiary, fontSize = 11.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun IconAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .pressable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
     }
 }
 

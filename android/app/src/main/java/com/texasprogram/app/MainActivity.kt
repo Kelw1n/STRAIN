@@ -43,6 +43,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import com.texasprogram.app.ui.ThemeManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +66,7 @@ import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.ui.AppBackground
 import com.texasprogram.app.ui.BenchWaveScreen
+import com.texasprogram.app.ui.BroTrackerScreen
 import com.texasprogram.app.ui.DayCustomizeScreen
 import com.texasprogram.app.ui.DayDetailScreen
 import com.texasprogram.app.ui.ExerciseHistoryListScreen
@@ -84,11 +87,14 @@ import com.texasprogram.app.ui.TodayScreen
 import com.texasprogram.app.ui.RestTimerBar
 import com.texasprogram.app.ui.pressable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        ThemeManager.init(applicationContext)
+        handleDeepLink(intent)
         setContent {
             val store = remember { AppStore(applicationContext) }
             val timer = remember { RestTimer(applicationContext) }
@@ -100,15 +106,39 @@ class MainActivity : ComponentActivity() {
                     delay(1000)
                 }
             }
-            MaterialTheme(
-                colorScheme = darkColorScheme(
+            val isDark = Theme.isDark
+            val colorScheme = if (isDark) {
+                darkColorScheme(
                     primary = Theme.accent,
                     background = Theme.base,
                     surface = Theme.surface,
                     onSurface = Theme.textPrimary
                 )
-            ) {
+            } else {
+                lightColorScheme(
+                    primary = Theme.accent,
+                    background = Theme.base,
+                    surface = Theme.surface,
+                    onSurface = Theme.textPrimary
+                )
+            }
+            MaterialTheme(colorScheme = colorScheme) {
                 AppBackground { AppRoot(store, timer) }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: android.content.Intent?) {
+        val data = intent?.data ?: return
+        val url = data.toString()
+        if (url.contains("bro")) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                com.texasprogram.app.service.BroTrackerService(applicationContext).addBuddy(url)
             }
         }
     }
@@ -161,6 +191,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     var showHistoryList by remember { mutableStateOf(false) }
     var historyFor by remember { mutableStateOf<String?>(null) }
     var showNotes by remember { mutableStateOf(false) }
+    var showBroTracker by remember { mutableStateOf(false) }
 
     val isUpperLower = profile.programKind == TrainingProgramKind.UPPER_LOWER
     val tabs = AppTab.entries.filter { it != AppTab.BENCH || isUpperLower }
@@ -221,9 +252,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
     BackHandler(
         enabled = showSettings || dayDetail != null || customizing != null ||
-            showHistoryList || historyFor != null || showNotes
+            showHistoryList || historyFor != null || showNotes || showBroTracker
     ) {
         when {
+            showBroTracker -> showBroTracker = false
             customizing != null -> customizing = null
             historyFor != null -> historyFor = null
             showHistoryList -> showHistoryList = false
@@ -273,6 +305,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         )
                     },
                     onOpenHistory = { name -> historyFor = name },
+                    onOpenBroTracker = { showBroTracker = true },
                     onSettings = { showSettings = true },
                     contentPadding = contentPadding
                 )
@@ -423,6 +456,31 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             store.delete(profile.id)
                         },
                         onClose = { showSettings = false },
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                }
+            }
+        }
+
+        AnimatedContent(
+            targetState = showBroTracker,
+            transitionSpec = {
+                if (targetState) {
+                    (slideInVertically(tween(320)) { it / 3 } + fadeIn(tween(220))) togetherWith fadeOut(tween(180))
+                } else {
+                    fadeIn(tween(180)) togetherWith (slideOutVertically(tween(320)) { it / 3 } + fadeOut(tween(200)))
+                }
+            },
+            label = "broTracker"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    BroTrackerScreen(
+                        profile = profile,
+                        onCopyProgram = { newProfile ->
+                            store.add(newProfile)
+                        },
+                        onClose = { showBroTracker = false },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
                 }

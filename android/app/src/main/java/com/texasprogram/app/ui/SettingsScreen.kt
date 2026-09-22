@@ -102,6 +102,53 @@ fun SettingsScreen(
             }
         }
 
+        item(key = "theme") {
+            CardView(Modifier.appearIn(0)) {
+                SectionLabel("Тема оформления")
+                AppThemeStyle.entries.forEach { themeStyle ->
+                    val isSelected = ThemeManager.style == themeStyle
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSelected) Theme.accent.copy(alpha = 0.12f) else Color.Transparent)
+                            .pressable { ThemeManager.set(themeStyle) }
+                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when (themeStyle) {
+                                        AppThemeStyle.CLAUDE_LIGHT -> Color(0xFFFBF8F3)
+                                        AppThemeStyle.CLAUDE_DARK -> Color(0xFF1B1917)
+                                        AppThemeStyle.STRAIN_DARK -> Color(0xFF0B0E13)
+                                        AppThemeStyle.SYSTEM -> Theme.accent
+                                    }
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isSelected) Theme.accent else Theme.hairline,
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(themeStyle.displayName, color = Theme.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(themeStyle.description, color = Theme.textSecondary, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
         item(key = "profiles") {
             CardView(Modifier.appearIn(0)) {
                 SectionLabel("Профили")

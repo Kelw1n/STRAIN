@@ -94,6 +94,7 @@ struct TodayView: View {
     @State private var entryTarget: SetEntryTarget?
     /// Имя движения, чью историю открыли: `navigationDestination` ждёт Hashable.
     @State private var historyFor: String?
+    @State private var showingBroTracker = false
 
     private var overallProgress: Double {
         guard profile.totalDays > 0 else { return 0 }
@@ -210,12 +211,27 @@ struct TodayView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: onSettings) {
-                        Image(systemName: "slider.horizontal.3").font(.body.weight(.semibold))
+                    HStack(spacing: 12) {
+                        Button {
+                            showingBroTracker = true
+                        } label: {
+                            Image(systemName: "person.2.fill")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(Theme.accent)
+                        }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Бро-трекер")
+
+                        Button(action: onSettings) {
+                            Image(systemName: "slider.horizontal.3").font(.body.weight(.semibold))
+                        }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Настройки программы")
                     }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel("Настройки программы")
                 }
+            }
+            .sheet(isPresented: $showingBroTracker) {
+                BroTrackerView(profile: profile)
             }
             .sheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)

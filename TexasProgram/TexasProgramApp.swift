@@ -30,6 +30,10 @@ struct TexasProgramApp: App {
         } else if path.contains("stop") || path.contains("finish") {
             restTimer.stop()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } else if path.contains("bro") {
+            Task {
+                _ = await BroTrackerService.shared.addBuddy(from: url.absoluteString)
+            }
         }
     }
 }

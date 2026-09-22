@@ -41,6 +41,9 @@ class RestTimer(private val context: Context) {
     var nowMillis by mutableLongStateOf(System.currentTimeMillis())
         private set
 
+    private var toneGenerator: android.media.ToneGenerator? = null
+    private var lastBeepSecond: Long = -1L
+
     val isRunning: Boolean get() = endsAtMillis > 0
 
     val remainingSeconds: Long
@@ -57,6 +60,7 @@ class RestTimer(private val context: Context) {
         totalSeconds = seconds
         endsAtMillis = System.currentTimeMillis() + seconds * 1000
         nowMillis = System.currentTimeMillis()
+        lastBeepSecond = -1L
         ensureChannel()
         scheduleAlarm()
     }
@@ -65,19 +69,69 @@ class RestTimer(private val context: Context) {
         if (!isRunning) return
         endsAtMillis += extraSeconds * 1000
         totalSeconds += extraSeconds
+        lastBeepSecond = -1L
         scheduleAlarm()
     }
 
     fun stop() {
         endsAtMillis = 0
         totalSeconds = 0
+        lastBeepSecond = -1L
         cancelAlarm()
     }
 
     /// Дёргается раз в секунду из интерфейса и при возврате из фона.
     fun tick() {
         nowMillis = System.currentTimeMillis()
-        if (isRunning && nowMillis >= endsAtMillis) stop()
+        if (isRunning) {
+            val rem = remainingSeconds
+            if (rem in 1..3 && rem != lastBeepSecond) {
+                lastBeepSecond = rem
+                playCountdownBeep()
+                vibrate(45)
+            }
+            if (nowMillis >= endsAtMillis) {
+                playFinishTone()
+                vibrate(300)
+                stop()
+            }
+        }
+    }
+
+    private fun playCountdownBeep() {
+        try {
+            if (toneGenerator == null) {
+                toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80)
+            }
+            toneGenerator?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 100)
+        } catch (_: Exception) {}
+    }
+
+    private fun playFinishTone() {
+        try {
+            if (toneGenerator == null) {
+                toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 90)
+            }
+            toneGenerator?.startTone(android.media.ToneGenerator.TONE_PROP_PROMPT, 350)
+        } catch (_: Exception) {}
+    }
+
+    private fun vibrate(durationMillis: Long) {
+        try {
+            val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                manager?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                vibrator?.vibrate(android.os.VibrationEffect.createOneShot(durationMillis, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(durationMillis)
+            }
+        } catch (_: Exception) {}
     }
 
     private fun ensureChannel() {
