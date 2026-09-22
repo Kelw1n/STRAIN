@@ -55,8 +55,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.texasprogram.app.model.ProgramInput
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.TrainingLevel
+import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.service.BroProfileData
 import com.texasprogram.app.service.BroTrackerService
 import com.texasprogram.app.service.QRCodeService
@@ -469,13 +470,19 @@ fun BroTrackerScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        val kind = try {
+                            TrainingProgramKind.valueOf(currentBuddy.programKind)
+                        } catch (_: Exception) {
+                            TrainingProgramKind.TEXAS
+                        }
                         val newProf = ProgramProfile(
-                            input = ProgramInput(
-                                squat5RM = if (currentBuddy.squat5RM > 0) currentBuddy.squat5RM else 100.0,
-                                bench5RM = if (currentBuddy.bench5RM > 0) currentBuddy.bench5RM else 100.0,
-                                deadlift5RM = if (currentBuddy.deadlift5RM > 0) currentBuddy.deadlift5RM else 100.0
-                            )
-                        ).copy(name = "${currentBuddy.name} (копия)")
+                            name = "${currentBuddy.name} (копия)",
+                            programKind = kind,
+                            squat5RM = if (currentBuddy.squat5RM > 0) currentBuddy.squat5RM else 100.0,
+                            bench5RM = if (currentBuddy.bench5RM > 0) currentBuddy.bench5RM else 100.0,
+                            deadlift5RM = if (currentBuddy.deadlift5RM > 0) currentBuddy.deadlift5RM else 100.0,
+                            level = TrainingLevel.BEGINNER
+                        )
                         onCopyProgram(newProf)
                         selectedBuddyForProgram = null
                         copyNotice = "Программа друга «${currentBuddy.name}» успешно скопирована в твои профили!"
