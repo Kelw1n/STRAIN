@@ -364,10 +364,12 @@ private struct MessageBubble: View {
                             isMe ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Color.primary.opacity(0.06)),
                             in: RoundedRectangle(cornerRadius: 16)
                         )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .strokeBorder(isMe ? Color.clear : Theme.hairline(scheme), lineWidth: 1)
-                        )
+                        .overlay {
+                            if !isMe {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .strokeBorder(Theme.hairline(scheme), lineWidth: 1)
+                            }
+                        }
 
                 case .workoutResult:
                     if let p = message.workoutPayload {
