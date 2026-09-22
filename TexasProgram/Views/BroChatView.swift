@@ -6,6 +6,7 @@ struct BroChatView: View {
     let buddy: BroProfileData
     let profile: ProgramProfile
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
 
     @State private var service = BroTrackerService.shared
     @State private var messages: [BroChatMessage] = []
@@ -52,7 +53,7 @@ struct BroChatView: View {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.textSecondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -123,7 +124,7 @@ struct BroChatView: View {
                 HStack(spacing: 6) {
                     Text(buddy.name)
                         .font(.headline)
-                        .foregroundStyle(Theme.textPrimary)
+                        .foregroundStyle(.primary)
 
                     Circle()
                         .fill(buddy.isOnline ? Theme.success : (buddy.isRecentlyActive ? Theme.warning : Color.gray))
@@ -132,7 +133,7 @@ struct BroChatView: View {
 
                 Text(buddy.statusDescription)
                     .font(.caption2)
-                    .foregroundStyle(buddy.isOnline ? Theme.success : Theme.textSecondary)
+                    .foregroundStyle(buddy.isOnline ? Theme.success : .secondary)
             }
 
             Spacer()
@@ -140,7 +141,7 @@ struct BroChatView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("ПРОГРАММА")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(.secondary)
                 Text("Нед. \(buddy.currentWeek) · Дн. \(buddy.currentDay)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.accent)
@@ -162,10 +163,10 @@ struct BroChatView: View {
                                 .padding(.top, 40)
                             Text("Здесь начнётся ваш разговор!")
                                 .font(.headline)
-                                .foregroundStyle(Theme.textPrimary)
+                                .foregroundStyle(.primary)
                             Text("Поделись результатом подхода или черкани пару слов бро.")
                                 .font(.caption)
-                                .foregroundStyle(Theme.textSecondary)
+                                .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
                         .padding(.horizontal, 32)
@@ -204,11 +205,11 @@ struct BroChatView: View {
                     }) {
                         Text(phrase)
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(Theme.textPrimary)
+                            .foregroundStyle(.primary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Theme.surfaceSoft, in: Capsule())
-                            .overlay(Capsule().stroke(Theme.hairline, lineWidth: 1))
+                            .background(Color.primary.opacity(0.06), in: Capsule())
+                            .overlay(Capsule().strokeBorder(Theme.hairline(scheme), lineWidth: 1))
                     }
                 }
             }
@@ -225,7 +226,7 @@ struct BroChatView: View {
                     .font(.system(size: 18))
                     .foregroundStyle(Theme.accent)
                     .frame(width: 38, height: 38)
-                    .background(Theme.surfaceSoft, in: Circle())
+                    .background(Color.primary.opacity(0.06), in: Circle())
             }
 
             // Кнопка шеринга текущего подхода/рекорда
@@ -234,7 +235,7 @@ struct BroChatView: View {
                     .font(.system(size: 18))
                     .foregroundStyle(Theme.warning)
                     .frame(width: 38, height: 38)
-                    .background(Theme.surfaceSoft, in: Circle())
+                    .background(Color.primary.opacity(0.06), in: Circle())
             }
 
             // Поле ввода текста
@@ -242,9 +243,9 @@ struct BroChatView: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(Theme.surfaceSoft, in: RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.hairline, lineWidth: 1))
-                .foregroundStyle(Theme.textPrimary)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
+                .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Theme.hairline(scheme), lineWidth: 1))
+                .foregroundStyle(.primary)
                 .onSubmit {
                     Task { await sendCurrentText() }
                 }
@@ -255,13 +256,13 @@ struct BroChatView: View {
             }) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundStyle(inputText.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.textTertiary : Theme.accent)
+                    .foregroundStyle(inputText.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary.opacity(0.4) : Theme.accent)
             }
             .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty || isSending)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Theme.surface)
+        .background(Theme.surface(scheme))
     }
 
     private func reloadMessages() {
@@ -338,6 +339,7 @@ private struct MessageBubble: View {
     let message: BroChatMessage
     let isMe: Bool
     let onPhotoTap: (UIImage) -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
@@ -347,7 +349,7 @@ private struct MessageBubble: View {
                 if !isMe {
                     Text(message.senderName)
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.textSecondary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
                 }
 
@@ -355,16 +357,16 @@ private struct MessageBubble: View {
                 case .text:
                     Text(message.text)
                         .font(.subheadline)
-                        .foregroundStyle(isMe ? .white : Theme.textPrimary)
+                        .foregroundStyle(isMe ? .white : .primary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(
-                            isMe ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.surfaceSoft),
+                            isMe ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Color.primary.opacity(0.06)),
                             in: RoundedRectangle(cornerRadius: 16)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
-                                .stroke(isMe ? Color.clear : Theme.hairline, lineWidth: 1)
+                                .strokeBorder(isMe ? Color.clear : Theme.hairline(scheme), lineWidth: 1)
                         )
 
                 case .workoutResult:
@@ -373,9 +375,9 @@ private struct MessageBubble: View {
                     } else {
                         Text(message.text)
                             .font(.subheadline)
-                            .foregroundStyle(Theme.textPrimary)
+                            .foregroundStyle(.primary)
                             .padding(12)
-                            .background(Theme.surfaceSoft, in: RoundedRectangle(cornerRadius: 16))
+                            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
                     }
 
                 case .photo:
@@ -384,7 +386,7 @@ private struct MessageBubble: View {
 
                 Text(message.timeFormatted)
                     .font(.system(size: 9))
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
             }
 
@@ -397,6 +399,7 @@ private struct MessageBubble: View {
 private struct WorkoutResultBubble: View {
     let payload: WorkoutSharePayload
     let isMe: Bool
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -413,12 +416,12 @@ private struct WorkoutResultBubble: View {
 
                 Text("Нед. \(payload.week) · Дн. \(payload.day)")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(.secondary)
             }
 
             Text(payload.exercise)
                 .font(.headline.weight(.bold))
-                .foregroundStyle(Theme.textPrimary)
+                .foregroundStyle(.primary)
 
             HStack(spacing: 8) {
                 HStack(spacing: 4) {
@@ -428,20 +431,20 @@ private struct WorkoutResultBubble: View {
                 }
 
                 Text("·")
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(.secondary)
 
                 Text("\(payload.sets)×\(payload.reps)")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .foregroundStyle(.primary)
             }
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Theme.surface)
+                .fill(Theme.surface(scheme))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(payload.isPR ? Color.yellow.opacity(0.6) : Theme.accent.opacity(0.4), lineWidth: 1.5)
+                        .strokeBorder(payload.isPR ? Color.yellow.opacity(0.6) : Theme.accent.opacity(0.4), lineWidth: 1.5)
                 )
         )
     }
@@ -452,6 +455,7 @@ private struct PhotoBubble: View {
     let message: BroChatMessage
     let isMe: Bool
     let onPhotoTap: (UIImage) -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: isMe ? .trailing : .leading, spacing: 6) {
@@ -462,19 +466,19 @@ private struct PhotoBubble: View {
                     .scaledToFill()
                     .frame(maxWidth: 240, maxHeight: 240)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.hairline, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.hairline(scheme), lineWidth: 1))
                     .onTapGesture {
                         onPhotoTap(uiImage)
                     }
             } else {
                 Text(message.text)
                     .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(.secondary)
                     .padding(8)
             }
         }
         .padding(4)
-        .background(Theme.surfaceSoft, in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func decodeBase64(_ base64String: String) -> UIImage? {
