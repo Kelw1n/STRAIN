@@ -45,9 +45,11 @@ enum class AppThemeStyle(val displayName: String, val description: String) {
 /// Управление темой на Android с сохранением в SharedPreferences.
 object ThemeManager {
     private var prefs: SharedPreferences? = null
+    var appContext: Context? = null
     var style by mutableStateOf(AppThemeStyle.CLAUDE_LIGHT)
 
     fun init(context: Context) {
+        appContext = context.applicationContext
         val p = context.getSharedPreferences("strain.theme", Context.MODE_PRIVATE)
         prefs = p
         val raw = p.getString("theme_style", AppThemeStyle.CLAUDE_LIGHT.name)
@@ -63,13 +65,19 @@ object ThemeManager {
         prefs?.edit()?.putString("theme_style", newStyle.name)?.apply()
     }
 
+    val isSystemDark: Boolean
+        get() {
+            val ctx = appContext ?: return false
+            val mask = ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+            return mask == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        }
+
     val isDark: Boolean
-        @Composable
         get() = when (style) {
             AppThemeStyle.CLAUDE_LIGHT -> false
             AppThemeStyle.CLAUDE_DARK -> true
             AppThemeStyle.STRAIN_DARK -> true
-            AppThemeStyle.SYSTEM -> isSystemInDarkTheme()
+            AppThemeStyle.SYSTEM -> isSystemDark
         }
 
     val isClaude: Boolean
@@ -79,7 +87,7 @@ object ThemeManager {
 /// Динамическая палитра оформления, поддерживающая темы Claude и Strain.
 object Theme {
     val isClaude: Boolean get() = ThemeManager.isClaude
-    val isDark: Boolean @Composable get() = ThemeManager.isDark
+    val isDark: Boolean get() = ThemeManager.isDark
 
     val accent: Color
         get() = if (isClaude) Color(0xFFD97757) else Color(0xFF29D6C2)
@@ -97,7 +105,6 @@ object Theme {
         get() = if (isClaude) Color(0xFFE25E4C) else Color(0xFFFF6B85)
 
     val base: Color
-        @Composable
         get() = when {
             !isClaude -> Color(0xFF0B0E13)
             isDark -> Color(0xFF1B1917)
@@ -105,7 +112,6 @@ object Theme {
         }
 
     val textPrimary: Color
-        @Composable
         get() = when {
             !isClaude -> Color(0xFFF2F5F8)
             isDark -> Color(0xFFF5F3EF)
@@ -113,7 +119,6 @@ object Theme {
         }
 
     val textSecondary: Color
-        @Composable
         get() = when {
             !isClaude -> Color(0xFF98A2B0)
             isDark -> Color(0xFFA69F97)
@@ -121,7 +126,6 @@ object Theme {
         }
 
     val textTertiary: Color
-        @Composable
         get() = when {
             !isClaude -> Color(0xFF6B7482)
             isDark -> Color(0xFF756F68)
@@ -129,7 +133,6 @@ object Theme {
         }
 
     val surface: Color
-        @Composable
         get() = when {
             !isClaude -> Color.White.copy(alpha = 0.055f)
             isDark -> Color(0xFF262422)
@@ -137,7 +140,6 @@ object Theme {
         }
 
     val surfaceSoft: Color
-        @Composable
         get() = when {
             !isClaude -> Color(0x0DFFFFFF)
             isDark -> Color(0xFF32302D)
@@ -145,7 +147,6 @@ object Theme {
         }
 
     val dialog: Color
-        @Composable
         get() = when {
             !isClaude -> Color(0xFF161B24)
             isDark -> Color(0xFF262422)
@@ -153,7 +154,6 @@ object Theme {
         }
 
     val hairline: Color
-        @Composable
         get() = when {
             !isClaude -> Color(0x1FFFFFFF)
             isDark -> Color(0x28FFFFFF)
@@ -161,7 +161,6 @@ object Theme {
         }
 
     val hairlineGradient: Brush
-        @Composable
         get() = if (!isDark) {
             Brush.linearGradient(
                 listOf(Color(0xFFE0DBD3), Color(0xFFEDE8E1)),
