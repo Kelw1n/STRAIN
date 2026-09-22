@@ -35,6 +35,7 @@ struct RootView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: activeProfile?.profileID)
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: isAddingProfile)
         .tint(Theme.accent)
+        .preferredColorScheme(ThemeManager.shared.current.preferredColorScheme)
     }
 
     private func suggestedName() -> String {

@@ -6,51 +6,46 @@ enum Theme {
     static var style: AppThemeStyle { ThemeManager.shared.current }
 
     static var accent: Color {
-        switch style {
-        case .claude:
+        if style.isClaude {
             // Фирменный теплый терракотово-оранжевый Claude (#D97757)
             return Color(red: 0.851, green: 0.467, blue: 0.341)
-        case .strain:
+        } else {
             return Color(red: 0.16, green: 0.84, blue: 0.76)
         }
     }
 
     static var accentDeep: Color {
-        switch style {
-        case .claude:
+        if style.isClaude {
             // Глубокий оттенок теплой глины / янтаря (#C16141)
             return Color(red: 0.757, green: 0.380, blue: 0.255)
-        case .strain:
+        } else {
             return Color(red: 0.35, green: 0.47, blue: 0.98)
         }
     }
 
     static var success: Color {
-        switch style {
-        case .claude:
+        if style.isClaude {
             // Мягкий шалфейный зеленый (#4CB079)
             return Color(red: 0.298, green: 0.686, blue: 0.475)
-        case .strain:
+        } else {
             return Color(red: 0.27, green: 0.85, blue: 0.53)
         }
     }
 
     static var warning: Color {
-        switch style {
-        case .claude:
+        if style.isClaude {
             // Тёплый янтарь (#EBA048)
             return Color(red: 0.922, green: 0.627, blue: 0.282)
-        case .strain:
+        } else {
             return Color(red: 1.00, green: 0.64, blue: 0.26)
         }
     }
 
     static var record: Color {
-        switch style {
-        case .claude:
+        if style.isClaude {
             // Благородная ржавчина (#E25E4C)
             return Color(red: 0.886, green: 0.369, blue: 0.298)
-        case .strain:
+        } else {
             return Color(red: 1.00, green: 0.42, blue: 0.52)
         }
     }
@@ -72,8 +67,7 @@ enum Theme {
     }
 
     static func hairline(_ scheme: ColorScheme) -> LinearGradient {
-        switch style {
-        case .claude:
+        if style.isClaude {
             return LinearGradient(
                 colors: scheme == .dark
                     ? [Color(red: 0.35, green: 0.33, blue: 0.31).opacity(0.8), Color(red: 0.25, green: 0.23, blue: 0.21).opacity(0.4)]
@@ -81,7 +75,7 @@ enum Theme {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-        case .strain:
+        } else {
             return LinearGradient(
                 colors: scheme == .dark
                     ? [.white.opacity(0.16), .white.opacity(0.04)]
@@ -94,12 +88,11 @@ enum Theme {
 
     /// Заливка карточки в зависимости от темы и цветовой схемы.
     static func surface(_ scheme: ColorScheme) -> Color {
-        switch style {
-        case .claude:
-            // В Claude светлый режим — нежнейший молочно-слоновый оттенок (#FFFEFC),
-            // в тёмном — тёплый бархатный антрацит (#292725).
-            return scheme == .dark ? Color(red: 0.161, green: 0.153, blue: 0.145) : Color(red: 1.0, green: 0.996, blue: 0.992)
-        case .strain:
+        if style.isClaude {
+            return scheme == .dark
+                ? Color(red: 0.155, green: 0.147, blue: 0.140)
+                : Color(red: 1.0, green: 0.996, blue: 0.992)
+        } else {
             return scheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.78)
         }
     }
@@ -124,20 +117,18 @@ struct AppBackground: View {
     @Environment(\.colorScheme) private var scheme
 
     private var base: Color {
-        switch Theme.style {
-        case .claude:
-            // Тёплый молочный пергамент (#FAF7F2) в светлой, и тёплый матовый уголь (#1A1918) в тёмной
-            return scheme == .dark ? Color(red: 0.102, green: 0.098, blue: 0.094) : Color(red: 0.980, green: 0.969, blue: 0.949)
-        case .strain:
+        if Theme.style.isClaude {
+            // Тёплый молочный пергамент (#FAF7F2) в светлой, и тёплый матовый уголь (#151413) в тёмной
+            return scheme == .dark ? Color(red: 0.086, green: 0.082, blue: 0.078) : Color(red: 0.980, green: 0.969, blue: 0.949)
+        } else {
             return scheme == .dark ? Color(red: 0.043, green: 0.055, blue: 0.075) : Color(red: 0.945, green: 0.957, blue: 0.973)
         }
     }
 
     private var glow: Double {
-        switch Theme.style {
-        case .claude:
+        if Theme.style.isClaude {
             return scheme == .dark ? 0.18 : 0.12
-        case .strain:
+        } else {
             return scheme == .dark ? 0.26 : 0.20
         }
     }

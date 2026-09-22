@@ -28,14 +28,11 @@ public final class HealthKitService {
     public func requestAuthorization() async -> Bool {
         guard isAvailable else { return false }
 
-        let typesToShare: Set<HKSampleType> = [
-            HKObjectType.workoutType()
-        ]
+        guard let bodyMassType = HKQuantityType.quantityType(forIdentifier: .bodyMass) else { return false }
+        let workoutType = HKObjectType.workoutType()
 
-        let typesToRead: Set<HKObjectType> = [
-            HKQuantityType(.bodyMass),
-            HKObjectType.workoutType()
-        ]
+        let typesToShare: Set<HKSampleType> = [workoutType]
+        let typesToRead: Set<HKObjectType> = [bodyMassType, workoutType]
 
         do {
             try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)

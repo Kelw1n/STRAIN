@@ -40,12 +40,34 @@ enum WidgetStore {
     private static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
 
     static func save(_ snapshot: WidgetSnapshot) {
-        guard let defaults, let data = try? JSONEncoder().encode(snapshot) else { return }
-        defaults.set(data, forKey: key)
+        if let defaults, let data = try? JSONEncoder().encode(snapshot) {
+            defaults.set(data, forKey: key)
+        }
+        if let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
     }
 
     static func load() -> WidgetSnapshot? {
-        guard let defaults, let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
+        if let defaults, let data = defaults.data(forKey: key),
+           let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data) {
+            return snapshot
+        }
+        if let data = UserDefaults.standard.data(forKey: key),
+           let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data) {
+            return snapshot
+        }
+        return WidgetSnapshot(
+            relative: "Сегодня",
+            dateText: "STRAIN",
+            weekText: "Силовая программа",
+            title: "Открой приложение для синхронизации",
+            benchSession: nil,
+            benchTopWeight: nil,
+            doneDays: 0,
+            totalDays: 1,
+            isRestToday: false,
+            updatedAt: .now
+        )
     }
 }

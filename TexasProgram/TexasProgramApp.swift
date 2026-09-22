@@ -11,11 +11,25 @@ struct TexasProgramApp: App {
         WindowGroup {
             RootView()
                 .environment(restTimer)
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
         }
         .modelContainer(for: [ProgramProfile.self])
         .onChange(of: scenePhase) { _, phase in
             // После фона пересчитываем остаток от даты окончания, а не от тиков.
             if phase == .active { restTimer.refresh() }
+        }
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        let path = url.absoluteString.lowercased()
+        if path.contains("add30") || path.contains("add") {
+            restTimer.add(30)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        } else if path.contains("stop") || path.contains("finish") {
+            restTimer.stop()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }
 }

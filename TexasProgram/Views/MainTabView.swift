@@ -145,6 +145,18 @@ struct TodayView: View {
                                 onOpenHistory: { historyFor = exercise.name },
                                 hint: profile.accessoryHint(for: exercise, week: focus.week, day: focus.day.number)
                             )
+                            .contextMenu {
+                                Button {
+                                    customizing = focus
+                                } label: {
+                                    Label("Настроить / Заменить упражнение", systemImage: "pencil.line")
+                                }
+                                Button {
+                                    historyFor = exercise.name
+                                } label: {
+                                    Label("История подходов", systemImage: "chart.xyaxis.line")
+                                }
+                            }
                             .appearIn(index + 4)
                             .softScroll()
                         }

@@ -4,8 +4,10 @@ import SwiftData
 /// Черновик своего упражнения: то, что пользователь набирает в форме.
 struct ExerciseDraft: Identifiable, Hashable {
     var id = UUID()
-    /// Что заменяем. `nil` — добавляем новое упражнение.
+    /// Что заменяем из программы. `nil` — добавляем своё или редактируем добавленное.
     var target: ExercisePrescription?
+    /// Существующая модификация плана, если редактируем уже созданное упражнение.
+    var existingEdit: PlanEdit?
     var name: String = ""
     var sets: Int = 3
     var reps: String = "8–12"
@@ -27,7 +29,7 @@ struct ExerciseDraft: Identifiable, Hashable {
     }
 }
 
-/// Настройка одного дня программы: заменить, убрать или дописать своё упражнение.
+/// Настройка одного дня программы: заменить, переименовать, убрать или дописать своё упражнение.
 struct DayCustomizeView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var profile: ProgramProfile
@@ -60,12 +62,12 @@ struct DayCustomizeView: View {
         NavigationStack {
             Form {
                 scopeSection
-                orderSection
                 programSection
                 addedSection
+                orderSection
                 if !dayEdits.isEmpty { resetSection }
             }
-            .navigationTitle("Свои упражнения")
+            .navigationTitle("Настройка упражнений")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -74,15 +76,21 @@ struct DayCustomizeView: View {
             }
             .onAppear { ordering = current }
             .onChange(of: current) { _, value in
-                // Состав дня поменялся — подхватываем, иначе список перестановки
-                // покажет упражнения, которых уже нет.
                 ordering = value
             }
             .navigationDestination(item: $draft) { value in
-                ExerciseFormView(draft: value, scope: scope) { saved in
-                    apply(saved)
-                    draft = nil
-                }
+                ExerciseFormView(
+                    draft: value,
+                    scope: scope,
+                    onSave: { saved in
+                        apply(saved)
+                        draft = nil
+                    },
+                    onDelete: {
+                        deleteDraft(value)
+                        draft = nil
+                    }
+                )
             }
         }
     }
@@ -96,14 +104,131 @@ struct DayCustomizeView: View {
             }
             .pickerStyle(.segmented)
         } header: {
-            Text("Куда применить")
+            Text("Применить изменения")
         } footer: {
             Text(scope.explanation)
         }
     }
 
-    /// Перестановка. Список отдельный: тянуть строки, у которых сбоку меню
-    /// с действиями, неудобно — палец попадает то туда, то сюда.
+    private var programSection: some View {
+        Section {
+            ForEach(generated) { exercise in
+                let currentEdit = edit(for: exercise)
+                Button {
+                    // НАЖАТИЕ НА ЛЮБОЕ УПРАЖНЕНИЕ ОТКРЫВАЕТ ЕГО РЕДАКТИРОВАНИЕ
+                    draft = ExerciseDraft(
+                        target: exercise,
+                        existingEdit: currentEdit,
+                        name: currentEdit?.name ?? exercise.name,
+                        sets: currentEdit?.sets ?? max(exercise.sets, 1),
+                        reps: currentEdit?.reps ?? exercise.reps,
+                        weightText: currentEdit?.kilograms.map(WeightFormat.plain) ?? weightText(of: exercise),
+                        loadText: currentEdit?.loadText ?? ""
+                    )
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(currentEdit?.name ?? exercise.name)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(currentEdit?.kind == .hide ? .secondary : .primary)
+                                .strikethrough(currentEdit?.kind == .hide)
+
+                            if let currentEdit {
+                                Text(currentEdit.summary + " · " + currentEdit.scope.rawValue.lowercased())
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.warning)
+                            } else {
+                                Text(subtitle(of: exercise)).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer(minLength: 6)
+
+                        Image(systemName: "slider.horizontal.2.square")
+                            .font(.title3)
+                            .foregroundStyle(Theme.accent)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        profile.hideExercise(exercise, week: week, day: day.number, scope: scope)
+                    } label: {
+                        Label("Убрать", systemImage: "eye.slash")
+                    }
+
+                    if currentEdit != nil {
+                        Button {
+                            if let currentEdit { profile.removeEdit(currentEdit) }
+                        } label: {
+                            Label("Сброс", systemImage: "arrow.uturn.backward")
+                        }
+                        .tint(.blue)
+                    }
+                }
+            }
+        } header: {
+            Text("Упражнения программы")
+        } footer: {
+            Text("Нажмите на любое упражнение, чтобы изменить его название, подходы, повторения, вес или убрать из дня.")
+        }
+    }
+
+    private var addedSection: some View {
+        Section {
+            ForEach(addedEdits) { item in
+                Button {
+                    // ТЕПЕРЬ НАЖАТИЕ НА ДОБАВЛЕННОЕ УПРАЖНЕНИЕ ТОЖЕ ОТКРЫВАЕТ ЕГО РЕДАКТИРОВАНИЕ
+                    draft = ExerciseDraft(
+                        target: nil,
+                        existingEdit: item,
+                        name: item.name,
+                        sets: max(item.sets, 1),
+                        reps: item.reps,
+                        weightText: item.kilograms.map(WeightFormat.plain) ?? "",
+                        loadText: item.loadText ?? ""
+                    )
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.name)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
+                            Text(detail(of: item) + " · " + item.scope.rawValue.lowercased())
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 6)
+
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(Theme.accent)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .swipeActions {
+                    Button(role: .destructive) { profile.removeEdit(item) } label: {
+                        Label("Удалить", systemImage: "trash")
+                    }
+                }
+            }
+
+            Button {
+                draft = ExerciseDraft()
+            } label: {
+                Label("Добавить новое упражнение", systemImage: "plus.circle.fill")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+            }
+        } header: {
+            Text("Свои добавленные упражнения")
+        } footer: {
+            Text("Нажмите на созданное упражнение, чтобы отредактировать его или удалить.")
+        }
+    }
+
     private var orderSection: some View {
         Section {
             ForEach(ordering) { exercise in
@@ -119,121 +244,56 @@ struct DayCustomizeView: View {
             }
         } header: {
             HStack {
-                Text("Порядок")
+                Text("Порядок выполнения")
                 Spacer()
                 EditButton().font(.footnote)
             }
         } footer: {
-            Text("Нажми «Изменить» и перетащи за полоски. Порядок сохранится по тому же правилу, что выбрано выше.")
-        }
-    }
-
-    private var programSection: some View {
-        Section {
-            ForEach(generated) { exercise in
-                row(for: exercise)
-            }
-        } header: {
-            Text("Упражнения программы")
-        } footer: {
-            Text("Приседания, жим и становая кормят график прогресса. Если заменить или убрать их, в графике за эти дни будет пусто.")
-        }
-    }
-
-    @ViewBuilder
-    private func row(for exercise: ExercisePrescription) -> some View {
-        let current = edit(for: exercise)
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text(exercise.name)
-                    .foregroundStyle(current?.kind == .hide ? .secondary : .primary)
-                    .strikethrough(current?.kind == .hide)
-                Spacer(minLength: 6)
-                Menu {
-                    Button {
-                        draft = ExerciseDraft(
-                            target: exercise,
-                            name: exercise.name,
-                            sets: max(exercise.sets, 1),
-                            reps: exercise.reps,
-                            weightText: weightText(of: exercise)
-                        )
-                    } label: {
-                        Label("Заменить", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    Button(role: .destructive) {
-                        profile.hideExercise(exercise, week: week, day: day.number, scope: scope)
-                    } label: {
-                        Label("Убрать из дня", systemImage: "eye.slash")
-                    }
-                    if let current {
-                        Divider()
-                        Button {
-                            profile.removeEdit(current)
-                        } label: {
-                            Label("Вернуть как было", systemImage: "arrow.uturn.backward")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle").font(.body.weight(.semibold))
-                }
-            }
-            if let current {
-                Text(current.summary + " · " + current.scope.rawValue.lowercased())
-                    .font(.caption)
-                    .foregroundStyle(Theme.warning)
-            } else {
-                Text(subtitle(of: exercise)).font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private var addedSection: some View {
-        Section {
-            ForEach(addedEdits) { item in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name)
-                    Text(detail(of: item) + " · " + item.scope.rawValue.lowercased())
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                .swipeActions {
-                    Button(role: .destructive) { profile.removeEdit(item) } label: {
-                        Label("Удалить", systemImage: "trash")
-                    }
-                }
-            }
-            Button {
-                draft = ExerciseDraft()
-            } label: {
-                Label("Добавить своё упражнение", systemImage: "plus.circle.fill")
-            }
-        } header: {
-            Text("Свои упражнения")
-        } footer: {
-            Text(addedEdits.isEmpty
-                 ? "Упражнение встанет в конец дня и будет отмечаться по подходам наравне с остальными."
-                 : "Смахни влево, чтобы убрать.")
+            Text("Нажмите «Изменить» и перетащите за полоски, чтобы поменять порядок.")
         }
     }
 
     private var resetSection: some View {
         Section {
-            Button(role: .destructive) {
-                profile.removeEdits(week: week, day: day.number)
-            } label: {
-                Label("Вернуть день как было", systemImage: "arrow.uturn.backward.circle")
+            Button("Вернуть стандартную программу дня", role: .destructive) {
+                profile.resetDayEdits(week: week, day: day.number)
             }
         } footer: {
-            Text("Уберёт все правки этого дня и вернёт упражнения программы.")
+            Text("Снимет все замены, убранные упражнения и добавленные движения этого дня.")
         }
     }
 
-    // MARK: - Действия
+    // MARK: - Логика
 
     private func apply(_ value: ExerciseDraft) {
-        guard !value.trimmedName.isEmpty else { return }
-        if let target = value.target {
+        if let existing = value.existingEdit {
+            // Если редактировали уже существующий edit: убираем старый и ставим новый с новым именем/весом
+            profile.removeEdit(existing)
+            if let target = value.target {
+                profile.replaceExercise(
+                    target,
+                    name: value.trimmedName,
+                    sets: value.sets,
+                    reps: value.reps,
+                    kilograms: value.kilograms,
+                    loadText: value.load,
+                    week: week,
+                    day: day.number,
+                    scope: scope
+                )
+            } else {
+                profile.addExercise(
+                    name: value.trimmedName,
+                    sets: value.sets,
+                    reps: value.reps,
+                    kilograms: value.kilograms,
+                    loadText: value.load,
+                    week: week,
+                    day: day.number,
+                    scope: scope
+                )
+            }
+        } else if let target = value.target {
             profile.replaceExercise(
                 target,
                 name: value.trimmedName,
@@ -259,9 +319,17 @@ struct DayCustomizeView: View {
         }
     }
 
+    private func deleteDraft(_ value: ExerciseDraft) {
+        if let existing = value.existingEdit {
+            profile.removeEdit(existing)
+        } else if let target = value.target {
+            profile.hideExercise(target, week: week, day: day.number, scope: scope)
+        }
+    }
+
     private func weightText(of exercise: ExercisePrescription) -> String {
         guard case .kilograms(let value) = exercise.load else { return "" }
-        return WeightFormat.kilogramsPrecise(value).replacingOccurrences(of: " кг", with: "")
+        return WeightFormat.kilogramsPrecise(value).replacingOccurrences(of: " кг", with: "").replacingOccurrences(of: " lbs", with: "")
     }
 
     private func subtitle(of exercise: ExercisePrescription) -> String {
@@ -281,6 +349,7 @@ private struct ExerciseFormView: View {
     @State var draft: ExerciseDraft
     let scope: PlanEditScope
     let onSave: (ExerciseDraft) -> Void
+    let onDelete: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -288,21 +357,23 @@ private struct ExerciseFormView: View {
 
     var body: some View {
         Form {
-            Section("Упражнение") {
-                TextField("Название", text: $draft.name)
+            Section("Название и повторения") {
+                TextField("Название упражнения", text: $draft.name)
                     .textInputAutocapitalization(.sentences)
-                Stepper("Подходов: \(draft.sets)", value: $draft.sets, in: 1...12)
-                TextField("Повторения, например 8–12", text: $draft.reps)
+                    .font(.body.weight(.semibold))
+
+                Stepper("Подходов: \(draft.sets)", value: $draft.sets, in: 1...15)
+                TextField("Повторения (например 8–12 или 5)", text: $draft.reps)
             }
 
             Section {
-                TextField("Вес, кг", text: $draft.weightText)
+                TextField("Вес (например 80 или 102.5)", text: $draft.weightText)
                     .keyboardType(.decimalPad)
-                TextField("Или подпись: RPE 8, до отказа", text: $draft.loadText)
+                TextField("Или подсказка: RPE 8, до отказа, разминка", text: $draft.loadText)
             } header: {
-                Text("Нагрузка")
+                Text("Рабочий вес / Нагрузка")
             } footer: {
-                Text("Если указать вес, приложение посчитает блины и разминку. Оставишь пусто — покажет подпись.")
+                Text("Если указать вес числом, STRAIN рассчитает разминочные подходы и блины.")
             }
 
             Section {
@@ -310,14 +381,39 @@ private struct ExerciseFormView: View {
                     onSave(draft)
                     dismiss()
                 } label: {
-                    Label(isReplacing ? "Заменить" : "Добавить", systemImage: "checkmark.circle.fill")
+                    HStack {
+                        Spacer()
+                        Text("Сохранить изменения")
+                            .font(.body.weight(.bold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
                 }
+                .listRowBackground(draft.trimmedName.isEmpty ? Color.gray.opacity(0.3) : Theme.accent)
                 .disabled(draft.trimmedName.isEmpty)
             } footer: {
                 Text(scope.explanation)
             }
+
+            if isReplacing || draft.existingEdit != nil {
+                Section {
+                    Button(role: .destructive) {
+                        onDelete?()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label(isReplacing ? "Убрать это упражнение из дня" : "Удалить упражнение", systemImage: "trash.fill")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.red)
+                            Spacer()
+                        }
+                    }
+                }
+            }
         }
-        .navigationTitle(isReplacing ? "Замена" : "Своё упражнение")
+        .navigationTitle(draft.name.isEmpty ? "Новое упражнение" : draft.name)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

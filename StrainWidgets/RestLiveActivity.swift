@@ -1,54 +1,6 @@
 import ActivityKit
-import AppIntents
 import SwiftUI
 import WidgetKit
-
-// MARK: - App Intents для интерактивного управления отдыхом с экрана блокировки
-
-@available(iOS 17.0, *)
-struct AddRestSecondsIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Добавить 30 секунд"
-    static var description = IntentDescription("Продлевает текущий таймер отдыха на 30 секунд")
-
-    @Parameter(title: "Секунды")
-    var seconds: Double
-
-    init() {
-        self.seconds = 30
-    }
-
-    init(seconds: Double) {
-        self.seconds = seconds
-    }
-
-    func perform() async throws -> some IntentResult {
-        for activity in Activity<RestActivityAttributes>.activities {
-            let current = activity.content.state
-            let newEnd = current.endsAt.addingTimeInterval(seconds)
-            let updated = RestActivityAttributes.ContentState(
-                startedAt: current.startedAt,
-                endsAt: newEnd
-            )
-            await activity.update(ActivityContent(state: updated, staleDate: newEnd))
-        }
-        return .result()
-    }
-}
-
-@available(iOS 17.0, *)
-struct StopRestIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Завершить отдых"
-    static var description = IntentDescription("Останавливает текущий таймер отдыха")
-
-    init() {}
-
-    func perform() async throws -> some IntentResult {
-        for activity in Activity<RestActivityAttributes>.activities {
-            await activity.end(nil, dismissalPolicy: .immediate)
-        }
-        return .result()
-    }
-}
 
 // MARK: - Палитра виджета
 
@@ -69,7 +21,7 @@ struct RestLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RestActivityAttributes.self) { context in
             LockScreenView(state: context.state, isDone: context.isStale)
-                .activityBackgroundTint(Color(red: 0.12, green: 0.11, blue: 0.10).opacity(0.85))
+                .activityBackgroundTint(Color(red: 0.10, green: 0.09, blue: 0.08).opacity(0.92))
                 .activitySystemActionForegroundColor(WidgetPalette.accent)
         } dynamicIsland: { context in
             let done = context.isStale
@@ -92,7 +44,21 @@ struct RestLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 8) {
+                    HStack(spacing: 10) {
+                        if !done {
+                            Link(destination: URL(string: "strain://timer/add30")!) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "plus")
+                                    Text("30с")
+                                }
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.vertical, 5)
+                                .padding(.horizontal, 9)
+                                .background(WidgetPalette.accent, in: Capsule())
+                            }
+                        }
+
                         ProgressView(timerInterval: context.state.range, countsDown: true) {
                             EmptyView()
                         } currentValueLabel: {
@@ -100,38 +66,19 @@ struct RestLiveActivity: Widget {
                         }
                         .tint(done ? WidgetPalette.done : WidgetPalette.accent)
 
-                        if !done {
-                            HStack {
-                                Button(intent: AddRestSecondsIntent(seconds: 30)) {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "plus")
-                                        Text("30 сек")
-                                    }
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.vertical, 4)
-                                    .padding(.horizontal, 8)
-                                    .background(WidgetPalette.accent.opacity(0.4), in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-
-                                Spacer()
-
-                                Button(intent: StopRestIntent()) {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "checkmark")
-                                        Text("Готово")
-                                    }
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(WidgetPalette.done)
-                                    .padding(.vertical, 4)
-                                    .padding(.horizontal, 8)
-                                    .background(WidgetPalette.done.opacity(0.2), in: Capsule())
-                                }
-                                .buttonStyle(.plain)
+                        Link(destination: URL(string: "strain://timer/stop")!) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "checkmark")
+                                Text("Готово")
                             }
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.vertical, 5)
+                            .padding(.horizontal, 9)
+                            .background(WidgetPalette.done, in: Capsule())
                         }
                     }
+                    .padding(.top, 4)
                 }
             } compactLeading: {
                 Image(systemName: done ? "checkmark.circle.fill" : "hourglass")
@@ -203,10 +150,10 @@ private struct LockScreenView: View {
             }
             .tint(isDone ? WidgetPalette.done : WidgetPalette.accent)
 
-            // Интерактивные кнопки управления (iOS 17+)
+            // Интерактивные кнопки управления через гарантированный Deep Link
             if !isDone {
                 HStack(spacing: 12) {
-                    Button(intent: AddRestSecondsIntent(seconds: 30)) {
+                    Link(destination: URL(string: "strain://timer/add30")!) {
                         HStack(spacing: 5) {
                             Image(systemName: "plus")
                                 .font(.caption2.weight(.bold))
@@ -214,27 +161,25 @@ private struct LockScreenView: View {
                                 .font(.caption.weight(.semibold))
                         }
                         .foregroundStyle(.white)
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(WidgetPalette.accent.opacity(0.35), in: Capsule())
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 14)
+                        .background(WidgetPalette.accent, in: Capsule())
                     }
-                    .buttonStyle(.plain)
 
                     Spacer()
 
-                    Button(intent: StopRestIntent()) {
+                    Link(destination: URL(string: "strain://timer/stop")!) {
                         HStack(spacing: 5) {
                             Image(systemName: "checkmark")
                                 .font(.caption2.weight(.bold))
                             Text("Завершить")
                                 .font(.caption.weight(.semibold))
                         }
-                        .foregroundStyle(WidgetPalette.done)
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(WidgetPalette.done.opacity(0.2), in: Capsule())
+                        .foregroundStyle(.white)
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 14)
+                        .background(WidgetPalette.done, in: Capsule())
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.top, 2)
             }
