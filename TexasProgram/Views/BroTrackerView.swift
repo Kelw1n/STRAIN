@@ -15,6 +15,8 @@ struct BroTrackerView: View {
     @State private var selectedBuddyForProgram: BroProfileData?
     @State private var copyAlertMessage: String?
     @State private var showingCopyAlert = false
+    @State private var scanAlertMessage: String?
+    @State private var showingScanAlert = false
 
     init(profile: ProgramProfile) {
         self.profile = profile
@@ -64,7 +66,7 @@ struct BroTrackerView: View {
                 await service.refreshBuddies()
             }
             .sheet(isPresented: $showingMyQR) {
-                MyQRCodeSheet(myBroId: service.myBroId, profileName: profile.name)
+                MyQRCodeSheet(profile: profile, service: service)
             }
             .sheet(isPresented: $showingScanner) {
                 NavigationStack {
@@ -72,7 +74,11 @@ struct BroTrackerView: View {
                         onScan: { code in
                             showingScanner = false
                             Task {
-                                _ = await service.addBuddy(from: code)
+                                let res = await service.addBuddy(from: code)
+                                await MainActor.run {
+                                    scanAlertMessage = res.message
+                                    showingScanAlert = true
+                                }
                             }
                         },
                         onCancel: { showingScanner = false }
@@ -97,9 +103,20 @@ struct BroTrackerView: View {
                 Button("Добавить") {
                     let text = manualInputText
                     manualInputText = ""
-                    Task { _ = await service.addBuddy(from: text) }
+                    Task {
+                        let res = await service.addBuddy(from: text)
+                        await MainActor.run {
+                            scanAlertMessage = res.message
+                            showingScanAlert = true
+                        }
+                    }
                 }
                 Button("Отмена", role: .cancel) {}
+            }
+            .alert("Бро-трекер", isPresented: $showingScanAlert) {
+                Button("ОК", role: .cancel) {}
+            } message: {
+                Text(scanAlertMessage ?? "")
             }
             .sheet(item: $selectedBuddyForProgram) { buddy in
                 BuddyProgramView(buddy: buddy) {
@@ -342,11 +359,11 @@ private struct BuddyCardView: View {
 /// Модальный экран показа своего QR-кода
 private struct MyQRCodeSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let myBroId: String
-    let profileName: String
+    let profile: ProgramProfile
+    let service: BroTrackerService
 
     private var qrLink: String {
-        "strain://bro/\(myBroId)"
+        service.buildQRLink(profile: profile)
     }
 
     var body: some View {
@@ -366,7 +383,7 @@ private struct MyQRCodeSheet: View {
                 }
 
                 VStack(spacing: 6) {
-                    Text(profileName.isEmpty ? "Твой профиль" : profileName)
+                    Text(profile.name.isEmpty ? "Твой профиль" : profile.name)
                         .font(.title2.weight(.bold))
                     Text("Пусть бро наведёт камеру сканера на этот код")
                         .font(.subheadline)
@@ -375,7 +392,7 @@ private struct MyQRCodeSheet: View {
                 }
 
                 HStack(spacing: 8) {
-                    Text(myBroId)
+                    Text(service.myBroId)
                         .font(.system(.subheadline, design: .monospaced).weight(.bold))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)

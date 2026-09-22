@@ -53,7 +53,7 @@ class AppStore(context: Context) {
             .putString(KEY_PROFILES, serialized)
             .putString(KEY_PROFILES_BACKUP, serialized)
             .putString(KEY_ACTIVE, activeId)
-            .commit() // Синхронная запись на физический диск телефона без задержек
+            .apply() // Быстрая запись в память + асинхронный сброс на диск без фризов UI
     }
 
     fun add(profile: ProgramProfile) {

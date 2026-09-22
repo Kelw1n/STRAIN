@@ -107,10 +107,20 @@ struct BroProfileData: Codable, Identifiable {
     }
 }
 
+struct AddBuddyResult {
+    let success: Bool
+    let buddyName: String
+    let message: String
+}
+
 private struct RestfulApiObject: Codable {
     let id: String?
     let name: String
     let data: BroProfileData
+}
+
+private struct CreateResponse: Codable {
+    let id: String?
 }
 
 @Observable
@@ -135,9 +145,28 @@ final class BroTrackerService {
     var lastError: String? = nil
 
     private init() {
-        self.myBroId = defaults.string(forKey: keyMyBroId) ?? ""
+        var id = defaults.string(forKey: keyMyBroId) ?? ""
+        if id.isEmpty {
+            id = "bro_" + UUID().uuidString.prefix(8).lowercased()
+            defaults.set(id, forKey: keyMyBroId)
+        }
+        self.myBroId = id
         self.buddyIds = defaults.stringArray(forKey: keyBuddyIds) ?? []
         loadCachedBuddies()
+    }
+
+    /// Генерирует полную QR-ссылку с данными профиля для мгновенного добавления офлайн
+    func buildQRLink(profile: ProgramProfile) -> String {
+        let name = profile.name.isEmpty ? "Бро" : profile.name
+        let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
+        let kind = profile.programKind.backupCode
+        let week = profile.currentWeek
+        let day = 1
+        let sq = Int(profile.squat5RM)
+        let bp = Int(profile.bench5RM)
+        let dl = Int(profile.deadlift5RM)
+
+        return "strain://bro?id=\(myBroId)&name=\(encodedName)&kind=\(kind)&w=\(week)&d=\(day)&sq=\(sq)&bp=\(bp)&dl=\(dl)"
     }
 
     private func loadCachedBuddies() {
@@ -218,7 +247,7 @@ final class BroTrackerService {
 
             let (data, response) = try await URLSession.shared.data(for: request)
             if let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) {
-                if let decoded = try? JSONDecoder().decode(RestfulApiObject.self, from: data), let newId = decoded.id {
+                if let decoded = try? JSONDecoder().decode(CreateResponse.self, from: data), let newId = decoded.id {
                     self.myBroId = newId
                 }
                 self.lastError = nil
@@ -228,17 +257,80 @@ final class BroTrackerService {
         }
     }
 
-    /// Добавляет друга по ссылке strain://bro/<id> или чистому ID
-    func addBuddy(from rawCode: String) async -> Bool {
-        var cleanId = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Добавляет друга по ссылке strain://bro?... (офлайн/онлайн) или чистому ID
+    func addBuddy(from rawCode: String) async -> AddBuddyResult {
+        let trimmed = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return AddBuddyResult(success: false, buddyName: "", message: "Код пуст")
+        }
+
+        // 1. Проверяем QR-ссылку с параметрами (офлайн / прямой обмен)
+        if trimmed.contains("?") && (trimmed.contains("name=") || trimmed.contains("kind=")) {
+            let urlToParse = trimmed.hasPrefix("strain://") ? trimmed.replacingOccurrences(of: "strain://", with: "https://strain.app/") : trimmed
+            if let url = URL(string: urlToParse),
+               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let items = components.queryItems {
+                let dict = Dictionary(uniqueKeysWithValues: items.compactMap { item in
+                    item.value.map { (item.name, $0) }
+                })
+                let id = dict["id"] ?? ("bro_" + UUID().uuidString.prefix(8).lowercased())
+                if id == myBroId {
+                    return AddBuddyResult(success: false, buddyName: "", message: "Это твой собственный QR-код!")
+                }
+                let name = dict["name"] ?? "Бро"
+                let kind = dict["kind"] ?? "TEXAS"
+                let week = Int(dict["w"] ?? "") ?? 1
+                let day = Int(dict["d"] ?? "") ?? 1
+                let sq = Double(dict["sq"] ?? "") ?? 100.0
+                let bp = Double(dict["bp"] ?? "") ?? 100.0
+                let dl = Double(dict["dl"] ?? "") ?? 100.0
+
+                let programTitle = TrainingProgramKind.allCases.first { $0.backupCode == kind || $0.rawValue == kind }?.rawValue ?? kind
+
+                let days = generatePreviewDays(kind: kind, squat: sq, bench: bp, deadlift: dl)
+                let lifts = generatePreviewLifts(squat: sq, bench: bp, deadlift: dl)
+
+                let buddy = BroProfileData(
+                    broId: id,
+                    name: name,
+                    programKind: kind,
+                    programTitle: programTitle,
+                    currentWeek: week,
+                    currentDay: day,
+                    lastActiveEpoch: Int64(Date().timeIntervalSince1970 * 1000),
+                    squat5RM: sq,
+                    bench5RM: bp,
+                    deadlift5RM: dl,
+                    recentLifts: lifts,
+                    programDays: days
+                )
+
+                if !buddyIds.contains(id) {
+                    buddyIds.append(id)
+                }
+                buddies.removeAll { $0.broId == id }
+                buddies.insert(buddy, at: 0)
+                saveCachedBuddies()
+
+                return AddBuddyResult(success: true, buddyName: name, message: "Бро «\(name)» успешно добавлен в банду! 🤝")
+            }
+        }
+
+        // 2. Если передан ID или strain://bro/<id>
+        var cleanId = trimmed
         if cleanId.contains("/bro/") {
             cleanId = cleanId.components(separatedBy: "/bro/").last ?? cleanId
         } else if cleanId.contains("bro=") {
             cleanId = cleanId.components(separatedBy: "bro=").last ?? cleanId
         }
-        cleanId = cleanId.replacingOccurrences(of: "strain://", with: "")
+        cleanId = cleanId.replacingOccurrences(of: "strain://", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !cleanId.isEmpty, cleanId != myBroId else { return false }
+        guard !cleanId.isEmpty else {
+            return AddBuddyResult(success: false, buddyName: "", message: "Неверный формат ссылки или кода")
+        }
+        if cleanId == myBroId {
+            return AddBuddyResult(success: false, buddyName: "", message: "Это твой собственный код бро!")
+        }
 
         if let fetched = await fetchBuddy(id: cleanId) {
             if !buddyIds.contains(cleanId) {
@@ -247,9 +339,40 @@ final class BroTrackerService {
             buddies.removeAll { $0.broId == cleanId }
             buddies.insert(fetched, at: 0)
             saveCachedBuddies()
-            return true
+            return AddBuddyResult(success: true, buddyName: fetched.name, message: "Бро «\(fetched.name)» успешно добавлен в банду! 🤝")
+        } else {
+            return AddBuddyResult(success: false, buddyName: "", message: "Не удалось найти бро с ID «\(cleanId)». Проверь подключение к интернету.")
         }
-        return false
+    }
+
+    private func generatePreviewDays(kind: String, squat: Double, bench: Double, deadlift: Double) -> [BroWorkoutDay] {
+        let progKind = TrainingProgramKind.allCases.first { $0.backupCode == kind || $0.rawValue == kind } ?? .texas
+        let dummy = ProgramProfile(
+            name: "Preview",
+            kind: progKind,
+            squat5RM: squat > 0 ? squat : 100,
+            bench5RM: bench > 0 ? bench : 100,
+            deadlift5RM: deadlift > 0 ? deadlift : 100,
+            level: .beginner
+        )
+        var days: [BroWorkoutDay] = []
+        for week in dummy.workoutPlan.weeks.prefix(4) {
+            for day in week.days {
+                let exs = day.exercises.map {
+                    BroExercise(name: $0.name, sets: $0.sets, reps: $0.reps, weight: $0.load.displayText)
+                }
+                days.append(BroWorkoutDay(week: week.number, day: day.number, title: day.title, exercises: exs))
+            }
+        }
+        return days
+    }
+
+    private func generatePreviewLifts(squat: Double, bench: Double, deadlift: Double) -> [BroLiftEntry] {
+        return [
+            BroLiftEntry(name: "Присед 5ПМ", prescription: "\(Int(squat)) кг"),
+            BroLiftEntry(name: "Жим 5ПМ", prescription: "\(Int(bench)) кг"),
+            BroLiftEntry(name: "Тяга 5ПМ", prescription: "\(Int(deadlift)) кг")
+        ]
     }
 
     func removeBuddy(id: String) {

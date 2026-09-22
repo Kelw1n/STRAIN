@@ -15,17 +15,15 @@ import kotlinx.serialization.Serializable
 import java.time.LocalDate
 import java.util.UUID
 
-/// Кэш последнего плана: он пересобирался бы на каждое обращение из UI.
+/// Кэш планов: кэшируется по ID профиля, чтобы смена профиля или просмотр друга не выбивали кэш.
 private object PlanCache {
-    private var key: Any? = null
-    private var value: WorkoutPlan? = null
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Any, WorkoutPlan>>()
 
-    fun resolve(newKey: Any, build: () -> WorkoutPlan): WorkoutPlan {
-        val cached = value
-        if (cached != null && key == newKey) return cached
+    fun resolve(profileId: String, newKey: Any, build: () -> WorkoutPlan): WorkoutPlan {
+        val entry = cache[profileId]
+        if (entry != null && entry.first == newKey) return entry.second
         val built = build()
-        key = newKey
-        value = built
+        cache[profileId] = Pair(newKey, built)
         return built
     }
 }
@@ -124,7 +122,7 @@ data class ProgramProfile(
             // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
             // правки подставляют свои упражнения. Наоборот задержка стёрла бы
             // то, что пользователь вписал руками.
-            return PlanCache.resolve(key) { applyEdits(applyAutoregulation(applyHolds(generatedPlan))) }
+            return PlanCache.resolve(id, key) { applyEdits(applyAutoregulation(applyHolds(generatedPlan))) }
         }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,

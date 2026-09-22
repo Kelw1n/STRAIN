@@ -1,6 +1,7 @@
 package com.texasprogram.app.ui
 
 import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,6 +56,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingLevel
 import com.texasprogram.app.model.TrainingProgramKind
@@ -80,6 +83,16 @@ fun BroTrackerScreen(
     var addInputText by remember { mutableStateOf("") }
     var selectedBuddyForProgram by remember { mutableStateOf<BroProfileData?>(null) }
     var copyNotice by remember { mutableStateOf<String?>(null) }
+    var scanNotice by remember { mutableStateOf<String?>(null) }
+
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        if (result.contents != null) {
+            scope.launch {
+                val res = service.addBuddy(result.contents)
+                scanNotice = res.message
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         service.syncMyProfile(profile)
@@ -209,8 +222,29 @@ fun BroTrackerScreen(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(onClick = { showAddDialog = true }) {
-                    Text("+ Добавить бро", color = Theme.accent, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Theme.surfaceSoft)
+                            .pressable {
+                                val options = ScanOptions().apply {
+                                    setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                    setPrompt("Наведи камеру на QR-код бро")
+                                    setBeepEnabled(true)
+                                    setOrientationLocked(false)
+                                }
+                                scanLauncher.launch(options)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.QrCodeScanner, contentDescription = "Сканировать QR", tint = Theme.accent, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { showAddDialog = true }) {
+                        Text("+ Ввести код", color = Theme.accent, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -244,12 +278,39 @@ fun BroTrackerScreen(
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            SecondaryButton("Ввести код", icon = Icons.Filled.Add) {
-                                showAddDialog = true
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Theme.accent)
+                                    .pressable {
+                                        val options = ScanOptions().apply {
+                                            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                            setPrompt("Наведи камеру на QR-код бро")
+                                            setBeepEnabled(true)
+                                            setOrientationLocked(false)
+                                        }
+                                        scanLauncher.launch(options)
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.QrCodeScanner, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Сканировать QR", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
-                            SecondaryButton("Мой QR", icon = Icons.Filled.QrCode) {
-                                showMyQR = true
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Theme.surfaceSoft)
+                                    .pressable { showAddDialog = true }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Ввести код", color = Theme.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                         }
                     }
@@ -268,8 +329,10 @@ fun BroTrackerScreen(
 
     // Диалог показа своего QR
     if (showMyQR) {
-        val qrLink = "strain://bro/${service.myBroId}"
-        val qrBitmap = remember(service.myBroId) {
+        val qrLink = remember(profile, service.myBroId) {
+            service.buildQRLink(profile)
+        }
+        val qrBitmap = remember(qrLink) {
             QRCodeService.generateQRCode(qrLink, 400)
         }
 
@@ -362,7 +425,8 @@ fun BroTrackerScreen(
                         showAddDialog = false
                         addInputText = ""
                         scope.launch {
-                            service.addBuddy(input)
+                            val res = service.addBuddy(input)
+                            scanNotice = res.message
                         }
                     }
                 ) {
@@ -372,6 +436,20 @@ fun BroTrackerScreen(
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) {
                     Text("Отмена", color = Theme.textSecondary)
+                }
+            }
+        )
+    }
+
+    val sNotice = scanNotice
+    if (sNotice != null) {
+        AlertDialog(
+            onDismissRequest = { scanNotice = null },
+            title = { Text("Бро-трекер", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text(sNotice, color = Theme.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { scanNotice = null }) {
+                    Text("ОК", color = Theme.accent)
                 }
             }
         )

@@ -46,7 +46,6 @@ enum class AppThemeStyle(val displayName: String, val description: String) {
 object ThemeManager {
     private var prefs: SharedPreferences? = null
     var style by mutableStateOf(AppThemeStyle.CLAUDE_LIGHT)
-    var isSystemDark by mutableStateOf(false)
 
     fun init(context: Context) {
         val p = context.getSharedPreferences("strain.theme", Context.MODE_PRIVATE)
@@ -61,15 +60,16 @@ object ThemeManager {
 
     fun set(newStyle: AppThemeStyle) {
         style = newStyle
-        prefs?.edit()?.putString("theme_style", newStyle.name)?.commit()
+        prefs?.edit()?.putString("theme_style", newStyle.name)?.apply()
     }
 
     val isDark: Boolean
+        @Composable
         get() = when (style) {
             AppThemeStyle.CLAUDE_LIGHT -> false
             AppThemeStyle.CLAUDE_DARK -> true
             AppThemeStyle.STRAIN_DARK -> true
-            AppThemeStyle.SYSTEM -> isSystemDark
+            AppThemeStyle.SYSTEM -> isSystemInDarkTheme()
         }
 
     val isClaude: Boolean
@@ -79,7 +79,7 @@ object ThemeManager {
 /// Динамическая палитра оформления, поддерживающая темы Claude и Strain.
 object Theme {
     val isClaude: Boolean get() = ThemeManager.isClaude
-    val isDark: Boolean get() = ThemeManager.isDark
+    val isDark: Boolean @Composable get() = ThemeManager.isDark
 
     val accent: Color
         get() = if (isClaude) Color(0xFFD97757) else Color(0xFF29D6C2)
@@ -97,6 +97,7 @@ object Theme {
         get() = if (isClaude) Color(0xFFE25E4C) else Color(0xFFFF6B85)
 
     val base: Color
+        @Composable
         get() = when {
             !isClaude -> Color(0xFF0B0E13)
             isDark -> Color(0xFF1B1917)
@@ -104,6 +105,7 @@ object Theme {
         }
 
     val textPrimary: Color
+        @Composable
         get() = when {
             !isClaude -> Color(0xFFF2F5F8)
             isDark -> Color(0xFFF5F3EF)
@@ -111,6 +113,7 @@ object Theme {
         }
 
     val textSecondary: Color
+        @Composable
         get() = when {
             !isClaude -> Color(0xFF98A2B0)
             isDark -> Color(0xFFA69F97)
@@ -118,6 +121,7 @@ object Theme {
         }
 
     val textTertiary: Color
+        @Composable
         get() = when {
             !isClaude -> Color(0xFF6B7482)
             isDark -> Color(0xFF756F68)
@@ -125,6 +129,7 @@ object Theme {
         }
 
     val surface: Color
+        @Composable
         get() = when {
             !isClaude -> Color.White.copy(alpha = 0.055f)
             isDark -> Color(0xFF262422)
@@ -132,6 +137,7 @@ object Theme {
         }
 
     val surfaceSoft: Color
+        @Composable
         get() = when {
             !isClaude -> Color(0x0DFFFFFF)
             isDark -> Color(0xFF32302D)
@@ -139,6 +145,7 @@ object Theme {
         }
 
     val dialog: Color
+        @Composable
         get() = when {
             !isClaude -> Color(0xFF161B24)
             isDark -> Color(0xFF262422)
@@ -146,6 +153,7 @@ object Theme {
         }
 
     val hairline: Color
+        @Composable
         get() = when {
             !isClaude -> Color(0x1FFFFFFF)
             isDark -> Color(0x28FFFFFF)
@@ -153,6 +161,7 @@ object Theme {
         }
 
     val hairlineGradient: Brush
+        @Composable
         get() = if (!isDark) {
             Brush.linearGradient(
                 listOf(Color(0xFFE0DBD3), Color(0xFFEDE8E1)),
@@ -208,33 +217,36 @@ object Motion {
 /// Фон приложения: адаптивные радиальные пятна, зависящие от выбранной темы.
 @Composable
 fun AppBackground(content: @Composable () -> Unit) {
-    ThemeManager.isSystemDark = isSystemInDarkTheme()
     val isClaude = Theme.isClaude
     val isDark = Theme.isDark
     val glow = if (!isClaude) 0.26f else if (isDark) 0.14f else 0.08f
+    val base = Theme.base
+    val accent = Theme.accent
+    val accentDeep = Theme.accentDeep
+    val record = Theme.record
 
     Box(
         Modifier
             .fillMaxSize()
             .drawBehind {
-                drawRect(Theme.base)
+                drawRect(base)
                 drawRect(
                     Brush.radialGradient(
-                        colors = listOf(Theme.accent.copy(alpha = glow), Color.Transparent),
+                        colors = listOf(accent.copy(alpha = glow), Color.Transparent),
                         center = Offset(size.width * 0.08f, size.height * 0.02f),
                         radius = size.width * 1.10f
                     )
                 )
                 drawRect(
                     Brush.radialGradient(
-                        colors = listOf(Theme.accentDeep.copy(alpha = glow), Color.Transparent),
+                        colors = listOf(accentDeep.copy(alpha = glow), Color.Transparent),
                         center = Offset(size.width * 0.98f, size.height),
                         radius = size.width * 1.20f
                     )
                 )
                 drawRect(
                     Brush.radialGradient(
-                        colors = listOf(Theme.record.copy(alpha = glow * 0.45f), Color.Transparent),
+                        colors = listOf(record.copy(alpha = glow * 0.45f), Color.Transparent),
                         center = Offset(size.width, size.height * 0.12f),
                         radius = size.width * 0.82f
                     )
