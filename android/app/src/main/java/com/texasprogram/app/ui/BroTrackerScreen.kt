@@ -515,7 +515,7 @@ fun BroTrackerScreen(
 @Composable
 private fun BuddyCard(
     buddy: BroProfileData,
-    onViewProgram: () -> Void = {},
+    onViewProgram: () -> Unit = {},
     onDelete: () -> Unit
 ) {
     CardView {
