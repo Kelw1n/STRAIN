@@ -242,15 +242,21 @@ struct BroTrackerView: View {
     }
 
     private func copyProgramFromBuddy(_ buddy: BroProfileData) {
-        let newProfile = ProgramProfile(
-            input: ProgramInput(
-                squat5RM: buddy.squat5RM > 0 ? buddy.squat5RM : 100,
-                bench5RM: buddy.bench5RM > 0 ? buddy.bench5RM : 100,
-                deadlift5RM: buddy.deadlift5RM > 0 ? buddy.deadlift5RM : 100,
-                level: .beginner
-            )
-        )
-        newProfile.name = "\(buddy.name) (копия)"
+        let progKind = TrainingProgramKind.allCases.first { $0.backupCode == buddy.programKind || $0.rawValue == buddy.programKind } ?? .texas
+        let sq = buddy.squat5RM > 0 ? buddy.squat5RM : 100
+        let bp = buddy.bench5RM > 0 ? buddy.bench5RM : 100
+        let dl = buddy.deadlift5RM > 0 ? buddy.deadlift5RM : 100
+        let newProfile: ProgramProfile
+        switch progKind {
+        case .upperLower:
+            newProfile = ProgramProfile(upperLowerInput: UpperLowerInput(squat1RM: sq, bench1RM: bp, deadlift1RM: dl), name: "\(buddy.name) (копия)")
+        case .fullBody:
+            newProfile = ProgramProfile(fullBodyInput: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), level: .aboutYear, name: "\(buddy.name) (копия)")
+        case .proTexas:
+            newProfile = ProgramProfile(proTexasInput: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), name: "\(buddy.name) (копия)")
+        default:
+            newProfile = ProgramProfile(input: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), name: "\(buddy.name) (копия)")
+        }
         modelContext.insert(newProfile)
         try? modelContext.save()
 

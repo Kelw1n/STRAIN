@@ -347,14 +347,20 @@ final class BroTrackerService {
 
     private func generatePreviewDays(kind: String, squat: Double, bench: Double, deadlift: Double) -> [BroWorkoutDay] {
         let progKind = TrainingProgramKind.allCases.first { $0.backupCode == kind || $0.rawValue == kind } ?? .texas
-        let dummy = ProgramProfile(
-            name: "Preview",
-            kind: progKind,
-            squat5RM: squat > 0 ? squat : 100,
-            bench5RM: bench > 0 ? bench : 100,
-            deadlift5RM: deadlift > 0 ? deadlift : 100,
-            level: .beginner
-        )
+        let sq = squat > 0 ? squat : 100
+        let bp = bench > 0 ? bench : 100
+        let dl = deadlift > 0 ? deadlift : 100
+        let dummy: ProgramProfile
+        switch progKind {
+        case .upperLower:
+            dummy = ProgramProfile(upperLowerInput: UpperLowerInput(squat1RM: sq, bench1RM: bp, deadlift1RM: dl), name: "Preview")
+        case .fullBody:
+            dummy = ProgramProfile(fullBodyInput: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), level: .aboutYear, name: "Preview")
+        case .proTexas:
+            dummy = ProgramProfile(proTexasInput: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), name: "Preview")
+        default:
+            dummy = ProgramProfile(input: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), name: "Preview")
+        }
         var days: [BroWorkoutDay] = []
         for week in dummy.workoutPlan.weeks.prefix(4) {
             for day in week.days {
