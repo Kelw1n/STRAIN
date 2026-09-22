@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -30,17 +31,19 @@ fun NotesListScreen(
     onUpdate: (ProgramProfile) -> Unit,
     contentPadding: PaddingValues
 ) {
-    val prefix = profile.keyPrefix
     // От свежих к старым: перечитывают обычно последнее.
-    val notes = profile.workoutNotes
-        .filterKeys { profile.isOwnKey(it) }
-        .mapNotNull { (key, text) ->
-            val parts = key.removePrefix(prefix).split("-")
-            val week = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
-            val day = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
-            Triple(week, day, text)
-        }
-        .sortedWith(compareByDescending<Triple<Int, Int, String>> { it.first }.thenByDescending { it.second })
+    val notes = remember(profile.workoutNotes, profile.id) {
+        val prefix = profile.keyPrefix
+        profile.workoutNotes
+            .filterKeys { profile.isOwnKey(it) }
+            .mapNotNull { (key, text) ->
+                val parts = key.removePrefix(prefix).split("-")
+                val week = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+                val day = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+                Triple(week, day, text)
+            }
+            .sortedWith(compareByDescending<Triple<Int, Int, String>> { it.first }.thenByDescending { it.second })
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),

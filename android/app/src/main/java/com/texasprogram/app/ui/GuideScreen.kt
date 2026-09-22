@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -105,14 +106,11 @@ fun GuideScreen(programKind: TrainingProgramKind, contentPadding: PaddingValues)
     ) {
         item(key = "title") { ScreenTitle("Инструкция") }
 
-        items.forEachIndexed { index, item ->
-            item(key = item.id) {
-                GuideCard(
-                    item = item,
-                    isOpen = opened == item.id,
-                    modifier = Modifier.appearIn(index)
-                ) { opened = if (opened == item.id) null else item.id }
-            }
+        items(items, key = { it.id }) { item ->
+            GuideCard(
+                item = item,
+                isOpen = opened == item.id
+            ) { opened = if (opened == item.id) null else item.id }
         }
 
         item(key = "rpe") {

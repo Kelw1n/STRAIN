@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -98,51 +99,49 @@ fun EuthanasiaSetup(
             }
         }
 
-        EuthanasiaPattern.entries.forEachIndexed { index, pattern ->
-            item(key = "pattern-${pattern.name}") {
-                CardView(Modifier.appearIn(index + 1)) {
-                    SectionLabel(pattern.title)
-                    pattern.options.forEach { option ->
-                        val selected = (chosen[pattern] ?: pattern.options[0]) == option
-                        Row(
+        items(EuthanasiaPattern.entries, key = { it.name }) { pattern ->
+            CardView {
+                SectionLabel(pattern.title)
+                pattern.options.forEach { option ->
+                    val selected = (chosen[pattern] ?: pattern.options[0]) == option
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .pressable { chosen[pattern] = option }
+                            .padding(vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
                             Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .pressable { chosen[pattern] = option }
-                                .padding(vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(if (selected) Theme.accent else Theme.surfaceSoft),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                Modifier
-                                    .size(18.dp)
-                                    .clip(CircleShape)
-                                    .background(if (selected) Theme.accent else Theme.surfaceSoft),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (selected) {
-                                    Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
-                                }
+                            if (selected) {
+                                Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
                             }
-                            Spacer(Modifier.width(10.dp))
-                            Text(option, color = Theme.textPrimary, fontSize = 13.sp)
                         }
+                        Spacer(Modifier.width(10.dp))
+                        Text(option, color = Theme.textPrimary, fontSize = 13.sp)
                     }
-                    DecimalField(
-                        value = maxima[pattern] ?: "",
-                        label = "Тест 1ПМ, кг",
-                        onValueChange = { maxima[pattern] = it }
-                    )
-                    DecimalField(
-                        value = minutes[pattern] ?: "",
-                        label = "Тест ${pattern.totalReps} КПШ, минут",
-                        onValueChange = { minutes[pattern] = it }
-                    )
-                    Text(
-                        "Сначала максимум на один раз, потом — за сколько минут пройдёшь ${pattern.totalReps} повторений с 75 % от него, не подходя к отказу. Ориентир: ${pattern.testHint}.",
-                        color = Theme.textTertiary,
-                        fontSize = 11.sp
-                    )
                 }
+                DecimalField(
+                    value = maxima[pattern] ?: "",
+                    label = "Тест 1ПМ, кг",
+                    onValueChange = { maxima[pattern] = it }
+                )
+                DecimalField(
+                    value = minutes[pattern] ?: "",
+                    label = "Тест ${pattern.totalReps} КПШ, минут",
+                    onValueChange = { minutes[pattern] = it }
+                )
+                Text(
+                    "Сначала максимум на один раз, потом — за сколько минут пройдёшь ${pattern.totalReps} повторений с 75 % от него, не подходя к отказу. Ориентир: ${pattern.testHint}.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
             }
         }
 

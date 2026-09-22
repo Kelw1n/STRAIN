@@ -2,6 +2,7 @@ package com.texasprogram.app.ui
 
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,11 +14,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -58,10 +63,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import com.texasprogram.app.model.BroExercise
+import com.texasprogram.app.model.BroLiftEntry
+import com.texasprogram.app.model.BroProfileData
+import com.texasprogram.app.model.BroWorkoutDay
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingLevel
 import com.texasprogram.app.model.TrainingProgramKind
-import com.texasprogram.app.service.BroProfileData
 import com.texasprogram.app.service.BroTrackerService
 import com.texasprogram.app.service.QRCodeService
 import kotlinx.coroutines.launch
@@ -74,7 +82,7 @@ fun BroTrackerScreen(
     contentPadding: PaddingValues
 ) {
     val context = LocalContext.current
-    val service = remember { BroTrackerService(context) }
+    val service = remember { BroTrackerService.getInstance(context) }
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
 
@@ -458,125 +466,13 @@ fun BroTrackerScreen(
     // Просмотр программы друга
     val currentBuddy = selectedBuddyForProgram
     if (currentBuddy != null) {
-        AlertDialog(
-            onDismissRequest = { selectedBuddyForProgram = null },
-            title = {
-                Column {
-                    Text(currentBuddy.name, color = Theme.textPrimary, fontWeight = FontWeight.Bold)
-                    Text(
-                        "${currentBuddy.programTitle} · Неделя ${currentBuddy.currentWeek}",
-                        color = Theme.textSecondary,
-                        fontSize = 12.sp
-                    )
-                }
-            },
-            text = {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(340.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    item {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Theme.surfaceSoft)
-                                .padding(10.dp),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
-                            if (currentBuddy.squat5RM > 0) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Присед", color = Theme.textSecondary, fontSize = 11.sp)
-                                    Text("${currentBuddy.squat5RM.toInt()} кг", color = Theme.textPrimary, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            if (currentBuddy.bench5RM > 0) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Жим", color = Theme.textSecondary, fontSize = 11.sp)
-                                    Text("${currentBuddy.bench5RM.toInt()} кг", color = Theme.textPrimary, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            if (currentBuddy.deadlift5RM > 0) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Тяга", color = Theme.textSecondary, fontSize = 11.sp)
-                                    Text("${currentBuddy.deadlift5RM.toInt()} кг", color = Theme.textPrimary, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-
-                    if (currentBuddy.programDays.isEmpty()) {
-                        item {
-                            Text("Дни программы не загружены", color = Theme.textSecondary, fontSize = 12.sp)
-                        }
-                    } else {
-                        items(currentBuddy.programDays) { day ->
-                            Column(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Theme.surfaceSoft)
-                                    .padding(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    "Неделя ${day.week} · ${day.title}",
-                                    color = Theme.accent,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                day.exercises.forEach { ex ->
-                                    Row(
-                                        Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(ex.name, color = Theme.textPrimary, fontSize = 12.sp)
-                                        Text(
-                                            "${if (ex.sets > 0) "${ex.sets}×${ex.reps}" else ex.reps} · ${ex.weight}",
-                                            color = Theme.textSecondary,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val kind = try {
-                            TrainingProgramKind.valueOf(currentBuddy.programKind)
-                        } catch (_: Exception) {
-                            TrainingProgramKind.TEXAS
-                        }
-                        val newProf = ProgramProfile(
-                            name = "${currentBuddy.name} (копия)",
-                            programKind = kind,
-                            squat5RM = if (currentBuddy.squat5RM > 0) currentBuddy.squat5RM else 100.0,
-                            bench5RM = if (currentBuddy.bench5RM > 0) currentBuddy.bench5RM else 100.0,
-                            deadlift5RM = if (currentBuddy.deadlift5RM > 0) currentBuddy.deadlift5RM else 100.0,
-                            level = TrainingLevel.BEGINNER
-                        )
-                        onCopyProgram(newProf)
-                        selectedBuddyForProgram = null
-                        copyNotice = "Программа друга «${currentBuddy.name}» успешно скопирована в твои профили!"
-                    }
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Скопировать себе", color = Theme.accent, fontWeight = FontWeight.Bold)
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { selectedBuddyForProgram = null }) {
-                    Text("Закрыть", color = Theme.textSecondary)
-                }
+        BuddyProgramDialog(
+            buddy = currentBuddy,
+            onDismiss = { selectedBuddyForProgram = null },
+            onCopyProgram = { newProf ->
+                onCopyProgram(newProf)
+                selectedBuddyForProgram = null
+                copyNotice = "Программа друга «${currentBuddy.name}» успешно скопирована в твои профили!"
             }
         )
     }
@@ -652,7 +548,7 @@ private fun BuddyCard(
             ) {
                 Column {
                     Text("ТЕКУЩИЙ ЭТАП", color = Theme.textTertiary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    Text("Неделя ${buddy.currentWeek} · День ${buddy.currentDay}", color = Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Неделя ${buddy.currentWeek}, День ${buddy.currentDay}", color = Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("ПРОГРАММА", color = Theme.textTertiary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
@@ -669,7 +565,7 @@ private fun BuddyCard(
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    buddy.recentLifts.take(2).forEach { lift ->
+                    buddy.recentLifts.forEach { lift ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -692,6 +588,315 @@ private fun BuddyCard(
             ) {
                 Text("Посмотреть программу", color = Theme.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BuddyProgramDialog(
+    buddy: BroProfileData,
+    onDismiss: () -> Unit,
+    onCopyProgram: (ProgramProfile) -> Unit
+) {
+    val availableWeeks = remember(buddy.programDays) {
+        val distinct = buddy.programDays.map { it.week }.distinct().sorted()
+        if (distinct.isNotEmpty()) distinct else listOf(buddy.currentWeek.coerceAtLeast(1))
+    }
+
+    var selectedWeek by remember(buddy.broId) {
+        mutableIntStateOf(
+            if (availableWeeks.contains(buddy.currentWeek)) buddy.currentWeek
+            else availableWeeks.firstOrNull() ?: 1
+        )
+    }
+
+    val weekListState = rememberLazyListState()
+    val daysListState = rememberLazyListState()
+
+    // Auto-scroll the week chips to selectedWeek
+    LaunchedEffect(selectedWeek) {
+        val targetIdx = availableWeeks.indexOf(selectedWeek)
+        if (targetIdx >= 0) {
+            weekListState.animateScrollToItem(targetIdx)
+        }
+    }
+
+    val daysForSelectedWeek = remember(buddy.programDays, selectedWeek) {
+        buddy.programDays.filter { it.week == selectedWeek }
+    }
+
+    // Auto-scroll day list to active day when active week is selected
+    LaunchedEffect(selectedWeek) {
+        val activeDayIdx = daysForSelectedWeek.indexOfFirst { it.day == buddy.currentDay }
+        if (selectedWeek == buddy.currentWeek && activeDayIdx >= 0) {
+            val hasStats = buddy.squat5RM > 0 || buddy.bench5RM > 0 || buddy.deadlift5RM > 0
+            val offset = if (hasStats) 2 else 1
+            daysListState.animateScrollToItem(activeDayIdx + offset)
+        } else {
+            daysListState.scrollToItem(0)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(buddy.name, color = Theme.textPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        buddy.programTitle,
+                        color = Theme.textSecondary,
+                        fontSize = 12.sp
+                    )
+                    Text(" · ", color = Theme.textTertiary, fontSize = 12.sp)
+                    Text(
+                        "Неделя ${buddy.currentWeek}, День ${buddy.currentDay}",
+                        color = Theme.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        },
+        text = {
+            LazyColumn(
+                state = daysListState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 360.dp, max = 520.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // 1. 5RM Stats
+                if (buddy.squat5RM > 0 || buddy.bench5RM > 0 || buddy.deadlift5RM > 0) {
+                    item(key = "stats") {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Theme.surfaceSoft)
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            if (buddy.squat5RM > 0) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Присед", color = Theme.textSecondary, fontSize = 11.sp)
+                                    Text("${buddy.squat5RM.toInt()} кг", color = Theme.textPrimary, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            if (buddy.bench5RM > 0) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Жим", color = Theme.textSecondary, fontSize = 11.sp)
+                                    Text("${buddy.bench5RM.toInt()} кг", color = Theme.textPrimary, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            if (buddy.deadlift5RM > 0) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Тяга", color = Theme.textSecondary, fontSize = 11.sp)
+                                    Text("${buddy.deadlift5RM.toInt()} кг", color = Theme.textPrimary, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. Horizontal LazyRow of week chips
+                item(key = "week_chips") {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "НЕДЕЛЯ ТРЕНИРОВОК",
+                                color = Theme.textTertiary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (selectedWeek == buddy.currentWeek) {
+                                Text(
+                                    "АКТИВНАЯ НЕДЕЛЯ",
+                                    color = Theme.accent,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        LazyRow(
+                            state = weekListState,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp)
+                        ) {
+                            items(availableWeeks, key = { it }) { weekNum ->
+                                val isSelected = weekNum == selectedWeek
+                                val isBuddyActiveWeek = weekNum == buddy.currentWeek
+                                BuddyWeekChip(
+                                    number = weekNum,
+                                    selected = isSelected,
+                                    isActiveWeek = isBuddyActiveWeek,
+                                    onClick = { selectedWeek = weekNum }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 3. Days of the selected week
+                if (daysForSelectedWeek.isEmpty()) {
+                    item(key = "empty_days") {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Дни для недели $selectedWeek не найдены", color = Theme.textSecondary, fontSize = 12.sp)
+                        }
+                    }
+                } else {
+                    items(daysForSelectedWeek, key = { "day-${it.week}-${it.day}" }) { day ->
+                        val isActiveDay = (selectedWeek == buddy.currentWeek && day.day == buddy.currentDay)
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Theme.surfaceSoft)
+                                .then(
+                                    if (isActiveDay) Modifier.border(1.5.dp, Theme.accent, RoundedCornerShape(8.dp))
+                                    else Modifier
+                                )
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "День ${day.day} · ${day.title.ifBlank { "Тренировка" }}",
+                                    color = if (isActiveDay) Theme.accent else Theme.textPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (isActiveDay) {
+                                    Box(
+                                        Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Theme.accent.copy(alpha = 0.2f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("ТЕКУЩАЯ", color = Theme.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                            day.exercises.forEach { ex ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        ex.name,
+                                        color = Theme.textPrimary,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    val prescription = buildString {
+                                        if (ex.sets > 0) append("${ex.sets}×")
+                                        append(ex.reps)
+                                        if (ex.weight.isNotBlank()) append(" · ${ex.weight}")
+                                    }
+                                    Text(
+                                        prescription,
+                                        color = Theme.textSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val kind = try {
+                        TrainingProgramKind.valueOf(buddy.programKind)
+                    } catch (_: Exception) {
+                        TrainingProgramKind.TEXAS
+                    }
+                    val newProf = ProgramProfile(
+                        name = "${buddy.name} (копия)",
+                        programKind = kind,
+                        squat5RM = if (buddy.squat5RM > 0) buddy.squat5RM else 100.0,
+                        bench5RM = if (buddy.bench5RM > 0) buddy.bench5RM else 100.0,
+                        deadlift5RM = if (buddy.deadlift5RM > 0) buddy.deadlift5RM else 100.0,
+                        level = TrainingLevel.BEGINNER
+                    )
+                    onCopyProgram(newProf)
+                }
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Скопировать себе", color = Theme.accent, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Закрыть", color = Theme.textSecondary)
+            }
+        }
+    )
+}
+
+@Composable
+private fun BuddyWeekChip(
+    number: Int,
+    selected: Boolean,
+    isActiveWeek: Boolean,
+    onClick: () -> Unit
+) {
+    val scale by animateFloatAsState(if (selected) 1f else 0.96f, Motion.snappy(), label = "buddyChip")
+    Box(
+        Modifier
+            .size(width = 48.dp, height = 52.dp)
+            .clip(CircleShape)
+            .background(
+                if (selected) Theme.accentGradient
+                else androidx.compose.ui.graphics.SolidColor(
+                    if (isActiveWeek) Theme.surfaceSoft.copy(alpha = 0.9f) else Theme.surfaceSoft
+                )
+            )
+            .then(
+                if (isActiveWeek && !selected) Modifier.border(1.5.dp, Theme.accent, CircleShape)
+                else Modifier
+            )
+            .pressable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "$number",
+                color = if (selected) Color.White else if (isActiveWeek) Theme.accent else Theme.textPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            if (isActiveWeek) {
+                Box(
+                    Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) Color.White else Theme.accent)
+                )
+            } else {
+                Spacer(Modifier.height(5.dp))
             }
         }
     }

@@ -169,7 +169,7 @@ private fun HistoryChart(points: List<ExerciseHistoryPoint>, modifier: Modifier 
 
             for (i in 0..3) {
                 val gy = size.height * i / 3f
-                drawLine(Color.White.copy(alpha = 0.06f), Offset(0f, gy), Offset(size.width, gy), strokeWidth = 1f)
+                drawLine(Theme.hairline, Offset(0f, gy), Offset(size.width, gy), strokeWidth = 1f)
             }
 
             if (plans.size >= 2) {
@@ -249,7 +249,8 @@ fun ExerciseHistoryListScreen(
     onUpdate: (ProgramProfile) -> Unit,
     contentPadding: PaddingValues
 ) {
-    val names = profile.loggedExerciseNames
+    val names = remember(profile) { profile.loggedExerciseNames }
+    val historyMap = remember(profile, names) { names.associateWith { profile.history(it) } }
     val pending = profile.backfillableWorkouts
     var confirming by remember { mutableStateOf(false) }
     var filledMessage by remember { mutableStateOf<String?>(null) }
@@ -308,7 +309,7 @@ fun ExerciseHistoryListScreen(
         }
 
         items(names, key = { it }) { name ->
-            val points = profile.history(name)
+            val points = historyMap[name].orEmpty()
             CardView(
                 Modifier.pressable { onOpen(name) },
                 padding = 15.dp,

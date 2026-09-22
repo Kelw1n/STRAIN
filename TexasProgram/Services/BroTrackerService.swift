@@ -88,9 +88,29 @@ struct BroProfileData: Codable, Identifiable {
         self.rawProgramJson = rawProgramJson
     }
 
+    func withBroId(_ newBroId: String) -> BroProfileData {
+        BroProfileData(
+            broId: newBroId,
+            name: name,
+            programKind: programKind,
+            programTitle: programTitle,
+            currentWeek: currentWeek,
+            currentDay: currentDay,
+            lastActiveEpoch: lastActiveEpoch,
+            squat5RM: squat5RM,
+            bench5RM: bench5RM,
+            deadlift5RM: deadlift5RM,
+            recentLifts: recentLifts,
+            programDays: programDays,
+            rawProgramJson: rawProgramJson
+        )
+    }
+
     var statusDescription: String {
-        let diffSec = (Int64(Date().timeIntervalSince1970 * 1000) - lastActiveEpoch) / 1000
-        if diffSec < 3600 {
+        let diffSec = max(0, (Int64(Date().timeIntervalSince1970 * 1000) - lastActiveEpoch) / 1000)
+        if diffSec < 300 {
+            return "В сети / Только что тренировался"
+        } else if diffSec < 3600 {
             return "Только что тренировался"
         } else if diffSec < 86400 {
             let hours = max(1, diffSec / 3600)
@@ -102,8 +122,13 @@ struct BroProfileData: Codable, Identifiable {
     }
 
     var isRecentlyActive: Bool {
-        let diffSec = (Int64(Date().timeIntervalSince1970 * 1000) - lastActiveEpoch) / 1000
+        let diffSec = max(0, (Int64(Date().timeIntervalSince1970 * 1000) - lastActiveEpoch) / 1000)
         return diffSec < 86400 * 2
+    }
+
+    var isOnline: Bool {
+        let diffSec = max(0, (Int64(Date().timeIntervalSince1970 * 1000) - lastActiveEpoch) / 1000)
+        return diffSec < 300
     }
 }
 
@@ -144,6 +169,11 @@ final class BroTrackerService {
     var isSyncing: Bool = false
     var lastError: String? = nil
 
+    /// Проверяет, является ли идентификатор подтверждённым серверным объектом, а не локальной временной заглушкой
+    var isConfirmedServerId: Bool {
+        !myBroId.isEmpty && !myBroId.hasPrefix("bro_")
+    }
+
     private init() {
         var id = defaults.string(forKey: keyMyBroId) ?? ""
         if id.isEmpty {
@@ -161,7 +191,9 @@ final class BroTrackerService {
         let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
         let kind = profile.programKind.backupCode
         let week = profile.currentWeek
-        let day = 1
+        let curWeekPlan = profile.workoutPlan.weeks.first { $0.number == week }
+        let nextDay = curWeekPlan?.days.first { !profile.isCompleted(week: week, day: $0.number) }
+        let day = nextDay?.number ?? 1
         let sq = Int(profile.squat5RM)
         let bp = Int(profile.bench5RM)
         let dl = Int(profile.deadlift5RM)
@@ -193,19 +225,19 @@ final class BroTrackerService {
         let curWeekPlan = plan.weeks.first { $0.number == curWeek }
         let nextDay = curWeekPlan?.days.first { !profile.isCompleted(week: curWeek, day: $0.number) }
 
-        // Собираем ключевые упражнения текущего дня
+        // Собираем все запланированные упражнения текущего дня
         var lifts: [BroLiftEntry] = []
         if let day = nextDay ?? curWeekPlan?.days.first {
-            for ex in day.exercises.prefix(3) {
+            for ex in day.exercises {
                 let load = ex.load.displayText
                 let presc = ex.sets > 0 ? "\(ex.sets)×\(ex.reps) · \(load)" : "\(ex.reps) · \(load)"
                 lifts.append(BroLiftEntry(name: ex.name, prescription: presc))
             }
         }
 
-        // Собираем дни плана для просмотра другом
+        // Собираем все дни плана для просмотра другом (все недели цикла без усечения)
         var programDays: [BroWorkoutDay] = []
-        for week in plan.weeks.prefix(4) {
+        for week in plan.weeks {
             for day in week.days {
                 let exs = day.exercises.map {
                     BroExercise(name: $0.name, sets: $0.sets, reps: $0.reps, weight: $0.load.displayText)
@@ -231,29 +263,67 @@ final class BroTrackerService {
 
         let endpoint = "https://api.restful-api.dev/objects"
         do {
-            let apiObject = RestfulApiObject(id: myBroId.isEmpty ? nil : myBroId, name: "STRAIN_BRO", data: myData)
-            let bodyData = try JSONEncoder().encode(apiObject)
+            if isConfirmedServerId {
+                // Серверный ID уже есть: пытаемся обновить существующий объект через PUT
+                let apiObject = RestfulApiObject(id: myBroId, name: "STRAIN_BRO", data: myData)
+                let bodyData = try JSONEncoder().encode(apiObject)
 
-            var request: URLRequest
-            if myBroId.isEmpty {
-                request = URLRequest(url: URL(string: endpoint)!)
-                request.httpMethod = "POST"
-            } else {
-                request = URLRequest(url: URL(string: "\(endpoint)/\(myBroId)")!)
+                var request = URLRequest(url: URL(string: "\(endpoint)/\(myBroId)")!)
                 request.httpMethod = "PUT"
-            }
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = bodyData
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = bodyData
 
-            let (data, response) = try await URLSession.shared.data(for: request)
-            if let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) {
-                if let decoded = try? JSONDecoder().decode(CreateResponse.self, from: data), let newId = decoded.id {
-                    self.myBroId = newId
+                let (data, response) = try await URLSession.shared.data(for: request)
+                if let httpRes = response as? HTTPURLResponse {
+                    if (200...299).contains(httpRes.statusCode) {
+                        if let decoded = try? JSONDecoder().decode(CreateResponse.self, from: data),
+                           let newId = decoded.id, !newId.isEmpty {
+                            self.myBroId = newId
+                        }
+                        self.lastError = nil
+                    } else if httpRes.statusCode == 404 {
+                        // Сервер удалил/сбросил объект (404 Not Found) — немедленный откат к созданию через POST
+                        try await createRemoteProfile(myData: myData, endpoint: endpoint)
+                    } else {
+                        self.lastError = "Ошибка сервера: HTTP \(httpRes.statusCode)"
+                    }
                 }
-                self.lastError = nil
+            } else {
+                // Локальный временный ID (начинается с bro_) — выполняем первичное создание через POST
+                try await createRemoteProfile(myData: myData, endpoint: endpoint)
             }
         } catch {
             self.lastError = error.localizedDescription
+        }
+    }
+
+    private func createRemoteProfile(myData: BroProfileData, endpoint: String) async throws {
+        var createRequest = URLRequest(url: URL(string: endpoint)!)
+        createRequest.httpMethod = "POST"
+        createRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let createObject = RestfulApiObject(id: nil, name: "STRAIN_BRO", data: myData)
+        createRequest.httpBody = try JSONEncoder().encode(createObject)
+
+        let (data, response) = try await URLSession.shared.data(for: createRequest)
+        if let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) {
+            if let decoded = try? JSONDecoder().decode(CreateResponse.self, from: data),
+               let newId = decoded.id, !newId.isEmpty {
+                self.myBroId = newId
+
+                // Обновляем remote object с новым server ID внутри data.broId, чтобы друзья получали верный ID
+                let updatedData = myData.withBroId(newId)
+                let updateObject = RestfulApiObject(id: newId, name: "STRAIN_BRO", data: updatedData)
+                if let updateBody = try? JSONEncoder().encode(updateObject) {
+                    var putReq = URLRequest(url: URL(string: "\(endpoint)/\(newId)")!)
+                    putReq.httpMethod = "PUT"
+                    putReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    putReq.httpBody = updateBody
+                    _ = try? await URLSession.shared.data(for: putReq)
+                }
+            }
+            self.lastError = nil
+        } else if let httpRes = response as? HTTPURLResponse {
+            self.lastError = "Ошибка сервера: HTTP \(httpRes.statusCode)"
         }
     }
 
@@ -362,7 +432,7 @@ final class BroTrackerService {
             dummy = ProgramProfile(input: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), name: "Preview")
         }
         var days: [BroWorkoutDay] = []
-        for week in dummy.workoutPlan.weeks.prefix(4) {
+        for week in dummy.workoutPlan.weeks {
             for day in week.days {
                 let exs = day.exercises.map {
                     BroExercise(name: $0.name, sets: $0.sets, reps: $0.reps, weight: $0.load.displayText)
@@ -412,7 +482,8 @@ final class BroTrackerService {
                 return nil
             }
             let obj = try JSONDecoder().decode(RestfulApiObject.self, from: data)
-            return obj.data
+            let serverId = obj.id ?? id
+            return obj.data.broId == serverId ? obj.data : obj.data.withBroId(serverId)
         } catch {
             return nil
         }

@@ -2,6 +2,7 @@ package com.texasprogram.app.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,6 +113,7 @@ private fun WeekChip(number: Int, selected: Boolean, done: Boolean, onClick: () 
             .size(width = 48.dp, height = 52.dp)
             .clip(CircleShape)
             .background(if (selected) Theme.accentGradient else androidx.compose.ui.graphics.SolidColor(Theme.surface))
+            .then(if (selected) Modifier else Modifier.border(1.dp, Theme.hairline, CircleShape))
             .pressable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

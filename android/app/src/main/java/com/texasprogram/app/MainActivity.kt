@@ -42,24 +42,29 @@ import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.border
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import com.texasprogram.app.ui.ThemeManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
 import com.texasprogram.app.data.AppStore
 import com.texasprogram.app.data.BackupService
 import com.texasprogram.app.model.ProgramProfile
@@ -86,6 +91,7 @@ import com.texasprogram.app.ui.Theme
 import com.texasprogram.app.ui.TodayScreen
 import com.texasprogram.app.ui.RestTimerBar
 import com.texasprogram.app.ui.pressable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -107,6 +113,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
             val isDark = Theme.isDark
+            val view = LocalView.current
+            if (!view.isInEditMode) {
+                SideEffect {
+                    val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = !isDark
+                        isAppearanceLightNavigationBars = !isDark
+                    }
+                }
+            }
             val colorScheme = if (isDark) {
                 darkColorScheme(
                     primary = Theme.accent,
@@ -138,7 +154,7 @@ class MainActivity : ComponentActivity() {
         val url = data.toString()
         if (url.contains("bro")) {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                com.texasprogram.app.service.BroTrackerService(applicationContext).addBuddy(url)
+                com.texasprogram.app.service.BroTrackerService.getInstance(applicationContext).addBuddy(url)
             }
         }
     }
@@ -205,6 +221,16 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     } else null
 
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val broService = remember { com.texasprogram.app.service.BroTrackerService.getInstance(context) }
+
+    fun syncProfileInBackground() {
+        val updated = store.active ?: return
+        scope.launch(Dispatchers.IO) {
+            broService.syncMyProfile(updated)
+        }
+    }
+
     var backupMessage by remember { mutableStateOf<String?>(null) }
 
     // Системные диалоги файлов: приложению не нужны разрешения на хранилище.
@@ -280,7 +306,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                 AppTab.TODAY -> TodayScreen(
                     profile = profile,
                     timer = timer,
-                    onToggleDay = { week, day -> store.updateActive { it.toggleCompleted(week, day) } },
+                    onToggleDay = { week, day ->
+                        store.updateActive { it.toggleCompleted(week, day) }
+                        syncProfileInBackground()
+                    },
                     onToggleSet = { workout, exercise, dot ->
                         val adds = profile.willAddSet(workout.week, workout.day.number, exercise, dot)
                         store.updateActive { it.toggleSet(workout.week, workout.day.number, exercise, dot) }
@@ -289,6 +318,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             if (updated != null && updated.allSetsDone(workout)) {
                                 timer.stop()
                                 store.updateActive { it.toggleCompleted(workout.week, workout.day.number) }
+                                syncProfileInBackground()
                             } else {
                                 timer.start(profile.defaultRestSeconds.toLong())
                             }
@@ -319,7 +349,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     profile = profile,
                     focused = benchFocus,
                     onFocusHandled = { benchFocus = null },
-                    onToggleBench = { session -> store.updateActive { it.toggleBenchCompleted(session) } },
+                    onToggleBench = { session ->
+                        store.updateActive { it.toggleBenchCompleted(session) }
+                        syncProfileInBackground()
+                    },
                     onSetCurrentBench = { session -> store.updateActive { it.setCurrentBenchSession(session) } },
                     contentPadding = contentPadding
                 )
@@ -366,7 +399,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             week = week,
                             day = day,
                             scheduled = scheduled,
-                            onToggleDay = { w, d -> store.updateActive { it.toggleCompleted(w, d) } },
+                            onToggleDay = { w, d ->
+                                store.updateActive { it.toggleCompleted(w, d) }
+                                syncProfileInBackground()
+                            },
                             onToggleSet = { exercise, dot ->
                                 val adds = profile.willAddSet(week, dayNumber, exercise, dot)
                                 store.updateActive { it.toggleSet(week, dayNumber, exercise, dot) }
@@ -561,10 +597,12 @@ private fun BottomBar(
     onSelect: (AppTab) -> Unit
 ) {
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val barBackground = if (Theme.isDark) Color(0xE60D1116) else Theme.surface.copy(alpha = 0.94f)
     Row(
         modifier
             .fillMaxWidth()
-            .background(Color(0xE60D1116))
+            .background(barBackground)
+            .border(width = 0.5.dp, color = Theme.hairline)
             .padding(top = 10.dp, bottom = bottomInset + 10.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically

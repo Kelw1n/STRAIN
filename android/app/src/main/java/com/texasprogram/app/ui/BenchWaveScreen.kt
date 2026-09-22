@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -129,22 +130,17 @@ fun BenchWaveScreen(
             }
         }
 
-        sessions.forEachIndexed { index, session ->
-            item(key = "session-${session.id}") {
-                BenchSessionCard(
-                    session = session,
-                    subtitle = "Неделя ${session.week} · ${profile.weekdayName(session.dayNumber).replaceFirstChar { it.uppercase() }}",
-                    isDone = completed.contains(session.id),
-                    isNext = next == session.id,
-                    isExpanded = expanded == session.id,
-                    modifier = Modifier
-                        .appearIn(minOf(index + 3, 10))
-                        .softScroll(listState, index + 4),
-                    onTap = { expanded = if (expanded == session.id) null else session.id },
-                    onToggleDone = { onToggleBench(session.id) },
-                    onSetCurrent = { pendingStart = session }
-                )
-            }
+        items(sessions, key = { it.id }) { session ->
+            BenchSessionCard(
+                session = session,
+                subtitle = "Неделя ${session.week} · ${profile.weekdayName(session.dayNumber).replaceFirstChar { it.uppercase() }}",
+                isDone = completed.contains(session.id),
+                isNext = next == session.id,
+                isExpanded = expanded == session.id,
+                onTap = { expanded = if (expanded == session.id) null else session.id },
+                onToggleDone = { onToggleBench(session.id) },
+                onSetCurrent = { pendingStart = session }
+            )
         }
     }
 

@@ -187,7 +187,7 @@ fun RingProgress(
             val inset = stroke / 2f
             val arcSize = Size(size.width - stroke, size.height - stroke)
             drawArc(
-                color = Color.White.copy(alpha = 0.09f),
+                color = Theme.surfaceSoft,
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -225,7 +225,7 @@ fun LineMeter(
             .fillMaxWidth()
             .height(height)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.09f))
+            .background(Theme.surfaceSoft)
     ) {
         Box(
             Modifier
@@ -371,7 +371,8 @@ fun SegmentedControl(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = 0.07f))
+            .background(Theme.surfaceSoft)
+            .border(1.dp, Theme.hairline, RoundedCornerShape(10.dp))
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -381,7 +382,8 @@ fun SegmentedControl(
                 Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (selected) Color.White.copy(alpha = 0.18f) else Color.Transparent)
+                    .background(if (selected) Theme.card else Color.Transparent)
+                    .then(if (selected) Modifier.border(1.dp, Theme.hairline, RoundedCornerShape(8.dp)) else Modifier)
                     .pressable { onSelect(index) }
                     .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center
@@ -430,7 +432,8 @@ fun WeightStepper(
         Row(
             Modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color.White.copy(alpha = 0.06f))
+                .background(Theme.surfaceSoft)
+                .border(1.dp, Theme.hairline, RoundedCornerShape(12.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

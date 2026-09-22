@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -121,28 +122,26 @@ fun CustomProgramBuilder(
             }
         }
 
-        program.days.forEachIndexed { dayIndex, day ->
-            item(key = "day-${day.id}") {
-                CardView(Modifier.appearIn(dayIndex + 1)) {
-                    SectionLabel("День ${day.number}")
-                    TextRow(day.title, "Название дня") { title ->
-                        program = program.copy(days = program.days.map { if (it.id == day.id) it.copy(title = title) else it })
-                    }
-                    day.exercises.forEachIndexed { index, exercise ->
-                        ExerciseRow(
-                            exercise = exercise,
-                            canMoveUp = index > 0,
-                            canMoveDown = index < day.exercises.size - 1,
-                            onOpen = { editing = day.id to exercise },
-                            onMove = { offset ->
-                                program = program.copy(days = program.days.map {
-                                    if (it.id == day.id) it.copy(exercises = it.exercises.moved(index, index + offset)) else it
-                                })
-                            }
-                        )
-                    }
-                    SecondaryButton("Добавить упражнение", icon = Icons.Filled.Add) { editing = day.id to null }
+        items(program.days, key = { it.number }) { day ->
+            CardView {
+                SectionLabel("День ${day.number}")
+                TextRow(day.title, "Название дня") { title ->
+                    program = program.copy(days = program.days.map { if (it.id == day.id) it.copy(title = title) else it })
                 }
+                day.exercises.forEachIndexed { index, exercise ->
+                    ExerciseRow(
+                        exercise = exercise,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < day.exercises.size - 1,
+                        onOpen = { editing = day.id to exercise },
+                        onMove = { offset ->
+                            program = program.copy(days = program.days.map {
+                                if (it.id == day.id) it.copy(exercises = it.exercises.moved(index, index + offset)) else it
+                            })
+                        }
+                    )
+                }
+                SecondaryButton("Добавить упражнение", icon = Icons.Filled.Add) { editing = day.id to null }
             }
         }
 

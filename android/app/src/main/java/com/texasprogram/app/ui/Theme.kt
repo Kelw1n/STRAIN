@@ -139,6 +139,9 @@ object Theme {
             else -> Color(0xFFFFFFFF)
         }
 
+    val card: Color
+        get() = surface
+
     val surfaceSoft: Color
         get() = when {
             !isClaude -> Color(0x0DFFFFFF)

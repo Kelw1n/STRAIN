@@ -48,7 +48,7 @@ fun BodyWeightCard(
     onUpdate: (ProgramProfile) -> Unit
 ) {
     var input by remember { mutableStateOf("") }
-    val series = profile.bodyWeightSeries
+    val series = remember(profile.bodyWeightSeries) { profile.bodyWeightSeries }
     // Запятая и точка на клавиатуре разные, а значат одно и то же.
     val parsed = input.replace(',', '.').trim().toDoubleOrNull()?.takeIf { it > 20 && it < 400 }
 
@@ -100,10 +100,10 @@ fun BodyWeightCard(
         }
 
         if (series.size > 1) {
-            val minWeight = series.minOf { it.weight }
-            val maxWeight = series.maxOf { it.weight }
-            val minDay = series.first().epochDay
-            val maxDay = series.last().epochDay
+            val minWeight = remember(series) { series.minOf { it.weight } }
+            val maxWeight = remember(series) { series.maxOf { it.weight } }
+            val minDay = remember(series) { series.first().epochDay }
+            val maxDay = remember(series) { series.last().epochDay }
 
             Canvas(
                 Modifier
@@ -121,7 +121,7 @@ fun BodyWeightCard(
 
                 for (i in 0..2) {
                     val gy = size.height * i / 2f
-                    drawLine(Color.White.copy(alpha = 0.06f), Offset(0f, gy), Offset(size.width, gy), strokeWidth = 1f)
+                    drawLine(Theme.hairline, Offset(0f, gy), Offset(size.width, gy), strokeWidth = 1f)
                 }
 
                 val path = Path()
@@ -134,7 +134,7 @@ fun BodyWeightCard(
                 series.forEach { drawCircle(Theme.accent, radius = 5f, center = Offset(x(it.epochDay), y(it.weight))) }
             }
 
-            val delta = series.last().weight - series.first().weight
+            val delta = remember(series) { series.last().weight - series.first().weight }
             Text(
                 (if (delta > 0) "+" else "") + "${formatWeight(delta)} кг с первого замера",
                 color = Theme.textSecondary,
@@ -150,10 +150,13 @@ fun BodyWeightCard(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp
             )
+            val squatRatio = remember(profile) { profile.relativeStrength(profile.squat5RM) }
+            val benchRatio = remember(profile) { profile.relativeStrength(profile.bench5RM) }
+            val deadliftRatio = remember(profile) { profile.relativeStrength(profile.deadlift5RM) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Ratio("Присед", profile.relativeStrength(profile.squat5RM), Modifier.weight(1f))
-                Ratio("Жим", profile.relativeStrength(profile.bench5RM), Modifier.weight(1f))
-                Ratio("Тяга", profile.relativeStrength(profile.deadlift5RM), Modifier.weight(1f))
+                Ratio("Присед", squatRatio, Modifier.weight(1f))
+                Ratio("Жим", benchRatio, Modifier.weight(1f))
+                Ratio("Тяга", deadliftRatio, Modifier.weight(1f))
             }
             Text(
                 "Отношение ${profile.maximumLabel} к весу тела. Держится при похудении — сила осталась, лишнее ушло.",

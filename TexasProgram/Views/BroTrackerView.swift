@@ -330,7 +330,7 @@ private struct BuddyCardView: View {
 
                 if !buddy.recentLifts.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(buddy.recentLifts.prefix(2)) { lift in
+                        ForEach(buddy.recentLifts) { lift in
                             HStack {
                                 Text(lift.name)
                                     .font(.caption)
@@ -429,8 +429,91 @@ private struct MyQRCodeSheet: View {
 /// Экран просмотра расписания и упражнений друга с возможностью копирования
 private struct BuddyProgramView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let buddy: BroProfileData
     let onCopy: () -> Void
+
+    @State private var selectedWeek: Int
+    @Namespace private var weekPill
+
+    init(buddy: BroProfileData, onCopy: @escaping () -> Void) {
+        self.buddy = buddy
+        self.onCopy = onCopy
+        _selectedWeek = State(initialValue: buddy.currentWeek)
+    }
+
+    private var availableWeeks: [Int] {
+        let set = Set(buddy.programDays.map(\.week))
+        let sorted = set.sorted()
+        return sorted.isEmpty ? [buddy.currentWeek] : sorted
+    }
+
+    private var daysForSelectedWeek: [BroWorkoutDay] {
+        buddy.programDays
+            .filter { $0.week == selectedWeek }
+            .sorted { $0.day < $1.day }
+    }
+
+    private var weekSelector: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 9) {
+                    ForEach(availableWeeks, id: \.self) { weekNum in
+                        weekChip(weekNum)
+                            .id(weekNum)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+            }
+            .onChange(of: selectedWeek) { _, newValue in
+                withAnimation(Motion.maybe(Motion.smooth, reduce: reduceMotion)) {
+                    proxy.scrollTo(newValue, anchor: .center)
+                }
+            }
+            .onAppear {
+                proxy.scrollTo(selectedWeek, anchor: .center)
+            }
+        }
+    }
+
+    private func weekChip(_ weekNum: Int) -> some View {
+        let isSelected = selectedWeek == weekNum
+        let isCurrent = buddy.currentWeek == weekNum
+        return Button {
+            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) {
+                selectedWeek = weekNum
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Text("\(weekNum)")
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                if isCurrent {
+                    Circle()
+                        .fill(isSelected ? Color.white : Theme.accent)
+                        .frame(width: 6, height: 6)
+                } else {
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .frame(width: 48, height: 52)
+            .foregroundStyle(isSelected ? Color.white : (isCurrent ? Theme.accent : Color.primary))
+            .background {
+                ZStack {
+                    Capsule().fill(Color.primary.opacity(0.06))
+                    if isSelected {
+                        Capsule()
+                            .fill(Theme.accentGradient)
+                            .matchedGeometryEffect(id: "buddyWeekPill", in: weekPill)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Неделя \(weekNum)\(isCurrent ? ", текущая" : "")")
+    }
 
     var body: some View {
         NavigationStack {
@@ -438,8 +521,14 @@ private struct BuddyProgramView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     CardView {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(buddy.name)
-                                .font(.title3.weight(.bold))
+                            HStack {
+                                Text(buddy.name)
+                                    .font(.title3.weight(.bold))
+                                Spacer()
+                                if buddy.isOnline {
+                                    TagBadge(text: "В сети", systemImage: "circle.fill", gradient: Theme.successGradient)
+                                }
+                            }
                             Text("Программа: \(buddy.programTitle) · Неделя \(buddy.currentWeek)")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -476,34 +565,53 @@ private struct BuddyProgramView: View {
                     }
                     .buttonStyle(.gradientProminent)
 
+                    if !buddy.programDays.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Неделя \(selectedWeek)")
+                                    .font(.headline)
+                                Spacer()
+                                if selectedWeek == buddy.currentWeek {
+                                    TagBadge(text: "Текущая неделя", systemImage: "star.fill", gradient: Theme.accentGradient)
+                                }
+                            }
+                            weekSelector
+                        }
+                    }
+
                     Text("Дни и упражнения")
                         .font(.headline)
-                        .padding(.top, 8)
+                        .padding(.top, 4)
 
                     if buddy.programDays.isEmpty {
                         CardView {
-                            Text("Детальные дни не загружены")
+                            VStack(spacing: 8) {
+                                Image(systemName: "calendar.badge.exclamationmark")
+                                    .font(.largeTitle)
+                                    .foregroundStyle(.secondary)
+                                Text("Детальные дни не загружены")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                        }
+                    } else if daysForSelectedWeek.isEmpty {
+                        CardView {
+                            Text("Для недели \(selectedWeek) нет запланированных дней")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                     } else {
-                        ForEach(buddy.programDays) { day in
-                            CardView {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Неделя \(day.week) · \(day.title)")
-                                        .font(.subheadline.weight(.bold))
-                                        .foregroundStyle(Theme.accent)
-
-                                    ForEach(day.exercises) { ex in
-                                        HStack {
-                                            Text(ex.name)
-                                                .font(.subheadline)
-                                            Spacer()
-                                            Text("\(ex.sets > 0 ? "\(ex.sets)×\(ex.reps)" : ex.reps) · \(ex.weight)")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
+                        ForEach(daysForSelectedWeek) { day in
+                            let isActiveDay = (selectedWeek == buddy.currentWeek && day.day == buddy.currentDay)
+                            if isActiveDay {
+                                HighlightCard {
+                                    dayContent(day: day, isActive: true)
+                                }
+                            } else {
+                                CardView {
+                                    dayContent(day: day, isActive: false)
                                 }
                             }
                         }
@@ -517,6 +625,39 @@ private struct BuddyProgramView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Назад") { dismiss() }
+                }
+            }
+            .onAppear {
+                if !availableWeeks.contains(selectedWeek), let first = availableWeeks.first {
+                    selectedWeek = first
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dayContent(day: BroWorkoutDay, isActive: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("День \(day.day) · \(day.title)")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(isActive ? Theme.accent : .primary)
+                Spacer()
+                if isActive {
+                    TagBadge(text: "Активный день", systemImage: "flame.fill", gradient: Theme.accentGradient)
+                }
+            }
+
+            Divider().opacity(0.3)
+
+            ForEach(day.exercises) { ex in
+                HStack {
+                    Text(ex.name)
+                        .font(.subheadline)
+                    Spacer()
+                    Text("\(ex.sets > 0 ? "\(ex.sets)×\(ex.reps)" : ex.reps) · \(ex.weight)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

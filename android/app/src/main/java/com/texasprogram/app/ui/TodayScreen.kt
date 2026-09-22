@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,7 +64,7 @@ fun TodayScreen(
     contentPadding: PaddingValues
 ) {
     val today = LocalDate.now()
-    val schedule = profile.schedule(today)
+    val schedule = remember(profile, today) { profile.schedule(today) }
     val focus = schedule.focus
     val listState = rememberLazyListState()
 
@@ -164,8 +165,8 @@ fun TodayScreen(
         }
 
         // Вспомогательные упражнения — из дня программы, жим — из волны.
-        val exercises = profile.exercises(focus)
-        itemsIndexed(exercises, key = { index, item -> "ex-$index-${item.name}" }) { index, exercise ->
+        val exercises = remember(profile, focus) { profile.exercises(focus) }
+        itemsIndexed(exercises, key = { _, item -> item.name }) { index, exercise ->
             ExerciseCard(
                 exercise = exercise,
                 modifier = Modifier.appearIn(index + 4),

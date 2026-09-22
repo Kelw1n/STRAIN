@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,18 +30,47 @@ import com.texasprogram.app.model.CompletionRecord
 import com.texasprogram.app.service.RuDate
 import java.time.LocalDate
 
+private data class ChartData(
+    val series: List<Triple<String, Color, List<Pair<Long, Double>>>>,
+    val minWeight: Double,
+    val maxWeight: Double,
+    val minDay: Long,
+    val maxDay: Long
+)
+
 /// График рабочих весов по датам выполненных тренировок.
 ///
 /// Рисуется вручную на Canvas: тянуть графическую библиотеку ради трёх линий незачем.
 @Composable
 fun ProgressChartView(records: List<CompletionRecord>, modifier: Modifier = Modifier) {
-    val sorted = records.sortedBy { it.epochDay }
-    val days = sorted.map { it.epochDay }.distinct()
+    val accent = Theme.accent
+    val accentDeep = Theme.accentDeep
+    val recordColor = Theme.record
+
+    val chartData = remember(records, accent, accentDeep, recordColor) {
+        val sorted = records.sortedBy { it.epochDay }
+        val days = sorted.map { it.epochDay }.distinct()
+        if (days.size < 2) null
+        else {
+            val series = listOf(
+                Triple("Присед", accent, sorted.mapNotNull { r -> r.squat?.let { r.epochDay to it } }),
+                Triple("Жим", accentDeep, sorted.mapNotNull { r -> r.bench?.let { r.epochDay to it } }),
+                Triple("Тяга", recordColor, sorted.mapNotNull { r -> r.deadlift?.let { r.epochDay to it } })
+            ).filter { it.third.size >= 2 }
+
+            val allWeights = series.flatMap { it.third.map { point -> point.second } }
+            val minWeight = (allWeights.minOrNull() ?: 0.0)
+            val maxWeight = (allWeights.maxOrNull() ?: 1.0)
+            val minDay = days.first()
+            val maxDay = days.last()
+            ChartData(series, minWeight, maxWeight, minDay, maxDay)
+        }
+    }
 
     CardView(modifier) {
         Text("Рабочие веса", color = Theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
 
-        if (days.size < 2) {
+        if (chartData == null) {
             Text("Пока нечего показывать", color = Theme.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 "График появится после двух отмеченных тренировок в разные дни.",
@@ -50,17 +80,7 @@ fun ProgressChartView(records: List<CompletionRecord>, modifier: Modifier = Modi
             return@CardView
         }
 
-        val series = listOf(
-            Triple("Присед", Theme.accent, sorted.mapNotNull { r -> r.squat?.let { r.epochDay to it } }),
-            Triple("Жим", Theme.accentDeep, sorted.mapNotNull { r -> r.bench?.let { r.epochDay to it } }),
-            Triple("Тяга", Theme.record, sorted.mapNotNull { r -> r.deadlift?.let { r.epochDay to it } })
-        ).filter { it.third.size >= 2 }
-
-        val allWeights = series.flatMap { it.third.map { point -> point.second } }
-        val minWeight = (allWeights.minOrNull() ?: 0.0)
-        val maxWeight = (allWeights.maxOrNull() ?: 1.0)
-        val minDay = days.first()
-        val maxDay = days.last()
+        val (series, minWeight, maxWeight, minDay, maxDay) = chartData
 
         Canvas(
             Modifier
@@ -81,7 +101,7 @@ fun ProgressChartView(records: List<CompletionRecord>, modifier: Modifier = Modi
             for (i in 0..3) {
                 val gy = size.height * i / 3f
                 drawLine(
-                    Color.White.copy(alpha = 0.06f),
+                    Theme.hairline,
                     Offset(0f, gy),
                     Offset(size.width, gy),
                     strokeWidth = 1f
@@ -118,7 +138,7 @@ fun ProgressChartView(records: List<CompletionRecord>, modifier: Modifier = Modi
 /// Список последних тренировок с датами.
 @Composable
 fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier) {
-    val recent = records.sortedByDescending { it.epochDay }.take(8)
+    val recent = remember(records) { records.sortedByDescending { it.epochDay }.take(8) }
     if (recent.isEmpty()) return
 
     CardView(modifier) {
@@ -129,7 +149,7 @@ fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier) 
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color.White.copy(alpha = 0.04f))
+                    .background(Theme.surfaceSoft)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

@@ -75,7 +75,7 @@ fun SetDotsView(total: Int, tracker: SetTracker, modifier: Modifier = Modifier) 
                     .padding(end = 8.dp)
                     .size(22.dp)
                     .clip(CircleShape)
-                    .background(if (filled) Theme.accentGradient else SolidColor(Color.White.copy(alpha = 0.10f)))
+                    .background(if (filled) Theme.accentGradient else SolidColor(Theme.surfaceSoft))
                     .border(
                         if (hasEntry) 2.dp else 1.dp,
                         when {
@@ -266,13 +266,16 @@ private fun StepSquare(
 /// Плашка обратного отсчёта над нижней панелью.
 @Composable
 fun RestTimerBar(timer: RestTimer, modifier: Modifier = Modifier) {
+    val pillBackground = if (Theme.isDark) Color(0xF01A1F27) else Theme.dialog.copy(alpha = 0.96f)
+    val pillBorder = if (Theme.isDark) Theme.accent.copy(alpha = 0.35f) else Theme.hairline
+
     Row(
         modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .clip(CircleShape)
-            .background(Color(0xF01A1F27))
-            .border(1.dp, Theme.accent.copy(alpha = 0.35f), CircleShape)
+            .background(pillBackground)
+            .border(1.dp, pillBorder, CircleShape)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -300,7 +303,7 @@ fun RestTimerBar(timer: RestTimer, modifier: Modifier = Modifier) {
             Modifier
                 .size(30.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.07f))
+                .background(Theme.surfaceSoft)
                 .pressable { timer.stop() },
             contentAlignment = Alignment.Center
         ) {
