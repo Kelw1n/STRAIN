@@ -1,25 +1,25 @@
 import SwiftUI
 import Foundation
 
-public struct BroLiftEntry: Codable, Identifiable {
-    public var id: String { name }
-    public let name: String
-    public let prescription: String
+struct BroLiftEntry: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let prescription: String
 
-    public init(name: String, prescription: String) {
+    init(name: String, prescription: String) {
         self.name = name
         self.prescription = prescription
     }
 }
 
-public struct BroExercise: Codable, Identifiable {
-    public var id: String { name }
-    public let name: String
-    public let sets: Int
-    public let reps: String
-    public let weight: String
+struct BroExercise: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let sets: Int
+    let reps: String
+    let weight: String
 
-    public init(name: String, sets: Int, reps: String, weight: String) {
+    init(name: String, sets: Int, reps: String, weight: String) {
         self.name = name
         self.sets = sets
         self.reps = reps
@@ -27,14 +27,14 @@ public struct BroExercise: Codable, Identifiable {
     }
 }
 
-public struct BroWorkoutDay: Codable, Identifiable {
-    public var id: String { "\(week)-\(day)" }
-    public let week: Int
-    public let day: Int
-    public let title: String
-    public let exercises: [BroExercise]
+struct BroWorkoutDay: Codable, Identifiable {
+    var id: String { "\(week)-\(day)" }
+    let week: Int
+    let day: Int
+    let title: String
+    let exercises: [BroExercise]
 
-    public init(week: Int, day: Int, title: String, exercises: [BroExercise]) {
+    init(week: Int, day: Int, title: String, exercises: [BroExercise]) {
         self.week = week
         self.day = day
         self.title = title
@@ -42,23 +42,23 @@ public struct BroWorkoutDay: Codable, Identifiable {
     }
 }
 
-public struct BroProfileData: Codable, Identifiable {
-    public var id: String { broId }
-    public let broId: String
-    public let name: String
-    public let programKind: String
-    public let programTitle: String
-    public let currentWeek: Int
-    public let currentDay: Int
-    public let lastActiveEpoch: Int64
-    public let squat5RM: Double
-    public let bench5RM: Double
-    public let deadlift5RM: Double
-    public let recentLifts: [BroLiftEntry]
-    public let programDays: [BroWorkoutDay]
-    public let rawProgramJson: String?
+struct BroProfileData: Codable, Identifiable {
+    var id: String { broId }
+    let broId: String
+    let name: String
+    let programKind: String
+    let programTitle: String
+    let currentWeek: Int
+    let currentDay: Int
+    let lastActiveEpoch: Int64
+    let squat5RM: Double
+    let bench5RM: Double
+    let deadlift5RM: Double
+    let recentLifts: [BroLiftEntry]
+    let programDays: [BroWorkoutDay]
+    let rawProgramJson: String?
 
-    public init(
+    init(
         broId: String,
         name: String,
         programKind: String,
@@ -88,7 +88,7 @@ public struct BroProfileData: Codable, Identifiable {
         self.rawProgramJson = rawProgramJson
     }
 
-    public var statusDescription: String {
+    var statusDescription: String {
         let diffSec = (Int64(Date().timeIntervalSince1970 * 1000) - lastActiveEpoch) / 1000
         if diffSec < 3600 {
             return "Только что тренировался"
@@ -101,7 +101,7 @@ public struct BroProfileData: Codable, Identifiable {
         }
     }
 
-    public var isRecentlyActive: Bool {
+    var isRecentlyActive: Bool {
         let diffSec = (Int64(Date().timeIntervalSince1970 * 1000) - lastActiveEpoch) / 1000
         return diffSec < 86400 * 2
     }
@@ -114,25 +114,25 @@ private struct RestfulApiObject: Codable {
 }
 
 @Observable
-public final class BroTrackerService {
-    public static let shared = BroTrackerService()
+final class BroTrackerService {
+    static let shared = BroTrackerService()
 
     private let defaults = UserDefaults.standard
     private let keyMyBroId = "strain_my_bro_id"
     private let keyBuddyIds = "strain_buddy_ids"
     private let keyCachedBuddies = "strain_cached_buddies"
 
-    public var myBroId: String {
+    var myBroId: String {
         didSet { defaults.set(myBroId, forKey: keyMyBroId) }
     }
 
-    public var buddyIds: [String] {
+    var buddyIds: [String] {
         didSet { defaults.set(buddyIds, forKey: keyBuddyIds) }
     }
 
-    public var buddies: [BroProfileData] = []
-    public var isSyncing: Bool = false
-    public var lastError: String? = nil
+    var buddies: [BroProfileData] = []
+    var isSyncing: Bool = false
+    var lastError: String? = nil
 
     private init() {
         self.myBroId = defaults.string(forKey: keyMyBroId) ?? ""
@@ -155,7 +155,7 @@ public final class BroTrackerService {
     }
 
     /// Публикует / обновляет свой профиль в облаке
-    public func syncMyProfile(profile: ProgramProfile) async {
+    func syncMyProfile(profile: ProgramProfile) async {
         isSyncing = true
         defer { isSyncing = false }
 
@@ -188,8 +188,8 @@ public final class BroTrackerService {
         let myData = BroProfileData(
             broId: myBroId.isEmpty ? UUID().uuidString.prefix(8).lowercased() + String(Int.random(in: 1000...9999)) : myBroId,
             name: profile.name.isEmpty ? "Бро" : profile.name,
-            programKind: profile.programKind.rawValue,
-            programTitle: profile.programKind.title,
+            programKind: profile.programKind.backupCode,
+            programTitle: profile.programKind.rawValue,
             currentWeek: profile.currentWeek,
             currentDay: nextDay?.number ?? 1,
             lastActiveEpoch: Int64(Date().timeIntervalSince1970 * 1000),
@@ -229,7 +229,7 @@ public final class BroTrackerService {
     }
 
     /// Добавляет друга по ссылке strain://bro/<id> или чистому ID
-    public func addBuddy(from rawCode: String) async -> Bool {
+    func addBuddy(from rawCode: String) async -> Bool {
         var cleanId = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanId.contains("/bro/") {
             cleanId = cleanId.components(separatedBy: "/bro/").last ?? cleanId
@@ -252,13 +252,13 @@ public final class BroTrackerService {
         return false
     }
 
-    public func removeBuddy(id: String) {
+    func removeBuddy(id: String) {
         buddyIds.removeAll { $0 == id }
         buddies.removeAll { $0.broId == id }
         saveCachedBuddies()
     }
 
-    public func refreshBuddies() async {
+    func refreshBuddies() async {
         guard !buddyIds.isEmpty else { return }
         isSyncing = true
         defer { isSyncing = false }

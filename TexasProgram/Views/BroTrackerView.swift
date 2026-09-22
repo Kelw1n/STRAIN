@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 /// Экран «Бро-трекер»: онлайн отслеживание прогресса друзей и просмотр их программ
-public struct BroTrackerView: View {
+struct BroTrackerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     let profile: ProgramProfile
@@ -16,11 +16,11 @@ public struct BroTrackerView: View {
     @State private var copyAlertMessage: String?
     @State private var showingCopyAlert = false
 
-    public init(profile: ProgramProfile) {
+    init(profile: ProgramProfile) {
         self.profile = profile
     }
 
-    public var body: some View {
+    var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
@@ -130,11 +130,11 @@ public struct BroTrackerView: View {
                     HStack {
                         Text(profile.name.isEmpty ? "Ты" : profile.name)
                             .font(.headline)
-                            .foregroundStyle(Theme.textPrimary)
+                            .foregroundStyle(.primary)
                         TagBadge(text: "Онлайн", systemImage: "circle.fill", gradient: Theme.successGradient)
                     }
 
-                    Text("Неделя \(profile.currentWeek) · \(profile.programKind.title)")
+                    Text("Неделя \(profile.currentWeek) · \(profile.programKind.rawValue)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -162,7 +162,7 @@ public struct BroTrackerView: View {
             HStack {
                 Text("Твоя банда (\(service.buddies.count))")
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
@@ -185,7 +185,7 @@ public struct BroTrackerView: View {
 
                         Text("Пока нет добавленных друзей")
                             .font(.headline)
-                            .foregroundStyle(Theme.textPrimary)
+                            .foregroundStyle(.primary)
 
                         Text("Отсканируй QR-код друга или дай ему сосканировать свой, чтобы видеть тренировки друг друга в реальном времени.")
                             .font(.caption)
@@ -225,12 +225,12 @@ public struct BroTrackerView: View {
     }
 
     private func copyProgramFromBuddy(_ buddy: BroProfileData) {
-        // Создаем новый профиль с программой друга
         let newProfile = ProgramProfile(
             input: ProgramInput(
                 squat5RM: buddy.squat5RM > 0 ? buddy.squat5RM : 100,
                 bench5RM: buddy.bench5RM > 0 ? buddy.bench5RM : 100,
-                deadlift5RM: buddy.deadlift5RM > 0 ? buddy.deadlift5RM : 100
+                deadlift5RM: buddy.deadlift5RM > 0 ? buddy.deadlift5RM : 100,
+                level: .beginner
             )
         )
         newProfile.name = "\(buddy.name) (копия)"
@@ -256,7 +256,7 @@ private struct BuddyCardView: View {
                         HStack {
                             Text(buddy.name)
                                 .font(.headline)
-                                .foregroundStyle(Theme.textPrimary)
+                                .foregroundStyle(.primary)
 
                             Circle()
                                 .fill(buddy.isRecentlyActive ? Theme.success : Color.gray)
@@ -301,7 +301,7 @@ private struct BuddyCardView: View {
                             .foregroundStyle(.secondary)
                         Text(buddy.programTitle)
                             .font(.subheadline)
-                            .foregroundStyle(Theme.textPrimary)
+                            .foregroundStyle(.primary)
                     }
                 }
 
@@ -311,7 +311,7 @@ private struct BuddyCardView: View {
                             HStack {
                                 Text(lift.name)
                                     .font(.caption)
-                                    .foregroundStyle(Theme.textPrimary)
+                                    .foregroundStyle(.primary)
                                 Spacer()
                                 Text(lift.prescription)
                                     .font(.caption.weight(.medium))

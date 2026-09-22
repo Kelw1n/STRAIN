@@ -7,7 +7,7 @@ public enum QRCodeService {
     private static let context = CIContext()
 
     /// Генерирует изображение QR-кода из строки
-    public static fun generateQRCode(from string: String, size: CGFloat = 300) -> UIImage? {
+    public static func generateQRCode(from string: String, size: CGFloat = 300) -> UIImage? {
         let data = Data(string.utf8)
         let filter = CIFilter.qrCodeGenerator()
         filter.setValue(data, forKey: "inputMessage")
