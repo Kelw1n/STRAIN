@@ -208,7 +208,38 @@ final class BroTrackerService {
     }
 
     func setBackendUrl(_ url: String) {
-        defaults.set(url, forKey: "strain_backend_url")
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        defaults.set(trimmed, forKey: "strain_backend_url")
+    }
+
+    /// Проверяет доступность бэкенда и возвращает задержку (ping) в миллисекундах
+    func pingBackend(url: String? = nil) async -> (success: Bool, latencyMs: Int, message: String) {
+        let baseUrl = (url ?? backendBaseUrl).trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let healthUrl = URL(string: "\(baseUrl)/health") else {
+            return (false, 0, "Некорректный URL")
+        }
+        let start = Date()
+        var request = URLRequest(url: healthUrl)
+        request.timeoutInterval = 8
+        request.httpMethod = "GET"
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let elapsed = Int(Date().timeIntervalSince(start) * 1000)
+            guard let http = response as? HTTPURLResponse else {
+                return (false, elapsed, "Нет HTTP ответа")
+            }
+            if http.statusCode == 200 {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let serviceName = json["service"] as? String, serviceName == "strain-backend" {
+                    return (true, elapsed, "Сервер активен (strain-backend)")
+                }
+                return (true, elapsed, "Сервер отвечает (HTTP 200)")
+            } else {
+                return (false, elapsed, "HTTP \(http.statusCode)")
+            }
+        } catch {
+            return (false, 0, error.localizedDescription)
+        }
     }
 
     private init() {
@@ -236,6 +267,9 @@ final class BroTrackerService {
         let dl = Int(profile.deadlift5RM)
 
         var link = "strain://bro?id=\(myBroId)&name=\(encodedName)&kind=\(kind)&w=\(week)&d=\(day)&sq=\(sq)&bp=\(bp)&dl=\(dl)"
+        if let encodedSrv = backendBaseUrl.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !encodedSrv.isEmpty {
+            link += "&srv=\(encodedSrv)"
+        }
         if let back = profile.back?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !back.isEmpty {
             link += "&back=\(back)"
         }
@@ -438,6 +472,12 @@ final class BroTrackerService {
                 if id == myBroId {
                     return AddBuddyResult(success: false, buddyName: "", message: "Это твой собственный QR-код!")
                 }
+
+                // Автоматически подхватываем сервер друга, если передан в QR-коде
+                if let srv = dict["srv"], !srv.isEmpty, srv.hasPrefix("http") {
+                    setBackendUrl(srv)
+                }
+
                 let name = dict["name"] ?? "Бро"
                 let kind = dict["kind"] ?? "TEXAS"
                 let week = Int(dict["w"] ?? "") ?? 1

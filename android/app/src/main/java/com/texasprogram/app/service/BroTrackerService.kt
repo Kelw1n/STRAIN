@@ -68,7 +68,35 @@ class BroTrackerService(context: Context) {
         get() = prefs.getString("strain_backend_url", "https://strain-backend.onrender.com") ?: "https://strain-backend.onrender.com"
 
     fun setBackendUrl(url: String) {
-        prefs.edit().putString("strain_backend_url", url).apply()
+        val trimmed = url.trim().trimEnd('/')
+        prefs.edit().putString("strain_backend_url", trimmed).apply()
+    }
+
+    suspend fun pingBackend(customUrl: String? = null): Triple<Boolean, Long, String> = withContext(Dispatchers.IO) {
+        val base = (customUrl ?: backendBaseUrl).trim().trimEnd('/')
+        val start = System.currentTimeMillis()
+        try {
+            val url = URL("$base/health")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.connect()
+            val code = conn.responseCode
+            val elapsed = System.currentTimeMillis() - start
+            if (code == 200) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                if (body.contains("strain-backend")) {
+                    Triple(true, elapsed, "Сервер активен (strain-backend)")
+                } else {
+                    Triple(true, elapsed, "Сервер отвечает (HTTP 200)")
+                }
+            } else {
+                Triple(false, elapsed, "HTTP $code")
+            }
+        } catch (e: Exception) {
+            Triple(false, 0L, e.message ?: "Ошибка соединения")
+        }
     }
 
     var buddyIds by mutableStateOf(loadBuddyIds())
@@ -134,6 +162,8 @@ class BroTrackerService(context: Context) {
         val dl = profile.deadlift5RM.toInt()
 
         val sb = StringBuilder("strain://bro?id=$myBroId&name=$encodedName&kind=$kind&w=$week&d=$day&sq=$sq&bp=$bp&dl=$dl")
+        val srvEncoded = java.net.URLEncoder.encode(backendBaseUrl, "UTF-8")
+        sb.append("&srv=").append(srvEncoded)
         profile.back?.takeIf { it.isNotBlank() }?.let { sb.append("&back=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
         profile.press?.takeIf { it.isNotBlank() }?.let { sb.append("&press=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
         profile.pull?.takeIf { it.isNotBlank() }?.let { sb.append("&pull=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
@@ -370,6 +400,13 @@ class BroTrackerService(context: Context) {
                 if (id == myBroId) {
                     return@withContext AddBuddyResult(false, "", "Это твой собственный QR-код!")
                 }
+
+                // Автоматически подхватываем сервер друга, если передан в QR-коде
+                val srv = uri.getQueryParameter("srv")
+                if (!srv.isNullOrBlank() && srv.startsWith("http")) {
+                    setBackendUrl(srv)
+                }
+
                 val name = uri.getQueryParameter("name") ?: "Бро"
                 val kindStr = uri.getQueryParameter("kind") ?: "TEXAS"
                 val week = uri.getQueryParameter("w")?.toIntOrNull() ?: 1

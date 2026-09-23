@@ -18,6 +18,7 @@ struct BroTrackerView: View {
     @State private var showingCopyAlert = false
     @State private var scanAlertMessage: String?
     @State private var showingScanAlert = false
+    @State private var showingServerSettings = false
 
     init(profile: ProgramProfile) {
         self.profile = profile
@@ -43,6 +44,13 @@ struct BroTrackerView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {
                         Button {
+                            showingServerSettings = true
+                        } label: {
+                            Image(systemName: "server.rack")
+                                .font(.body.weight(.semibold))
+                        }
+
+                        Button {
                             showingMyQR = true
                         } label: {
                             Image(systemName: "qrcode")
@@ -65,6 +73,9 @@ struct BroTrackerView: View {
             .refreshable {
                 await service.syncMyProfile(profile: profile)
                 await service.refreshBuddies()
+            }
+            .sheet(isPresented: $showingServerSettings) {
+                ServerSettingsSheet(service: service)
             }
             .sheet(isPresented: $showingMyQR) {
                 MyQRCodeSheet(profile: profile, service: service)
@@ -701,3 +712,106 @@ private struct BuddyProgramView: View {
         }
     }
 }
+
+/// Экран настройки и проверки сервера синхронизации
+private struct ServerSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let service: BroTrackerService
+
+    @State private var serverUrl: String = ""
+    @State private var isTesting = false
+    @State private var testResult: (success: Bool, latencyMs: Int, message: String)?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("https://...", text: $serverUrl)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+
+                    Button {
+                        Task {
+                            isTesting = true
+                            testResult = await service.pingBackend(url: serverUrl)
+                            isTesting = false
+                        }
+                    } label: {
+                        HStack {
+                            if isTesting {
+                                ProgressView()
+                                    .padding(.trailing, 4)
+                            }
+                            Text(isTesting ? "Проверка связи..." : "Проверить соединение")
+                            Spacer()
+                            if let res = testResult {
+                                if res.success {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                        Text("\(res.latencyMs) мс")
+                                            .font(.caption.weight(.bold))
+                                            .foregroundColor(.green)
+                                    }
+                                } else {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.red)
+                                        Text("Ошибка")
+                                            .font(.caption.weight(.bold))
+                                            .foregroundColor(.red)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .disabled(isTesting || serverUrl.trimmingCharacters(in: .whitespaces).isEmpty)
+                } header: {
+                    Text("Адрес сервера (URL)")
+                } footer: {
+                    if let res = testResult {
+                        Text(res.message)
+                            .font(.caption)
+                            .foregroundColor(res.success ? .secondary : .red)
+                    }
+                }
+
+                Section {
+                    Button("Сбросить по умолчанию") {
+                        serverUrl = "https://strain-backend.onrender.com"
+                        testResult = nil
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                Section(header: Text("О синхронизации")) {
+                    Text("Сервер обеспечивает передачу всей кастомной программы тренировок (любое количество недель и упражнений) и мгновенную доставку сообщений в чате.\n\nКогда ты показываешь свой QR-код, адрес твоего сервера автоматически передаётся бро — ему не нужно настраивать его вручную.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Сервер синхронизации")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Отмена") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Сохранить") {
+                        let trimmed = serverUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty {
+                            service.setBackendUrl(trimmed)
+                        }
+                        dismiss()
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+            .onAppear {
+                serverUrl = service.backendBaseUrl
+            }
+        }
+    }
+}
+

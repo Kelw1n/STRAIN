@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -88,6 +89,7 @@ fun BroTrackerScreen(
 
     var showMyQR by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var showServerDialog by remember { mutableStateOf(false) }
     var addInputText by remember { mutableStateOf("") }
     var selectedBuddyForProgram by remember { mutableStateOf<BroProfileData?>(null) }
     var selectedBuddyForChat by remember { mutableStateOf<BroProfileData?>(null) }
@@ -145,6 +147,16 @@ fun BroTrackerScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Theme.surfaceSoft)
+                            .pressable { showServerDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Сервер", tint = Theme.accent, modifier = Modifier.size(20.dp))
+                    }
                     Box(
                         Modifier
                             .size(40.dp)
@@ -345,6 +357,106 @@ fun BroTrackerScreen(
                 )
             }
         }
+    }
+
+    // Диалог настройки сервера
+    if (showServerDialog) {
+        var serverUrlInput by remember { mutableStateOf(service.backendBaseUrl) }
+        var isTesting by remember { mutableStateOf(false) }
+        var testResult by remember { mutableStateOf<Triple<Boolean, Long, String>?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showServerDialog = false },
+            title = {
+                Text("Сервер синхронизации", color = Theme.textPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Используется для мгновенной доставки сообщений чата и передачи полных кастомных программ тренировок.",
+                        color = Theme.textSecondary,
+                        fontSize = 13.sp
+                    )
+
+                    OutlinedTextField(
+                        value = serverUrlInput,
+                        onValueChange = {
+                            serverUrlInput = it
+                            testResult = null
+                        },
+                        label = { Text("URL сервера") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    isTesting = true
+                                    testResult = service.pingBackend(serverUrlInput)
+                                    isTesting = false
+                                }
+                            },
+                            enabled = !isTesting && serverUrlInput.isNotBlank()
+                        ) {
+                            Text(if (isTesting) "Проверка..." else "Проверить связь", color = Theme.accent)
+                        }
+
+                        testResult?.let { res ->
+                            Text(
+                                text = if (res.first) "${res.second} мс (OK)" else "Ошибка",
+                                color = if (res.first) Theme.accent else Theme.record,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    testResult?.let { res ->
+                        Text(
+                            text = res.third,
+                            color = if (res.first) Theme.textSecondary else Theme.record,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            serverUrlInput = "https://strain-backend.onrender.com"
+                            testResult = null
+                        }
+                    ) {
+                        Text("Сбросить по умолчанию", color = Theme.textTertiary, fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (serverUrlInput.isNotBlank()) {
+                        service.setBackendUrl(serverUrlInput)
+                        scope.launch {
+                            service.syncMyProfile(profile)
+                            service.refreshBuddies()
+                        }
+                    }
+                    showServerDialog = false
+                }) {
+                    Text("Сохранить", color = Theme.accent, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerDialog = false }) {
+                    Text("Отмена", color = Theme.textSecondary)
+                }
+            },
+            containerColor = Theme.surface,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 
     // Диалог показа своего QR
