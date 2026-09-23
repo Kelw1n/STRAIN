@@ -779,7 +779,7 @@ private struct ServerSettingsSheet: View {
 
                 Section {
                     Button("Сбросить по умолчанию") {
-                        serverUrl = "https://strain-backend.onrender.com"
+                        serverUrl = "https://strain-yk4r.onrender.com"
                         testResult = nil
                     }
                     .foregroundColor(.secondary)

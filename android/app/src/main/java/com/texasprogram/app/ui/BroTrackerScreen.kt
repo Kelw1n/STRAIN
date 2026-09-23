@@ -427,7 +427,7 @@ fun BroTrackerScreen(
 
                     TextButton(
                         onClick = {
-                            serverUrlInput = "https://strain-backend.onrender.com"
+                            serverUrlInput = "https://strain-yk4r.onrender.com"
                             testResult = null
                         }
                     ) {

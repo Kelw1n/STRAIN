@@ -65,7 +65,7 @@ class BroTrackerService(context: Context) {
         private set
 
     val backendBaseUrl: String
-        get() = prefs.getString("strain_backend_url", "https://strain-backend.onrender.com") ?: "https://strain-backend.onrender.com"
+        get() = prefs.getString("strain_backend_url", "https://strain-yk4r.onrender.com") ?: "https://strain-yk4r.onrender.com"
 
     fun setBackendUrl(url: String) {
         val trimmed = url.trim().trimEnd('/')

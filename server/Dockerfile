@@ -15,11 +15,10 @@ COPY server.js ./
 # Create data directory
 RUN mkdir -p /app/data
 
-# Expose port
-EXPOSE 3000
+# Expose port (Render uses 10000 by default)
+EXPOSE 10000 3000
 
 ENV NODE_ENV=production
-ENV PORT=3000
 
 # Start server
 CMD ["node", "server.js"]

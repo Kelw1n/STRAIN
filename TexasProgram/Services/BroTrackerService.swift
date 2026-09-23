@@ -204,7 +204,7 @@ final class BroTrackerService {
 
     // MARK: - Backend Server URL
     var backendBaseUrl: String {
-        defaults.string(forKey: "strain_backend_url") ?? "https://strain-backend.onrender.com"
+        defaults.string(forKey: "strain_backend_url") ?? "https://strain-yk4r.onrender.com"
     }
 
     func setBackendUrl(_ url: String) {
