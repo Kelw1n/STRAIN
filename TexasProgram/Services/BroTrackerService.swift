@@ -290,7 +290,7 @@ final class BroTrackerService {
 
         // Сопоставление сессий жимовой волны для каждого дня плана
         let benchMap = Dictionary(
-            schedule.allPending.compactMap { sw in sw.benchSession.map { ((sw.week, sw.day.number), $0) } },
+            schedule.allPending.compactMap { sw in sw.benchSession.map { ("\(sw.week)-\(sw.day.number)", $0) } },
             uniquingKeysWith: { first, _ in first }
         )
 
@@ -298,7 +298,7 @@ final class BroTrackerService {
         var programDays: [BroWorkoutDay] = []
         for week in plan.weeks {
             for day in week.days {
-                let benchSession = benchMap[(week.number, day.number)]
+                let benchSession = benchMap["\(week.number)-\(day.number)"]
                 let resolvedExercises = profile.exercises(day: day, benchSession: benchSession)
                 let exs = resolvedExercises.map {
                     BroExercise(name: $0.name, sets: $0.sets, reps: $0.reps, weight: $0.load.displayText)
