@@ -516,6 +516,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         onCopyProgram = { newProfile ->
                             store.add(newProfile)
                         },
+                        onUpdateProfile = { updated ->
+                            store.update(updated.id) { updated }
+                        },
                         onClose = { showBroTracker = false },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )

@@ -65,7 +65,7 @@ class BroTrackerService(context: Context) {
         private set
 
     val backendBaseUrl: String
-        get() = prefs.getString("strain_backend_url", "https://strain-yk4r.onrender.com") ?: "https://strain-yk4r.onrender.com"
+        get() = prefs.getString("strain_backend_url", "https://strain-y94r.onrender.com") ?: "https://strain-y94r.onrender.com"
 
     fun setBackendUrl(url: String) {
         val trimmed = url.trim().trimEnd('/')
@@ -533,6 +533,19 @@ class BroTrackerService(context: Context) {
         val newIds = buddyIds.filterNot { it == id }
         saveBuddyIds(newIds)
         val updated = buddies.filterNot { it.broId == id }
+        prefs.edit().remove("strain_buddy_alias_$id").apply()
+        saveCachedBuddies(updated)
+    }
+
+    /// Позволяет локально переименовать бро (задать псевдоним)
+    fun renameBuddy(id: String, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return
+        val updated = buddies.map {
+            if (it.broId == id) it.copy(name = trimmed) else it
+        }
+        buddies = updated
+        prefs.edit().putString("strain_buddy_alias_$id", trimmed).apply()
         saveCachedBuddies(updated)
     }
 
@@ -561,6 +574,11 @@ class BroTrackerService(context: Context) {
         }
     }
 
+    private fun applyAliasIfPresent(buddy: BroProfileData, id: String): BroProfileData {
+        val alias = prefs.getString("strain_buddy_alias_$id", null)
+        return if (!alias.isNullOrBlank()) buddy.copy(name = alias) else buddy
+    }
+
     private fun fetchBuddy(id: String): BroProfileData? {
         // 1. Попытка загрузить с выделенного бэкенда STRAIN
         try {
@@ -575,7 +593,7 @@ class BroTrackerService(context: Context) {
                 val data = json.decodeFromString<BroProfileData>(raw)
                 val serverId = if (data.broId.isNotBlank()) data.broId else id
                 bConn.disconnect()
-                return data.copy(broId = serverId)
+                return applyAliasIfPresent(data.copy(broId = serverId), id)
             }
             bConn.disconnect()
         } catch (_: Exception) {}
@@ -593,7 +611,7 @@ class BroTrackerService(context: Context) {
                 val data = obj.data
                 if (data != null) {
                     val serverId = if (!obj.id.isNullOrEmpty()) obj.id!! else id
-                    data.copy(broId = serverId)
+                    applyAliasIfPresent(data.copy(broId = serverId), id)
                 } else null
             } else null
         } catch (_: Exception) {

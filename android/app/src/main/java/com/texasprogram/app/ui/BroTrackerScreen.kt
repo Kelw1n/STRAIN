@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -79,6 +80,7 @@ import kotlinx.coroutines.launch
 fun BroTrackerScreen(
     profile: ProgramProfile,
     onCopyProgram: (ProgramProfile) -> Unit,
+    onUpdateProfile: (ProgramProfile) -> Unit = {},
     onClose: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -90,6 +92,10 @@ fun BroTrackerScreen(
     var showMyQR by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showServerDialog by remember { mutableStateOf(false) }
+    var showEditMyNameDialog by remember { mutableStateOf(false) }
+    var editMyNameText by remember { mutableStateOf("") }
+    var buddyToRename by remember { mutableStateOf<BroProfileData?>(null) }
+    var renameBuddyText by remember { mutableStateOf("") }
     var addInputText by remember { mutableStateOf("") }
     var selectedBuddyForProgram by remember { mutableStateOf<BroProfileData?>(null) }
     var selectedBuddyForChat by remember { mutableStateOf<BroProfileData?>(null) }
@@ -199,14 +205,31 @@ fun BroTrackerScreen(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .pressable {
+                                    editMyNameText = profile.name.ifBlank { "Бро" }
+                                    showEditMyNameDialog = true
+                                }
+                        ) {
                             Text(
                                 profile.name.ifBlank { "Ты" },
                                 color = Theme.textPrimary,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = "Изменить имя",
+                                tint = Theme.accent,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 Modifier
                                     .clip(RoundedCornerShape(6.dp))
@@ -215,12 +238,13 @@ fun BroTrackerScreen(
                             ) {
                                 Text("Онлайн", color = Theme.success, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Неделя ${profile.currentWeek} · ${profile.programKind.title}",
+                                color = Theme.textSecondary,
+                                fontSize = 12.sp
+                            )
                         }
-                        Text(
-                            "Неделя ${profile.currentWeek} · ${profile.programKind.title}",
-                            color = Theme.textSecondary,
-                            fontSize = 12.sp
-                        )
                     }
 
                     Box(
@@ -353,6 +377,10 @@ fun BroTrackerScreen(
                     buddy = buddy,
                     onViewProgram = { selectedBuddyForProgram = buddy },
                     onOpenChat = { selectedBuddyForChat = buddy },
+                    onRename = {
+                        buddyToRename = buddy
+                        renameBuddyText = buddy.name
+                    },
                     onDelete = { service.removeBuddy(buddy.broId) }
                 )
             }
@@ -427,7 +455,7 @@ fun BroTrackerScreen(
 
                     TextButton(
                         onClick = {
-                            serverUrlInput = "https://strain-yk4r.onrender.com"
+                            serverUrlInput = "https://strain-y94r.onrender.com"
                             testResult = null
                         }
                     ) {
@@ -620,6 +648,94 @@ fun BroTrackerScreen(
             }
         )
     }
+
+    // Диалог изменения своего имени
+    if (showEditMyNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditMyNameDialog = false },
+            title = { Text("Изменить моё имя", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Это имя будут видеть твои друзья в чате и в списке бро.",
+                        color = Theme.textSecondary,
+                        fontSize = 13.sp
+                    )
+                    OutlinedTextField(
+                        value = editMyNameText,
+                        onValueChange = { editMyNameText = it },
+                        placeholder = { Text("Твоё имя или псевдоним") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = editMyNameText.trim()
+                        if (trimmed.isNotEmpty()) {
+                            val updated = profile.copy(name = trimmed)
+                            onUpdateProfile(updated)
+                            scope.launch {
+                                service.syncMyProfile(updated)
+                            }
+                        }
+                        showEditMyNameDialog = false
+                    }
+                ) {
+                    Text("Сохранить", color = Theme.accent, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditMyNameDialog = false }) {
+                    Text("Отмена", color = Theme.textSecondary)
+                }
+            }
+        )
+    }
+
+    // Диалог переименования бро (локальный алиас)
+    buddyToRename?.let { b ->
+        AlertDialog(
+            onDismissRequest = { buddyToRename = null },
+            title = { Text("Переименовать бро", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Задай понятное имя для бро (например: Саня, Влад, Тренер).",
+                        color = Theme.textSecondary,
+                        fontSize = 13.sp
+                    )
+                    OutlinedTextField(
+                        value = renameBuddyText,
+                        onValueChange = { renameBuddyText = it },
+                        placeholder = { Text("Имя бро") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = renameBuddyText.trim()
+                        if (trimmed.isNotEmpty()) {
+                            service.renameBuddy(b.broId, trimmed)
+                        }
+                        buddyToRename = null
+                    }
+                ) {
+                    Text("Сохранить", color = Theme.accent, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { buddyToRename = null }) {
+                    Text("Отмена", color = Theme.textSecondary)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -627,6 +743,7 @@ private fun BuddyCard(
     buddy: BroProfileData,
     onViewProgram: () -> Unit = {},
     onOpenChat: () -> Unit = {},
+    onRename: () -> Unit = {},
     onDelete: () -> Unit
 ) {
     CardView {
@@ -637,8 +754,15 @@ private fun BuddyCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .pressable(onClick = onRename)
+                    ) {
                         Text(buddy.name, color = Theme.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(4.dp))
+                        Icon(Icons.Filled.Edit, contentDescription = "Переименовать бро", tint = Theme.accent.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
                         Spacer(Modifier.width(6.dp))
                         Box(
                             Modifier

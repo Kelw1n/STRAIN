@@ -204,7 +204,7 @@ final class BroTrackerService {
 
     // MARK: - Backend Server URL
     var backendBaseUrl: String {
-        defaults.string(forKey: "strain_backend_url") ?? "https://strain-yk4r.onrender.com"
+        defaults.string(forKey: "strain_backend_url") ?? "https://strain-y94r.onrender.com"
     }
 
     func setBackendUrl(_ url: String) {
@@ -614,7 +614,34 @@ final class BroTrackerService {
     func removeBuddy(id: String) {
         buddyIds.removeAll { $0 == id }
         buddies.removeAll { $0.broId == id }
+        defaults.removeObject(forKey: "strain_buddy_alias_\(id)")
         saveCachedBuddies()
+    }
+
+    /// Позволяет локально переименовать бро (задать псевдоним)
+    func renameBuddy(id: String, newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let idx = buddies.firstIndex(where: { $0.broId == id }) {
+            let current = buddies[idx]
+            let updated = BroProfileData(
+                broId: current.broId,
+                name: trimmed,
+                programKind: current.programKind,
+                programTitle: current.programTitle,
+                currentWeek: current.currentWeek,
+                currentDay: current.currentDay,
+                lastActiveEpoch: current.lastActiveEpoch,
+                squat5RM: current.squat5RM,
+                bench5RM: current.bench5RM,
+                deadlift5RM: current.deadlift5RM,
+                recentLifts: current.recentLifts,
+                programDays: current.programDays
+            )
+            buddies[idx] = updated
+            defaults.set(trimmed, forKey: "strain_buddy_alias_\(id)")
+            saveCachedBuddies()
+        }
     }
 
     func refreshBuddies() async {
@@ -634,6 +661,26 @@ final class BroTrackerService {
         saveCachedBuddies()
     }
 
+    private func applyAliasIfPresent(_ buddy: BroProfileData, id: String) -> BroProfileData {
+        if let alias = defaults.string(forKey: "strain_buddy_alias_\(id)"), !alias.isEmpty {
+            return BroProfileData(
+                broId: buddy.broId,
+                name: alias,
+                programKind: buddy.programKind,
+                programTitle: buddy.programTitle,
+                currentWeek: buddy.currentWeek,
+                currentDay: buddy.currentDay,
+                lastActiveEpoch: buddy.lastActiveEpoch,
+                squat5RM: buddy.squat5RM,
+                bench5RM: buddy.bench5RM,
+                deadlift5RM: buddy.deadlift5RM,
+                recentLifts: buddy.recentLifts,
+                programDays: buddy.programDays
+            )
+        }
+        return buddy
+    }
+
     private func fetchBuddy(id: String) async -> BroProfileData? {
         // 1. Попытка загрузить с выделенного бэкенда STRAIN
         if let url = URL(string: "\(backendBaseUrl)/api/profile/\(id)") {
@@ -642,7 +689,8 @@ final class BroTrackerService {
             if let (data, response) = try? await URLSession.shared.data(for: req),
                let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode),
                let buddy = try? JSONDecoder().decode(BroProfileData.self, from: data) {
-                return buddy.broId.isEmpty ? buddy.withBroId(id) : buddy
+                let resolved = buddy.broId.isEmpty ? buddy.withBroId(id) : buddy
+                return applyAliasIfPresent(resolved, id: id)
             }
         }
 
@@ -655,7 +703,8 @@ final class BroTrackerService {
             }
             let obj = try JSONDecoder().decode(RestfulApiObject.self, from: data)
             let serverId = obj.id ?? id
-            return obj.data.broId == serverId ? obj.data : obj.data.withBroId(serverId)
+            let resolved = obj.data.broId == serverId ? obj.data : obj.data.withBroId(serverId)
+            return applyAliasIfPresent(resolved, id: id)
         } catch {
             return nil
         }

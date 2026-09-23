@@ -19,6 +19,10 @@ struct BroTrackerView: View {
     @State private var scanAlertMessage: String?
     @State private var showingScanAlert = false
     @State private var showingServerSettings = false
+    @State private var showingEditMyName = false
+    @State private var editingMyNameText = ""
+    @State private var buddyToRename: BroProfileData?
+    @State private var renameBuddyText = ""
 
     init(profile: ProgramProfile) {
         self.profile = profile
@@ -143,6 +147,34 @@ struct BroTrackerView: View {
             } message: {
                 Text(copyAlertMessage ?? "")
             }
+            .alert("Твоё имя в банде", isPresented: $showingEditMyName) {
+                TextField("Имя профиля", text: $editingMyNameText)
+                Button("Отмена", role: .cancel) {}
+                Button("Сохранить") {
+                    let trimmed = editingMyNameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        profile.name = trimmed
+                        try? modelContext.save()
+                        Task {
+                            await service.syncMyProfile(profile: profile)
+                        }
+                    }
+                }
+            } message: {
+                Text("Это имя будут видеть твои бро в списке друзей и в чате.")
+            }
+            .alert("Переименовать бро", isPresented: Binding(get: { buddyToRename != nil }, set: { if !$0 { buddyToRename = nil } })) {
+                TextField("Имя бро", text: $renameBuddyText)
+                Button("Отмена", role: .cancel) { buddyToRename = nil }
+                Button("Сохранить") {
+                    if let b = buddyToRename {
+                        service.renameBuddy(id: b.broId, newName: renameBuddyText)
+                    }
+                    buddyToRename = nil
+                }
+            } message: {
+                Text("Задай понятное имя для бро (например: Саня, Влад, Тренер).")
+            }
         }
     }
 
@@ -159,10 +191,22 @@ struct BroTrackerView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack {
-                        Text(profile.name.isEmpty ? "Ты" : profile.name)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        Button {
+                            editingMyNameText = profile.name.isEmpty ? "Бро" : profile.name
+                            showingEditMyName = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(profile.name.isEmpty ? "Ты" : profile.name)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Image(systemName: "pencil")
+                                    .font(.caption2)
+                                    .foregroundStyle(Theme.accent)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
                         TagBadge(text: "Онлайн", systemImage: "circle.fill", gradient: Theme.successGradient)
                     }
 
@@ -250,6 +294,9 @@ struct BroTrackerView: View {
                         selectedBuddyForProgram = buddy
                     } onOpenChat: {
                         selectedBuddyForChat = buddy
+                    } onRename: {
+                        buddyToRename = buddy
+                        renameBuddyText = buddy.name
                     } onDelete: {
                         service.removeBuddy(id: buddy.broId)
                     }
@@ -287,6 +334,7 @@ private struct BuddyCardView: View {
     let buddy: BroProfileData
     let onOpenProgram: () -> Void
     let onOpenChat: () -> Void
+    let onRename: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -314,6 +362,7 @@ private struct BuddyCardView: View {
                     Menu {
                         Button("Чат с бро", action: onOpenChat)
                         Button("Смотреть программу", action: onOpenProgram)
+                        Button("Переименовать бро", action: onRename)
                         Button("Удалить из друзей", role: .destructive, action: onDelete)
                     } label: {
                         Image(systemName: "ellipsis")
@@ -779,7 +828,7 @@ private struct ServerSettingsSheet: View {
 
                 Section {
                     Button("Сбросить по умолчанию") {
-                        serverUrl = "https://strain-yk4r.onrender.com"
+                        serverUrl = "https://strain-y94r.onrender.com"
                         testResult = nil
                     }
                     .foregroundColor(.secondary)

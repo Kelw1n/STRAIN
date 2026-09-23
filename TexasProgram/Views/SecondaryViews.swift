@@ -475,6 +475,11 @@ struct SettingsView: View {
                     Text("У каждого профиля своя программа, максимумы, расписание и отметки.")
                 }
 
+                Section("Имя профиля") {
+                    TextField("Твоё имя или псевдоним", text: $profile.name)
+                        .autocorrectionDisabled()
+                }
+
                 Section(profile.maximumLabel) {
                     TextField("Приседания", value: $profile.squat5RM, format: .number).keyboardType(.decimalPad)
                     TextField("Жим лёжа", value: $profile.bench5RM, format: .number).keyboardType(.decimalPad)
