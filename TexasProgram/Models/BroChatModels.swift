@@ -1,9 +1,20 @@
 import Foundation
 
 enum BroMessageType: String, Codable, Sendable {
-    case text
-    case workoutResult = "workout_result"
-    case photo
+    case text = "TEXT"
+    case workoutResult = "WORKOUT_RESULT"
+    case photo = "PHOTO"
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = (try? container.decode(String.self)) ?? "TEXT"
+        switch raw.uppercased() {
+        case "TEXT": self = .text
+        case "WORKOUT_RESULT": self = .workoutResult
+        case "PHOTO": self = .photo
+        default: self = .text
+        }
+    }
 }
 
 struct WorkoutSharePayload: Codable, Equatable, Hashable, Sendable {
@@ -47,6 +58,23 @@ struct BroChatMessage: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.type = type
         self.workoutPayload = workoutPayload
         self.photoBase64 = photoBase64
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        channelId = try container.decode(String.self, forKey: .channelId)
+        senderId = try container.decode(String.self, forKey: .senderId)
+        senderName = try container.decode(String.self, forKey: .senderName)
+        timestamp = try container.decode(Int64.self, forKey: .timestamp)
+        text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
+        type = (try? container.decode(BroMessageType.self, forKey: .type)) ?? .text
+        workoutPayload = try container.decodeIfPresent(WorkoutSharePayload.self, forKey: .workoutPayload)
+        photoBase64 = try container.decodeIfPresent(String.self, forKey: .photoBase64)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, channelId, senderId, senderName, timestamp, text, type, workoutPayload, photoBase64
     }
 
     var timeFormatted: String {

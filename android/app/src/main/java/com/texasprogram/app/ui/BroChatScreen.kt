@@ -169,7 +169,8 @@ fun BroChatScreen(
                 .padding(top = statusBarPadding, bottom = navBarPadding)
         ) {
             // Шапка диалога
-            ChatHeader(buddy = buddy, onBack = onBack)
+            val currentBuddy = service.buddies.firstOrNull { it.broId == buddy.broId } ?: buddy
+            ChatHeader(buddy = currentBuddy, onBack = onBack)
 
             Box(
                 modifier = Modifier

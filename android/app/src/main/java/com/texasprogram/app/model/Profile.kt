@@ -931,9 +931,13 @@ data class ProgramProfile(
 
     /// Упражнения тренировки: вспомогательные — из дня программы, жим — из волны.
     fun exercises(workout: ScheduledWorkout): List<ExercisePrescription> {
-        val session = workout.benchSession ?: return workout.day.exercises
-        val wave = benchWave.firstOrNull { it.id == session } ?: return workout.day.exercises
-        return workout.day.exercises.map { exercise ->
+        return exercises(workout.day, workout.benchSession)
+    }
+
+    fun exercises(day: WorkoutDayPlan, benchSession: Int? = null): List<ExercisePrescription> {
+        val session = benchSession ?: return day.exercises
+        val wave = benchWave.firstOrNull { it.id == session } ?: return day.exercises
+        return day.exercises.map { exercise ->
             if (exercise.benchSession == null) exercise
             else ExercisePrescription(
                 name = wave.exerciseName,

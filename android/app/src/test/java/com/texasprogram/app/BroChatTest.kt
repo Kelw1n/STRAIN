@@ -129,4 +129,31 @@ class BroChatTest {
         assertEquals("2", local[1].id)
         assertEquals("3", local[2].id)
     }
+
+    @Test
+    fun testCrossPlatformMessageTypeCompatibility() {
+        val rawIosJson = """
+            {"id":"ios_1","channelId":"chat_a_b","senderId":"a","senderName":"iOS","timestamp":100,"text":"Привет","type":"text"}
+        """.trimIndent()
+        val decodedFromIos = json.decodeFromString<BroChatMessage>(rawIosJson)
+        assertEquals(BroMessageType.TEXT, decodedFromIos.type)
+
+        val rawIosWorkout = """
+            {"id":"ios_2","channelId":"chat_a_b","senderId":"a","senderName":"iOS","timestamp":200,"text":"Жим","type":"workout_result"}
+        """.trimIndent()
+        val decodedWorkout = json.decodeFromString<BroChatMessage>(rawIosWorkout)
+        assertEquals(BroMessageType.WORKOUT_RESULT, decodedWorkout.type)
+
+        val rawIosPhoto = """
+            {"id":"ios_3","channelId":"chat_a_b","senderId":"a","senderName":"iOS","timestamp":300,"text":"Фото","type":"photo"}
+        """.trimIndent()
+        val decodedPhoto = json.decodeFromString<BroChatMessage>(rawIosPhoto)
+        assertEquals(BroMessageType.PHOTO, decodedPhoto.type)
+
+        val rawUnknown = """
+            {"id":"ios_4","channelId":"chat_a_b","senderId":"a","senderName":"iOS","timestamp":400,"text":"Хей","type":"SOME_FUTURE_TYPE"}
+        """.trimIndent()
+        val decodedUnknown = json.decodeFromString<BroChatMessage>(rawUnknown)
+        assertEquals(BroMessageType.TEXT, decodedUnknown.type)
+    }
 }

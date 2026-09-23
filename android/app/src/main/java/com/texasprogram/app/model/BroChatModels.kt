@@ -1,16 +1,43 @@
 package com.texasprogram.app.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-@Serializable
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+
+object BroMessageTypeSerializer : KSerializer<BroMessageType> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("BroMessageType", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: BroMessageType) {
+        encoder.encodeString(value.name)
+    }
+
+    override fun deserialize(decoder: Decoder): BroMessageType {
+        val raw = try { decoder.decodeString().uppercase() } catch (_: Exception) { "TEXT" }
+        return when (raw) {
+            "TEXT" -> BroMessageType.TEXT
+            "WORKOUT_RESULT" -> BroMessageType.WORKOUT_RESULT
+            "PHOTO" -> BroMessageType.PHOTO
+            else -> BroMessageType.TEXT
+        }
+    }
+}
+
+@Serializable(with = BroMessageTypeSerializer::class)
 enum class BroMessageType {
-    TEXT,
-    WORKOUT_RESULT,
-    PHOTO
+    @SerialName("TEXT") TEXT,
+    @SerialName("WORKOUT_RESULT") WORKOUT_RESULT,
+    @SerialName("PHOTO") PHOTO
 }
 
 @Serializable

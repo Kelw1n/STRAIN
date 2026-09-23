@@ -226,7 +226,23 @@ final class BroTrackerService {
         let bp = Int(profile.bench5RM)
         let dl = Int(profile.deadlift5RM)
 
-        return "strain://bro?id=\(myBroId)&name=\(encodedName)&kind=\(kind)&w=\(week)&d=\(day)&sq=\(sq)&bp=\(bp)&dl=\(dl)"
+        var link = "strain://bro?id=\(myBroId)&name=\(encodedName)&kind=\(kind)&w=\(week)&d=\(day)&sq=\(sq)&bp=\(bp)&dl=\(dl)"
+        if let back = profile.back?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !back.isEmpty {
+            link += "&back=\(back)"
+        }
+        if let press = profile.press?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !press.isEmpty {
+            link += "&press=\(press)"
+        }
+        if let pull = profile.pull?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !pull.isEmpty {
+            link += "&pull=\(pull)"
+        }
+        if let arms = profile.arms?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !arms.isEmpty {
+            link += "&arms=\(arms)"
+        }
+        if let core = profile.core?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !core.isEmpty {
+            link += "&core=\(core)"
+        }
+        return link
     }
 
     private func loadCachedBuddies() {
@@ -249,25 +265,42 @@ final class BroTrackerService {
         defer { isSyncing = false }
 
         let plan = profile.workoutPlan
-        let curWeek = profile.currentWeek
-        let curWeekPlan = plan.weeks.first { $0.number == curWeek }
-        let nextDay = curWeekPlan?.days.first { !profile.isCompleted(week: curWeek, day: $0.number) }
+        let schedule = profile.schedule
+        let focus = schedule.focus
+        let curWeek = focus?.week ?? profile.currentWeek
+        let curDay = focus?.day.number ?? (plan.weeks.first { $0.number == curWeek }?.days.first { !profile.isCompleted(week: curWeek, day: $0.number) }?.number ?? 1)
 
-        // Собираем все запланированные упражнения текущего дня
+        // Собираем все запланированные упражнения активного дня с учётом волны жима и правок
         var lifts: [BroLiftEntry] = []
-        if let day = nextDay ?? curWeekPlan?.days.first {
-            for ex in day.exercises {
+        if let focus {
+            let focusExercises = profile.exercises(for: focus)
+            for ex in focusExercises {
+                let load = ex.load.displayText
+                let presc = ex.sets > 0 ? "\(ex.sets)×\(ex.reps) · \(load)" : "\(ex.reps) · \(load)"
+                lifts.append(BroLiftEntry(name: ex.name, prescription: presc))
+            }
+        } else if let day = plan.weeks.first(where: { $0.number == curWeek })?.days.first {
+            let exs = profile.exercises(day: day, benchSession: nil)
+            for ex in exs {
                 let load = ex.load.displayText
                 let presc = ex.sets > 0 ? "\(ex.sets)×\(ex.reps) · \(load)" : "\(ex.reps) · \(load)"
                 lifts.append(BroLiftEntry(name: ex.name, prescription: presc))
             }
         }
 
+        // Сопоставление сессий жимовой волны для каждого дня плана
+        let benchMap = Dictionary(
+            schedule.allPending.compactMap { sw in sw.benchSession.map { ((sw.week, sw.day.number), $0) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+
         // Собираем все дни плана для просмотра другом (все недели цикла без усечения)
         var programDays: [BroWorkoutDay] = []
         for week in plan.weeks {
             for day in week.days {
-                let exs = day.exercises.map {
+                let benchSession = benchMap[(week.number, day.number)]
+                let resolvedExercises = profile.exercises(day: day, benchSession: benchSession)
+                let exs = resolvedExercises.map {
                     BroExercise(name: $0.name, sets: $0.sets, reps: $0.reps, weight: $0.load.displayText)
                 }
                 programDays.append(BroWorkoutDay(week: week.number, day: day.number, title: day.title, exercises: exs))
@@ -279,8 +312,8 @@ final class BroTrackerService {
             name: profile.name.isEmpty ? "Бро" : profile.name,
             programKind: profile.programKind.backupCode,
             programTitle: profile.programKind.rawValue,
-            currentWeek: profile.currentWeek,
-            currentDay: nextDay?.number ?? 1,
+            currentWeek: curWeek,
+            currentDay: curDay,
             lastActiveEpoch: Int64(Date().timeIntervalSince1970 * 1000),
             squat5RM: profile.squat5RM,
             bench5RM: profile.bench5RM,
@@ -386,7 +419,23 @@ final class BroTrackerService {
 
                 let programTitle = TrainingProgramKind.allCases.first { $0.backupCode == kind || $0.rawValue == kind }?.rawValue ?? kind
 
-                let days = generatePreviewDays(kind: kind, squat: sq, bench: bp, deadlift: dl)
+                let back = dict["back"]
+                let press = dict["press"]
+                let pull = dict["pull"]
+                let arms = dict["arms"]
+                let core = dict["core"]
+
+                let days = generatePreviewDays(
+                    kind: kind,
+                    squat: sq,
+                    bench: bp,
+                    deadlift: dl,
+                    back: back,
+                    press: press,
+                    pull: pull,
+                    arms: arms,
+                    core: core
+                )
                 let lifts = generatePreviewLifts(squat: sq, bench: bp, deadlift: dl)
 
                 let buddy = BroProfileData(
@@ -410,6 +459,9 @@ final class BroTrackerService {
                 buddies.removeAll { $0.broId == id }
                 buddies.insert(buddy, at: 0)
                 saveCachedBuddies()
+
+                // Сразу пытаемся обновить данные с сервера (полная программа, подсобные, актуальные веса)
+                await refreshBuddies()
 
                 return AddBuddyResult(success: true, buddyName: name, message: "Бро «\(name)» успешно добавлен в банду! 🤝")
             }
@@ -444,7 +496,17 @@ final class BroTrackerService {
         }
     }
 
-    private func generatePreviewDays(kind: String, squat: Double, bench: Double, deadlift: Double) -> [BroWorkoutDay] {
+    private func generatePreviewDays(
+        kind: String,
+        squat: Double,
+        bench: Double,
+        deadlift: Double,
+        back: String? = nil,
+        press: String? = nil,
+        pull: String? = nil,
+        arms: String? = nil,
+        core: String? = nil
+    ) -> [BroWorkoutDay] {
         let progKind = TrainingProgramKind.allCases.first { $0.backupCode == kind || $0.rawValue == kind } ?? .texas
         let sq = squat > 0 ? squat : 100
         let bp = bench > 0 ? bench : 100
@@ -454,11 +516,11 @@ final class BroTrackerService {
         case .upperLower:
             dummy = ProgramProfile(upperLowerInput: UpperLowerInput(squat1RM: sq, bench1RM: bp, deadlift1RM: dl), name: "Preview")
         case .fullBody:
-            dummy = ProgramProfile(fullBodyInput: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), level: .aboutYear, name: "Preview")
+            dummy = ProgramProfile(fullBodyInput: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner, pull: pull, arms: arms, core: core, back: back, press: press), level: .aboutYear, name: "Preview")
         case .proTexas:
-            dummy = ProgramProfile(proTexasInput: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), name: "Preview")
+            dummy = ProgramProfile(proTexasInput: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner, pull: pull, arms: arms, core: core, back: back, press: press), name: "Preview")
         default:
-            dummy = ProgramProfile(input: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner), name: "Preview")
+            dummy = ProgramProfile(input: ProgramInput(squat5RM: sq, bench5RM: bp, deadlift5RM: dl, level: .beginner, pull: pull, arms: arms, core: core, back: back, press: press), name: "Preview")
         }
         var days: [BroWorkoutDay] = []
         for week in dummy.workoutPlan.weeks {

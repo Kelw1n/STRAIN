@@ -108,4 +108,24 @@ final class BroChatTests: XCTestCase {
         XCTAssertEqual(local[1].id, "2")
         XCTAssertEqual(local[2].id, "3")
     }
+
+    func testCrossPlatformMessageTypeCompatibility() throws {
+        let androidJson = """
+        {"id":"android_1","channelId":"chat_a_b","senderId":"b","senderName":"Android","timestamp":100,"text":"Привет","type":"TEXT"}
+        """.data(using: .utf8)!
+        let decodedFromAndroid = try JSONDecoder().decode(BroChatMessage.self, from: androidJson)
+        XCTAssertEqual(decodedFromAndroid.type, .text)
+
+        let iosJson = """
+        {"id":"ios_1","channelId":"chat_a_b","senderId":"a","senderName":"iOS","timestamp":100,"text":"Привет","type":"text"}
+        """.data(using: .utf8)!
+        let decodedFromIos = try JSONDecoder().decode(BroChatMessage.self, from: iosJson)
+        XCTAssertEqual(decodedFromIos.type, .text)
+
+        let unknownJson = """
+        {"id":"future_1","channelId":"chat_a_b","senderId":"a","senderName":"Future","timestamp":100,"text":"Привет","type":"FUTURE_UNKNOWN"}
+        """.data(using: .utf8)!
+        let decodedUnknown = try JSONDecoder().decode(BroChatMessage.self, from: unknownJson)
+        XCTAssertEqual(decodedUnknown.type, .text)
+    }
 }

@@ -126,31 +126,56 @@ class BroTrackerService(context: Context) {
         val bp = profile.bench5RM.toInt()
         val dl = profile.deadlift5RM.toInt()
 
-        return "strain://bro?id=$myBroId&name=$encodedName&kind=$kind&w=$week&d=$day&sq=$sq&bp=$bp&dl=$dl"
+        val sb = StringBuilder("strain://bro?id=$myBroId&name=$encodedName&kind=$kind&w=$week&d=$day&sq=$sq&bp=$bp&dl=$dl")
+        profile.back?.takeIf { it.isNotBlank() }?.let { sb.append("&back=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+        profile.press?.takeIf { it.isNotBlank() }?.let { sb.append("&press=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+        profile.pull?.takeIf { it.isNotBlank() }?.let { sb.append("&pull=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+        profile.arms?.takeIf { it.isNotBlank() }?.let { sb.append("&arms=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+        profile.core?.takeIf { it.isNotBlank() }?.let { sb.append("&core=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+        return sb.toString()
     }
 
     suspend fun syncMyProfile(profile: ProgramProfile) = withContext(Dispatchers.IO) {
         isSyncing = true
         try {
             val plan = profile.workoutPlan
-            val curWeek = profile.currentWeek
+            val schedule = profile.schedule()
+            val focus = schedule.focus
+            val curWeek = focus?.week ?: profile.currentWeek
             val curWeekPlan = plan.weeks.firstOrNull { it.number == curWeek }
             val nextDay = curWeekPlan?.days?.firstOrNull { !profile.isCompleted(curWeek, it.number) }
+            val curDay = focus?.day?.number ?: (nextDay?.number ?: 1)
 
             val lifts = ArrayList<BroLiftEntry>()
-            val activeDay = nextDay ?: curWeekPlan?.days?.firstOrNull()
-            if (activeDay != null) {
-                for (ex in activeDay.exercises) {
+            if (focus != null) {
+                val focusExercises = profile.exercises(focus)
+                for (ex in focusExercises) {
                     val load = ex.load.displayText
                     val presc = if (ex.sets > 0) "${ex.sets}×${ex.reps} · $load" else "${ex.reps} · $load"
                     lifts.add(BroLiftEntry(ex.name, presc))
                 }
+            } else {
+                val activeDay = curWeekPlan?.days?.firstOrNull()
+                if (activeDay != null) {
+                    val activeExercises = profile.exercises(activeDay, null)
+                    for (ex in activeExercises) {
+                        val load = ex.load.displayText
+                        val presc = if (ex.sets > 0) "${ex.sets}×${ex.reps} · $load" else "${ex.reps} · $load"
+                        lifts.add(BroLiftEntry(ex.name, presc))
+                    }
+                }
             }
+
+            val benchMap = schedule.allPending.mapNotNull { sw ->
+                sw.benchSession?.let { (sw.week to sw.day.number) to it }
+            }.toMap()
 
             val programDays = ArrayList<BroWorkoutDay>()
             for (week in plan.weeks) {
                 for (day in week.days) {
-                    val exs = day.exercises.map {
+                    val benchSession = benchMap[week.number to day.number]
+                    val resolvedExercises = profile.exercises(day, benchSession)
+                    val exs = resolvedExercises.map {
                         BroExercise(it.name, it.sets, it.reps, it.load.displayText)
                     }
                     programDays.add(BroWorkoutDay(week.number, day.number, day.title, exs))
@@ -162,8 +187,8 @@ class BroTrackerService(context: Context) {
                 name = profile.name.ifBlank { "Бро" },
                 programKind = profile.programKind.name,
                 programTitle = profile.programKind.title,
-                currentWeek = profile.currentWeek,
-                currentDay = nextDay?.number ?: 1,
+                currentWeek = curWeek,
+                currentDay = curDay,
                 lastActiveEpoch = System.currentTimeMillis(),
                 squat5RM = profile.squat5RM,
                 bench5RM = profile.bench5RM,
@@ -331,6 +356,12 @@ class BroTrackerService(context: Context) {
                     com.texasprogram.app.model.TrainingProgramKind.TEXAS
                 }
 
+                val back = uri.getQueryParameter("back")
+                val press = uri.getQueryParameter("press")
+                val pull = uri.getQueryParameter("pull")
+                val arms = uri.getQueryParameter("arms")
+                val core = uri.getQueryParameter("core")
+
                 val buddy = BroProfileData(
                     broId = id,
                     name = name,
@@ -343,7 +374,7 @@ class BroTrackerService(context: Context) {
                     bench5RM = bench,
                     deadlift5RM = deadlift,
                     recentLifts = generatePreviewLifts(squat, bench, deadlift),
-                    programDays = generatePreviewDays(kind, squat, bench, deadlift)
+                    programDays = generatePreviewDays(kind, squat, bench, deadlift, back, press, pull, arms, core)
                 )
 
                 val newIds = if (buddyIds.contains(id)) buddyIds else buddyIds + id
@@ -351,6 +382,9 @@ class BroTrackerService(context: Context) {
 
                 val updatedBuddies = listOf(buddy) + buddies.filterNot { it.broId == id }
                 saveCachedBuddies(updatedBuddies)
+
+                // Сразу пытаемся обновить данные с сервера (полная программа, подсобные, актуальные веса)
+                try { refreshBuddiesInternal() } catch (_: Exception) {}
 
                 return@withContext AddBuddyResult(true, name, "Бро «$name» успешно добавлен в банду! 🤝")
             }
@@ -389,7 +423,12 @@ class BroTrackerService(context: Context) {
         kind: com.texasprogram.app.model.TrainingProgramKind,
         squat: Double,
         bench: Double,
-        deadlift: Double
+        deadlift: Double,
+        back: String? = null,
+        press: String? = null,
+        pull: String? = null,
+        arms: String? = null,
+        core: String? = null
     ): List<BroWorkoutDay> {
         val dummy = ProgramProfile(
             name = "Preview",
@@ -397,7 +436,12 @@ class BroTrackerService(context: Context) {
             squat5RM = if (squat > 0) squat else 100.0,
             bench5RM = if (bench > 0) bench else 100.0,
             deadlift5RM = if (deadlift > 0) deadlift else 100.0,
-            level = com.texasprogram.app.model.TrainingLevel.BEGINNER
+            level = com.texasprogram.app.model.TrainingLevel.BEGINNER,
+            back = back,
+            press = press,
+            pull = pull,
+            arms = arms,
+            core = core
         )
         val plan = dummy.workoutPlan
         val days = ArrayList<BroWorkoutDay>()
@@ -428,7 +472,11 @@ class BroTrackerService(context: Context) {
     }
 
     suspend fun refreshBuddies() = withContext(Dispatchers.IO) {
-        if (buddyIds.isEmpty()) return@withContext
+        refreshBuddiesInternal()
+    }
+
+    private fun refreshBuddiesInternal() {
+        if (buddyIds.isEmpty()) return
         isSyncing = true
         try {
             val updated = ArrayList<BroProfileData>()

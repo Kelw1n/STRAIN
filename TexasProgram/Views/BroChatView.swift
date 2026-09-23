@@ -109,31 +109,35 @@ struct BroChatView: View {
         }
     }
 
+    private var currentBuddy: BroProfileData {
+        service.buddies.first(where: { $0.broId == buddy.broId }) ?? buddy
+    }
+
     private var chatHeader: some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(Theme.accentGradient)
                     .frame(width: 42, height: 42)
-                Text(buddy.name.prefix(1).uppercased())
+                Text(currentBuddy.name.prefix(1).uppercased())
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(buddy.name)
+                    Text(currentBuddy.name)
                         .font(.headline)
                         .foregroundStyle(.primary)
 
                     Circle()
-                        .fill(buddy.isOnline ? Theme.success : (buddy.isRecentlyActive ? Theme.warning : Color.gray))
+                        .fill(currentBuddy.isOnline ? Theme.success : (currentBuddy.isRecentlyActive ? Theme.warning : Color.gray))
                         .frame(width: 8, height: 8)
                 }
 
-                Text(buddy.statusDescription)
+                Text(currentBuddy.statusDescription)
                     .font(.caption2)
-                    .foregroundStyle(buddy.isOnline ? Theme.success : .secondary)
+                    .foregroundStyle(currentBuddy.isOnline ? Theme.success : .secondary)
             }
 
             Spacer()
@@ -142,7 +146,7 @@ struct BroChatView: View {
                 Text("ПРОГРАММА")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
-                Text("Нед. \(buddy.currentWeek) · Дн. \(buddy.currentDay)")
+                Text("Нед. \(currentBuddy.currentWeek) · Дн. \(currentBuddy.currentDay)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.accent)
             }

@@ -349,6 +349,11 @@ fun BroTrackerScreen(
 
     // Диалог показа своего QR
     if (showMyQR) {
+        LaunchedEffect(Unit) {
+            if (service.myBroId.startsWith("bro_")) {
+                service.syncMyProfile(profile)
+            }
+        }
         val qrLink = remember(profile, service.myBroId) {
             service.buildQRLink(profile)
         }

@@ -435,6 +435,16 @@ private struct MyQRCodeSheet: View {
                     }
                 }
 
+                if !service.isConfirmedServerId && service.isSyncing {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Подключение к облаку...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Spacer()
 
                 Button("Готово") { dismiss() }
@@ -445,6 +455,11 @@ private struct MyQRCodeSheet: View {
             .screenBackground()
             .navigationTitle("Мой QR-код")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                if !service.isConfirmedServerId {
+                    await service.syncMyProfile(profile: profile)
+                }
+            }
         }
     }
 }
