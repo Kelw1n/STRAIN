@@ -64,6 +64,13 @@ class BroTrackerService(context: Context) {
     var myBroId by mutableStateOf(getOrCreateMyId())
         private set
 
+    val backendBaseUrl: String
+        get() = prefs.getString("strain_backend_url", "https://strain-backend.onrender.com") ?: "https://strain-backend.onrender.com"
+
+    fun setBackendUrl(url: String) {
+        prefs.edit().putString("strain_backend_url", url).apply()
+    }
+
     var buddyIds by mutableStateOf(loadBuddyIds())
         private set
 
@@ -198,6 +205,27 @@ class BroTrackerService(context: Context) {
                 recentChatMessages = loadOutbox()
             )
 
+            // 1. Синхронизация с выделенным бэкендом STRAIN (без лимитов размера JSON)
+            try {
+                val bUrl = URL("$backendBaseUrl/api/profile/$myBroId")
+                val bConn = (bUrl.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "PUT"
+                    setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                    setRequestProperty("Accept", "application/json")
+                    doOutput = true
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                }
+                val body = json.encodeToString(myData)
+                OutputStreamWriter(bConn.outputStream, "UTF-8").use {
+                    it.write(body)
+                    it.flush()
+                }
+                bConn.responseCode
+                bConn.disconnect()
+            } catch (_: Exception) {}
+
+            // 2. Fallback на api.restful-api.dev
             val endpoint = "https://api.restful-api.dev/objects"
             var hasServerId = prefs.getBoolean(KEY_HAS_SERVER_ID, false) &&
                 myBroId.isNotBlank() && !myBroId.startsWith("bro_")
@@ -497,6 +525,25 @@ class BroTrackerService(context: Context) {
     }
 
     private fun fetchBuddy(id: String): BroProfileData? {
+        // 1. Попытка загрузить с выделенного бэкенда STRAIN
+        try {
+            val bUrl = URL("$backendBaseUrl/api/profile/$id")
+            val bConn = (bUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 6000
+                readTimeout = 6000
+            }
+            if (bConn.responseCode in 200..299) {
+                val raw = bConn.inputStream.bufferedReader().use { it.readText() }
+                val data = json.decodeFromString<BroProfileData>(raw)
+                val serverId = if (data.broId.isNotBlank()) data.broId else id
+                bConn.disconnect()
+                return data.copy(broId = serverId)
+            }
+            bConn.disconnect()
+        } catch (_: Exception) {}
+
+        // 2. Fallback на restful-api.dev
         return try {
             val url = URL("https://api.restful-api.dev/objects/$id")
             val conn = url.openConnection() as HttpURLConnection
@@ -556,6 +603,37 @@ class BroTrackerService(context: Context) {
         } catch (_: Exception) {}
     }
 
+    /// Загружает свежие сообщения из облачного канала выделенного бэкенда
+    suspend fun fetchRemoteMessages(buddyId: String) = withContext(Dispatchers.IO) {
+        val chId = channelId(buddyId)
+        try {
+            val url = URL("$backendBaseUrl/api/chat/$chId/messages")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            if (conn.responseCode in 200..299) {
+                val raw = conn.inputStream.bufferedReader().use { it.readText() }
+                val serverMsgs = json.decodeFromString<List<BroChatMessage>>(raw)
+                val local = loadLocalMessages(chId).toMutableList()
+                val existingIds = local.map { it.id }.toSet()
+                var hasNew = false
+                for (m in serverMsgs) {
+                    if (m.id !in existingIds) {
+                        local.add(m)
+                        hasNew = true
+                    }
+                }
+                if (hasNew) {
+                    local.sortBy { it.timestamp }
+                    saveLocalMessages(local, chId)
+                }
+            }
+            conn.disconnect()
+        } catch (_: Exception) {}
+    }
+
     fun getMessages(buddyId: String): List<BroChatMessage> {
         val chId = channelId(buddyId)
         val local = loadLocalMessages(chId).toMutableList()
@@ -608,6 +686,27 @@ class BroTrackerService(context: Context) {
         }
         saveOutbox(outbox)
 
+        // 1. Прямая отправка в облачный канал бэкенда
+        try {
+            val chatUrl = URL("$backendBaseUrl/api/chat/$chId/messages")
+            val chatConn = (chatUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                setRequestProperty("Accept", "application/json")
+                doOutput = true
+                connectTimeout = 8000
+                readTimeout = 8000
+            }
+            val body = json.encodeToString(msg)
+            OutputStreamWriter(chatConn.outputStream, "UTF-8").use {
+                it.write(body)
+                it.flush()
+            }
+            chatConn.responseCode
+            chatConn.disconnect()
+        } catch (_: Exception) {}
+
+        // 2. Обновление профиля
         if (profile != null) {
             syncMyProfile(profile)
         }

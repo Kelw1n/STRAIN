@@ -1,0 +1,20 @@
+{
+  "name": "strain-backend",
+  "version": "1.0.0",
+  "description": "Backend API for STRAIN fitness app (Bro Tracker & Workout Chat)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["strain", "fitness", "bro-tracker", "workout-chat"],
+  "author": "STRAIN Team",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

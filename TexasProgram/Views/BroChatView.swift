@@ -59,9 +59,12 @@ struct BroChatView: View {
             }
             .task {
                 reloadMessages()
+                await service.fetchRemoteMessages(for: buddy.broId)
+                reloadMessages()
                 // Циклическое обновление онлайна и сообщений
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    await service.fetchRemoteMessages(for: buddy.broId)
                     await service.refreshBuddies()
                     reloadMessages()
                 }

@@ -202,6 +202,15 @@ final class BroTrackerService {
         !myBroId.isEmpty && !myBroId.hasPrefix("bro_")
     }
 
+    // MARK: - Backend Server URL
+    var backendBaseUrl: String {
+        defaults.string(forKey: "strain_backend_url") ?? "https://strain-backend.onrender.com"
+    }
+
+    func setBackendUrl(_ url: String) {
+        defaults.set(url, forKey: "strain_backend_url")
+    }
+
     private init() {
         var id = defaults.string(forKey: keyMyBroId) ?? ""
         if id.isEmpty {
@@ -323,6 +332,24 @@ final class BroTrackerService {
             recentChatMessages: loadOutbox()
         )
 
+        // 1. Синхронизация с выделенным бэкендом STRAIN (без лимитов размера JSON)
+        var backendSynced = false
+        if let backendUrl = URL(string: "\(backendBaseUrl)/api/profile/\(myBroId)") {
+            var req = URLRequest(url: backendUrl)
+            req.httpMethod = "PUT"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.timeoutInterval = 10
+            if let bodyData = try? JSONEncoder().encode(myData) {
+                req.httpBody = bodyData
+                if let (_, response) = try? await URLSession.shared.data(for: req),
+                   let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) {
+                    backendSynced = true
+                    self.lastError = nil
+                }
+            }
+        }
+
+        // 2. Fallback на api.restful-api.dev
         let endpoint = "https://api.restful-api.dev/objects"
         do {
             if isConfirmedServerId {
@@ -346,7 +373,7 @@ final class BroTrackerService {
                     } else if httpRes.statusCode == 404 {
                         // Сервер удалил/сбросил объект (404 Not Found) — немедленный откат к созданию через POST
                         try await createRemoteProfile(myData: myData, endpoint: endpoint)
-                    } else {
+                    } else if !backendSynced {
                         self.lastError = "Ошибка сервера: HTTP \(httpRes.statusCode)"
                     }
                 }
@@ -355,7 +382,9 @@ final class BroTrackerService {
                 try await createRemoteProfile(myData: myData, endpoint: endpoint)
             }
         } catch {
-            self.lastError = error.localizedDescription
+            if !backendSynced {
+                self.lastError = error.localizedDescription
+            }
         }
     }
 
@@ -566,6 +595,18 @@ final class BroTrackerService {
     }
 
     private func fetchBuddy(id: String) async -> BroProfileData? {
+        // 1. Попытка загрузить с выделенного бэкенда STRAIN
+        if let url = URL(string: "\(backendBaseUrl)/api/profile/\(id)") {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 6
+            if let (data, response) = try? await URLSession.shared.data(for: req),
+               let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode),
+               let buddy = try? JSONDecoder().decode(BroProfileData.self, from: data) {
+                return buddy.broId.isEmpty ? buddy.withBroId(id) : buddy
+            }
+        }
+
+        // 2. Fallback на restful-api.dev
         guard let url = URL(string: "https://api.restful-api.dev/objects/\(id)") else { return nil }
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
@@ -614,6 +655,31 @@ final class BroTrackerService {
     func saveOutbox(_ msgs: [BroChatMessage]) {
         if let data = try? JSONEncoder().encode(msgs) {
             defaults.set(data, forKey: keyOutbox)
+        }
+    }
+
+    /// Загружает свежие сообщения из облачного канала выделенного бэкенда
+    func fetchRemoteMessages(for buddyId: String) async {
+        let chId = channelId(for: buddyId)
+        guard let url = URL(string: "\(backendBaseUrl)/api/chat/\(chId)/messages") else { return }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 5
+        guard let (data, response) = try? await URLSession.shared.data(for: req),
+              let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode),
+              let serverMsgs = try? JSONDecoder().decode([BroChatMessage].self, from: data) else {
+            return
+        }
+
+        var local = loadLocalMessages(channelId: chId)
+        let existingIds = Set(local.map { $0.id })
+        var hasNew = false
+        for m in serverMsgs where !existingIds.contains(m.id) {
+            local.append(m)
+            hasNew = true
+        }
+        if hasNew {
+            local.sort { $0.timestamp < $1.timestamp }
+            saveLocalMessages(local, channelId: chId)
         }
     }
 
@@ -667,6 +733,21 @@ final class BroTrackerService {
         }
         saveOutbox(outbox)
 
+        // 1. Прямая отправка в выделенный канал бэкенда
+        if let chatUrl = URL(string: "\(backendBaseUrl)/api/chat/\(chId)/messages") {
+            var chatReq = URLRequest(url: chatUrl)
+            chatReq.httpMethod = "POST"
+            chatReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            chatReq.timeoutInterval = 8
+            if let body = try? JSONEncoder().encode(msg) {
+                chatReq.httpBody = body
+                Task {
+                    _ = try? await URLSession.shared.data(for: chatReq)
+                }
+            }
+        }
+
+        // 2. Обновление профиля
         if let profile = profile {
             await syncMyProfile(profile: profile)
         }

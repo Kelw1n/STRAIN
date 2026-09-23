@@ -142,11 +142,14 @@ fun BroChatScreen(
         }
     }
 
-    // Автоматическое обновление сообщений и онлайна каждые 3 секунды
+    // Автоматическое обновление сообщений и онлайна каждые 2.5 секунды
     LaunchedEffect(buddy.broId) {
         messages = service.getMessages(buddy.broId)
+        service.fetchRemoteMessages(buddy.broId)
+        messages = service.getMessages(buddy.broId)
         while (true) {
-            delay(3000)
+            delay(2500)
+            service.fetchRemoteMessages(buddy.broId)
             service.refreshBuddies()
             messages = service.getMessages(buddy.broId)
         }
