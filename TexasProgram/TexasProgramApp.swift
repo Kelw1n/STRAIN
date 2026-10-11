@@ -23,6 +23,7 @@ struct TexasProgramApp: App {
     }
 
     private func handleDeepLink(_ url: URL) {
+        let path = url.absoluteString.lowercased()
         if path.contains("minus30") || path.contains("sub30") {
             restTimer.add(-30)
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()

@@ -89,9 +89,9 @@ fun WorkoutCompletionSummaryScreen(
     val haptic = LocalHapticFeedback.current
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    var workoutTitle by remember { mutableStateOf(workout.title) }
+    var workoutTitle by remember { mutableStateOf<String>(workout.fullTitle) }
     var workoutDescription by remember {
-        mutableStateOf(
+        mutableStateOf<String>(
             if (WorkoutSessionManager.noteText.isNotEmpty()) WorkoutSessionManager.noteText
             else profile.note(workout.week, workout.day.number)
         )

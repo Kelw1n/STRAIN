@@ -96,7 +96,7 @@ fun RebrnRestTimerCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         CircularProgressIndicator(
-                            progress = { timer.progress },
+                            progress = timer.progress,
                             modifier = Modifier.size(14.dp),
                             color = Theme.accent,
                             trackColor = Theme.accent.copy(alpha = 0.35f),
@@ -161,15 +161,17 @@ fun RebrnRestTimerCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            if (timer.totalSets > 0) {
-                                val displaySets = minOf(timer.totalSets, 8)
+                            val completedSetsCount = timer.completedSets
+                            val totalSetsCount = timer.totalSets
+                            if (totalSetsCount > 0) {
+                                val displaySets = if (totalSetsCount > 8) 8 else totalSetsCount
                                 for (idx in 0 until displaySets) {
                                     Box(
                                         modifier = Modifier
                                             .size(6.dp)
                                             .clip(CircleShape)
                                             .background(
-                                                if (idx < timer.completedSets) Theme.accent
+                                                if (idx < completedSetsCount) Theme.accent
                                                 else Color.White.copy(alpha = 0.25f)
                                             )
                                     )
