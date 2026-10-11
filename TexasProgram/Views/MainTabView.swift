@@ -242,8 +242,8 @@ struct TodayView: View {
                 } else {
                     let completedCount = profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise)
                     let details: String = {
-                        if let entry = profile.entries(week: workout.week, day: workout.day.number, exercise: exercise).first(where: { $0.index == index }) {
-                            return "\(Int(entry.weight)) кг × \(entry.reps)"
+                        if let item = profile.entries(week: workout.week, day: workout.day.number, exercise: exercise).first(where: { $0.index == index }) {
+                            return "\(Int(item.entry.weight)) кг × \(item.entry.reps)"
                         }
                         if case .kilograms(let kg) = exercise.load {
                             return "\(Int(kg)) кг × \(exercise.reps)"
@@ -816,8 +816,8 @@ struct DayDetailView: View {
                                 if added {
                                     let completedCount = profile.completedSets(week: week, day: day.number, exercise: exercise)
                                     let details: String = {
-                                        if let entry = profile.entries(week: week, day: day.number, exercise: exercise).first(where: { $0.index == dot }) {
-                                            return "\(Int(entry.weight)) кг × \(entry.reps)"
+                                        if let item = profile.entries(week: week, day: day.number, exercise: exercise).first(where: { $0.index == dot }) {
+                                            return "\(Int(item.entry.weight)) кг × \(item.entry.reps)"
                                         }
                                         if case .kilograms(let kg) = exercise.load {
                                             return "\(Int(kg)) кг × \(exercise.reps)"

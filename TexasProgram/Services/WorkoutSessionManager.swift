@@ -183,7 +183,7 @@ final class WorkoutSessionManager {
             )
             let completedCount = exercises[exIdx].sets.filter(\.isDone).count
             let totalCount = exercises[exIdx].sets.count
-            let details = "\(formatWeight(currentSet.weight)) × \(currentSet.reps)"
+            let details = "\(WeightFormat.kilograms(currentSet.weight)) × \(currentSet.reps)"
             restTimer.start(
                 TimeInterval(ex.restSeconds),
                 exerciseName: ex.prescription.name,
