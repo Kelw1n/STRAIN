@@ -239,13 +239,15 @@ struct LiquidGlassTabBar: View {
     }
 
     /// Подложка. Собранная Xcode 26 и запущенная на iOS 26 — настоящее системное
-    /// стекло, которое ещё и само пружинит под пальцем. Иначе — материал с бликами.
+    /// стекло, иначе — материал с бликами. Стекло без `.interactive()`: оно само
+    /// ловит касания и могло бы забрать у панели ведение пальцем, а на касание
+    /// и так отвечает линза.
     @ViewBuilder
     private var dock: some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             Color.clear
-                .glassEffect(.regular.tint(Color.black.opacity(0.35)).interactive(), in: Capsule(style: .continuous))
+                .glassEffect(.regular.tint(Color.black.opacity(0.35)), in: Capsule(style: .continuous))
         } else {
             materialDock
         }

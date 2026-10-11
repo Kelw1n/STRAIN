@@ -17,7 +17,9 @@ struct ActiveWorkoutSessionView: View {
                 // Основной контент тренировки
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        ForEach(Array(sessionManager.exercises.indices), id: \.self) { exIndex in
+                        // Идентичность по упражнению, а не по номеру — иначе перестановка
+                        // перерисовала бы карточки на месте вместо того, чтобы их подвинуть.
+                        ForEach(Array(sessionManager.exercises.enumerated()), id: \.element.id) { exIndex, _ in
                             exerciseCard(at: exIndex)
                         }
                     }
@@ -143,10 +145,6 @@ struct ActiveWorkoutSessionView: View {
             VStack(alignment: .leading, spacing: 14) {
                 // Шапка упражнения
                 HStack(spacing: 12) {
-                    Image(systemName: "circle.grid.2x3.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.25))
-
                     exerciseThumbnail(for: exerciseState.prescription)
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -180,6 +178,21 @@ struct ActiveWorkoutSessionView: View {
                             sessionManager.addSet(to: exIndex, profile: profile)
                         } label: {
                             Label("Добавить подход", systemImage: "plus")
+                        }
+                        // Порядок меняется только в этой тренировке, план остаётся прежним.
+                        if exIndex > 0 {
+                            Button {
+                                withAnimation(Motion.snappy) { sessionManager.moveExercise(from: exIndex, by: -1) }
+                            } label: {
+                                Label("Переместить выше", systemImage: "arrow.up")
+                            }
+                        }
+                        if exIndex < sessionManager.exercises.count - 1 {
+                            Button {
+                                withAnimation(Motion.snappy) { sessionManager.moveExercise(from: exIndex, by: 1) }
+                            } label: {
+                                Label("Переместить ниже", systemImage: "arrow.down")
+                            }
                         }
                     } label: {
                         Image(systemName: "ellipsis")

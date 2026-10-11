@@ -311,6 +311,14 @@ final class WorkoutSessionManager {
         )
     }
 
+    /// Сдвигает упражнение на `offset` позиций в пределах тренировки.
+    func moveExercise(from index: Int, by offset: Int) {
+        let target = index + offset
+        guard exercises.indices.contains(index), exercises.indices.contains(target) else { return }
+        exercises.swapAt(index, target)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
     func adjustWeight(exIdx: Int, sIdx: Int, delta: Double) {
         guard exIdx < exercises.count, sIdx < exercises[exIdx].sets.count else { return }
         exercises[exIdx].sets[sIdx].weight = max(0, exercises[exIdx].sets[sIdx].weight + delta)
