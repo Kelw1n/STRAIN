@@ -12,30 +12,44 @@ jobs:
     # Тесты и сборка на Xcode 16: проверяют, что запасной путь без iOS 26 SDK компилируется.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE="$(ls -d /Applications/Xcode_16*.app | sort -V | tail -n 1)"
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
       - name: Run tests
         shell: bash
         run: |
           set -euo pipefail
-          # Нужен конкретный симулятор: «Any iOS Simulator Device» для тестов не годится.
-          # Между platform и id новые Xcode вставляют arch, поэтому id ищем отдельно.
-          DEST="$(xcodebuild -showdestinations -project TexasProgram.xcodeproj -scheme TexasProgram 2>/dev/null \
-            | grep 'platform:iOS Simulator' | grep -v -i placeholder \
-            | sed -n 's/.*[{ ]id:\([^,}]*\).*/platform=iOS Simulator,id=\1/p' | head -n 1 || true)"
-          if [ -n "$DEST" ]; then
-            echo "Testing on $DEST"
+          # Берём любой доступный iPhone-симулятор этого Xcode. На macos-14 под
+          # Xcode 16.2 их не было вовсе, и тесты молча подменялись сборкой.
+          UDID="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          def iphones(tag):
+              return [d["udid"] for runtime, items in sorted(devices.items()) if tag in runtime
+                      for d in items if d["name"].startswith("iPhone")]
+          # Xcode 16 запускает рантаймы до iOS 18 включительно; iOS 26 ему не подходит.
+          ids = iphones("iOS-18") or iphones("iOS-17") or iphones("iOS")
+          print(ids[-1] if ids else "")
+          ')"
+          if [ -n "$UDID" ]; then
+            echo "Testing on simulator $UDID"
             xcodebuild test \
               -project TexasProgram.xcodeproj \
               -scheme TexasProgram \
-              -destination "$DEST" \
-              -destination-timeout 120 \
+              -destination "platform=iOS Simulator,id=$UDID" \
+              -destination-timeout 180 \
               CODE_SIGNING_ALLOWED=NO
           else
-            echo "No concrete iOS Simulator is installed; validating an unsigned simulator build instead."
+            echo "No iOS Simulator is installed; validating an unsigned simulator build instead."
+            xcrun simctl list runtimes || true
             xcodebuild build \
               -project TexasProgram.xcodeproj \
               -scheme TexasProgram \

@@ -46,6 +46,13 @@ object WorkoutSessionManager {
     var showingNoteSheet by mutableStateOf(false)
     var customRestTargetExerciseIndex by mutableStateOf<Int?>(null)
 
+    /// Время старта: длительность считаем от него, а не тиками — тики отстают,
+    /// когда система придерживает приложение в фоне.
+    private var startMillis = 0L
+
+    /// Профиль на момент старта: отмена возвращает к нему отметки дня, а не стирает день.
+    private var startSnapshot: ProgramProfile? = null
+
     private var timerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main)
 
@@ -74,6 +81,8 @@ object WorkoutSessionManager {
 
         activeWorkout = workout
         elapsedSeconds = 0
+        startMillis = System.currentTimeMillis()
+        startSnapshot = profile
         noteText = profile.note(workout.week, workout.day.number)
         showingZeroSetsAlert = false
         showingSummary = false
@@ -86,7 +95,8 @@ object WorkoutSessionManager {
             val defaultRest = if (presc.benchSession != null) 180 else profile.defaultRestSeconds
             val plannedWeight = extractPlannedWeight(presc, profile, workout)
             val plannedReps = extractPlannedReps(presc)
-            val setsCount = maxOf(presc.sets, 3)
+            // Сколько подходов в плане, столько и строк: два — значит два.
+            val setsCount = maxOf(presc.sets, 1)
 
             val sets = (0 until setsCount).map { sIdx ->
                 ActiveSetState(
@@ -145,6 +155,9 @@ object WorkoutSessionManager {
             )
             val completedCount = exercises[exIdx].sets.count { it.isDone }
             val totalCount = exercises[exIdx].sets.size
+            // Отмеченный подход сохраняем сразу: раньше он доезжал до профиля только
+            // на «Завершить», и закрытое приложение теряло всю тренировку.
+            onUpdateProfile(updated)
             val details = "${formatWeight(currentSet.weight)} кг × ${currentSet.reps}"
             restTimer.start(
                 seconds = ex.restSeconds.toLong(),
@@ -244,6 +257,7 @@ object WorkoutSessionManager {
 
         onUpdateProfile(next)
         stopTimer()
+        startSnapshot = null
         activeWorkout = null
         isPresented = false
         exercises.clear()
@@ -251,8 +265,11 @@ object WorkoutSessionManager {
 
     fun discardWorkout(profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
         val workout = activeWorkout ?: return
-        val updated = profile.resetDaySets(workout.week, workout.day.number)
-        onUpdateProfile(updated)
+        val snapshot = startSnapshot
+        if (snapshot != null) {
+            onUpdateProfile(profile.restoreDay(snapshot, workout.week, workout.day.number))
+        }
+        startSnapshot = null
 
         stopTimer()
         activeWorkout = null
@@ -265,9 +282,14 @@ object WorkoutSessionManager {
         timerJob = scope.launch {
             while (isActive) {
                 delay(1000)
-                elapsedSeconds++
+                refreshElapsed()
             }
         }
+    }
+
+    fun refreshElapsed(now: Long = System.currentTimeMillis()) {
+        if (activeWorkout == null) return
+        elapsedSeconds = maxOf(0L, (now - startMillis) / 1000).toInt()
     }
 
     private fun stopTimer() {

@@ -52,7 +52,7 @@ struct WorkoutHubView: View {
                     .padding(.top, 12)
                 }
                 .scrollIndicators(.hidden)
-                .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+                .screenBackground()
 
                 // Плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ» / «ПРОДОЛЖИТЬ»
                 if let focus {
@@ -167,37 +167,52 @@ struct WorkoutHubView: View {
                 .foregroundStyle(Color.white.opacity(0.45))
         }
         .padding(18)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
+    /// Календарь текущего месяца, как у REBRN: столбцы — дни недели с понедельника,
+    /// строки — недели. Закрытые дни залиты акцентом, прошедшие — серым,
+    /// будущие тренировочные обведены акцентом, сегодня подчёркнуто.
     private var monthDotsMatrix: some View {
-        let completedSet = Set(profile.completionLog.map { Calendar.current.startOfDay(for: $0.date) })
-        let today = Calendar.current.startOfDay(for: Date())
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let today = calendar.startOfDay(for: Date())
+        let done = Set(profile.completionLog.map { calendar.startOfDay(for: $0.date) })
+        let trainingWeekdays = Set(profile.weekdays)
+        let rows = Self.monthRows(containing: today, calendar: calendar)
 
-        return HStack(spacing: 7) {
-            ForEach(0..<4, id: \.self) { weekOffset in
-                VStack(spacing: 7) {
-                    ForEach(0..<7, id: \.self) { dayOffset in
-                        let daysAgo = (3 - weekOffset) * 7 + (6 - dayOffset)
-                        let targetDate = Calendar.current.date(byAdding: .day, value: -daysAgo, to: today) ?? today
-                        let isDone = completedSet.contains(targetDate)
-                        let isToday = targetDate == today
-
-                        Circle()
-                            .fill(isDone ? Theme.accent : Color.clear)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(
-                                        isToday ? Color.white : (isDone ? Theme.accent : Color.white.opacity(0.18)),
-                                        lineWidth: isToday ? 2 : 1.2
-                                    )
-                            )
-                            .frame(width: 10, height: 10)
+        return VStack(spacing: 7) {
+            ForEach(rows.indices, id: \.self) { row in
+                HStack(spacing: 7) {
+                    ForEach(0..<7, id: \.self) { column in
+                        MonthDot(
+                            date: rows[row][column],
+                            today: today,
+                            isDone: rows[row][column].map { done.contains($0) } ?? false,
+                            isTrainingDay: rows[row][column].map {
+                                trainingWeekdays.contains(calendar.component(.weekday, from: $0))
+                            } ?? false
+                        )
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Тренировок в этом месяце: \(rows.joined().compactMap { $0 }.filter { done.contains($0) }.count)")
+    }
+
+    /// Дни месяца по неделям; пустые клетки до первого и после последнего числа — `nil`.
+    static func monthRows(containing date: Date, calendar: Calendar) -> [[Date?]] {
+        guard let month = calendar.dateInterval(of: .month, for: date),
+              let days = calendar.range(of: .day, in: .month, for: date) else { return [] }
+        let firstWeekday = calendar.component(.weekday, from: month.start)
+        let leading = (firstWeekday - calendar.firstWeekday + 7) % 7
+        var cells: [Date?] = Array(repeating: nil, count: leading)
+        for offset in 0..<days.count {
+            cells.append(calendar.date(byAdding: .day, value: offset, to: month.start))
+        }
+        while cells.count % 7 != 0 { cells.append(nil) }
+        return stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<$0 + 7]) }
     }
 
     private func streakWord(_ count: Int) -> String {
@@ -247,7 +262,7 @@ struct WorkoutHubView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var programsCard: some View {
@@ -285,7 +300,7 @@ struct WorkoutHubView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     // MARK: - Превью сегодняшней тренировки
@@ -330,7 +345,7 @@ struct WorkoutHubView: View {
             }
         }
         .padding(18)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var restDayCard: some View {
@@ -348,6 +363,40 @@ struct WorkoutHubView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+/// Клетка календаря серии.
+private struct MonthDot: View {
+    let date: Date?
+    let today: Date
+    let isDone: Bool
+    let isTrainingDay: Bool
+
+    var body: some View {
+        ZStack {
+            if let date {
+                if isDone {
+                    Circle().fill(Theme.accent)
+                } else if date < today {
+                    Circle().fill(Color.white.opacity(0.16))
+                } else {
+                    Circle().strokeBorder(
+                        isTrainingDay ? Theme.accent : Color.white.opacity(0.18),
+                        lineWidth: 1.6
+                    )
+                }
+            }
+        }
+        .frame(width: 11, height: 11)
+        .overlay(alignment: .bottom) {
+            if date == today {
+                Capsule()
+                    .fill(Color.white)
+                    .frame(width: 8, height: 2)
+                    .offset(y: 5)
+            }
+        }
     }
 }

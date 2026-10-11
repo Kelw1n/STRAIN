@@ -408,9 +408,10 @@ data class ProgramProfile(
     fun loggedSets(week: Int, day: Int, exercise: ExercisePrescription): Set<Int> =
         (0 until maxOf(exercise.sets, 0)).filter { setEntry(week, day, exercise, it) != null }.toSet()
 
-    /// Записанные подходы упражнения по порядку номеров.
+    /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана:
+    /// без запаса подход, добавленный в тренировке кнопкой, в историю и графики не попадал.
     fun entries(week: Int, day: Int, exercise: ExercisePrescription): List<SetEntry> =
-        (0 until maxOf(exercise.sets, 0)).mapNotNull { setEntry(week, day, exercise, it) }
+        (0 until maxOf(exercise.sets, 0) + EXTRA_SET_ALLOWANCE).mapNotNull { setEntry(week, day, exercise, it) }
 
     // MARK: - История упражнения
 
@@ -933,6 +934,19 @@ data class ProgramProfile(
     }
 
     /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
+    /// Возвращает отметки дня к состоянию из `snapshot` (профиль на момент старта
+    /// тренировки). Выполненность дня и история не трогаются: отмена сессии по уже
+    /// закрытому дню раньше выбрасывала его из истории.
+    fun restoreDay(snapshot: ProgramProfile, week: Int, day: Int, today: LocalDate = LocalDate.now()): ProgramProfile {
+        val prefix = dayKey(week, day) + "|"
+        return copy(
+            setProgress = setProgress.filterNot { it.key.startsWith(prefix) } +
+                snapshot.setProgress.filter { it.key.startsWith(prefix) },
+            setLog = setLog.filterNot { it.key.startsWith(prefix) } +
+                snapshot.setLog.filter { it.key.startsWith(prefix) }
+        ).refreshCompletion(week, day, today)
+    }
+
     fun resetDaySets(week: Int, day: Int): ProgramProfile {
         val prefix = dayKey(week, day) + "|"
         val updatedProgress = setProgress.filterNot { it.key.startsWith(prefix) }
@@ -1153,6 +1167,9 @@ data class ProgramProfile(
     }
 
     companion object {
+        /// Сколько подходов сверх плана ищем в записях.
+        const val EXTRA_SET_ALLOWANCE = 12
+
         fun texas(input: ProgramInput, name: String = "Профиль") = ProgramProfile(
             name = name,
             programKind = TrainingProgramKind.TEXAS,

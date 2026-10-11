@@ -751,7 +751,7 @@ private fun SetRow(
             }
         }
 
-        // REBRN Cyan Чекбокс
+        // Отметка подхода: оранжевый кружок с белой галочкой, как у REBRN
         Box(
             modifier = Modifier
                 .size(38.dp)
@@ -773,10 +773,10 @@ private fun SetRow(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(if (currentSet.isDone) Color(0xFF00E5FF) else Color.Transparent)
+                    .background(if (currentSet.isDone) Theme.accent else Color.Transparent)
                     .border(
                         2.dp,
-                        if (currentSet.isDone) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.3f),
+                        if (currentSet.isDone) Theme.accent else Color.White.copy(alpha = 0.3f),
                         CircleShape
                     ),
                 contentAlignment = Alignment.Center
@@ -785,7 +785,7 @@ private fun SetRow(
                     Icon(
                         imageVector = Icons.Filled.Check,
                         contentDescription = "Готово",
-                        tint = Color.Black,
+                        tint = Color.White,
                         modifier = Modifier.size(16.dp)
                     )
                 }

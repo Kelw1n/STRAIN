@@ -7,6 +7,17 @@ struct TexasProgramApp: App {
     @State private var restTimer = RestTimer()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        // Крупные заголовки экранов у REBRN плотные и тяжёлые. Внешний вид
+        // навигации задаётся один раз при запуске — смена темы подхватится
+        // со следующего запуска.
+        if ThemeManager.shared.current.isRebrn {
+            let bar = UINavigationBar.appearance()
+            bar.largeTitleTextAttributes = [.font: UIFont.systemFont(ofSize: 34, weight: .heavy)]
+            bar.titleTextAttributes = [.font: UIFont.systemFont(ofSize: 17, weight: .bold)]
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
