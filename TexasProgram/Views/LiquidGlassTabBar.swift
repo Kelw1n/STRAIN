@@ -146,7 +146,7 @@ struct LiquidGlassTabBar: View {
         let index = Int(clampedX / itemWidth)
         let targetTab = tabs[min(max(index, 0), tabs.count - 1)]
         if targetTab != selectedTab {
-            UIImpactFeedbackGenerator(style: .selection).selectionChanged()
+            UISelectionFeedbackGenerator().selectionChanged()
             withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
                 selectedTab = targetTab
             }
