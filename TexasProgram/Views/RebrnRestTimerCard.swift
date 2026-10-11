@@ -15,9 +15,9 @@ struct RebrnRestTimerCard: View {
                             .overlay {
                                 Circle()
                                     .trim(from: 0, to: CGFloat(timer.progress))
-                                    .animation(.linear(duration: 0.2), value: timer.progress)
                                     .stroke(Theme.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
+                                    .animation(.linear(duration: 0.2), value: timer.progress)
                             }
                             .frame(width: 14, height: 14)
 
