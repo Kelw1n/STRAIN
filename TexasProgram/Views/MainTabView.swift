@@ -266,7 +266,7 @@ struct TodayView: View {
                 }
             }
             .sheet(isPresented: $showingBroTracker) {
-                BroTrackerView(profile: profile)
+                BroTrackerView(profile: profile, showsCloseButton: true)
             }
             .sheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)

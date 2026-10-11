@@ -25,15 +25,18 @@ struct LiquidGlassTabBar: View {
     @Environment(\.colorScheme) private var scheme
     @Namespace private var tabLensNamespace
 
+    private let barHeight: CGFloat = 62
+    private let lensHeight: CGFloat = 48
+
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             ForEach(MainTabItem.allCases) { tab in
                 let isSelected = selectedTab == tab
 
                 Button {
                     guard selectedTab != tab else { return }
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.76)) {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.74)) {
                         selectedTab = tab
                     }
                 } label: {
@@ -41,14 +44,14 @@ struct LiquidGlassTabBar: View {
                         // Скользящая линза под активной вкладкой
                         if isSelected {
                             Capsule(style: .continuous)
-                                .fill(scheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.08))
+                                .fill(Color.white.opacity(0.16))
                                 .overlay(
                                     Capsule(style: .continuous)
                                         .strokeBorder(
                                             LinearGradient(
                                                 colors: [
-                                                    .white.opacity(scheme == .dark ? 0.35 : 0.6),
-                                                    .white.opacity(0.05)
+                                                    Color.white.opacity(0.40),
+                                                    Color.white.opacity(0.08)
                                                 ],
                                                 startPoint: .topLeading,
                                                 endPoint: .bottomTrailing
@@ -57,40 +60,43 @@ struct LiquidGlassTabBar: View {
                                         )
                                 )
                                 .matchedGeometryEffect(id: "active_lens", in: tabLensNamespace)
-                                .shadow(color: Theme.accent.opacity(0.2), radius: 8, y: 2)
+                                .shadow(color: Theme.accent.opacity(0.35), radius: 8, y: 2)
+                                .frame(height: lensHeight)
+                                .padding(.horizontal, 2)
                         }
 
-                        // Иконка
+                        // Иконка вкладки
                         Image(systemName: tab.icon)
                             .font(.system(size: 20, weight: isSelected ? .bold : .medium))
-                            .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.secondary))
+                            .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.white.opacity(0.45)))
                             .scaleEffect(isSelected ? 1.08 : 1.0)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 48)
+                            .frame(height: lensHeight)
                     }
+                    .frame(height: lensHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .frame(height: barHeight)
         .background {
             Capsule(style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay {
                     Capsule(style: .continuous)
-                        .fill(scheme == .dark ? Color.black.opacity(0.70) : Color.white.opacity(0.40))
+                        .fill(Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.88))
                 }
                 .overlay {
                     Capsule(style: .continuous)
                         .strokeBorder(
                             LinearGradient(
                                 stops: [
-                                    .init(color: .white.opacity(scheme == .dark ? 0.32 : 0.65), location: 0.0),
-                                    .init(color: .white.opacity(0.08), location: 0.3),
-                                    .init(color: .clear, location: 0.65),
-                                    .init(color: .white.opacity(scheme == .dark ? 0.16 : 0.25), location: 1.0)
+                                    .init(color: Color.white.opacity(0.32), location: 0.0),
+                                    .init(color: Color.white.opacity(0.08), location: 0.3),
+                                    .init(color: Color.clear, location: 0.65),
+                                    .init(color: Color.white.opacity(0.18), location: 1.0)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -98,9 +104,10 @@ struct LiquidGlassTabBar: View {
                             lineWidth: 1
                         )
                 }
-                .shadow(color: Color.black.opacity(scheme == .dark ? 0.45 : 0.12), radius: 22, x: 0, y: 10)
+                .shadow(color: Color.black.opacity(0.60), radius: 24, x: 0, y: 12)
         }
-        .padding(.horizontal, 22)
-        .padding(.bottom, 6)
+        .frame(height: barHeight)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
 }

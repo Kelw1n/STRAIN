@@ -23,9 +23,11 @@ struct BroTrackerView: View {
     @State private var editingMyNameText = ""
     @State private var buddyToRename: BroProfileData?
     @State private var renameBuddyText = ""
+    var showsCloseButton: Bool = false
 
-    init(profile: ProgramProfile) {
+    init(profile: ProgramProfile, showsCloseButton: Bool = false) {
         self.profile = profile
+        self.showsCloseButton = showsCloseButton
     }
 
     var body: some View {
@@ -43,8 +45,10 @@ struct BroTrackerView: View {
             .navigationTitle("Бро-трекер")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Закрыть") { dismiss() }
+                if showsCloseButton {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Закрыть") { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {

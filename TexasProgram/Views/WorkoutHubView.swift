@@ -46,7 +46,7 @@ struct WorkoutHubView: View {
                             restDayCard
                         }
 
-                        Spacer(minLength: 90) // Место под кнопку «НАЧАТЬ ТРЕНИРОВКУ» и Liquid Glass Dock
+                        Spacer(minLength: 130) // Место под кнопку «НАЧАТЬ ТРЕНИРОВКУ» и Liquid Glass Dock
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
