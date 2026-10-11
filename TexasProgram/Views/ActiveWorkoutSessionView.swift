@@ -13,7 +13,7 @@ struct ActiveWorkoutSessionView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .bottom) {
                 // Основной контент тренировки
                 ScrollView {
                     LazyVStack(spacing: 16) {
@@ -23,10 +23,17 @@ struct ActiveWorkoutSessionView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
-                    .padding(.bottom, 60)
+                    .padding(.bottom, restTimer.isRunning ? 200 : 60)
                 }
                 .scrollIndicators(.hidden)
                 .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+
+                // Карточка отдыха в стиле REBRN
+                if restTimer.isRunning {
+                    RebrnRestTimerCard()
+                        .padding(.bottom, 16)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
 
                 // Всплывающее окно подтверждения при 0 отмеченных подходах или отмене
                 if sessionManager.showingZeroSetsAlert {
@@ -34,6 +41,7 @@ struct ActiveWorkoutSessionView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: restTimer.isRunning)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -95,7 +103,7 @@ struct ActiveWorkoutSessionView: View {
                 }
             }
             .sheet(isPresented: $sessionManager.showingSummary) {
-                workoutSummarySheet
+                WorkoutCompletionSummaryView(profile: profile, workout: workout)
             }
             .sheet(isPresented: $sessionManager.showingNoteSheet) {
                 workoutNoteSheet
@@ -395,68 +403,6 @@ struct ActiveWorkoutSessionView: View {
         }
     }
 
-    // MARK: - Экран завершения тренировки
-
-    private var workoutSummarySheet: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Spacer()
-
-                // Праздничная анимация
-                Image(systemName: "trophy.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(Theme.accentGradient)
-                    .shadow(color: Theme.accent.opacity(0.4), radius: 16)
-
-                VStack(spacing: 6) {
-                    Text("Тренировка завершена!")
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text(workout.fullTitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                // Статистика сессии
-                HStack(spacing: 16) {
-                    summaryStatCard(title: "Время", value: formatDuration(sessionManager.elapsedSeconds))
-                    summaryStatCard(title: "Объём", value: "\(Int(sessionManager.totalTonnage)) кг")
-                    summaryStatCard(title: "Плотность", value: "\(Int(sessionManager.density)) кг/мин")
-                }
-                .padding(.horizontal, 16)
-
-                Spacer()
-
-                Button {
-                    sessionManager.finishWorkout(profile: profile)
-                } label: {
-                    Text("Сохранить и закрыть")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-            }
-            .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
-        }
-    }
-
-    private func summaryStatCard(title: String, value: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-            Text(title)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
 
     // MARK: - Заметка
 

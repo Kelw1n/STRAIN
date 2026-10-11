@@ -23,11 +23,13 @@ struct TexasProgramApp: App {
     }
 
     private func handleDeepLink(_ url: URL) {
-        let path = url.absoluteString.lowercased()
-        if path.contains("add30") || path.contains("add") {
+        if path.contains("minus30") || path.contains("sub30") {
+            restTimer.add(-30)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        } else if path.contains("add30") || path.contains("add") {
             restTimer.add(30)
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        } else if path.contains("stop") || path.contains("finish") {
+        } else if path.contains("stop") || path.contains("finish") || path.contains("skip") {
             restTimer.stop()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } else if path.contains("bro") {

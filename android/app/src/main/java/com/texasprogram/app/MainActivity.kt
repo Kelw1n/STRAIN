@@ -90,6 +90,7 @@ import com.texasprogram.app.ui.SettingsScreen
 import com.texasprogram.app.ui.Theme
 import com.texasprogram.app.ui.TodayScreen
 import com.texasprogram.app.ui.RestTimerBar
+import com.texasprogram.app.ui.RebrnRestTimerCard
 import com.texasprogram.app.ui.pressable
 import com.texasprogram.app.service.WorkoutSessionManager
 import com.texasprogram.app.ui.ActiveWorkoutSessionScreen
@@ -316,7 +317,17 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                                 store.updateActive { it.toggleCompleted(workout.week, workout.day.number) }
                                 syncProfileInBackground()
                             } else {
-                                timer.start(profile.defaultRestSeconds.toLong())
+                                val completedCount = updated?.completedSets(workout.week, workout.day.number, exercise) ?: 0
+                                val weightVal = (exercise.load as? LoadPrescription.Kilograms)?.value
+                                val weightStr = if (weightVal != null) "${weightVal.toInt()} кг" else ""
+                                val details = if (weightStr.isNotEmpty()) "$weightStr × ${exercise.reps}" else "${exercise.reps} повт."
+                                timer.start(
+                                    seconds = profile.defaultRestSeconds.toLong(),
+                                    exerciseName = exercise.name,
+                                    setDetails = details,
+                                    completedSets = completedCount,
+                                    totalSets = exercise.sets
+                                )
                             }
                         }
                     },
@@ -382,7 +393,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                 MinimizedWorkoutBar(profile = profile)
             }
             if (timer.isRunning) {
-                RestTimerBar(timer, Modifier.padding(bottom = 8.dp))
+                RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
             }
             LiquidGlassTabBar(
                 selectedTab = tab,

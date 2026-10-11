@@ -74,8 +74,10 @@ struct MainTabView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                RestTimerBar()
-                    .animation(Motion.maybe(Motion.card, reduce: reduceMotion), value: restTimer.isRunning)
+                if restTimer.isRunning {
+                    RebrnRestTimerCard()
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
 
                 LiquidGlassTabBar(selectedTab: $selectedTab)
             }
@@ -238,7 +240,23 @@ struct TodayView: View {
                     restTimer.stop()
                     profile.toggleCompleted(week: workout.week, day: workout.day.number)
                 } else {
-                    restTimer.start(TimeInterval(profile.defaultRestSeconds))
+                    let completedCount = profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise).count
+                    let details: String = {
+                        if let entry = profile.entries(week: workout.week, day: workout.day.number, exercise: exercise).first(where: { $0.index == index }) {
+                            return "\(Int(entry.weight)) кг × \(entry.reps)"
+                        }
+                        if case .kilograms(let kg) = exercise.load {
+                            return "\(Int(kg)) кг × \(exercise.reps)"
+                        }
+                        return "\(exercise.reps) повт."
+                    }()
+                    restTimer.start(
+                        TimeInterval(profile.defaultRestSeconds),
+                        exerciseName: exercise.name,
+                        setDetails: details,
+                        completedSets: completedCount,
+                        totalSets: exercise.sets
+                    )
                 }
             },
             onHold: { index in
@@ -795,7 +813,25 @@ struct DayDetailView: View {
                             done: profile.completedSets(week: week, day: day.number, exercise: exercise),
                             onTap: { dot in
                                 let added = profile.toggleSet(week: week, day: day.number, exercise: exercise, index: dot)
-                                if added { restTimer.start(TimeInterval(profile.defaultRestSeconds)) }
+                                if added {
+                                    let completedCount = profile.completedSets(week: week, day: day.number, exercise: exercise).count
+                                    let details: String = {
+                                        if let entry = profile.entries(week: week, day: day.number, exercise: exercise).first(where: { $0.index == dot }) {
+                                            return "\(Int(entry.weight)) кг × \(entry.reps)"
+                                        }
+                                        if case .kilograms(let kg) = exercise.load {
+                                            return "\(Int(kg)) кг × \(exercise.reps)"
+                                        }
+                                        return "\(exercise.reps) повт."
+                                    }()
+                                    restTimer.start(
+                                        TimeInterval(profile.defaultRestSeconds),
+                                        exerciseName: exercise.name,
+                                        setDetails: details,
+                                        completedSets: completedCount,
+                                        totalSets: exercise.sets
+                                    )
+                                }
                             },
                             onHold: { dot in
                                 entryTarget = SetEntryTarget(week: week, day: day.number, exercise: exercise, index: dot)

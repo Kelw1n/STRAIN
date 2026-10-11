@@ -74,6 +74,7 @@ fun LiquidGlassTabBar(
     val tabs = remember { MainTabItem.entries }
     var isInteracting by remember { mutableStateOf(false) }
     var hoveredIndex by remember { mutableIntStateOf(tabs.indexOf(selectedTab).coerceAtLeast(0)) }
+    var dragXPx by remember { mutableStateOf<Float?>(null) }
 
     val activeIndex = if (isInteracting) hoveredIndex else tabs.indexOf(selectedTab).coerceAtLeast(0)
     val activeTab = tabs.getOrElse(activeIndex) { selectedTab }
@@ -98,10 +99,21 @@ fun LiquidGlassTabBar(
             val density = LocalDensity.current
             val itemWidthDp = with(density) { itemWidthPx.toDp() }
             val lensWidthDp = (itemWidthDp - 8.dp).coerceAtLeast(20.dp)
+            val lensWidthPx = with(density) { lensWidthDp.toPx() }
+            val lensPaddingPx = with(density) { 4.dp.toPx() }
+
+            val targetLensOffsetPx = if (isInteracting && dragXPx != null) {
+                (dragXPx!! - lensWidthPx / 2f).coerceIn(lensPaddingPx, totalWidthPx - lensWidthPx - lensPaddingPx)
+            } else {
+                activeIndex * itemWidthPx + lensPaddingPx
+            }
 
             val animatedLensOffsetPx by animateFloatAsState(
-                targetValue = activeIndex * itemWidthPx + with(density) { 4.dp.toPx() },
-                animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
+                targetValue = targetLensOffsetPx,
+                animationSpec = spring(
+                    dampingRatio = if (isInteracting) 0.82f else 0.72f,
+                    stiffness = if (isInteracting) 600f else 420f
+                ),
                 label = "lensOffset"
             )
 
@@ -140,6 +152,7 @@ fun LiquidGlassTabBar(
                         detectDragGestures(
                             onDragStart = { offset ->
                                 isInteracting = true
+                                dragXPx = offset.x
                                 val idx = ((offset.x / itemWidthPx).toInt()).coerceIn(0, tabs.size - 1)
                                 if (idx != hoveredIndex) {
                                     hoveredIndex = idx
@@ -148,6 +161,7 @@ fun LiquidGlassTabBar(
                             },
                             onDrag = { change, _ ->
                                 change.consume()
+                                dragXPx = change.position.x
                                 val idx = ((change.position.x / itemWidthPx).toInt()).coerceIn(0, tabs.size - 1)
                                 if (idx != hoveredIndex) {
                                     hoveredIndex = idx
@@ -160,9 +174,11 @@ fun LiquidGlassTabBar(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }
                                 isInteracting = false
+                                dragXPx = null
                             },
                             onDragCancel = {
                                 isInteracting = false
+                                dragXPx = null
                             }
                         )
                     }

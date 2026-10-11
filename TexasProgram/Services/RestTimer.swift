@@ -15,15 +15,23 @@ final class RestTimer {
     static let presets: [TimeInterval] = [180, 300, 600]
 
     private(set) var endsAt: Date?
+    private(set) var startedAt: Date?
     private(set) var total: TimeInterval = 0
     private(set) var remaining: TimeInterval = 0
+
+    // Контекст упражнения, после которого запущен отдых (стиль REBRN)
+    private(set) var exerciseName: String?
+    private(set) var setDetails: String?
+    private(set) var completedSets: Int = 0
+    private(set) var totalSets: Int = 0
+
     /// Включён ли звуковой сигнал и отсчёт таймера.
     var isSoundEnabled: Bool {
         get { UserDefaults.standard.object(forKey: "rest_timer_sound_enabled") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "rest_timer_sound_enabled") }
     }
+
     /// Почему не завелась Live Activity. Пусто — активность создана.
-    /// Нужно, чтобы отличать «система запретила» от «расширение молчит».
     private(set) var activityIssue: String?
 
     @ObservationIgnored private var ticker: Timer?
@@ -43,16 +51,46 @@ final class RestTimer {
         return String(format: "%d:%02d", value / 60, value % 60)
     }
 
-    func start(_ duration: TimeInterval) {
+    var elapsedSeconds: Int {
+        guard let startedAt else { return 0 }
+        return max(0, Int(Date().timeIntervalSince(startedAt)))
+    }
+
+    var elapsedText: String {
+        let val = elapsedSeconds
+        return String(format: "%d:%02d", val / 60, val % 60)
+    }
+
+    func start(
+        _ duration: TimeInterval,
+        exerciseName: String? = nil,
+        setDetails: String? = nil,
+        completedSets: Int = 0,
+        totalSets: Int = 0
+    ) {
         cancelNotification()
         let started = Date()
+        startedAt = started
         total = duration
         endsAt = started.addingTimeInterval(duration)
         remaining = duration
+
+        self.exerciseName = exerciseName
+        self.setDetails = setDetails
+        self.completedSets = completedSets
+        self.totalSets = totalSets
+
         lastTickSecond = nil
         scheduleTicker()
         scheduleNotification(after: duration)
-        startActivity(from: started, to: started.addingTimeInterval(duration))
+        startActivity(
+            from: started,
+            to: started.addingTimeInterval(duration),
+            exerciseName: exerciseName ?? "",
+            setDetails: setDetails ?? "",
+            completedSets: completedSets,
+            totalSets: totalSets
+        )
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
@@ -60,20 +98,30 @@ final class RestTimer {
         guard let endsAt else { return }
         cancelNotification()
         let updated = endsAt.addingTimeInterval(extra)
+        if updated <= Date() {
+            stop()
+            return
+        }
         self.endsAt = updated
-        total += extra
-        remaining = updated.timeIntervalSinceNow
+        total = max(15, total + extra)
+        remaining = max(0, updated.timeIntervalSinceNow)
         lastTickSecond = nil
         scheduleNotification(after: max(0, remaining))
         updateActivity(to: updated)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     func stop() {
         ticker?.invalidate()
         ticker = nil
         endsAt = nil
+        startedAt = nil
         remaining = 0
         total = 0
+        exerciseName = nil
+        setDetails = nil
+        completedSets = 0
+        totalSets = 0
         lastTickSecond = nil
         cancelNotification()
         endActivity()
@@ -109,12 +157,11 @@ final class RestTimer {
         ticker?.invalidate()
         ticker = nil
         endsAt = nil
+        startedAt = nil
         remaining = 0
         total = 0
         lastTickSecond = nil
         endActivity()
-        // Уведомление уже поставлено на этот момент, дублировать вибрацию не нужно,
-        // если приложение в фоне.
         if UIApplication.shared.applicationState == .active {
             if isSoundEnabled {
                 AudioServicesPlaySystemSound(1025) // Завершающий приятный аккорд
@@ -125,11 +172,14 @@ final class RestTimer {
 
     // MARK: - Live Activity
 
-    /// Отсчёт в Dynamic Island и на экране блокировки.
-    ///
-    /// Обновления содержимого не шлём каждую секунду: цифры рисует система по
-    /// диапазону дат, а ActivityKit ограничивает частоту обновлений.
-    private func startActivity(from start: Date, to end: Date) {
+    private func startActivity(
+        from start: Date,
+        to end: Date,
+        exerciseName: String,
+        setDetails: String,
+        completedSets: Int,
+        totalSets: Int
+    ) {
         endActivity()
         activityIssue = nil
 
@@ -138,7 +188,14 @@ final class RestTimer {
             return
         }
 
-        let state = RestActivityAttributes.ContentState(startedAt: start, endsAt: end)
+        let state = RestActivityAttributes.ContentState(
+            startedAt: start,
+            endsAt: end,
+            exerciseName: exerciseName,
+            setDetails: setDetails,
+            completedSets: completedSets,
+            totalSets: totalSets
+        )
         do {
             activity = try Activity.request(
                 attributes: RestActivityAttributes(),
@@ -146,7 +203,6 @@ final class RestTimer {
                 pushType: nil
             )
         } catch {
-            // Ошибку не глотаем: без неё пустой «остров» не отличить от несозданной активности.
             activityIssue = "Активность не создана: \(error.localizedDescription)"
         }
     }
@@ -155,7 +211,11 @@ final class RestTimer {
         guard let activity else { return }
         let state = RestActivityAttributes.ContentState(
             startedAt: activity.content.state.startedAt,
-            endsAt: end
+            endsAt: end,
+            exerciseName: exerciseName ?? activity.content.state.exerciseName,
+            setDetails: setDetails ?? activity.content.state.setDetails,
+            completedSets: completedSets,
+            totalSets: totalSets
         )
         Task {
             await activity.update(ActivityContent(state: state, staleDate: end))
@@ -176,8 +236,8 @@ final class RestTimer {
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
-            content.title = "Отдых закончен"
-            content.body = "Пора к следующему подходу."
+            content.title = self.exerciseName != nil ? "Отдых закончен: \(self.exerciseName!)" : "Отдых закончен"
+            content.body = self.setDetails != nil ? "Следующий подход: \(self.setDetails!). Пора!" : "Пора к следующему подходу."
             content.sound = .default
 
             let id = UUID().uuidString

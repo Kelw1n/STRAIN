@@ -40,6 +40,16 @@ class RestTimer(private val context: Context) {
         private set
     var nowMillis by mutableLongStateOf(System.currentTimeMillis())
         private set
+    var startedAtMillis by mutableLongStateOf(0L)
+        private set
+    var exerciseName by mutableStateOf<String?>(null)
+        private set
+    var setDetails by mutableStateOf<String?>(null)
+        private set
+    var completedSets by mutableIntStateOf(0)
+        private set
+    var totalSets by mutableIntStateOf(0)
+        private set
 
     private var toneGenerator: android.media.ToneGenerator? = null
     private var lastBeepSecond: Long = -1L
@@ -49,6 +59,12 @@ class RestTimer(private val context: Context) {
     val remainingSeconds: Long
         get() = if (!isRunning) 0 else ((endsAtMillis - nowMillis).coerceAtLeast(0) + 999) / 1000
 
+    val elapsedSeconds: Long
+        get() = if (!isRunning || startedAtMillis <= 0L) 0 else ((nowMillis - startedAtMillis) / 1000).coerceAtLeast(0)
+
+    val elapsedText: String
+        get() = "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60)
+
     val progress: Float
         get() = if (totalSeconds <= 0) 0f
         else (1f - remainingSeconds.toFloat() / totalSeconds.toFloat()).coerceIn(0f, 1f)
@@ -56,10 +72,22 @@ class RestTimer(private val context: Context) {
     val remainingText: String
         get() = "%d:%02d".format(remainingSeconds / 60, remainingSeconds % 60)
 
-    fun start(seconds: Long) {
+    fun start(
+        seconds: Long,
+        exerciseName: String? = null,
+        setDetails: String? = null,
+        completedSets: Int = 0,
+        totalSets: Int = 0
+    ) {
         totalSeconds = seconds
-        endsAtMillis = System.currentTimeMillis() + seconds * 1000
-        nowMillis = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        endsAtMillis = now + seconds * 1000
+        nowMillis = now
+        startedAtMillis = now
+        this.exerciseName = exerciseName
+        this.setDetails = setDetails
+        this.completedSets = completedSets
+        this.totalSets = totalSets
         lastBeepSecond = -1L
         ensureChannel()
         scheduleAlarm()
@@ -67,8 +95,16 @@ class RestTimer(private val context: Context) {
 
     fun add(extraSeconds: Long) {
         if (!isRunning) return
-        endsAtMillis += extraSeconds * 1000
-        totalSeconds += extraSeconds
+        val currentRemaining = remainingSeconds
+        val newRemaining = maxOf(0L, currentRemaining + extraSeconds)
+        if (newRemaining <= 0) {
+            stop()
+            return
+        }
+        val now = System.currentTimeMillis()
+        endsAtMillis = now + (newRemaining * 1000)
+        totalSeconds = maxOf(newRemaining, totalSeconds + extraSeconds)
+        nowMillis = now
         lastBeepSecond = -1L
         scheduleAlarm()
     }
@@ -76,6 +112,11 @@ class RestTimer(private val context: Context) {
     fun stop() {
         endsAtMillis = 0
         totalSeconds = 0
+        startedAtMillis = 0
+        exerciseName = null
+        setDetails = null
+        completedSets = 0
+        totalSets = 0
         lastBeepSecond = -1L
         cancelAlarm()
     }

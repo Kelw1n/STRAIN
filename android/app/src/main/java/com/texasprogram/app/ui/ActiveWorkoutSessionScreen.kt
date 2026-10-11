@@ -366,6 +366,16 @@ fun ActiveWorkoutSessionScreen(
             }
         }
 
+        // Плавающая карточка отдыха в стиле REBRN
+        if (restTimer.isRunning) {
+            RebrnRestTimerCard(
+                timer = restTimer,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
+            )
+        }
+
         // Всплывающее окно подтверждения удаления при 0 подходов
         if (WorkoutSessionManager.showingZeroSetsAlert) {
             ZeroSetsAlertOverlay(
@@ -375,15 +385,12 @@ fun ActiveWorkoutSessionScreen(
             )
         }
 
-        // Диалог завершения тренировки
+        // Экран завершения тренировки в стиле REBRN
         if (WorkoutSessionManager.showingSummary) {
-            WorkoutSummaryDialog(
-                workoutTitle = workout.fullTitle,
+            WorkoutCompletionSummaryScreen(
                 profile = profile,
-                onSaveAndClose = {
-                    WorkoutSessionManager.finishWorkout(profile, onUpdateProfile)
-                    WorkoutSessionManager.showingSummary = false
-                },
+                workout = workout,
+                onUpdateProfile = onUpdateProfile,
                 onDismiss = { WorkoutSessionManager.showingSummary = false }
             )
         }

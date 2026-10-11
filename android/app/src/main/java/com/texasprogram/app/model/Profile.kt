@@ -831,7 +831,13 @@ data class ProgramProfile(
 
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
-    fun toggleCompleted(week: Int, day: Int, today: LocalDate = LocalDate.now()): ProgramProfile {
+    fun toggleCompleted(
+        week: Int,
+        day: Int,
+        today: LocalDate = LocalDate.now(),
+        durationSeconds: Int? = null,
+        effort: String? = null
+    ): ProgramProfile {
         val done = !isCompleted(week, day)
         var next = setDayCompleted(week, day, done)
         // Возместил пропущенное — задержка снимается сама.
@@ -847,7 +853,7 @@ data class ProgramProfile(
         }
         next = next.syncSets(week, day, done)
         next = if (done) {
-            next.copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today)
+            next.copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today, durationSeconds, effort)
         } else {
             val key = dayKey(week, day)
             next.copy(completionLog = next.completionLog.filterNot { it.key == key })
@@ -857,7 +863,13 @@ data class ProgramProfile(
 
     /// Кладёт в историю дату и рабочие веса основных движений этого дня.
     /// Веса сохраняем на момент отметки: правка максимумов не должна менять прошлое.
-    private fun recordCompletion(week: Int, day: Int, today: LocalDate): ProgramProfile {
+    private fun recordCompletion(
+        week: Int,
+        day: Int,
+        today: LocalDate,
+        durationSeconds: Int? = null,
+        effort: String? = null
+    ): ProgramProfile {
         val key = dayKey(week, day)
         val exercises = workoutPlan.weeks.firstOrNull { it.number == week }
             ?.days?.firstOrNull { it.number == day }?.exercises.orEmpty()
@@ -876,7 +888,9 @@ data class ProgramProfile(
             deadlift = weight("Становая тяга"),
             actualSquat = actualWeight(week, day, listOf("Приседания", "Приседания со штангой")),
             actualBench = actualWeight(week, day, listOf("Жим лёжа")),
-            actualDeadlift = actualWeight(week, day, listOf("Становая тяга"))
+            actualDeadlift = actualWeight(week, day, listOf("Становая тяга")),
+            durationSeconds = durationSeconds,
+            effort = effort
         )
         return copy(completionLog = completionLog.filterNot { it.key == key } + record)
     }

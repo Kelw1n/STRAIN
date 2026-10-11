@@ -110,7 +110,9 @@ data class CompletionRecord(
     /// Что реально поднято в этот день, если подходы записывались.
     val actualSquat: Double? = null,
     val actualBench: Double? = null,
-    val actualDeadlift: Double? = null
+    val actualDeadlift: Double? = null,
+    val durationSeconds: Int? = null,
+    val effort: String? = null
 )
 
 data class ProgramInput(

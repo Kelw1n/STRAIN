@@ -117,7 +117,7 @@ final class WorkoutSessionManager {
         }
     }
 
-    func finishWorkout(profile: ProgramProfile) {
+    func finishWorkout(profile: ProgramProfile, customDuration: Int? = nil, effort: String? = nil) {
         guard let workout = activeWorkout else { return }
 
         // Записываем подходы
@@ -134,8 +134,16 @@ final class WorkoutSessionManager {
             }
         }
 
+        let finalDuration = customDuration ?? elapsedSeconds
+
         if !workout.isCompleted {
-            profile.toggleCompleted(week: workout.week, day: workout.day.number)
+            profile.toggleCompleted(
+                week: workout.week,
+                day: workout.day.number,
+                now: Date(),
+                durationSeconds: finalDuration,
+                effort: effort
+            )
         }
 
         stopTimer()
@@ -173,7 +181,16 @@ final class WorkoutSessionManager {
                 reps: currentSet.reps,
                 weight: currentSet.weight
             )
-            restTimer.start(TimeInterval(ex.restSeconds))
+            let completedCount = exercises[exIdx].sets.filter(\.isDone).count
+            let totalCount = exercises[exIdx].sets.count
+            let details = "\(formatWeight(currentSet.weight)) × \(currentSet.reps)"
+            restTimer.start(
+                TimeInterval(ex.restSeconds),
+                exerciseName: ex.prescription.name,
+                setDetails: details,
+                completedSets: completedCount,
+                totalSets: totalCount
+            )
         } else {
             profile.clearSetEntry(
                 week: workout.week,

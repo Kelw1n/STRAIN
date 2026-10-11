@@ -106,6 +106,8 @@ struct CompletionRecord: Codable, Equatable, Hashable, Sendable, Identifiable {
     var actualSquat: Double? = nil
     var actualBench: Double? = nil
     var actualDeadlift: Double? = nil
+    var durationSeconds: Int? = nil
+    var effort: String? = nil
 
     var id: String { key + "-" + String(Int(date.timeIntervalSince1970)) }
 }
@@ -1155,7 +1157,7 @@ final class ProgramProfile {
 
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
-    func toggleCompleted(week: Int, day: Int, now: Date = Date()) {
+    func toggleCompleted(week: Int, day: Int, now: Date = Date(), durationSeconds: Int? = nil, effort: String? = nil) {
         let done = !isCompleted(week: week, day: day)
         setDayCompleted(week: week, day: day, done)
         if carriesBenchWave(day: day) {
@@ -1170,10 +1172,11 @@ final class ProgramProfile {
         if done { skipped.removeAll { $0.week == week && $0.day == day && $0.isPeaking == isPeaking } }
         if done {
             lastCompletionDate = now
-            recordCompletion(week: week, day: day, now: now)
+            recordCompletion(week: week, day: day, now: now, durationSeconds: durationSeconds, effort: effort)
+            let dur = Double(durationSeconds ?? 3600)
             Task {
                 await HealthKitService.shared.saveWorkout(
-                    startDate: now.addingTimeInterval(-3600),
+                    startDate: now.addingTimeInterval(-dur),
                     endDate: now,
                     title: "\(self.name) · Неделя \(week), день \(day)"
                 )
@@ -1191,7 +1194,7 @@ final class ProgramProfile {
     }
 
     /// Кладёт в историю дату и рабочие веса основных движений этого дня.
-    private func recordCompletion(week: Int, day: Int, now: Date) {
+    private func recordCompletion(week: Int, day: Int, now: Date, durationSeconds: Int? = nil, effort: String? = nil) {
         let key = dayKey(week: week, day: day)
         completionLog.removeAll { $0.key == key }
 
@@ -1214,7 +1217,9 @@ final class ProgramProfile {
             deadlift: weight("Становая тяга"),
             actualSquat: actualWeight(week: week, day: day, exerciseNames: ["Приседания", "Приседания со штангой"]),
             actualBench: actualWeight(week: week, day: day, exerciseNames: ["Жим лёжа"]),
-            actualDeadlift: actualWeight(week: week, day: day, exerciseNames: ["Становая тяга"])
+            actualDeadlift: actualWeight(week: week, day: day, exerciseNames: ["Становая тяга"]),
+            durationSeconds: durationSeconds,
+            effort: effort
         ))
     }
 
@@ -1224,7 +1229,9 @@ final class ProgramProfile {
         guard isCompleted(week: week, day: day) else { return }
         let key = dayKey(week: week, day: day)
         let original = completionLog.first { $0.key == key }?.date ?? now
-        recordCompletion(week: week, day: day, now: original)
+        let prevDur = completionLog.first { $0.key == key }?.durationSeconds
+        let prevEffort = completionLog.first { $0.key == key }?.effort
+        recordCompletion(week: week, day: day, now: original, durationSeconds: prevDur, effort: prevEffort)
     }
 
     // MARK: - Отметка по подходам

@@ -143,8 +143,16 @@ object WorkoutSessionManager {
                 reps = currentSet.reps,
                 weight = currentSet.weight
             )
-            onUpdateProfile(updated)
-            restTimer.start(ex.restSeconds.toLong())
+            val completedCount = exercises[exIdx].sets.count { it.isDone }
+            val totalCount = exercises[exIdx].sets.size
+            val details = "${formatWeight(currentSet.weight)} кг × ${currentSet.reps}"
+            restTimer.start(
+                seconds = ex.restSeconds.toLong(),
+                exerciseName = ex.prescription.name,
+                setDetails = details,
+                completedSets = completedCount,
+                totalSets = totalCount
+            )
         } else {
             val cleared = profile.clearSetEntry(
                 week = workout.week,
@@ -200,7 +208,12 @@ object WorkoutSessionManager {
         customRestTargetExerciseIndex = null
     }
 
-    fun finishWorkout(profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
+    fun finishWorkout(
+        profile: ProgramProfile,
+        customDuration: Int? = null,
+        effort: String? = null,
+        onUpdateProfile: (ProgramProfile) -> Unit
+    ) {
         val workout = activeWorkout ?: return
         var next = profile
         for (ex in exercises) {
@@ -218,8 +231,15 @@ object WorkoutSessionManager {
             }
         }
 
+        val finalDuration = customDuration ?: elapsedSeconds
+
         if (!next.isCompleted(workout.week, workout.day.number)) {
-            next = next.toggleCompleted(workout.week, workout.day.number)
+            next = next.toggleCompleted(
+                week = workout.week,
+                day = workout.day.number,
+                durationSeconds = finalDuration,
+                effort = effort
+            )
         }
 
         onUpdateProfile(next)

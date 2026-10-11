@@ -26,6 +26,7 @@ struct LiquidGlassTabBar: View {
 
     @State private var isInteracting: Bool = false
     @State private var hoveredTab: MainTabItem? = nil
+    @State private var dragX: CGFloat? = nil
 
     private let barHeight: CGFloat = 62
     private let lensHeight: CGFloat = 48
@@ -44,55 +45,68 @@ struct LiquidGlassTabBar: View {
             let totalWidth = geometry.size.width
             let itemWidth = max(1, totalWidth / CGFloat(tabs.count))
             let lensWidth = itemWidth - 8
-            let lensOffset = CGFloat(currentActiveIndex) * itemWidth + 4
+
+            // Координата линзы: при перетаскивании плавно следует за пальцем,
+            // при отпускании точно центрируется на выбранной вкладке.
+            let targetOffset = CGFloat(currentActiveIndex) * itemWidth + 4
+            let lensOffset: CGFloat = {
+                if let drag = dragX {
+                    return min(max(4, drag - (lensWidth / 2)), totalWidth - lensWidth - 4)
+                }
+                return targetOffset
+            }()
 
             ZStack(alignment: .leading) {
                 // Фоновая подложка Liquid Glass капсулы
                 dockBackground
 
-                // Скользящая физическая линза (одна плавная форма с физикой пружины)
+                // Скользящая физическая стеклянная линза
                 Capsule(style: .continuous)
-                    .fill(Color.white.opacity(isInteracting ? 0.22 : 0.16))
+                    .fill(Color.white.opacity(isInteracting ? 0.24 : 0.16))
                     .overlay(
                         Capsule(style: .continuous)
                             .strokeBorder(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(isInteracting ? 0.55 : 0.40),
+                                        Color.white.opacity(isInteracting ? 0.60 : 0.40),
                                         Color.white.opacity(0.08)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 1
+                                lineWidth: 1.2
                             )
                     )
-                    .shadow(color: Theme.accent.opacity(isInteracting ? 0.55 : 0.35), radius: isInteracting ? 12 : 8, y: 2)
+                    .shadow(
+                        color: Theme.accent.opacity(isInteracting ? 0.60 : 0.35),
+                        radius: isInteracting ? 14 : 8,
+                        y: 2
+                    )
                     .frame(width: lensWidth, height: lensHeight)
                     .offset(x: lensOffset)
-                    .animation(.spring(response: 0.30, dampingFraction: 0.72), value: currentActiveIndex)
-                    .scaleEffect(isInteracting ? 1.05 : 1.0)
+                    .scaleEffect(isInteracting ? 1.06 : 1.0)
+                    .animation(
+                        isInteracting ? .interactiveSpring(response: 0.16, dampingFraction: 0.82) : .spring(response: 0.32, dampingFraction: 0.72),
+                        value: lensOffset
+                    )
                     .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isInteracting)
 
-                // Иконки вкладок
+                // Иконки вкладок (без захватывающих события Button, всё управляется док-жестом)
                 HStack(spacing: 0) {
                     ForEach(tabs) { tab in
                         let isActive = currentActiveTab == tab
 
-                        Button {
-                            selectTab(tab)
-                        } label: {
+                        ZStack {
                             Image(systemName: tab.icon)
                                 .font(.system(size: 20, weight: isActive ? .bold : .medium))
                                 .foregroundStyle(isActive ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.white.opacity(0.42)))
-                                .scaleEffect(isActive ? (isInteracting ? 1.20 : 1.10) : 1.0)
-                                .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isActive)
-                                .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isInteracting)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: lensHeight)
-                                .contentShape(Rectangle())
+                                .scaleEffect(isActive ? (isInteracting ? 1.22 : 1.10) : 1.0)
+                                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isActive)
+                                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isInteracting)
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: lensHeight)
+                        .contentShape(Rectangle())
                     }
                 }
             }
@@ -100,13 +114,13 @@ struct LiquidGlassTabBar: View {
             .scaleEffect(isInteracting ? 0.985 : 1.0)
             .animation(.spring(response: 0.30, dampingFraction: 0.75), value: isInteracting)
             .overlay(alignment: .topLeading) {
-                // Всплывающая стеклянная плашка с названием меню во время свайпа/зажатия
+                // Всплывающий стеклянный HUD-пузырёк с названием вкладки во время свайпа/зажатия
                 if isInteracting {
                     Text(currentActiveTab.rawValue)
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
                         .background {
                             Capsule()
                                 .fill(.ultraThinMaterial)
@@ -114,22 +128,23 @@ struct LiquidGlassTabBar: View {
                                     Capsule().fill(Color(red: 0.10, green: 0.10, blue: 0.12).opacity(0.92))
                                 }
                                 .overlay {
-                                    Capsule().strokeBorder(Theme.accent.opacity(0.5), lineWidth: 1)
+                                    Capsule().strokeBorder(Theme.accent.opacity(0.6), lineWidth: 1.2)
                                 }
-                                .shadow(color: Color.black.opacity(0.6), radius: 10, y: 5)
+                                .shadow(color: Color.black.opacity(0.65), radius: 12, y: 6)
                         }
-                        .offset(x: max(10, min(totalWidth - 90, lensOffset + (lensWidth / 2) - 40)), y: -42)
-                        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: currentActiveIndex)
+                        .offset(x: max(10, min(totalWidth - 96, lensOffset + (lensWidth / 2) - 44)), y: -46)
+                        .animation(.interactiveSpring(response: 0.16, dampingFraction: 0.82), value: lensOffset)
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                 }
             }
+            .contentShape(Capsule(style: .continuous))
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         handleDrag(at: value.location.x, totalWidth: totalWidth, itemWidth: itemWidth)
                     }
-                    .onEnded { _ in
-                        handleDragEnd()
+                    .onEnded { value in
+                        handleDragEnd(at: value.location.x, totalWidth: totalWidth, itemWidth: itemWidth)
                     }
             )
         }
@@ -166,38 +181,41 @@ struct LiquidGlassTabBar: View {
 
     private func handleDrag(at x: CGFloat, totalWidth: CGFloat, itemWidth: CGFloat) {
         if !isInteracting {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.7)) {
                 isInteracting = true
             }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
+
+        dragX = x
+
         let clampedX = min(max(x, 0), totalWidth - 1)
         let index = Int(clampedX / itemWidth)
         let targetTab = tabs[min(max(index, 0), tabs.count - 1)]
+
         if targetTab != currentActiveTab {
             UISelectionFeedbackGenerator().selectionChanged()
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.72)) {
                 hoveredTab = targetTab
             }
         }
     }
 
-    private func handleDragEnd() {
-        if let target = hoveredTab, target != selectedTab {
-            selectedTab = target
-        }
-        withAnimation(.spring(response: 0.30, dampingFraction: 0.75)) {
-            isInteracting = false
-            hoveredTab = nil
-        }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-    }
+    private func handleDragEnd(at x: CGFloat, totalWidth: CGFloat, itemWidth: CGFloat) {
+        let clampedX = min(max(x, 0), totalWidth - 1)
+        let index = Int(clampedX / itemWidth)
+        let finalTab = hoveredTab ?? tabs[min(max(index, 0), tabs.count - 1)]
 
-    private func selectTab(_ tab: MainTabItem) {
-        guard selectedTab != tab else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.74)) {
-            selectedTab = tab
+        if selectedTab != finalTab {
+            selectedTab = finalTab
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        } else {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) {
+            isInteracting = false
+            dragX = nil
             hoveredTab = nil
         }
     }
