@@ -24,13 +24,26 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      - name: Unit tests
+        working-directory: android
+        run: gradle testDebugUnitTest --stacktrace
+
+      # Release с R8: debug-сборка Compose на телефоне заметно лагает.
       - name: Build Android APK
         working-directory: android
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleRelease --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: strain-android-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: strain-android-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-report
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore

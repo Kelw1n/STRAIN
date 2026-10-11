@@ -18,8 +18,13 @@ android {
     }
 
     buildTypes {
+        // Ставим release: debug-сборка Compose заметно тормозит — без R8 код не
+        // оптимизирован, а отладочный режим мешает ART компилировать заранее.
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Подпись отладочным ключом: APK ставится вручную, магазина нет.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -60,6 +65,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    // Готовые профили Compose компилируются при установке APK, а не во время
+    // первых прокруток — иначе первые минуты интерфейс подтормаживает.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     testImplementation("junit:junit:4.13.2")
 }
