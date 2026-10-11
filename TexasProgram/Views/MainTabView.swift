@@ -240,7 +240,7 @@ struct TodayView: View {
                     restTimer.stop()
                     profile.toggleCompleted(week: workout.week, day: workout.day.number)
                 } else {
-                    let completedCount = profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise).count
+                    let completedCount = profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise)
                     let details: String = {
                         if let entry = profile.entries(week: workout.week, day: workout.day.number, exercise: exercise).first(where: { $0.index == index }) {
                             return "\(Int(entry.weight)) кг × \(entry.reps)"
@@ -814,7 +814,7 @@ struct DayDetailView: View {
                             onTap: { dot in
                                 let added = profile.toggleSet(week: week, day: day.number, exercise: exercise, index: dot)
                                 if added {
-                                    let completedCount = profile.completedSets(week: week, day: day.number, exercise: exercise).count
+                                    let completedCount = profile.completedSets(week: week, day: day.number, exercise: exercise)
                                     let details: String = {
                                         if let entry = profile.entries(week: week, day: day.number, exercise: exercise).first(where: { $0.index == dot }) {
                                             return "\(Int(entry.weight)) кг × \(entry.reps)"
