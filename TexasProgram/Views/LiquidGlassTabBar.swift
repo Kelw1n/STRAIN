@@ -117,7 +117,8 @@ struct LiquidGlassTabBar: View {
         }
         // Растяжение по скорости: быстро ведёшь — капля вытягивается и сплющивается.
         let stretch = reduceMotion ? 0 : min(abs(touch.velocity) / 2600, 0.24)
-        let width = (layout.item + 6) * (1 + stretch)
+        // Поднятая линза шире вкладки, как у REBRN: под её краем видно соседей.
+        let width = (layout.item * 1.24) * (1 + stretch)
         let height = (barHeight + overhang * 2) * (1 - stretch * 0.4)
         let half = width / 2
         let midX = min(max(touch.x, half + 2), layout.width - half - 2)
@@ -126,22 +127,22 @@ struct LiquidGlassTabBar: View {
 
     // MARK: - Панель
 
+    /// Собрано Xcode 26 и запущено на iOS 26 — линза из системного стекла.
+    private var usesSystemGlass: Bool {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) { return true }
+        #endif
+        return false
+    }
+
     private func bar(_ layout: Layout) -> some View {
         let lens = lens(in: layout)
         return ZStack {
-            dock
-
-            iconRow(filled: false)
-                .mask { hole(for: lens) }
-
-            lensBody(lens)
-
-            iconRow(filled: true)
-                .scaleEffect(
-                    lens.lifted ? magnification : 1,
-                    anchor: UnitPoint(x: layout.width > 0 ? lens.midX / layout.width : 0.5, y: 0.5)
-                )
-                .mask { lensShape(lens) }
+            if usesSystemGlass {
+                systemGlassLayers(lens)
+            } else {
+                drawnLayers(lens, layout: layout)
+            }
         }
         .frame(width: layout.width, height: barHeight)
         .contentShape(Capsule(style: .continuous))
@@ -173,6 +174,69 @@ struct LiquidGlassTabBar: View {
     }
 
     // MARK: - Слои
+
+    /// iOS 26: линза — прозрачное системное стекло поверх иконок. Оно само
+    /// преломляет то, что под ним, с радужной каймой на краю — как у REBRN.
+    /// Подложка при этом матовая: стекло не умеет смотреть сквозь другое стекло.
+    @ViewBuilder
+    private func systemGlassLayers(_ lens: Lens) -> some View {
+        let active = touch?.index ?? selectedTab.index
+        materialDock
+
+        // В покое под выбранной вкладкой тёмная таблетка; поднятая линза её заменяет.
+        Capsule(style: .continuous)
+            .fill(Color.black.opacity(0.55))
+            .overlay(Capsule(style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+            .frame(width: lens.width, height: lens.height)
+            .position(x: lens.midX, y: barHeight / 2)
+            .opacity(lens.lifted ? 0 : 1)
+
+        HStack(spacing: 0) {
+            ForEach(tabs) { tab in
+                let isActive = tab.index == active
+                Image(systemName: isActive ? tab.selectedIcon : tab.icon)
+                    .font(.system(size: 21, weight: isActive ? .semibold : .regular))
+                    .foregroundStyle(Color.white.opacity(isActive ? 1 : 0.55))
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: barHeight)
+            }
+        }
+
+        glassLens(lens)
+    }
+
+    @ViewBuilder
+    private func glassLens(_ lens: Lens) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .frame(width: lens.width, height: lens.height)
+                .glassEffect(.clear, in: Capsule(style: .continuous))
+                .opacity(lens.lifted ? 1 : 0)
+                .position(x: lens.midX, y: barHeight / 2)
+                .allowsHitTesting(false)
+        }
+        #endif
+    }
+
+    /// До iOS 26 линза нарисована: матовое стекло с бликом и увеличенные иконки под ней.
+    @ViewBuilder
+    private func drawnLayers(_ lens: Lens, layout: Layout) -> some View {
+        materialDock
+
+        iconRow(filled: false)
+            .mask { hole(for: lens) }
+
+        lensBody(lens)
+
+        iconRow(filled: true)
+            .scaleEffect(
+                lens.lifted ? magnification : 1,
+                anchor: UnitPoint(x: layout.width > 0 ? lens.midX / layout.width : 0.5, y: 0.5)
+            )
+            .mask { lensShape(lens) }
+    }
 
     private func iconRow(filled: Bool) -> some View {
         HStack(spacing: 0) {
@@ -238,30 +302,12 @@ struct LiquidGlassTabBar: View {
         .position(x: lens.midX, y: barHeight / 2)
     }
 
-    /// Подложка. Собранная Xcode 26 и запущенная на iOS 26 — настоящее системное
-    /// стекло, иначе — материал с бликами. Стекло без `.interactive()`: оно само
-    /// ловит касания и могло бы забрать у панели ведение пальцем, а на касание
-    /// и так отвечает линза.
-    @ViewBuilder
-    private var dock: some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            Color.clear
-                .glassEffect(.regular.tint(Color.black.opacity(0.35)), in: Capsule(style: .continuous))
-        } else {
-            materialDock
-        }
-        #else
-        materialDock
-        #endif
-    }
-
     private var materialDock: some View {
         Capsule(style: .continuous)
             .fill(.ultraThinMaterial)
             .overlay {
                 Capsule(style: .continuous)
-                    .fill(Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.86))
+                    .fill(Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.72))
             }
             .overlay {
                 Capsule(style: .continuous)

@@ -6,6 +6,8 @@ struct TexasProgramApp: App {
     /// Таймер живёт над экранами: отсчёт не должен сбрасываться при переходе по вкладкам.
     @State private var restTimer = RestTimer()
     @Environment(\.scenePhase) private var scenePhase
+    /// Анимация открытия — только при холодном запуске, не при возврате из фона.
+    @State private var showsLaunchReveal = true
 
     init() {
         // Крупные заголовки экранов у REBRN плотные и тяжёлые. Внешний вид
@@ -20,11 +22,17 @@ struct TexasProgramApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(restTimer)
-                .onOpenURL { url in
-                    handleDeepLink(url)
+            ZStack {
+                RootView()
+                    .environment(restTimer)
+                    .onOpenURL { url in
+                        handleDeepLink(url)
+                    }
+                if showsLaunchReveal {
+                    LaunchReveal { showsLaunchReveal = false }
+                        .zIndex(10)
                 }
+            }
         }
         .modelContainer(for: [ProgramProfile.self])
         .onChange(of: scenePhase) { _, phase in
