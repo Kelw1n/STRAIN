@@ -171,54 +171,17 @@ struct TodayView: View {
                                 .appearIn(3)
                         }
 
-                        // Вспомогательные упражнения — из дня программы, жим — из волны.
+                        // План тренировки на сегодня (компактный превью-обзор)
                         let exercises = profile.exercises(for: focus)
-                        ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
-                            ExerciseCard(
-                                exercise: exercise,
-                                onOpenBench: onOpenBench,
-                                sets: tracker(for: exercise, in: focus),
-                                onOpenHistory: { historyFor = exercise.name },
-                                hint: profile.accessoryHint(for: exercise, week: focus.week, day: focus.day.number)
-                            )
-                            .contextMenu {
-                                Button {
-                                    customizing = focus
-                                } label: {
-                                    Label("Настроить / Заменить упражнение", systemImage: "pencil.line")
-                                }
-                                Button {
-                                    historyFor = exercise.name
-                                } label: {
-                                    Label("История подходов", systemImage: "chart.xyaxis.line")
-                                }
-                            }
-                            .appearIn(index + 4)
-                            .softScroll()
-                        }
-
-                        RestTimerLauncher(profile: profile)
-                            .appearIn(exercises.count + 4)
-
-                        AsPlannedButton(profile: profile, week: focus.week, day: focus.day.number)
-                            .appearIn(exercises.count + 5)
-
-                        CompleteButton(isCompleted: focus.isCompleted) {
-                            withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
-                                profile.toggleCompleted(week: focus.week, day: focus.day.number)
-                            }
-                        }
-                        .padding(.top, 4)
-                        .appearIn(exercises.count + 5)
-
-                        AutoregulationCard(profile: profile, week: focus.week, day: focus.day)
-                            .appearIn(exercises.count + 6)
-                        StallNotice(profile: profile).appearIn(exercises.count + 6)
-                        WorkoutNoteCard(profile: profile, week: focus.week, day: focus.day.number)
-                            .appearIn(exercises.count + 6)
-                        SkipButton(profile: profile, week: focus.week, day: focus.day.number)
-                            .padding(.top, 2)
-                            .appearIn(exercises.count + 6)
+                        TodayWorkoutPreviewCard(
+                            profile: profile,
+                            workout: focus,
+                            exercises: exercises,
+                            onOpenBench: onOpenBench,
+                            onOpenHistory: { historyFor = $0 },
+                            onCustomize: { customizing = focus }
+                        )
+                        .appearIn(3)
                     } else {
                         finished.appearIn(0)
                     }
@@ -229,42 +192,6 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle("Сегодня")
-            .toolbar {
-                if let focus {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            customizing = focus
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(profile.edits(week: focus.week, day: focus.day.number).isEmpty
-                                                 ? AnyShapeStyle(Theme.accent)
-                                                 : AnyShapeStyle(Theme.warning))
-                        }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel("Свои упражнения")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 12) {
-                        Button {
-                            showingBroTracker = true
-                        } label: {
-                            Image(systemName: "person.2.fill")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(Theme.accent)
-                        }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel("Бро-трекер")
-
-                        Button(action: onSettings) {
-                            Image(systemName: "slider.horizontal.3").font(.body.weight(.semibold))
-                        }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel("Настройки программы")
-                    }
-                }
-            }
             .sheet(isPresented: $showingBroTracker) {
                 BroTrackerView(profile: profile, showsCloseButton: true)
             }
@@ -421,6 +348,138 @@ struct TodayView: View {
             .frame(maxWidth: .infinity)
         }
         .padding(.top, 40)
+    }
+}
+
+// MARK: - Компактный план тренировки на сегодня
+
+struct TodayWorkoutPreviewCard: View {
+    @Bindable var profile: ProgramProfile
+    let workout: ScheduledWorkout
+    let exercises: [ExercisePrescription]
+    var onOpenBench: ((Int) -> Void)?
+    var onOpenHistory: (String) -> Void
+    var onCustomize: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        CardView(padding: 18, spacing: 14) {
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "list.bullet.clipboard.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                    Text("План на сегодня")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer()
+
+                Text("\(exercises.count) упражнений")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.06), in: Capsule())
+
+                Menu {
+                    Button {
+                        onCustomize()
+                    } label: {
+                        Label("Настроить упражнения", systemImage: "pencil.line")
+                    }
+                    Button {
+                        withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
+                            profile.toggleCompleted(week: workout.week, day: workout.day.number)
+                        }
+                    } label: {
+                        Label(workout.isCompleted ? "Снять отметку" : "Отметить выполненной вручную",
+                              systemImage: workout.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
+                    }
+                    Button(role: .destructive) {
+                        withAnimation(Motion.snappy) {
+                            profile.skip(week: workout.week, day: workout.day.number)
+                        }
+                    } label: {
+                        Label("Пропустить тренировку", systemImage: "forward.end")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                        .padding(2)
+                }
+            }
+
+            Divider().opacity(0.25)
+
+            VStack(spacing: 10) {
+                ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
+                    Button {
+                        if let session = exercise.benchSession, let onOpenBench {
+                            onOpenBench(session)
+                        } else {
+                            onOpenHistory(exercise.name)
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(exercise.benchSession != nil ? Theme.record.opacity(0.18) : Theme.accent.opacity(0.14))
+                                    .frame(width: 32, height: 32)
+                                Text("\(index + 1)")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(exercise.benchSession != nil ? Theme.record : Theme.accent)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(exercise.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Text("\(exercise.sets) подходов × \(exercise.reps)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            let hint = profile.accessoryHint(for: exercise, week: workout.week, day: workout.day.number)
+                            if let weight = hint?.weight {
+                                Text("\(formatWeight(weight)) кг")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(Theme.accent)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4)
+                                    .background(Theme.accent.opacity(0.12), in: Capsule())
+                            } else {
+                                Text(exercise.load.displayText)
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.white.opacity(0.06), in: Capsule())
+                            }
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(Color.white.opacity(0.25))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < exercises.count - 1 {
+                        Divider().opacity(0.12).padding(.leading, 44)
+                    }
+                }
+            }
+        }
+    }
+
+    private func formatWeight(_ weight: Double) -> String {
+        weight == weight.rounded() ? String(Int(weight)) : String(format: "%.1f", weight)
     }
 }
 
