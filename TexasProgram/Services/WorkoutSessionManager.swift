@@ -192,7 +192,7 @@ final class WorkoutSessionManager {
     }
 
     func addSet(to exIdx: Int, profile: ProgramProfile) {
-        guard exIdx < exercises.count, let workout = activeWorkout else { return }
+        guard exIdx < exercises.count, activeWorkout != nil else { return }
         let existingSets = exercises[exIdx].sets
         let lastWeight = existingSets.last?.weight ?? 50.0
         let lastReps = existingSets.last?.reps ?? 10

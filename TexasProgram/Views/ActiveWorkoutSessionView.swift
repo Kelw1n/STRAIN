@@ -119,201 +119,201 @@ struct ActiveWorkoutSessionView: View {
 
     @ViewBuilder
     private func exerciseCard(at exIndex: Int) -> some View {
-        guard exIndex < sessionManager.exercises.count else { EmptyView() }
-        let exerciseState = sessionManager.exercises[exIndex]
+        if exIndex < sessionManager.exercises.count {
+            let exerciseState = sessionManager.exercises[exIndex]
 
-        VStack(alignment: .leading, spacing: 14) {
-            // Шапка упражнения
-            HStack(spacing: 12) {
-                Image(systemName: "circle.grid.2x3.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.white.opacity(0.25))
+            VStack(alignment: .leading, spacing: 14) {
+                // Шапка упражнения
+                HStack(spacing: 12) {
+                    Image(systemName: "circle.grid.2x3.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.white.opacity(0.25))
 
-                exerciseThumbnail(for: exerciseState.prescription)
+                    exerciseThumbnail(for: exerciseState.prescription)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(exerciseState.prescription.name)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 4)
-
-                // Кнопка времени отдыха
-                Button {
-                    sessionManager.customRestTargetExerciseIndex = exIndex
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "timer")
-                            .font(.system(size: 12, weight: .bold))
-                        Text(formatRestTime(exerciseState.restSeconds))
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .monospacedDigit()
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(exerciseState.prescription.name)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
                     }
-                    .foregroundStyle(Color.white.opacity(0.85))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.10), in: Capsule())
+
+                    Spacer(minLength: 4)
+
+                    // Кнопка времени отдыха
+                    Button {
+                        sessionManager.customRestTargetExerciseIndex = exIndex
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "timer")
+                                .font(.system(size: 12, weight: .bold))
+                            Text(formatRestTime(exerciseState.restSeconds))
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                        }
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.10), in: Capsule())
+                    }
+
+                    Menu {
+                        Button {
+                            sessionManager.addSet(to: exIndex, profile: profile)
+                        } label: {
+                            Label("Добавить подход", systemImage: "plus")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color.white.opacity(0.5))
+                            .frame(width: 28, height: 28)
+                    }
                 }
 
-                Menu {
+                // Таблица подходов
+                VStack(spacing: 8) {
+                    // Заголовки колонок
+                    HStack(spacing: 8) {
+                        Text("#")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.white.opacity(0.4))
+                            .frame(width: 28, alignment: .center)
+
+                        Text("БЫЛО")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.white.opacity(0.4))
+                            .frame(width: 66, alignment: .center)
+
+                        Text("КГ")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.white.opacity(0.4))
+                            .frame(maxWidth: .infinity, alignment: .center)
+
+                        Text("ПОВТ")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.white.opacity(0.4))
+                            .frame(maxWidth: .infinity, alignment: .center)
+
+                        Text("")
+                            .frame(width: 38)
+                    }
+                    .padding(.horizontal, 4)
+
+                    // Строки подходов
+                    ForEach(Array(exerciseState.sets.indices), id: \.self) { setIndex in
+                        setRow(exerciseIndex: exIndex, setIndex: setIndex)
+                    }
+
+                    // Кнопка «+ Добавить подход»
                     Button {
                         sessionManager.addSet(to: exIndex, profile: profile)
                     } label: {
-                        Label("Добавить подход", systemImage: "plus")
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .bold))
+                            Text("Добавить подход")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.5))
-                        .frame(width: 28, height: 28)
+                    .padding(.top, 4)
                 }
             }
-
-            // Таблица подходов
-            VStack(spacing: 8) {
-                // Заголовки колонок
-                HStack(spacing: 8) {
-                    Text("#")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.4))
-                        .frame(width: 28, alignment: .center)
-
-                    Text("БЫЛО")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.4))
-                        .frame(width: 66, alignment: .center)
-
-                    Text("КГ")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.4))
-                        .frame(maxWidth: .infinity, alignment: .center)
-
-                    Text("ПОВТ")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.4))
-                        .frame(maxWidth: .infinity, alignment: .center)
-
-                    Text("")
-                        .frame(width: 38)
-                }
-                .padding(.horizontal, 4)
-
-                // Строки подходов
-                ForEach(Array(exerciseState.sets.indices), id: \.self) { setIndex in
-                    setRow(exerciseIndex: exIndex, setIndex: setIndex)
-                }
-
-                // Кнопка «+ Добавить подход»
-                Button {
-                    sessionManager.addSet(to: exIndex, profile: profile)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 13, weight: .bold))
-                        Text("Добавить подход")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundStyle(Color.white.opacity(0.85))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .padding(.top, 4)
-            }
+            .padding(16)
+            .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+            )
         }
-        .padding(16)
-        .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-        )
     }
 
     // MARK: - Строка подхода
 
     @ViewBuilder
     private func setRow(exerciseIndex exIdx: Int, setIndex sIdx: Int) -> some View {
-        guard exIdx < sessionManager.exercises.count, sIdx < sessionManager.exercises[exIdx].sets.count else {
-            EmptyView()
-        }
-        let currentSet = sessionManager.exercises[exIdx].sets[sIdx]
-        let isCurrent = !currentSet.isDone && sessionManager.exercises[exIdx].sets.prefix(sIdx).allSatisfy(\.isDone)
+        if exIdx < sessionManager.exercises.count && sIdx < sessionManager.exercises[exIdx].sets.count {
+            let currentSet = sessionManager.exercises[exIdx].sets[sIdx]
+            let isCurrent = !currentSet.isDone && sessionManager.exercises[exIdx].sets.prefix(sIdx).allSatisfy(\.isDone)
 
-        HStack(spacing: 8) {
-            // Индикатор активного подхода + Номер
-            HStack(spacing: 4) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(isCurrent ? Theme.accent : Color.clear)
-                    .frame(width: 3, height: 16)
+            HStack(spacing: 8) {
+                // Индикатор активного подхода + Номер
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(isCurrent ? Theme.accent : Color.clear)
+                        .frame(width: 3, height: 16)
 
-                Text("\(sIdx + 1)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(isCurrent ? Theme.accent : Color.white.opacity(0.75))
-            }
-            .frame(width: 28, alignment: .center)
-
-            // «БЫЛО»
-            Text(currentSet.previousText)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(Color.white.opacity(0.45))
-                .frame(width: 66, alignment: .center)
-                .lineLimit(1)
-
-            // «КГ» (Интерактивное поле / Степер)
-            Menu {
-                Button("+5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 5) }
-                Button("+2.5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 2.5) }
-                Button("+1 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 1) }
-                Divider()
-                Button("-1 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -1) }
-                Button("-2.5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -2.5) }
-                Button("-5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -5) }
-            } label: {
-                Text(WeightFormat.kilogramsPrecise(currentSet.weight))
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-
-            // «ПОВТ»
-            Menu {
-                Button("+1 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 1) }
-                Button("+2 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 2) }
-                Divider()
-                Button("-1 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -1) }
-                Button("-2 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -2) }
-            } label: {
-                Text("\(currentSet.reps)")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-
-            // Чекбокс выполнения подхода (в стиле REBRN)
-            Button {
-                sessionManager.toggleSetDone(exIdx: exIdx, sIdx: sIdx, profile: profile, restTimer: restTimer)
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(currentSet.isDone ? Color.cyan : Color.clear)
-                        .strokeBorder(currentSet.isDone ? Color.cyan : Color.white.opacity(0.3), lineWidth: 2)
-                        .frame(width: 28, height: 28)
-
-                    if currentSet.isDone {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.black)
-                    }
+                    Text("\(sIdx + 1)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(isCurrent ? Theme.accent : Color.white.opacity(0.75))
                 }
-                .frame(width: 38, height: 38)
+                .frame(width: 28, alignment: .center)
+
+                // «БЫЛО»
+                Text(currentSet.previousText)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.45))
+                    .frame(width: 66, alignment: .center)
+                    .lineLimit(1)
+
+                // «КГ» (Интерактивное поле / Степер)
+                Menu {
+                    Button("+5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 5) }
+                    Button("+2.5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 2.5) }
+                    Button("+1 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 1) }
+                    Divider()
+                    Button("-1 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -1) }
+                    Button("-2.5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -2.5) }
+                    Button("-5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -5) }
+                } label: {
+                    Text(WeightFormat.kilogramsPrecise(currentSet.weight))
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
+                // «ПОВТ»
+                Menu {
+                    Button("+1 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 1) }
+                    Button("+2 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 2) }
+                    Divider()
+                    Button("-1 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -1) }
+                    Button("-2 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -2) }
+                } label: {
+                    Text("\(currentSet.reps)")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
+                // Чекбокс выполнения подхода (в стиле REBRN)
+                Button {
+                    sessionManager.toggleSetDone(exIdx: exIdx, sIdx: sIdx, profile: profile, restTimer: restTimer)
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(currentSet.isDone ? Color.cyan : Color.clear)
+                            .strokeBorder(currentSet.isDone ? Color.cyan : Color.white.opacity(0.3), lineWidth: 2)
+                            .frame(width: 28, height: 28)
+
+                        if currentSet.isDone {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.black)
+                        }
+                    }
+                    .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 

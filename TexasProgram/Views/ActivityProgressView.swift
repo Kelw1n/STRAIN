@@ -519,7 +519,9 @@ struct MuscleGroupAnalytics {
             }
         }
         for edit in profile.planEdits {
-            idToName[edit.targetID] = edit.name
+            if let targetID = edit.targetID {
+                idToName[targetID] = edit.name
+            }
         }
 
         var loggedSetsCount = 0
@@ -545,7 +547,7 @@ struct MuscleGroupAnalytics {
 
             for week in profile.workoutPlan.weeks {
                 for day in week.days {
-                    let exercises = profile.exercises(day: day)
+                    let exercises = profile.exercises(day: day, benchSession: nil)
                     for ex in exercises {
                         let cat = MuscleCategory.categorize(exerciseName: ex.name)
                         groupSets[cat, default: 0] += max(ex.sets, 1)
