@@ -486,7 +486,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         profile = profile,
                         onOpenDay = { week, day -> dayDetail = week to day },
                         onSetCurrent = { week, day ->
-                            store.updateActive { it.copy(currentWeek = week, currentDay = day) }
+                            store.updateActive { it.setCurrentWorkout(week, day) }
                         },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
@@ -508,10 +508,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         focused = session,
                         onFocusHandled = { benchFocus = null },
                         onToggleBench = { index ->
-                            store.updateActive { it.toggleBenchSession(index) }
+                            store.updateActive { it.toggleBenchCompleted(index) }
                         },
                         onSetCurrentBench = { index ->
-                            store.updateActive { it.copy(currentBenchSession = index) }
+                            store.updateActive { it.setCurrentBenchSession(index) }
                         },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )

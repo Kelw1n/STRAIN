@@ -394,7 +394,7 @@ fun ActiveWorkoutSessionScreen(
                 initialNote = WorkoutSessionManager.noteText,
                 onSave = { newNote ->
                     WorkoutSessionManager.noteText = newNote
-                    val updated = profile.setNote(workout.week, workout.day.number, newNote)
+                    val updated = profile.setNote(newNote, workout.week, workout.day.number)
                     onUpdateProfile(updated)
                     WorkoutSessionManager.showingNoteSheet = false
                 },

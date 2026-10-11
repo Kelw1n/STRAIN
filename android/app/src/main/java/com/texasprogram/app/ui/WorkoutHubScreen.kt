@@ -85,7 +85,7 @@ fun WorkoutHubScreen(
 
                     // Карточка «Программы»
                     ProgramsCard(
-                        programTitle = profile.programKind.displayName,
+                        programTitle = profile.programKind.title,
                         modifier = Modifier
                             .weight(1f)
                             .clickable { onOpenPlan() }

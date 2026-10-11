@@ -88,12 +88,14 @@ object MuscleGroupAnalytics {
         for (week in profile.workoutPlan.weeks) {
             for (day in week.days) {
                 for (ex in day.exercises) {
-                    idToName[ex.id] = ex.name
+                    ex.id?.let { idToName[it] = ex.name }
+                    idToName[ex.name] = ex.name
                 }
             }
         }
         for (edit in profile.planEdits) {
-            edit.targetID?.let { idToName[it] = edit.name }
+            edit.targetKey?.let { idToName[it] = edit.name }
+            idToName[edit.id] = edit.name
         }
 
         var loggedSetsCount = 0
