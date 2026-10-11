@@ -399,7 +399,7 @@ struct TodayWorkoutPreviewCard: View {
                     }
                     Button(role: .destructive) {
                         withAnimation(Motion.snappy) {
-                            profile.skip(week: workout.week, day: workout.day.number)
+                            profile.markSkipped(week: workout.week, day: workout.day.number, holdsProgression: false)
                         }
                     } label: {
                         Label("Пропустить тренировку", systemImage: "forward.end")
