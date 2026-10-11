@@ -549,7 +549,7 @@ struct TodayWorkoutPreviewCard: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle(scale: 0.98))
 
                     if index < exercises.count - 1 {
                         Divider().opacity(0.12).padding(.leading, 54)

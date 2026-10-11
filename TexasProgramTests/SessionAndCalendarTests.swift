@@ -223,6 +223,32 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertFalse(manager.isRunning)
     }
 
+    // MARK: - Перестановка
+
+    func testReorderShiftsNeighboursTowardsTheGap() {
+        let reorder = ExerciseReorder()
+        let step = ExerciseReorder.rowHeight + ExerciseReorder.spacing
+        reorder.begin(id: "b", index: 1)
+        // Потянули вниз на две строки с хвостиком — место третье по счёту (индекс 3).
+        reorder.update(translation: step * 2.2, count: 5)
+
+        XCTAssertEqual(reorder.offset(for: "b", index: 1), step * 2.2, accuracy: 0.001, "схваченная едет за пальцем")
+        XCTAssertEqual(reorder.offset(for: "a", index: 0), 0)
+        XCTAssertEqual(reorder.offset(for: "c", index: 2), -step, "соседи между старым и новым местом поднимаются")
+        XCTAssertEqual(reorder.offset(for: "d", index: 3), -step)
+        XCTAssertEqual(reorder.offset(for: "e", index: 4), 0)
+    }
+
+    func testReorderTargetIsClampedToList() {
+        let reorder = ExerciseReorder()
+        let step = ExerciseReorder.rowHeight + ExerciseReorder.spacing
+        reorder.begin(id: "a", index: 0)
+        reorder.update(translation: -step * 3, count: 3)
+        XCTAssertEqual(reorder.offset(for: "b", index: 1), 0, "выше первого места не уехать")
+        reorder.update(translation: step * 10, count: 3)
+        XCTAssertEqual(reorder.offset(for: "c", index: 2), -step, "ниже последнего тоже")
+    }
+
     // MARK: - Картинки
 
     func testExerciseArtMatchesNames() {

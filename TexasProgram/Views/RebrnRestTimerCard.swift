@@ -15,6 +15,7 @@ struct RebrnRestTimerCard: View {
                             .overlay {
                                 Circle()
                                     .trim(from: 0, to: CGFloat(timer.progress))
+                                    .animation(.linear(duration: 0.2), value: timer.progress)
                                     .stroke(Theme.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
                             }
@@ -42,12 +43,19 @@ struct RebrnRestTimerCard: View {
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
-                        HStack(spacing: 6) {
+                        HStack(spacing: 5) {
+                            // Как на острове: сделанные залиты, следующий — кольцом.
                             if timer.totalSets > 0 {
                                 ForEach(0..<min(timer.totalSets, 8), id: \.self) { idx in
-                                    Circle()
-                                        .fill(idx < timer.completedSets ? Theme.accent : Color.white.opacity(0.25))
-                                        .frame(width: 6, height: 6)
+                                    if idx == timer.completedSets {
+                                        Circle()
+                                            .strokeBorder(Theme.accent, lineWidth: 1.5)
+                                            .frame(width: 7, height: 7)
+                                    } else {
+                                        Circle()
+                                            .fill(idx < timer.completedSets ? Theme.accent : Color.white.opacity(0.25))
+                                            .frame(width: 7, height: 7)
+                                    }
                                 }
                             }
 
@@ -65,7 +73,7 @@ struct RebrnRestTimerCard: View {
                 // Нижняя строка: кнопки «−», большой таймер, «+», и оранжевая кнопка «Пропустить»
                 HStack(spacing: 12) {
                     Button {
-                        timer.add(-30)
+                        withAnimation(Motion.snappy) { timer.add(-30) }
                     } label: {
                         Image(systemName: "minus")
                             .font(.system(size: 16, weight: .bold))
@@ -73,7 +81,7 @@ struct RebrnRestTimerCard: View {
                             .frame(width: 44, height: 44)
                             .background(Color(white: 0.18), in: Circle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
 
                     Spacer()
 
@@ -81,11 +89,14 @@ struct RebrnRestTimerCard: View {
                         .font(.system(size: 30, weight: .black, design: Theme.fontDesign))
                         .monospacedDigit()
                         .foregroundStyle(Theme.accent)
+                        // Цифры перекатываются, а не прыгают.
+                        .contentTransition(.numericText(countsDown: true))
+                        .animation(.snappy(duration: 0.3), value: timer.remainingText)
 
                     Spacer()
 
                     Button {
-                        timer.add(30)
+                        withAnimation(Motion.snappy) { timer.add(30) }
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 16, weight: .bold))
@@ -93,7 +104,7 @@ struct RebrnRestTimerCard: View {
                             .frame(width: 44, height: 44)
                             .background(Color(white: 0.18), in: Circle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
 
                     Button {
                         timer.stop()
@@ -106,11 +117,11 @@ struct RebrnRestTimerCard: View {
                             .padding(.vertical, 12)
                             .background(Theme.accent, in: Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
             .padding(16)
-            .background(Color(red: 0.08, green: 0.08, blue: 0.09))
+            .background(Color(white: 0.07))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -129,7 +140,6 @@ struct RebrnRestTimerCard: View {
             )
             .shadow(color: Color.black.opacity(0.6), radius: 20, y: 10)
             .padding(.horizontal, 16)
-            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 }
