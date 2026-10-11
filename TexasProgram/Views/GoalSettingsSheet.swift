@@ -182,7 +182,7 @@ struct GoalSettingsSheet: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 14)
             }
-            .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Цель")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

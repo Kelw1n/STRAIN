@@ -78,7 +78,7 @@ struct WorkoutCompletionSummaryView: View {
                     .padding(.top, 16)
                 }
                 .scrollIndicators(.hidden)
-                .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+                .background(Color.black.ignoresSafeArea())
 
                 // Нижняя большая белая кнопка «ДАЛЬШЕ»
                 bottomActionButton
@@ -87,9 +87,9 @@ struct WorkoutCompletionSummaryView: View {
                     .background(
                         LinearGradient(
                             colors: [
-                                Color(red: 0.05, green: 0.05, blue: 0.06).opacity(0),
-                                Color(red: 0.05, green: 0.05, blue: 0.06).opacity(0.95),
-                                Color(red: 0.05, green: 0.05, blue: 0.06)
+                                Color.black.opacity(0),
+                                Color.black.opacity(0.95),
+                                Color.black
                             ],
                             startPoint: .top,
                             endPoint: .bottom

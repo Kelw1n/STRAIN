@@ -33,7 +33,7 @@ struct ActivityProgressView: View {
                 .padding(.top, 12)
             }
             .scrollIndicators(.hidden)
-            .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Активность")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -61,7 +61,7 @@ struct ActivityProgressView: View {
                 NavigationStack {
                     BodyWeightCard(profile: profile)
                         .padding()
-                        .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+                        .background(Color.black.ignoresSafeArea())
                         .navigationTitle("Замеры веса")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
@@ -152,7 +152,7 @@ struct ActivityProgressView: View {
             .padding(.top, 4)
         }
         .padding(18)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     // MARK: - Карточка «Замеры и фото»
@@ -206,7 +206,7 @@ struct ActivityProgressView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -249,7 +249,7 @@ struct ActivityProgressView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -292,7 +292,7 @@ struct ActivityProgressView: View {
             }
         }
         .padding(18)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private func recordRow(name: String, weight: Double, icon: String) -> some View {
@@ -412,7 +412,7 @@ struct MuscleGroupsDetailSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
             }
-            .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Группы мышц")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
