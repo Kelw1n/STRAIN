@@ -214,7 +214,8 @@ struct ActivityProgressView: View {
     // MARK: - Карточка «Группы мышц» (Радарная диаграмма)
 
     private var muscleGroupsRadarCard: some View {
-        Button {
+        let muscleData = MuscleGroupAnalytics.calculate(for: profile)
+        return Button {
             showingMuscleSheet = true
         } label: {
             VStack(alignment: .leading, spacing: 10) {
@@ -228,15 +229,15 @@ struct ActivityProgressView: View {
                         .foregroundStyle(Color.white.opacity(0.3))
                 }
 
-                // Радарная диаграмма (Spider web)
+                // Радарная диаграмма (Spider web) с динамическими данными
                 ZStack {
                     RadarWebShape(levels: 3)
                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
 
-                    RadarDataShape(values: [0.85, 0.7, 0.9, 0.6, 0.75, 0.5])
+                    RadarDataShape(values: muscleData.radarValues)
                         .fill(Theme.accent.opacity(0.25))
 
-                    RadarDataShape(values: [0.85, 0.7, 0.9, 0.6, 0.75, 0.5])
+                    RadarDataShape(values: muscleData.radarValues)
                         .stroke(Theme.accent, lineWidth: 1.6)
                 }
                 .frame(height: 56)
@@ -322,16 +323,10 @@ struct MuscleGroupsDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var profile: ProgramProfile
 
-    private let muscleGroups: [(name: String, percentage: Int, sets: Int, icon: String, exercises: String)] = [
-        ("Грудь (Пекторальные)", 26, 16, "figure.strengthtraining.traditional", "Жим лёжа, Жим на наклонной, Жим в тренажере"),
-        ("Спина (Широчайшие и трапеции)", 24, 15, "figure.rower", "Становая тяга, Тяга верхнего блока, Тяга сидя"),
-        ("Ноги (Квадрицепсы и бицепс бедра)", 22, 14, "figure.run", "Приседания со штангой, Жим ногами"),
-        ("Плечи (Передняя, средняя, задняя дельты)", 15, 9, "figure.boxing", "Армейский жим, Махи гантелями"),
-        ("Руки (Бицепс и трицепс)", 13, 8, "dumbbell.fill", "Французский жим, Сгибания со штангой")
-    ]
-
     var body: some View {
-        NavigationStack {
+        let data = MuscleGroupAnalytics.calculate(for: profile)
+
+        return NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
                     // Большая радарная диаграмма
@@ -345,16 +340,16 @@ struct MuscleGroupsDetailSheet: View {
                                 RadarWebShape(levels: 4)
                                     .stroke(Color.white.opacity(0.12), lineWidth: 1)
 
-                                RadarDataShape(values: [0.85, 0.75, 0.9, 0.65, 0.7, 0.5])
+                                RadarDataShape(values: data.radarValues)
                                     .fill(Theme.accent.opacity(0.25))
 
-                                RadarDataShape(values: [0.85, 0.75, 0.9, 0.65, 0.7, 0.5])
+                                RadarDataShape(values: data.radarValues)
                                     .stroke(Theme.accent, lineWidth: 2)
                             }
                             .frame(height: 160)
                             .padding(.vertical, 8)
 
-                            Text("Нагрузка сбалансирована для пропорционального роста и полноценного восстановления.")
+                            Text(data.subtitle)
                                 .font(.system(size: 12))
                                 .foregroundStyle(Color.white.opacity(0.6))
                                 .multilineTextAlignment(.center)
@@ -364,17 +359,17 @@ struct MuscleGroupsDetailSheet: View {
 
                     // Список групп мышц
                     VStack(spacing: 12) {
-                        ForEach(muscleGroups, id: \.name) { group in
+                        ForEach(data.items) { group in
                             CardView(padding: 16, spacing: 10) {
                                 HStack(spacing: 12) {
-                                    Image(systemName: group.icon)
+                                    Image(systemName: group.category.icon)
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundStyle(Theme.accent)
                                         .frame(width: 36, height: 36)
                                         .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(group.name)
+                                        Text(group.category.rawValue)
                                             .font(.system(size: 15, weight: .bold))
                                             .foregroundStyle(.white)
                                         Text(group.exercises)
@@ -404,7 +399,7 @@ struct MuscleGroupsDetailSheet: View {
 
                                         Capsule()
                                             .fill(Theme.accentGradient)
-                                            .frame(width: barProxy.size.width * CGFloat(group.percentage) / 30.0, height: 6)
+                                            .frame(width: max(6, barProxy.size.width * CGFloat(group.percentage) / 100.0), height: 6)
                                     }
                                 }
                                 .frame(height: 6)
@@ -429,6 +424,167 @@ struct MuscleGroupsDetailSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - Аналитика и расчёт баланса групп мышц
+
+enum MuscleCategory: String, CaseIterable, Identifiable {
+    case chest = "Грудь (Пекторальные)"
+    case back = "Спина (Широчайшие и трапеции)"
+    case legs = "Ноги (Квадрицепсы и бицепс бедра)"
+    case shoulders = "Плечи (Дельты)"
+    case arms = "Руки (Бицепс и трицепс)"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .chest: return "figure.strengthtraining.traditional"
+        case .back: return "figure.rower"
+        case .legs: return "figure.run"
+        case .shoulders: return "figure.boxing"
+        case .arms: return "dumbbell.fill"
+        }
+    }
+
+    static func categorize(exerciseName: String) -> MuscleCategory {
+        let name = exerciseName.lowercased()
+
+        // Ноги
+        if name.contains("присед") || name.contains("ног") || name.contains("выпад") ||
+           name.contains("квадрицепс") || name.contains("бицепс бедр") || name.contains("голен") ||
+           name.contains("икр") || name.contains("гакк") || name.contains("румынск") {
+            return .legs
+        }
+
+        // Плечи (важно проверять жим стоя / армейский жим до общего жима)
+        if name.contains("армейск") || name.contains("жим стоя") || name.contains("жим сидя") ||
+           name.contains("махи") || name.contains("дельт") || name.contains("плеч") ||
+           name.contains("к подбородку") {
+            return .shoulders
+        }
+
+        // Руки
+        if name.contains("бицепс") || name.contains("трицепс") || name.contains("француз") ||
+           name.contains("молот") || name.contains("сгибан") || name.contains("разгибан") ||
+           name.contains("брусь") {
+            return .arms
+        }
+
+        // Спина
+        if name.contains("тяг") || name.contains("станов") || name.contains("подтягиван") ||
+           name.contains("спин") || name.contains("широчайш") || name.contains("трапеци") ||
+           name.contains("блок") || name.contains("гиперэкстенз") || name.contains("пулловер") {
+            return .back
+        }
+
+        // Грудь
+        if name.contains("жим") || name.contains("груд") || name.contains("наклон") ||
+           name.contains("отжиман") || name.contains("пекторал") || name.contains("кроссовер") ||
+           name.contains("разводк") || name.contains("бабочк") {
+            return .chest
+        }
+
+        return .chest
+    }
+}
+
+struct MuscleGroupDisplayItem: Identifiable {
+    var id: String { category.id }
+    let category: MuscleCategory
+    let sets: Int
+    let percentage: Int
+    let exercises: String
+    let radarValue: CGFloat
+}
+
+struct MuscleGroupAnalytics {
+    static func calculate(for profile: ProgramProfile) -> (items: [MuscleGroupDisplayItem], radarValues: [CGFloat], subtitle: String) {
+        var groupSets: [MuscleCategory: Int] = [:]
+        var groupExercises: [MuscleCategory: Set<String>] = [:]
+
+        for cat in MuscleCategory.allCases {
+            groupSets[cat] = 0
+            groupExercises[cat] = []
+        }
+
+        // 1. Проверяем фактически выполненные подходы из setLog
+        var idToName: [String: String] = [:]
+        for week in profile.workoutPlan.weeks {
+            for day in week.days {
+                for ex in day.exercises {
+                    idToName[ex.id] = ex.name
+                }
+            }
+        }
+        for edit in profile.planEdits {
+            idToName[edit.targetID] = edit.name
+        }
+
+        var loggedSetsCount = 0
+        for (key, _) in profile.setLog {
+            let parts = key.split(separator: "|")
+            guard parts.count >= 2 else { continue }
+            let exId = String(parts[1])
+            let exName = idToName[exId] ?? exId
+            let cat = MuscleCategory.categorize(exerciseName: exName)
+            groupSets[cat, default: 0] += 1
+            groupExercises[cat, default: []].insert(exName)
+            loggedSetsCount += 1
+        }
+
+        let isBasedOnHistory = loggedSetsCount >= 3
+
+        // 2. Если выполненных подходов мало или нет — считаем нагрузку по текущему плану тренировок
+        if !isBasedOnHistory {
+            for cat in MuscleCategory.allCases {
+                groupSets[cat] = 0
+                groupExercises[cat] = []
+            }
+
+            for week in profile.workoutPlan.weeks {
+                for day in week.days {
+                    let exercises = profile.exercises(day: day)
+                    for ex in exercises {
+                        let cat = MuscleCategory.categorize(exerciseName: ex.name)
+                        groupSets[cat, default: 0] += max(ex.sets, 1)
+                        groupExercises[cat, default: []].insert(ex.name)
+                    }
+                }
+            }
+        }
+
+        let totalSets = groupSets.values.reduce(0, +)
+        let maxSets = max(1, groupSets.values.max() ?? 1)
+
+        let items: [MuscleGroupDisplayItem] = MuscleCategory.allCases.map { cat in
+            let sets = groupSets[cat] ?? 0
+            let pct = totalSets > 0 ? Int(round(Double(sets) / Double(totalSets) * 100)) : 0
+            let exList = (groupExercises[cat] ?? []).sorted()
+            let exString = exList.isEmpty ? "Базовые движения" : exList.prefix(3).joined(separator: ", ")
+            let radarVal = max(0.18, CGFloat(sets) / CGFloat(maxSets))
+
+            return MuscleGroupDisplayItem(
+                category: cat,
+                sets: sets,
+                percentage: pct,
+                exercises: exString,
+                radarValue: radarVal
+            )
+        }
+        .sorted { $0.sets > $1.sets }
+
+        let radarValues = MuscleCategory.allCases.map { cat -> CGFloat in
+            let sets = groupSets[cat] ?? 0
+            return max(0.2, CGFloat(sets) / CGFloat(maxSets))
+        }
+
+        let subtitle = isBasedOnHistory
+            ? "На основе \(loggedSetsCount) выполненных подходов в вашей истории."
+            : "На основе распределения упражнений в текущей программе."
+
+        return (items, radarValues, subtitle)
     }
 }
 

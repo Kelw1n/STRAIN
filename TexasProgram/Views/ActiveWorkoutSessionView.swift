@@ -1,24 +1,6 @@
 import SwiftUI
 import Combine
 
-// MARK: - Модели состояния активной тренировки
-
-struct ActiveSetState: Identifiable, Equatable {
-    let id = UUID()
-    let index: Int
-    var previousText: String
-    var weight: Double
-    var reps: Int
-    var isDone: Bool
-}
-
-struct ActiveExerciseState: Identifiable, Equatable {
-    var id: String { prescription.id }
-    let prescription: ExercisePrescription
-    var restSeconds: Int
-    var sets: [ActiveSetState]
-}
-
 // MARK: - Экран активной тренировки
 
 struct ActiveWorkoutSessionView: View {
@@ -27,15 +9,7 @@ struct ActiveWorkoutSessionView: View {
     @Bindable var profile: ProgramProfile
     let workout: ScheduledWorkout
 
-    @State private var exercises: [ActiveExerciseState] = []
-    @State private var startDate = Date()
-    @State private var elapsedSeconds = 0
-    @State private var timerCancellable: AnyCancellable?
-    @State private var showingZeroSetsAlert = false
-    @State private var showingSummary = false
-    @State private var showingNoteSheet = false
-    @State private var noteText = ""
-    @State private var customRestTargetExerciseIndex: Int?
+    @Bindable var sessionManager = WorkoutSessionManager.shared
 
     var body: some View {
         NavigationStack {
@@ -43,7 +17,7 @@ struct ActiveWorkoutSessionView: View {
                 // Основной контент тренировки
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        ForEach(Array(exercises.indices), id: \.self) { exIndex in
+                        ForEach(Array(sessionManager.exercises.indices), id: \.self) { exIndex in
                             exerciseCard(at: exIndex)
                         }
                     }
@@ -54,8 +28,8 @@ struct ActiveWorkoutSessionView: View {
                 .scrollIndicators(.hidden)
                 .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
 
-                // Всплывающее окно подтверждения при 0 отмеченных подходах (как в REBRN)
-                if showingZeroSetsAlert {
+                // Всплывающее окно подтверждения при 0 отмеченных подходах или отмене
+                if sessionManager.showingZeroSetsAlert {
                     zeroSetsAlertOverlay
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
@@ -64,11 +38,8 @@ struct ActiveWorkoutSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        if totalCompletedSets == 0 {
-                            showingZeroSetsAlert = true
-                        } else {
-                            dismiss()
-                        }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        sessionManager.minimize()
                     } label: {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 16, weight: .bold))
@@ -76,11 +47,12 @@ struct ActiveWorkoutSessionView: View {
                             .padding(8)
                             .background(Color.white.opacity(0.12), in: Circle())
                     }
+                    .accessibilityLabel("Свернуть тренировку")
                 }
 
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
-                        Text(formatTimer(elapsedSeconds))
+                        Text(formatTimer(sessionManager.elapsedSeconds))
                             .font(.system(size: 20, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(.white)
@@ -91,13 +63,13 @@ struct ActiveWorkoutSessionView: View {
                     HStack(spacing: 10) {
                         Menu {
                             Button {
-                                showingNoteSheet = true
+                                sessionManager.showingNoteSheet = true
                             } label: {
                                 Label("Заметка к тренировке", systemImage: "note.text")
                             }
 
                             Button(role: .destructive) {
-                                showingZeroSetsAlert = true
+                                sessionManager.showingZeroSetsAlert = true
                             } label: {
                                 Label("Отменить тренировку", systemImage: "trash")
                             }
@@ -122,39 +94,33 @@ struct ActiveWorkoutSessionView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingSummary) {
+            .sheet(isPresented: $sessionManager.showingSummary) {
                 workoutSummarySheet
             }
-            .sheet(isPresented: $showingNoteSheet) {
+            .sheet(isPresented: $sessionManager.showingNoteSheet) {
                 workoutNoteSheet
             }
             .confirmationDialog("Время отдыха", isPresented: Binding(
-                get: { customRestTargetExerciseIndex != nil },
-                set: { if !$0 { customRestTargetExerciseIndex = nil } }
+                get: { sessionManager.customRestTargetExerciseIndex != nil },
+                set: { if !$0 { sessionManager.customRestTargetExerciseIndex = nil } }
             )) {
-                Button("1 мин (01:00)") { setRestDuration(60) }
-                Button("1.5 мин (01:30)") { setRestDuration(90) }
-                Button("2 мин (02:00)") { setRestDuration(120) }
-                Button("2.5 мин (02:30)") { setRestDuration(150) }
-                Button("3 мин (03:00)") { setRestDuration(180) }
-                Button("4 мин (04:00)") { setRestDuration(240) }
+                Button("1 мин (01:00)") { sessionManager.setRestDuration(60) }
+                Button("1.5 мин (01:30)") { sessionManager.setRestDuration(90) }
+                Button("2 мин (02:00)") { sessionManager.setRestDuration(120) }
+                Button("2.5 мин (02:30)") { sessionManager.setRestDuration(150) }
+                Button("3 мин (03:00)") { sessionManager.setRestDuration(180) }
+                Button("4 мин (04:00)") { sessionManager.setRestDuration(240) }
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear {
-            setupInitialExercises()
-            startStopwatch()
-        }
-        .onDisappear {
-            stopStopwatch()
-        }
     }
 
     // MARK: - Карточка упражнения
 
     @ViewBuilder
     private func exerciseCard(at exIndex: Int) -> some View {
-        let exerciseState = exercises[exIndex]
+        guard exIndex < sessionManager.exercises.count else { EmptyView() }
+        let exerciseState = sessionManager.exercises[exIndex]
 
         VStack(alignment: .leading, spacing: 14) {
             // Шапка упражнения
@@ -176,7 +142,7 @@ struct ActiveWorkoutSessionView: View {
 
                 // Кнопка времени отдыха
                 Button {
-                    customRestTargetExerciseIndex = exIndex
+                    sessionManager.customRestTargetExerciseIndex = exIndex
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "timer")
@@ -193,7 +159,7 @@ struct ActiveWorkoutSessionView: View {
 
                 Menu {
                     Button {
-                        addSet(to: exIndex)
+                        sessionManager.addSet(to: exIndex, profile: profile)
                     } label: {
                         Label("Добавить подход", systemImage: "plus")
                     }
@@ -241,7 +207,7 @@ struct ActiveWorkoutSessionView: View {
 
                 // Кнопка «+ Добавить подход»
                 Button {
-                    addSet(to: exIndex)
+                    sessionManager.addSet(to: exIndex, profile: profile)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "plus")
@@ -269,8 +235,11 @@ struct ActiveWorkoutSessionView: View {
 
     @ViewBuilder
     private func setRow(exerciseIndex exIdx: Int, setIndex sIdx: Int) -> some View {
-        let currentSet = exercises[exIdx].sets[sIdx]
-        let isCurrent = !currentSet.isDone && exercises[exIdx].sets.prefix(sIdx).allSatisfy(\.isDone)
+        guard exIdx < sessionManager.exercises.count, sIdx < sessionManager.exercises[exIdx].sets.count else {
+            EmptyView()
+        }
+        let currentSet = sessionManager.exercises[exIdx].sets[sIdx]
+        let isCurrent = !currentSet.isDone && sessionManager.exercises[exIdx].sets.prefix(sIdx).allSatisfy(\.isDone)
 
         HStack(spacing: 8) {
             // Индикатор активного подхода + Номер
@@ -294,59 +263,55 @@ struct ActiveWorkoutSessionView: View {
 
             // «КГ» (Интерактивное поле / Степер)
             Menu {
-                Button("+5 кг") { adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 5) }
-                Button("+2.5 кг") { adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 2.5) }
-                Button("+1 кг") { adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 1) }
+                Button("+5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 5) }
+                Button("+2.5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 2.5) }
+                Button("+1 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 1) }
                 Divider()
-                Button("-1 кг") { adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -1) }
-                Button("-2.5 кг") { adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -2.5) }
-                Button("-5 кг") { adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -5) }
+                Button("-1 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -1) }
+                Button("-2.5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -2.5) }
+                Button("-5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -5) }
             } label: {
                 Text(WeightFormat.kilogramsPrecise(currentSet.weight))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 38)
+                    .padding(.vertical, 8)
                     .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .buttonStyle(.plain)
 
-            // «ПОВТ» (Интерактивное поле / Степер)
+            // «ПОВТ»
             Menu {
-                Button("+2 повт") { adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 2) }
-                Button("+1 повт") { adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 1) }
+                Button("+1 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 1) }
+                Button("+2 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 2) }
                 Divider()
-                Button("-1 повт") { adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -1) }
-                Button("-2 повт") { adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -2) }
+                Button("-1 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -1) }
+                Button("-2 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -2) }
             } label: {
                 Text("\(currentSet.reps)")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 38)
+                    .padding(.vertical, 8)
                     .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .buttonStyle(.plain)
 
-            // Чекбокс отметки подхода (Оранжевый круг с галочкой)
+            // Чекбокс выполнения подхода (в стиле REBRN)
             Button {
-                toggleSetDone(exIdx: exIdx, sIdx: sIdx)
+                sessionManager.toggleSetDone(exIdx: exIdx, sIdx: sIdx, profile: profile, restTimer: restTimer)
             } label: {
                 ZStack {
+                    Circle()
+                        .fill(currentSet.isDone ? Color.cyan : Color.clear)
+                        .strokeBorder(currentSet.isDone ? Color.cyan : Color.white.opacity(0.3), lineWidth: 2)
+                        .frame(width: 28, height: 28)
+
                     if currentSet.isDone {
-                        Circle()
-                            .fill(Theme.accent)
-                            .frame(width: 32, height: 32)
                         Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .black))
-                            .foregroundStyle(.white)
-                    } else {
-                        Circle()
-                            .strokeBorder(Color.white.opacity(0.3), lineWidth: 2.2)
-                            .frame(width: 32, height: 32)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.black)
                     }
                 }
-                .frame(width: 38)
+                .frame(width: 38, height: 38)
             }
             .buttonStyle(.plain)
         }
@@ -375,14 +340,14 @@ struct ActiveWorkoutSessionView: View {
         return "dumbbell.fill"
     }
 
-    // MARK: - Окно «Ни одного подхода не отмечено» (Скриншот 2)
+    // MARK: - Окно «Ни одного подхода не отмечено» / Отмена тренировки
 
     private var zeroSetsAlertOverlay: some View {
         ZStack {
             Color.black.opacity(0.78)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    showingZeroSetsAlert = false
+                    sessionManager.showingZeroSetsAlert = false
                 }
 
             VStack(spacing: 18) {
@@ -392,12 +357,12 @@ struct ActiveWorkoutSessionView: View {
                     .foregroundStyle(Color.red)
                     .padding(.top, 8)
 
-                Text("Ни одного подхода не отмечено")
+                Text(sessionManager.totalCompletedSets == 0 ? "Ни одного подхода не отмечено" : "Отменить тренировку?")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
 
-                Text("Отметь выполненные подходы галочкой — иначе сохранять нечего. Тренировка удалится вместе с введёнными значениями.")
+                Text("Тренировка удалится вместе с введёнными значениями и счётчиком времени.")
                     .font(.system(size: 14))
                     .foregroundStyle(Color.white.opacity(0.65))
                     .multilineTextAlignment(.center)
@@ -406,13 +371,13 @@ struct ActiveWorkoutSessionView: View {
 
                 // Слайдер «>>> УДАЛИТЬ»
                 SlideToConfirmView(title: "УДАЛИТЬ") {
-                    dismiss()
+                    sessionManager.discardWorkout(profile: profile)
                 }
                 .padding(.top, 8)
 
                 // Кнопка возврата
                 Button {
-                    showingZeroSetsAlert = false
+                    sessionManager.showingZeroSetsAlert = false
                 } label: {
                     Text("Вернуться к тренировке")
                         .font(.system(size: 15, weight: .semibold))
@@ -454,16 +419,16 @@ struct ActiveWorkoutSessionView: View {
 
                 // Статистика сессии
                 HStack(spacing: 16) {
-                    summaryStatCard(title: "Время", value: formatDuration(elapsedSeconds))
-                    summaryStatCard(title: "Объём", value: "\(Int(totalTonnage)) кг")
-                    summaryStatCard(title: "Плотность", value: "\(Int(density)) кг/мин")
+                    summaryStatCard(title: "Время", value: formatDuration(sessionManager.elapsedSeconds))
+                    summaryStatCard(title: "Объём", value: "\(Int(sessionManager.totalTonnage)) кг")
+                    summaryStatCard(title: "Плотность", value: "\(Int(sessionManager.density)) кг/мин")
                 }
                 .padding(.horizontal, 16)
 
                 Spacer()
 
                 Button {
-                    saveAndFinishWorkout()
+                    sessionManager.finishWorkout(profile: profile)
                 } label: {
                     Text("Сохранить и закрыть")
                         .font(.headline.weight(.bold))
@@ -498,7 +463,7 @@ struct ActiveWorkoutSessionView: View {
     private var workoutNoteSheet: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                TextEditor(text: $noteText)
+                TextEditor(text: $sessionManager.noteText)
                     .padding(12)
                     .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .scrollContentBackground(.hidden)
@@ -513,14 +478,14 @@ struct ActiveWorkoutSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Готово") {
-                        if !noteText.isEmpty {
+                        if !sessionManager.noteText.isEmpty {
                             profile.setNote(
-                                noteText,
+                                sessionManager.noteText,
                                 week: workout.week,
                                 day: workout.day.number
                             )
                         }
-                        showingNoteSheet = false
+                        sessionManager.showingNoteSheet = false
                     }
                     .font(.body.weight(.bold))
                 }
@@ -530,191 +495,12 @@ struct ActiveWorkoutSessionView: View {
 
     // MARK: - Вспомогательная логика
 
-    private var totalCompletedSets: Int {
-        exercises.flatMap(\.sets).filter(\.isDone).count
-    }
-
-    private var totalTonnage: Double {
-        exercises.flatMap(\.sets)
-            .filter(\.isDone)
-            .reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
-    }
-
-    private var density: Double {
-        let mins = max(1.0, Double(elapsedSeconds) / 60.0)
-        return totalTonnage / mins
-    }
-
     private func handleFinishTapped() {
-        if totalCompletedSets == 0 {
-            showingZeroSetsAlert = true
+        if sessionManager.totalCompletedSets == 0 {
+            sessionManager.showingZeroSetsAlert = true
         } else {
-            showingSummary = true
+            sessionManager.showingSummary = true
         }
-    }
-
-    private func saveAndFinishWorkout() {
-        // Записываем выполненные подходы в SwiftData профиль
-        for ex in exercises {
-            for set in ex.sets where set.isDone {
-                profile.recordSet(
-                    week: workout.week,
-                    day: workout.day.number,
-                    exercise: ex.prescription,
-                    index: set.index,
-                    reps: set.reps,
-                    weight: set.weight
-                )
-            }
-        }
-
-        // Помечаем тренировочный день завершённым
-        if !workout.isCompleted {
-            profile.toggleCompleted(week: workout.week, day: workout.day.number)
-        }
-
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        dismiss()
-    }
-
-    private func toggleSetDone(exIdx: Int, sIdx: Int) {
-        exercises[exIdx].sets[sIdx].isDone.toggle()
-        let isDone = exercises[exIdx].sets[sIdx].isDone
-
-        if isDone {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            let currentSet = exercises[exIdx].sets[sIdx]
-            let ex = exercises[exIdx]
-
-            profile.recordSet(
-                week: workout.week,
-                day: workout.day.number,
-                exercise: ex.prescription,
-                index: currentSet.index,
-                reps: currentSet.reps,
-                weight: currentSet.weight
-            )
-
-            // Автоматический запуск таймера отдыха
-            restTimer.start(TimeInterval(ex.restSeconds))
-        } else {
-            let currentSet = exercises[exIdx].sets[sIdx]
-            let ex = exercises[exIdx]
-            profile.clearSetEntry(
-                week: workout.week,
-                day: workout.day.number,
-                exercise: ex.prescription,
-                index: currentSet.index
-            )
-        }
-    }
-
-    private func addSet(to exIdx: Int) {
-        let existingSets = exercises[exIdx].sets
-        let lastWeight = existingSets.last?.weight ?? 50.0
-        let lastReps = existingSets.last?.reps ?? 10
-        let newIndex = existingSets.count
-
-        let newSet = ActiveSetState(
-            index: newIndex,
-            previousText: previousPerformance(for: exercises[exIdx].prescription, setIndex: newIndex),
-            weight: lastWeight,
-            reps: lastReps,
-            isDone: false
-        )
-        exercises[exIdx].sets.append(newSet)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    }
-
-    private func adjustWeight(exIdx: Int, sIdx: Int, delta: Double) {
-        exercises[exIdx].sets[sIdx].weight = max(0, exercises[exIdx].sets[sIdx].weight + delta)
-    }
-
-    private func adjustReps(exIdx: Int, sIdx: Int, delta: Int) {
-        exercises[exIdx].sets[sIdx].reps = max(1, exercises[exIdx].sets[sIdx].reps + delta)
-    }
-
-    private func setRestDuration(_ seconds: Int) {
-        if let idx = customRestTargetExerciseIndex {
-            exercises[idx].restSeconds = seconds
-        }
-    }
-
-    private func setupInitialExercises() {
-        let prescs = profile.exercises(for: workout)
-        exercises = prescs.map { presc in
-            let defaultRest = presc.benchSession != nil ? 180 : profile.defaultRestSeconds
-            let plannedWeight = extractPlannedWeight(for: presc)
-            let plannedReps = extractPlannedReps(for: presc)
-            let setsCount = max(presc.sets, 3)
-
-            let sets = (0..<setsCount).map { sIdx in
-                let logged = profile.setEntry(
-                    week: workout.week,
-                    day: workout.day.number,
-                    exercise: presc,
-                    index: sIdx
-                )
-                let isDone = sIdx < profile.completedSets(
-                    week: workout.week,
-                    day: workout.day.number,
-                    exercise: presc
-                )
-
-                return ActiveSetState(
-                    index: sIdx,
-                    previousText: previousPerformance(for: presc, setIndex: sIdx),
-                    weight: logged?.weight ?? plannedWeight,
-                    reps: logged?.reps ?? plannedReps,
-                    isDone: isDone
-                )
-            }
-
-            return ActiveExerciseState(
-                prescription: presc,
-                restSeconds: defaultRest,
-                sets: sets
-            )
-        }
-    }
-
-    private func previousPerformance(for presc: ExercisePrescription, setIndex: Int) -> String {
-        let hist = profile.history(forExerciseNamed: presc.name)
-        guard let lastPoint = hist.last, !lastPoint.entries.isEmpty else { return "—" }
-        if setIndex < lastPoint.entries.count {
-            let entry = lastPoint.entries[setIndex]
-            return "\(WeightFormat.kilogramsPrecise(entry.weight)) × \(entry.reps)"
-        } else if let best = lastPoint.entries.first {
-            return "\(WeightFormat.kilogramsPrecise(best.weight)) × \(best.reps)"
-        }
-        return "—"
-    }
-
-    private func extractPlannedWeight(for presc: ExercisePrescription) -> Double {
-        if case .kilograms(let value) = presc.load { return value }
-        if let hint = profile.accessoryHint(for: presc, week: workout.week, day: workout.day.number)?.weight {
-            return hint
-        }
-        let hist = profile.history(forExerciseNamed: presc.name)
-        return hist.last?.best ?? 50.0
-    }
-
-    private func extractPlannedReps(for presc: ExercisePrescription) -> Int {
-        if let reps = presc.plannedReps { return reps }
-        return 10
-    }
-
-    private func startStopwatch() {
-        timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
-            .autoconnect()
-            .sink { _ in
-                elapsedSeconds += 1
-            }
-    }
-
-    private func stopStopwatch() {
-        timerCancellable?.cancel()
-        timerCancellable = nil
     }
 
     private func formatTimer(_ seconds: Int) -> String {
@@ -737,5 +523,97 @@ struct ActiveWorkoutSessionView: View {
         } else {
             return "\(mins) мин"
         }
+    }
+}
+
+// MARK: - Свернутая панель активной тренировки (Liquid Glass Mini-Player)
+
+struct MinimizedWorkoutBar: View {
+    @Bindable var sessionManager = WorkoutSessionManager.shared
+    @Bindable var profile: ProgramProfile
+
+    var body: some View {
+        guard let workout = sessionManager.activeWorkout else { return AnyView(EmptyView()) }
+
+        return AnyView(
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                sessionManager.expand()
+            } label: {
+                HStack(spacing: 12) {
+                    // Пульсирующая зеленая точка
+                    ZStack {
+                        Circle()
+                            .fill(Color.green.opacity(0.35))
+                            .frame(width: 22, height: 22)
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(workout.fullTitle)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Text("\(sessionManager.totalCompletedSets) из \(sessionManager.totalSetsCount) подходов")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.55))
+                    }
+
+                    Spacer(minLength: 8)
+
+                    // Таймер
+                    HStack(spacing: 5) {
+                        Image(systemName: "timer")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(formatTimer(sessionManager.elapsedSeconds))
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Theme.accent.opacity(0.15), in: Capsule())
+
+                    // Кнопка развернуть
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.7))
+                        .padding(6)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background {
+                    Capsule(style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .fill(Color(red: 0.10, green: 0.10, blue: 0.12).opacity(0.88))
+                        }
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.28), Color.white.opacity(0.06)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                        .shadow(color: Color.black.opacity(0.55), radius: 12, y: 4)
+                }
+                .padding(.horizontal, 16)
+            }
+            .buttonStyle(.plain)
+        )
+    }
+
+    private func formatTimer(_ seconds: Int) -> String {
+        let mins = seconds / 60
+        let secs = seconds % 60
+        return String(format: "%02d:%02d", mins, secs)
     }
 }

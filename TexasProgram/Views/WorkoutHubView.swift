@@ -54,21 +54,35 @@ struct WorkoutHubView: View {
                 .scrollIndicators(.hidden)
                 .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
 
-                // Плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ»
+                // Плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ» / «ПРОДОЛЖИТЬ»
                 if let focus {
+                    let isRunning = WorkoutSessionManager.shared.isRunning
                     VStack(spacing: 0) {
                         Button {
                             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                            onStartWorkout(focus)
+                            if isRunning {
+                                WorkoutSessionManager.shared.expand()
+                            } else {
+                                onStartWorkout(focus)
+                            }
                         } label: {
-                            Text("НАЧАТЬ ТРЕНИРОВКУ")
-                                .font(.system(size: 16, weight: .black, design: .rounded))
-                                .tracking(1.2)
-                                .foregroundStyle(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 18)
-                                .background(Color.white, in: Capsule())
-                                .shadow(color: Color.white.opacity(0.18), radius: 14, y: 4)
+                            HStack(spacing: 8) {
+                                if isRunning {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 8, height: 8)
+                                    Text("ПРОДОЛЖИТЬ ТРЕНИРОВКУ")
+                                } else {
+                                    Text("НАЧАТЬ ТРЕНИРОВКУ")
+                                }
+                            }
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .tracking(1.2)
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Color.white, in: Capsule())
+                            .shadow(color: Color.white.opacity(0.18), radius: 14, y: 4)
                         }
                         .buttonStyle(.plain)
                         .padding(.horizontal, 18)

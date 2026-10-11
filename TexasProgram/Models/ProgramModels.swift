@@ -1267,6 +1267,32 @@ final class ProgramProfile {
         }
     }
 
+    /// Обновляет количество выполненных подходов в упражнении.
+    func updateCompletedSets(week: Int, day: Int, exercise: ExercisePrescription, count: Int) {
+        let key = setKey(week: week, day: day, exercise: exercise)
+        if count <= 0 {
+            setProgress[key] = nil
+        } else {
+            setProgress[key] = count
+        }
+    }
+
+    /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
+    func resetDaySets(week: Int, day: Int) {
+        let prefix = dayKey(week: week, day: day) + "|"
+        let progressKeys = setProgress.keys.filter { $0.hasPrefix(prefix) }
+        for k in progressKeys {
+            setProgress[k] = nil
+        }
+        let logKeys = setLog.keys.filter { $0.hasPrefix(prefix) }
+        for k in logKeys {
+            setLog[k] = nil
+        }
+        let dKey = dayKey(week: week, day: day)
+        completionLog.removeAll { $0.key == dKey }
+        setDayCompleted(week: week, day: day, false)
+    }
+
     /// Дни, которые несут волну жима: в «Верх / Низ» это верхние дни — первый и третий.
     func carriesBenchWave(day: Int) -> Bool {
         programKind.hasBenchWave && (day == 1 || day == 3)
