@@ -1290,7 +1290,7 @@ final class ProgramProfile {
     }
 
     /// Слепок отметок одного дня: им отмена тренировки возвращает всё как было.
-    struct DaySnapshot {
+    struct DaySnapshot: Codable {
         let progress: [String: Int]
         let log: [String: SetEntry]
     }

@@ -9,11 +9,12 @@ struct WorkoutHubView: View {
     @State private var showingProgramCatalog = false
     @State private var showingCustomizing = false
 
-    private var schedule: WorkoutSchedule { profile.schedule }
-    private var focus: ScheduledWorkout? { schedule.focus }
-
     var body: some View {
-        NavigationStack {
+        // Расписание — один раз за проход: каждое обращение к profile.schedule
+        // заново раскладывает весь план по датам.
+        let schedule = profile.schedule
+        let focus = schedule.focus
+        return NavigationStack {
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(spacing: 16) {
@@ -26,9 +27,9 @@ struct WorkoutHubView: View {
                             Button {
                                 showingGoalSheet = true
                             } label: {
-                                goalCard
+                                goalCard(schedule: schedule, focus: focus)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
 
                             // Карточка «Программы»
                             Button {
@@ -36,7 +37,7 @@ struct WorkoutHubView: View {
                             } label: {
                                 programsCard
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                         }
 
                         // Карточка сегодняшней программы
@@ -83,8 +84,10 @@ struct WorkoutHubView: View {
                             .padding(.vertical, 18)
                             .background(Color.white, in: Capsule())
                             .shadow(color: Color.white.opacity(0.18), radius: 14, y: 4)
+                            .contentTransition(.opacity)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
+                        .animation(Motion.snappy, value: isRunning)
                         .padding(.horizontal, 18)
                         .padding(.bottom, 74) // Зазор для Liquid Glass Dock
                     }
@@ -227,7 +230,7 @@ struct WorkoutHubView: View {
 
     // MARK: - Карточки «Цель» и «Программы»
 
-    private var goalCard: some View {
+    private func goalCard(schedule: WorkoutSchedule, focus: ScheduledWorkout?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Цель")

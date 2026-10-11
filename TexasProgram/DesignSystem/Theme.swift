@@ -128,6 +128,10 @@ enum Motion {
     static let snappy = Animation.spring(response: 0.32, dampingFraction: 0.78)
     static let bouncy = Animation.spring(response: 0.42, dampingFraction: 0.62)
     static let smooth = Animation.easeInOut(duration: 0.28)
+    /// Появление и уход крупных панелей: тренировка, листы, плашки.
+    static let sheet = Animation.spring(response: 0.42, dampingFraction: 0.86)
+    /// Перестановка и отклик на палец: быстро, с лёгким качанием.
+    static let reorder = Animation.spring(response: 0.3, dampingFraction: 0.78)
 
     static func maybe(_ animation: Animation, reduce: Bool) -> Animation? {
         reduce ? nil : animation

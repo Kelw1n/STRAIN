@@ -34,15 +34,7 @@ struct RebrnRestTimerCard: View {
 
                 // Средняя строка: иконка упражнения + название + точки подходов и вес
                 HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(white: 0.16))
-                            .frame(width: 44, height: 44)
-
-                        Image(systemName: "figure.strengthtraining.traditional")
-                            .font(.system(size: 22))
-                            .foregroundStyle(Theme.accent)
-                    }
+                    ExerciseThumb(name: timer.exerciseName ?? "", size: 44)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(timer.exerciseName ?? "Отдых между подходами")

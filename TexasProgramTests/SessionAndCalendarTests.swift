@@ -17,6 +17,7 @@ final class SessionAndCalendarTests: XCTestCase {
         if manager.isRunning { manager.discardWorkout(profile: texas()) }
         manager.pendingWorkout = nil
         manager.showingReplaceConfirm = false
+        manager.clearSaved()
         super.tearDown()
     }
 
@@ -84,8 +85,7 @@ final class SessionAndCalendarTests: XCTestCase {
         manager.startWorkout(workout: try XCTUnwrap(profile.schedule.focus), profile: profile)
 
         // Телефон пролежал заблокированным 40 минут — таймер за это время не тикал.
-        manager.refreshElapsed(now: manager.startDate.addingTimeInterval(40 * 60))
-        XCTAssertEqual(manager.elapsedSeconds, 40 * 60)
+        XCTAssertEqual(manager.elapsed(at: manager.startDate.addingTimeInterval(40 * 60)), 40 * 60)
     }
 
     func testStartingAnotherWorkoutAsksInsteadOfReplacing() throws {
@@ -119,6 +119,127 @@ final class SessionAndCalendarTests: XCTestCase {
 
         let exercise = manager.exercises[0].prescription
         XCTAssertEqual(profile.setEntry(week: workout.week, day: workout.day.number, exercise: exercise, index: 0)?.weight, 77.5)
+    }
+
+    func testAddSetAfterDeleteGetsFreshIndex() throws {
+        let profile = texas()
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: try XCTUnwrap(profile.schedule.focus), profile: profile)
+        let before = manager.exercises[0].sets.map(\.index)
+        XCTAssertGreaterThan(before.count, 1)
+
+        manager.deleteSet(exIdx: 0, sIdx: 0, profile: profile)
+        manager.addSet(to: 0, profile: profile)
+
+        let indexes = manager.exercises[0].sets.map(\.index)
+        XCTAssertEqual(Set(indexes).count, indexes.count, "номера подходов не должны повторяться")
+        XCTAssertEqual(indexes.last, (before.max() ?? 0) + 1)
+    }
+
+    func testDeletingDoneSetClearsItsEntry() throws {
+        let profile = texas()
+        let workout = try XCTUnwrap(profile.schedule.focus)
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: workout, profile: profile)
+        let timer = RestTimer()
+        manager.toggleSetDone(exIdx: 0, sIdx: 0, profile: profile, restTimer: timer)
+        timer.stop()
+        let exercise = manager.exercises[0].prescription
+        XCTAssertNotNil(profile.setEntry(week: workout.week, day: workout.day.number, exercise: exercise, index: 0))
+
+        manager.deleteSet(exIdx: 0, sIdx: 0, profile: profile)
+        XCTAssertNil(profile.setEntry(week: workout.week, day: workout.day.number, exercise: exercise, index: 0))
+    }
+
+    func testLastSetCannotBeDeleted() throws {
+        let profile = texas()
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: try XCTUnwrap(profile.schedule.focus), profile: profile)
+        while manager.exercises[0].sets.count > 1 { manager.deleteSet(exIdx: 0, sIdx: 0, profile: profile) }
+        manager.deleteSet(exIdx: 0, sIdx: 0, profile: profile)
+        XCTAssertEqual(manager.exercises[0].sets.count, 1)
+    }
+
+    func testMoveExerciseKeepsEveryExercise() throws {
+        let profile = texas()
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: try XCTUnwrap(profile.schedule.focus), profile: profile)
+        let ids = manager.exercises.map(\.id)
+        XCTAssertGreaterThan(ids.count, 2)
+
+        manager.moveExercise(from: 0, to: 2)
+        XCTAssertEqual(manager.exercises[2].id, ids[0])
+        XCTAssertEqual(Set(manager.exercises.map(\.id)), Set(ids))
+    }
+
+    func testApplyPreviousCopiesLastTime() throws {
+        let profile = texas()
+        let pending = profile.schedule.allPending
+        let first = try XCTUnwrap(pending.first)
+        let manager = WorkoutSessionManager.shared
+        // Прошлая тренировка этого движения.
+        let squat = try XCTUnwrap(profile.exercises(for: first).first { $0.name == "Приседания" })
+        let other = try XCTUnwrap(pending.dropFirst().first { profile.exercises(for: $0).contains { $0.name == "Приседания" } })
+        profile.recordSet(week: first.week, day: first.day.number, exercise: squat, index: 0, reps: 4, weight: 92.5)
+        profile.toggleCompleted(week: first.week, day: first.day.number)
+
+        manager.startWorkout(workout: other, profile: profile)
+        let exIdx = try XCTUnwrap(manager.exercises.firstIndex { $0.prescription.name == "Приседания" })
+        XCTAssertEqual(manager.exercises[exIdx].sets[0].previous?.weight, 92.5)
+
+        manager.applyPrevious(exIdx: exIdx, sIdx: 0, profile: profile)
+        XCTAssertEqual(manager.exercises[exIdx].sets[0].weight, 92.5)
+        XCTAssertEqual(manager.exercises[exIdx].sets[0].reps, 4)
+    }
+
+    func testSessionSurvivesRelaunch() throws {
+        let profile = texas()
+        let workout = try XCTUnwrap(profile.schedule.focus)
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: workout, profile: profile)
+        manager.setWeight(81, exIdx: 0, sIdx: 0, profile: profile)
+        manager.moveExercise(from: 0, to: 1)
+        manager.writeNow()
+        let saved = manager.exercises
+
+        // Как будто приложение выгрузили: память пустая, файл остался.
+        manager.forgetForTesting()
+        XCTAssertFalse(manager.isRunning)
+        manager.restoreIfNeeded(for: profile)
+
+        XCTAssertEqual(manager.activeWorkout?.id, workout.id)
+        XCTAssertEqual(manager.exercises, saved)
+        XCTAssertFalse(manager.isPresented, "поднятая тренировка открывается свёрнутой")
+    }
+
+    func testSavedSessionOfAnotherProfileIsIgnored() throws {
+        let profile = texas()
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: try XCTUnwrap(profile.schedule.focus), profile: profile)
+        manager.writeNow()
+        manager.forgetForTesting()
+
+        manager.restoreIfNeeded(for: texas())
+        XCTAssertFalse(manager.isRunning)
+    }
+
+    // MARK: - Картинки
+
+    func testExerciseArtMatchesNames() {
+        let cases: [(String, String)] = [
+            ("Приседания", "squat"), ("Фронтальный присед", "front_squat"), ("Присед с гирей", "goblet"),
+            ("Становая тяга", "deadlift"), ("Румынская тяга", "rdl"), ("Тяга трэп-грифа", "deadlift"),
+            ("Жим лёжа", "bench"), ("Жим на наклонной", "incline"), ("Жим штанги стоя", "ohp"),
+            ("Жим гантелей сидя", "seated_press"), ("Жим в тренажере", "bench"),
+            ("Тяга штанги в наклоне", "row"), ("Тяга верхнего блока", "pulldown"), ("Тяга сидя в блоке", "cable_row"),
+            ("Подтягивания", "pullup"), ("Отжимания на брусьях", "dips"), ("Махи в стороны", "lateral_raise"),
+            ("бицепс", "curl"), ("Трицепс", "pushdown"), ("Сгибание ног лёжа", "leg_curl"),
+            ("Подъём ног в висе", "hanging_raise"), ("Копенгагенская планка", "plank"), ("Икры", "calf"),
+            ("Обратная гиперэкстензия", "hyperext"), ("Что-то своё", "generic"),
+        ]
+        for (name, key) in cases {
+            XCTAssertEqual(ExerciseArt.key(for: name), key, name)
+        }
     }
 
     // MARK: - Склонения

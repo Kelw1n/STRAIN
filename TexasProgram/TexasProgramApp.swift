@@ -29,9 +29,14 @@ struct TexasProgramApp: App {
         .modelContainer(for: [ProgramProfile.self])
         .onChange(of: scenePhase) { _, phase in
             // После фона пересчитываем остаток от даты окончания, а не от тиков.
-            if phase == .active {
+            switch phase {
+            case .active:
                 restTimer.refresh()
-                WorkoutSessionManager.shared.refreshElapsed()
+            case .background:
+                // Свёрнутое приложение iOS может выгрузить — тренировку пишем сразу.
+                WorkoutSessionManager.shared.writeNow()
+            default:
+                break
             }
         }
     }

@@ -51,7 +51,7 @@ enum RuDate {
 }
 
 /// Тренировка плана, привязанная к календарной дате.
-struct ScheduledWorkout: Identifiable, Equatable {
+struct ScheduledWorkout: Identifiable, Equatable, Codable {
     let week: Int
     let day: WorkoutDayPlan
     let date: Date

@@ -141,6 +141,8 @@ struct MainTabView: View {
         .onAppear {
             WidgetBridge.publish(profile)
             ReminderScheduler.reschedule(for: profile)
+            // Приложение выгружали посреди тренировки — поднимаем её свёрнутой.
+            sessionManager.restoreIfNeeded(for: profile)
         }
         // Расписание напоминаний собирается заново на каждое изменение
         .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }
@@ -218,7 +220,7 @@ struct TodayView: View {
                                 .background(Color.white, in: Capsule())
                                 .shadow(color: Color.white.opacity(0.18), radius: 12, y: 4)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                             .appearIn(2)
                         }
 
@@ -501,14 +503,14 @@ struct TodayWorkoutPreviewCard: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            // Номер в нейтральном кружке, как у REBRN: оранжевым
-                            // выделен только жим волны — на него стоит обратить внимание.
-                            Text("\(index + 1)")
-                                .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
-                                .monospacedDigit()
-                                .foregroundStyle(exercise.benchSession != nil ? Theme.accent : Color.white.opacity(0.8))
-                                .frame(width: 32, height: 32)
-                                .background(Color.white.opacity(0.07), in: Circle())
+                            // Картинка движения; жим волны обведён акцентом —
+                            // на него стоит обратить внимание.
+                            ExerciseThumb(name: exercise.name, size: 42)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 42 * 0.25, style: .continuous)
+                                        .strokeBorder(Theme.accent, lineWidth: 2)
+                                        .opacity(exercise.benchSession != nil ? 1 : 0)
+                                }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(exercise.name)
@@ -550,7 +552,7 @@ struct TodayWorkoutPreviewCard: View {
                     .buttonStyle(.plain)
 
                     if index < exercises.count - 1 {
-                        Divider().opacity(0.12).padding(.leading, 44)
+                        Divider().opacity(0.12).padding(.leading, 54)
                     }
                 }
             }
@@ -1045,11 +1047,18 @@ struct ExerciseCard: View {
     private var card: some View {
         CardView(padding: 16, spacing: 10) {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: symbol)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
-                    .background(iconGradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                ExerciseThumb(name: exercise.name, size: 44)
+                    .overlay(alignment: .bottomTrailing) {
+                        // Значок поверх картинки: волна жима или необязательное упражнение.
+                        if exercise.benchSession != nil || exercise.isOptional {
+                            Image(systemName: symbol)
+                                .font(.system(size: 8, weight: .black))
+                                .foregroundStyle(.white)
+                                .frame(width: 16, height: 16)
+                                .background(iconGradient, in: Circle())
+                                .offset(x: 4, y: 4)
+                        }
+                    }
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(exercise.name)

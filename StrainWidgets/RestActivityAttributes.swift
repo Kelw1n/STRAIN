@@ -14,6 +14,9 @@ struct RestActivityAttributes: ActivityAttributes {
         var setDetails: String = ""
         var completedSets: Int = 0
         var totalSets: Int = 0
+        /// Картинка упражнения в общем контейнере. Необязательная: без неё
+        /// остров показывает значок, а старые состояния по-прежнему читаются.
+        var imageFile: String?
 
         var range: ClosedRange<Date> { startedAt...max(endsAt, startedAt.addingTimeInterval(1)) }
     }
