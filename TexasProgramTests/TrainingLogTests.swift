@@ -671,10 +671,14 @@ final class TrainingLogTests: XCTestCase {
 
     // MARK: - Разбор ключей
 
-    func testSetKeyWeekParsingSeparatesPeaking() {
-        XCTAssertEqual(SetKeyParts.week(from: "3-2|Приседания|0", isPeaking: false), 3)
-        XCTAssertNil(SetKeyParts.week(from: "3-2|Приседания|0", isPeaking: true))
-        XCTAssertEqual(SetKeyParts.week(from: "peak-2-1|Жим лёжа|1", isPeaking: true), 2)
-        XCTAssertNil(SetKeyParts.week(from: "peak-2-1|Жим лёжа|1", isPeaking: false))
+    /// Разбор переехал на ключ дня и префикс пространства (цикл + пикирование);
+    /// проверка та же: пиковые ключи не путаются с основными.
+    func testSetKeyWeekParsingSeparatesPeaking() throws {
+        let base = try XCTUnwrap(SetKeyParts.dayKey(from: "3-2|Приседания|0"))
+        let peak = try XCTUnwrap(SetKeyParts.dayKey(from: "peak-2-1|Жим лёжа|1"))
+        XCTAssertEqual(SetKeyParts.week(fromDayKey: base, prefix: ""), 3)
+        XCTAssertNil(SetKeyParts.week(fromDayKey: base, prefix: "peak-"))
+        XCTAssertEqual(SetKeyParts.week(fromDayKey: peak, prefix: "peak-"), 2)
+        XCTAssertNil(SetKeyParts.week(fromDayKey: peak, prefix: ""))
     }
 }
