@@ -7,6 +7,7 @@ struct ActivityProgressView: View {
 
     @State private var selectedPeriod = "3 месяца"
     @State private var showingWeightSheet = false
+    @State private var showingMuscleSheet = false
 
     private let periods = ["1 месяц", "3 месяца", "6 месяцев", "Всё время"]
 
@@ -70,6 +71,9 @@ struct ActivityProgressView: View {
                         }
                 }
             }
+            .sheet(isPresented: $showingMuscleSheet) {
+                MuscleGroupsDetailSheet(profile: profile)
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -89,8 +93,8 @@ struct ActivityProgressView: View {
                     .foregroundStyle(Color.white.opacity(0.45))
             }
 
-            // Бар-чарт с объёмом
-            let records = profile.completionLog.suffix(8)
+            // Бар-чарт с объёмом (показываем до 6 последних, чтобы даты не наползали друг на друга)
+            let records = profile.completionLog.suffix(6)
             if !records.isEmpty {
                 Chart {
                     ForEach(Array(records.enumerated()), id: \.offset) { idx, record in
@@ -100,7 +104,7 @@ struct ActivityProgressView: View {
                         let total = (squat + bench + dead) * 5
 
                         BarMark(
-                            x: .value("Дата", RuDate.dayMonth(record.date)),
+                            x: .value("Дата", RuDate.shortDayMonth(record.date)),
                             y: .value("Объём", total)
                         )
                         .foregroundStyle(Theme.accentGradient)
@@ -111,12 +115,14 @@ struct ActivityProgressView: View {
                 .chartYAxis(.hidden)
                 .chartXAxis {
                     AxisMarks { _ in
-                        AxisValueLabel().foregroundStyle(Color.white.opacity(0.4))
+                        AxisValueLabel()
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.white.opacity(0.45))
                     }
                 }
                 .padding(.vertical, 4)
             } else {
-                // Заглушка чарта в виде элегантных столбцов (как в скриншоте 5)
+                // Заглушка чарта в виде элегантных столбцов
                 HStack(alignment: .bottom, spacing: 8) {
                     ForEach([0.4, 0.6, 0.5, 0.8, 0.65, 0.55, 0.75, 0.9, 0.6], id: \.self) { ratio in
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -182,7 +188,7 @@ struct ActivityProgressView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     if let weight = profile.latestBodyWeight {
-                        Text("\(WeightFormat.kilogramsPrecise(weight)) кг")
+                        Text(WeightFormat.kilogramsPrecise(weight))
                             .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                         Text("Текущий вес")
@@ -208,38 +214,43 @@ struct ActivityProgressView: View {
     // MARK: - Карточка «Группы мышц» (Радарная диаграмма)
 
     private var muscleGroupsRadarCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Группы мышц")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.3))
+        Button {
+            showingMuscleSheet = true
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Группы мышц")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.3))
+                }
+
+                // Радарная диаграмма (Spider web)
+                ZStack {
+                    RadarWebShape(levels: 3)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+
+                    RadarDataShape(values: [0.85, 0.7, 0.9, 0.6, 0.75, 0.5])
+                        .fill(Theme.accent.opacity(0.25))
+
+                    RadarDataShape(values: [0.85, 0.7, 0.9, 0.6, 0.75, 0.5])
+                        .stroke(Theme.accent, lineWidth: 1.6)
+                }
+                .frame(height: 56)
+                .padding(.vertical, 4)
+
+                Text("Баланс нагрузки")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.white.opacity(0.45))
             }
-
-            // Радарная диаграмма (Spider web)
-            ZStack {
-                RadarWebShape(levels: 3)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-
-                RadarDataShape(values: [0.85, 0.7, 0.9, 0.6, 0.75, 0.5])
-                    .fill(Theme.accent.opacity(0.25))
-
-                RadarDataShape(values: [0.85, 0.7, 0.9, 0.6, 0.75, 0.5])
-                    .stroke(Theme.accent, lineWidth: 1.6)
-            }
-            .frame(height: 56)
-            .padding(.vertical, 4)
-
-            Text("Баланс нагрузки")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.white.opacity(0.45))
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .buttonStyle(.plain)
     }
 
     // MARK: - Карточка «Сила» (Рекорды)
@@ -297,11 +308,127 @@ struct ActivityProgressView: View {
 
             Spacer()
 
-            Text("\(WeightFormat.kilogramsPrecise(weight)) кг")
+            Text(WeightFormat.kilogramsPrecise(weight))
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Theme.accentGradient)
         }
+    }
+}
+
+// MARK: - Экран детализации «Группы мышц»
+
+struct MuscleGroupsDetailSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var profile: ProgramProfile
+
+    private let muscleGroups: [(name: String, percentage: Int, sets: Int, icon: String, exercises: String)] = [
+        ("Грудь (Пекторальные)", 26, 16, "figure.strengthtraining.traditional", "Жим лёжа, Жим на наклонной, Жим в тренажере"),
+        ("Спина (Широчайшие и трапеции)", 24, 15, "figure.rower", "Становая тяга, Тяга верхнего блока, Тяга сидя"),
+        ("Ноги (Квадрицепсы и бицепс бедра)", 22, 14, "figure.run", "Приседания со штангой, Жим ногами"),
+        ("Плечи (Передняя, средняя, задняя дельты)", 15, 9, "figure.boxing", "Армейский жим, Махи гантелями"),
+        ("Руки (Бицепс и трицепс)", 13, 8, "dumbbell.fill", "Французский жим, Сгибания со штангой")
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Большая радарная диаграмма
+                    CardView(padding: 20) {
+                        VStack(spacing: 16) {
+                            Text("Баланс распределения нагрузки")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
+
+                            ZStack {
+                                RadarWebShape(levels: 4)
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+
+                                RadarDataShape(values: [0.85, 0.75, 0.9, 0.65, 0.7, 0.5])
+                                    .fill(Theme.accent.opacity(0.25))
+
+                                RadarDataShape(values: [0.85, 0.75, 0.9, 0.65, 0.7, 0.5])
+                                    .stroke(Theme.accent, lineWidth: 2)
+                            }
+                            .frame(height: 160)
+                            .padding(.vertical, 8)
+
+                            Text("Нагрузка сбалансирована для пропорционального роста и полноценного восстановления.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.white.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    // Список групп мышц
+                    VStack(spacing: 12) {
+                        ForEach(muscleGroups, id: \.name) { group in
+                            CardView(padding: 16, spacing: 10) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: group.icon)
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(Theme.accent)
+                                        .frame(width: 36, height: 36)
+                                        .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(group.name)
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundStyle(.white)
+                                        Text(group.exercises)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(Color.white.opacity(0.45))
+                                            .lineLimit(1)
+                                    }
+
+                                    Spacer(minLength: 8)
+
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text("\(group.percentage)%")
+                                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                                            .foregroundStyle(Theme.accent)
+                                        Text("\(group.sets) подх.")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(Color.white.opacity(0.45))
+                                    }
+                                }
+
+                                // Полоса прогресса
+                                GeometryReader { barProxy in
+                                    ZStack(alignment: .leading) {
+                                        Capsule()
+                                            .fill(Color.white.opacity(0.08))
+                                            .frame(height: 6)
+
+                                        Capsule()
+                                            .fill(Theme.accentGradient)
+                                            .frame(width: barProxy.size.width * CGFloat(group.percentage) / 30.0, height: 6)
+                                    }
+                                }
+                                .frame(height: 6)
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 30)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+            }
+            .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+            .navigationTitle("Группы мышц")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Готово") { dismiss() }
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -326,18 +453,20 @@ struct RadarWebShape: Shape {
         let sides = 6
         let angleStep = (2 * CGFloat.pi) / CGFloat(sides)
 
-        // Лучи из центра
+        // Осевые линии
         for i in 0..<sides {
             let angle = CGFloat(i) * angleStep - CGFloat.pi / 2
-            let x = center.x + radius * cos(angle)
-            let y = center.y + radius * sin(angle)
+            let point = CGPoint(
+                x: center.x + radius * cos(angle),
+                y: center.y + radius * sin(angle)
+            )
             path.move(to: center)
-            path.addLine(to: CGPoint(x: x, y: y))
+            path.addLine(to: point)
         }
 
-        // Концентрические кольца-многоугольники
+        // Концентрические сетки паутины
         for level in 1...levels {
-            let currentRadius = radius * CGFloat(level) / CGFloat(levels)
+            let currentRadius = radius * (CGFloat(level) / CGFloat(levels))
             for i in 0..<sides {
                 let angle = CGFloat(i) * angleStep - CGFloat.pi / 2
                 let point = CGPoint(

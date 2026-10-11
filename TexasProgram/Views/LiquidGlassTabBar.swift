@@ -23,92 +23,119 @@ enum MainTabItem: String, CaseIterable, Identifiable {
 struct LiquidGlassTabBar: View {
     @Binding var selectedTab: MainTabItem
     @Environment(\.colorScheme) private var scheme
-    @Namespace private var tabLensNamespace
 
     @State private var isInteracting: Bool = false
+    @State private var hoveredTab: MainTabItem? = nil
 
     private let barHeight: CGFloat = 62
     private let lensHeight: CGFloat = 48
     private let tabs = MainTabItem.allCases
 
+    private var currentActiveTab: MainTabItem {
+        hoveredTab ?? selectedTab
+    }
+
+    private var currentActiveIndex: Int {
+        tabs.firstIndex(of: currentActiveTab) ?? 0
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let totalWidth = geometry.size.width
             let itemWidth = max(1, totalWidth / CGFloat(tabs.count))
+            let lensWidth = itemWidth - 8
+            let lensOffset = CGFloat(currentActiveIndex) * itemWidth + 4
 
-            HStack(spacing: 0) {
-                ForEach(tabs) { tab in
-                    tabButton(tab: tab)
+            ZStack(alignment: .leading) {
+                // Фоновая подложка Liquid Glass капсулы
+                dockBackground
+
+                // Скользящая физическая линза (одна плавная форма с физикой пружины)
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(isInteracting ? 0.22 : 0.16))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(isInteracting ? 0.55 : 0.40),
+                                        Color.white.opacity(0.08)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(color: Theme.accent.opacity(isInteracting ? 0.55 : 0.35), radius: isInteracting ? 12 : 8, y: 2)
+                    .frame(width: lensWidth, height: lensHeight)
+                    .offset(x: lensOffset)
+                    .animation(.spring(response: 0.30, dampingFraction: 0.72), value: currentActiveIndex)
+                    .scaleEffect(isInteracting ? 1.05 : 1.0)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isInteracting)
+
+                // Иконки вкладок
+                HStack(spacing: 0) {
+                    ForEach(tabs) { tab in
+                        let isActive = currentActiveTab == tab
+
+                        Button {
+                            selectTab(tab)
+                        } label: {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 20, weight: isActive ? .bold : .medium))
+                                .foregroundStyle(isActive ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.white.opacity(0.42)))
+                                .scaleEffect(isActive ? (isInteracting ? 1.20 : 1.10) : 1.0)
+                                .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isActive)
+                                .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isInteracting)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: lensHeight)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .frame(width: totalWidth, height: barHeight)
-            .background(dockBackground)
             .scaleEffect(isInteracting ? 0.985 : 1.0)
             .animation(.spring(response: 0.30, dampingFraction: 0.75), value: isInteracting)
+            .overlay(alignment: .topLeading) {
+                // Всплывающая стеклянная плашка с названием меню во время свайпа/зажатия
+                if isInteracting {
+                    Text(currentActiveTab.rawValue)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Capsule().fill(Color(red: 0.10, green: 0.10, blue: 0.12).opacity(0.92))
+                                }
+                                .overlay {
+                                    Capsule().strokeBorder(Theme.accent.opacity(0.5), lineWidth: 1)
+                                }
+                                .shadow(color: Color.black.opacity(0.6), radius: 10, y: 5)
+                        }
+                        .offset(x: max(10, min(totalWidth - 90, lensOffset + (lensWidth / 2) - 40)), y: -42)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: currentActiveIndex)
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                }
+            }
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         handleDrag(at: value.location.x, totalWidth: totalWidth, itemWidth: itemWidth)
                     }
                     .onEnded { _ in
-                        withAnimation(.spring(response: 0.30, dampingFraction: 0.75)) {
-                            isInteracting = false
-                        }
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        handleDragEnd()
                     }
             )
         }
         .frame(height: barHeight)
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
-    }
-
-    @ViewBuilder
-    private func tabButton(tab: MainTabItem) -> some View {
-        let isSelected = selectedTab == tab
-
-        Button {
-            selectTab(tab)
-        } label: {
-            ZStack {
-                if isSelected {
-                    activeLens
-                }
-
-                Image(systemName: tab.icon)
-                    .font(.system(size: 20, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.white.opacity(0.45)))
-                    .scaleEffect(isSelected ? (isInteracting ? 1.15 : 1.08) : 1.0)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: lensHeight)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: lensHeight)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var activeLens: some View {
-        let fillOpacity = isInteracting ? 0.22 : 0.16
-        let strokeColors = [Color.white.opacity(isInteracting ? 0.55 : 0.40), Color.white.opacity(0.08)]
-        let glowOpacity = isInteracting ? 0.55 : 0.35
-        let glowRadius: CGFloat = isInteracting ? 12 : 8
-
-        return Capsule(style: .continuous)
-            .fill(Color.white.opacity(fillOpacity))
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(colors: strokeColors, startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 1
-                    )
-            )
-            .matchedGeometryEffect(id: "active_lens", in: tabLensNamespace)
-            .shadow(color: Theme.accent.opacity(glowOpacity), radius: glowRadius, y: 2)
-            .frame(height: lensHeight)
-            .padding(.horizontal, 4)
-            .scaleEffect(isInteracting ? 1.05 : 1.0)
     }
 
     private var dockBackground: some View {
@@ -139,25 +166,39 @@ struct LiquidGlassTabBar: View {
 
     private func handleDrag(at x: CGFloat, totalWidth: CGFloat, itemWidth: CGFloat) {
         if !isInteracting {
-            isInteracting = true
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                isInteracting = true
+            }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
         let clampedX = min(max(x, 0), totalWidth - 1)
         let index = Int(clampedX / itemWidth)
         let targetTab = tabs[min(max(index, 0), tabs.count - 1)]
-        if targetTab != selectedTab {
+        if targetTab != currentActiveTab {
             UISelectionFeedbackGenerator().selectionChanged()
             withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
-                selectedTab = targetTab
+                hoveredTab = targetTab
             }
         }
+    }
+
+    private func handleDragEnd() {
+        if let target = hoveredTab, target != selectedTab {
+            selectedTab = target
+        }
+        withAnimation(.spring(response: 0.30, dampingFraction: 0.75)) {
+            isInteracting = false
+            hoveredTab = nil
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     private func selectTab(_ tab: MainTabItem) {
         guard selectedTab != tab else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.74)) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.74)) {
             selectedTab = tab
+            hoveredTab = nil
         }
     }
 }

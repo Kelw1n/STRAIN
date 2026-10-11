@@ -18,9 +18,18 @@ enum RuDate {
         weekdayShort.indices.contains(weekday) ? weekdayShort[weekday] : ""
     }
 
+    static let monthShort = ["", "янв", "фев", "мар", "апр", "май", "июн",
+                             "июл", "авг", "сен", "окт", "ноя", "дек"]
+
     static func dayMonth(_ date: Date, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents([.day, .month], from: date)
         let month = monthGenitive.indices.contains(parts.month ?? 0) ? monthGenitive[parts.month ?? 0] : ""
+        return "\(parts.day ?? 1) \(month)"
+    }
+
+    static func shortDayMonth(_ date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.day, .month], from: date)
+        let month = monthShort.indices.contains(parts.month ?? 0) ? monthShort[parts.month ?? 0] : ""
         return "\(parts.day ?? 1) \(month)"
     }
 }
