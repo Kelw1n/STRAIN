@@ -9,9 +9,10 @@ struct MainTabView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(RestTimer.self) private var restTimer
     @Bindable var profile: ProgramProfile
-    @State private var selectedTab: AppTab = .today
+    @State private var selectedTab: MainTabItem = .today
     @State private var showingSettings = false
     @State private var benchFocus: Int?
+    @State private var activeWorkout: ScheduledWorkout? = nil
     let onAddProfile: () -> Void
     let onDeleteProfile: () -> Void
 
@@ -23,43 +24,55 @@ struct MainTabView: View {
         guard isUpperLower else { return nil }
         return { session in
             benchFocus = session
-            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { selectedTab = .bench }
+            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { selectedTab = .workout }
         }
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            TodayView(
-                profile: profile,
-                onSettings: { showingSettings = true },
-                onOpenBench: benchHandler
-            )
-            .tabItem { Label("Сегодня", systemImage: "bolt.fill") }
-            .tag(AppTab.today)
-
-            PlanView(profile: profile, onOpenBench: benchHandler)
-                .tabItem { Label("План", systemImage: "square.stack.3d.up.fill") }
-                .tag(AppTab.plan)
-
-            if isUpperLower {
-                BenchWaveView(profile: profile, focused: $benchFocus)
-                    .tabItem { Label("Жим 14", systemImage: "waveform.path.ecg") }
-                    .tag(AppTab.bench)
+        ZStack(alignment: .bottom) {
+            // Экраны контента
+            Group {
+                switch selectedTab {
+                case .today:
+                    TodayView(
+                        profile: profile,
+                        onSettings: { showingSettings = true },
+                        onOpenBench: benchHandler,
+                        onStartWorkout: { workout in activeWorkout = workout }
+                    )
+                case .workout:
+                    WorkoutHubView(
+                        profile: profile,
+                        onStartWorkout: { workout in activeWorkout = workout },
+                        onOpenBench: benchHandler
+                    )
+                case .progress:
+                    ActivityProgressView(
+                        profile: profile,
+                        onStartWorkout: {
+                            if let focus = profile.schedule.focus {
+                                activeWorkout = focus
+                            }
+                        }
+                    )
+                case .community:
+                    BroTrackerView(profile: profile)
+                case .profile:
+                    SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            ProgressScreen(profile: profile)
-                .tabItem { Label("Прогресс", systemImage: "chart.bar.xaxis") }
-                .tag(AppTab.progress)
+            // Нижняя панель: плашка отдыха + Liquid Glass Dock
+            VStack(spacing: 8) {
+                RestTimerBar()
+                    .animation(Motion.maybe(Motion.card, reduce: reduceMotion), value: restTimer.isRunning)
 
-            InstructionsView(programKind: profile.programKind)
-                .tabItem { Label("Инструкция", systemImage: "book.closed.fill") }
-                .tag(AppTab.guide)
+                LiquidGlassTabBar(selectedTab: $selectedTab)
+            }
         }
-        .tint(Theme.accent)
-        // Плашка отдыха висит над вкладками и переживает переходы между ними.
-        .safeAreaInset(edge: .bottom) {
-            RestTimerBar()
-                .animation(Motion.maybe(Motion.card, reduce: reduceMotion), value: restTimer.isRunning)
+        .fullScreenCover(item: $activeWorkout) { workout in
+            ActiveWorkoutSessionView(profile: profile, workout: workout)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
@@ -69,8 +82,7 @@ struct MainTabView: View {
             WidgetBridge.publish(profile)
             ReminderScheduler.reschedule(for: profile)
         }
-        // Расписание напоминаний собирается заново на каждое изменение, от которого
-        // оно зависит: день недели, время и сам переключатель.
+        // Расписание напоминаний собирается заново на каждое изменение
         .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.reminderHour) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.reminderMinute) { _, _ in ReminderScheduler.reschedule(for: profile) }
@@ -90,6 +102,7 @@ struct TodayView: View {
     @Bindable var profile: ProgramProfile
     let onSettings: () -> Void
     var onOpenBench: ((Int) -> Void)?
+    var onStartWorkout: ((ScheduledWorkout) -> Void)?
     @State private var customizing: ScheduledWorkout?
     @State private var entryTarget: SetEntryTarget?
     /// Имя движения, чью историю открыли: `navigationDestination` ждёт Hashable.
@@ -126,6 +139,28 @@ struct TodayView: View {
                         }
 
                         hero(workout: focus, schedule: schedule).appearIn(1)
+
+                        if let onStartWorkout {
+                            Button {
+                                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                                onStartWorkout(focus)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 14, weight: .bold))
+                                    Text("НАЧАТЬ ТРЕНИРОВКУ")
+                                        .font(.system(size: 15, weight: .black, design: .rounded))
+                                        .tracking(1.0)
+                                }
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.white, in: Capsule())
+                                .shadow(color: Color.white.opacity(0.18), radius: 12, y: 4)
+                            }
+                            .buttonStyle(.plain)
+                            .appearIn(2)
+                        }
 
                         if !schedule.overdue.isEmpty {
                             overdueCard(schedule.overdue).appearIn(2)
@@ -189,7 +224,7 @@ struct TodayView: View {
                     }
                 }
                 .padding(.horizontal)
-                .padding(.bottom, 28)
+                .padding(.bottom, 94)
             }
             .scrollIndicators(.hidden)
             .screenBackground()
@@ -501,7 +536,7 @@ struct PlanView: View {
                         ))
                     }
                 }
-                .padding(.bottom, 28)
+                .padding(.bottom, 94)
             }
             .scrollIndicators(.hidden)
             .screenBackground()
@@ -634,6 +669,7 @@ struct DayDetailView: View {
     @State private var showCustomize = false
     @State private var entryTarget: SetEntryTarget?
     @State private var historyFor: String?
+    @State private var activeWorkoutSession: ScheduledWorkout? = nil
 
     /// У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
     ///
@@ -651,8 +687,37 @@ struct DayDetailView: View {
         // все двенадцать недель по нескольку раз на кадр.
         let currentDay = self.currentDay
         let exercises = profile.exercises(day: currentDay, benchSession: scheduled?.benchSession)
+        let targetWorkout = scheduled ?? ScheduledWorkout(
+            week: week,
+            day: currentDay,
+            date: Date(),
+            weekday: 2,
+            isCompleted: profile.isCompleted(week: week, day: day.number),
+            benchSession: nil
+        )
+
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
+                Button {
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    activeWorkoutSession = targetWorkout
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("НАЧАТЬ ТРЕНИРОВКУ")
+                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .tracking(1.0)
+                    }
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.white, in: Capsule())
+                    .shadow(color: Color.white.opacity(0.18), radius: 12, y: 4)
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 4)
+
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
                     ExerciseCard(
                         exercise: exercise,
@@ -697,7 +762,7 @@ struct DayDetailView: View {
                     .appearIn(exercises.count + 2)
             }
             .padding(.horizontal)
-            .padding(.bottom, 28)
+            .padding(.bottom, 94)
         }
         .scrollIndicators(.hidden)
         .screenBackground()
@@ -706,6 +771,9 @@ struct DayDetailView: View {
                          ? "Неделя \(week)"
                          : "Неделя \(week) · \(profile.shortWeekdayName(forDay: day.number).uppercased())")
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(item: $activeWorkoutSession) { workout in
+            ActiveWorkoutSessionView(profile: profile, workout: workout)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

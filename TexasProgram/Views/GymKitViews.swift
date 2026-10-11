@@ -245,10 +245,19 @@ struct RestTimerBar: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(.regularMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
-            .padding(.horizontal, 16)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(
+                Capsule().strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.35), Theme.accent.opacity(0.4), .white.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+            )
+            .shadow(color: .black.opacity(0.4), radius: 18, y: 8)
+            .padding(.horizontal, 22)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }

@@ -36,7 +36,8 @@ struct BroTrackerView: View {
                     crewSection
                 }
                 .padding(.horizontal)
-                .padding(.vertical, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 94)
             }
             .screenBackground()
             .navigationTitle("Бро-трекер")
