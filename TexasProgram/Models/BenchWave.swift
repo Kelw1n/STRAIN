@@ -67,10 +67,14 @@ enum WeightFormat {
         return WeightUnit(rawValue: raw) ?? .kg
     }
 
+    /// Число без единиц. Половинки килограмма сохраняем: веса идут с шагом 2,5,
+    /// и округление до целого показывало 53 кг вместо 52,5 — такой вес
+    /// на штангу не собрать.
     static func short(_ value: Double) -> String {
         switch unit {
         case .kg:
-            return String(Int(value.rounded()))
+            if value.rounded() == value { return String(Int(value)) }
+            return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
         case .lbs:
             return String(Int((value * 2.20462).rounded()))
         }
@@ -161,7 +165,7 @@ struct BenchSessionPlan: Identifiable, Hashable, Codable, Sendable {
         self.topWeight = top
         self.topWeightText = WeightFormat.kilograms(top)
         self.repsText = sets.map(\.reps).joined(separator: " / ")
-        self.weightsText = sets.map { WeightFormat.short($0.weight) }.joined(separator: " / ") + " кг"
+        self.weightsText = sets.map { WeightFormat.short($0.weight) }.joined(separator: " / ") + " " + WeightFormat.unit.label
     }
 
     var accent: LinearGradient { highlight?.gradient ?? Theme.accentGradient }
