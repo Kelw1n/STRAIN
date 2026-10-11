@@ -767,9 +767,14 @@ final class ProgramProfile {
         refreshCompletion(week: week, day: day, now: now)
     }
 
-    /// Записанные подходы упражнения по порядку номеров.
+    /// Сколько подходов сверх плана ищем в записях. В тренировке можно
+    /// добавить подход кнопкой — без этого запаса он записывался, но в историю,
+    /// графики и выгрузку не попадал.
+    static let extraSetAllowance = 12
+
+    /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана.
     func entries(week: Int, day: Int, exercise: ExercisePrescription) -> [(index: Int, entry: SetEntry)] {
-        (0..<max(exercise.sets, 0)).compactMap { index in
+        (0..<(max(exercise.sets, 0) + Self.extraSetAllowance)).compactMap { index in
             setEntry(week: week, day: day, exercise: exercise, index: index).map { (index, $0) }
         }
     }
@@ -1282,6 +1287,33 @@ final class ProgramProfile {
         } else {
             setProgress[key] = count
         }
+    }
+
+    /// Слепок отметок одного дня: им отмена тренировки возвращает всё как было.
+    struct DaySnapshot {
+        let progress: [String: Int]
+        let log: [String: SetEntry]
+    }
+
+    func snapshotDay(week: Int, day: Int) -> DaySnapshot {
+        let prefix = dayKey(week: week, day: day) + "|"
+        return DaySnapshot(
+            progress: setProgress.filter { $0.key.hasPrefix(prefix) },
+            log: setLog.filter { $0.key.hasPrefix(prefix) }
+        )
+    }
+
+    /// Возвращает отметки дня к слепку. Выполненность дня и история не трогаются:
+    /// тренировка, закрытая до начала сессии, после отмены сессии остаётся закрытой.
+    func restoreDay(_ snapshot: DaySnapshot, week: Int, day: Int, now: Date = Date()) {
+        let prefix = dayKey(week: week, day: day) + "|"
+        // Собираем словари целиком и присваиваем один раз: каждое присваивание
+        // свойства модели — это запись в хранилище.
+        setProgress = setProgress.filter { !$0.key.hasPrefix(prefix) }
+            .merging(snapshot.progress) { _, restored in restored }
+        setLog = setLog.filter { !$0.key.hasPrefix(prefix) }
+            .merging(snapshot.log) { _, restored in restored }
+        refreshCompletion(week: week, day: day, now: now)
     }
 
     /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).

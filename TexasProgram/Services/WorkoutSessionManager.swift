@@ -39,6 +39,19 @@ final class WorkoutSessionManager {
     var showingNoteSheet: Bool = false
     var customRestTargetExerciseIndex: Int? = nil
 
+    /// Тренировка, которую попросили начать, пока идёт другая.
+    var pendingWorkout: ScheduledWorkout? = nil
+    var showingReplaceConfirm: Bool = false
+
+    var replaceTitle: String {
+        guard let current = activeWorkout else { return "Уже идёт тренировка" }
+        return "Уже идёт: \(current.day.title)"
+    }
+
+    /// Отметки дня на момент старта. Отмена возвращает к ним, а не стирает день:
+    /// раньше отмена сессии по уже закрытому дню выбрасывала его из истории.
+    @ObservationIgnored private var startSnapshot: ProgramProfile.DaySnapshot?
+
     private var timerCancellable: AnyCancellable?
 
     var totalCompletedSets: Int {
@@ -60,6 +73,43 @@ final class WorkoutSessionManager {
         return totalTonnage / mins
     }
 
+    /// Вход для кнопок «Начать». Если идёт другая тренировка, молча её не
+    /// подменяем — спрашиваем, что делать.
+    func requestStart(workout: ScheduledWorkout, profile: ProgramProfile) {
+        if let current = activeWorkout, current.id != workout.id {
+            pendingWorkout = workout
+            showingReplaceConfirm = true
+            return
+        }
+        startWorkout(workout: workout, profile: profile)
+    }
+
+    func cancelReplace() {
+        pendingWorkout = nil
+        expand()
+    }
+
+    func confirmReplace(profile: ProgramProfile) {
+        guard let next = pendingWorkout else { return }
+        pendingWorkout = nil
+        discardWorkout(profile: profile)
+        startWorkout(workout: next, profile: profile)
+    }
+
+    /// Полноэкранную тренировку нельзя показать, пока открыт лист: система
+    /// отказывает молча, а флаг остаётся поднятым, и кнопка «Продолжить»
+    /// больше ничего не делает. Лист закрылся — показываем заново.
+    func representAfterSheet() {
+        if isPresented {
+            isPresented = false
+            DispatchQueue.main.async { self.isPresented = true }
+        }
+        if showingReplaceConfirm {
+            showingReplaceConfirm = false
+            DispatchQueue.main.async { self.showingReplaceConfirm = true }
+        }
+    }
+
     func startWorkout(workout: ScheduledWorkout, profile: ProgramProfile) {
         if let current = activeWorkout, current.id == workout.id {
             // Уже идет эта же тренировка — просто разворачиваем!
@@ -71,6 +121,7 @@ final class WorkoutSessionManager {
         activeWorkout = workout
         startDate = Date()
         elapsedSeconds = 0
+        startSnapshot = profile.snapshotDay(week: workout.week, day: workout.day.number)
         noteText = profile.note(week: workout.week, day: workout.day.number)
         showingZeroSetsAlert = false
         showingSummary = false
@@ -82,7 +133,8 @@ final class WorkoutSessionManager {
             let defaultRest = presc.benchSession != nil ? 180 : profile.defaultRestSeconds
             let plannedWeight = extractPlannedWeight(for: presc, profile: profile, workout: workout)
             let plannedReps = extractPlannedReps(for: presc)
-            let setsCount = max(presc.sets, 3)
+            // Сколько подходов в плане, столько и строк: два — значит два.
+            let setsCount = max(presc.sets, 1)
 
             let sets = (0..<setsCount).map { sIdx in
                 ActiveSetState(
@@ -147,6 +199,7 @@ final class WorkoutSessionManager {
         }
 
         stopTimer()
+        startSnapshot = nil
         activeWorkout = nil
         isPresented = false
         exercises = []
@@ -155,7 +208,11 @@ final class WorkoutSessionManager {
 
     func discardWorkout(profile: ProgramProfile) {
         guard let workout = activeWorkout else { return }
-        profile.resetDaySets(week: workout.week, day: workout.day.number)
+        if let snapshot = startSnapshot {
+            profile.restoreDay(snapshot, week: workout.week, day: workout.day.number)
+        }
+        startSnapshot = nil
+        showingZeroSetsAlert = false
 
         stopTimer()
         activeWorkout = nil
@@ -183,7 +240,7 @@ final class WorkoutSessionManager {
             )
             let completedCount = exercises[exIdx].sets.filter(\.isDone).count
             let totalCount = exercises[exIdx].sets.count
-            let details = "\(WeightFormat.kilograms(currentSet.weight)) × \(currentSet.reps)"
+            let details = "\(WeightFormat.kilogramsPrecise(currentSet.weight)) × \(currentSet.reps)"
             restTimer.start(
                 TimeInterval(ex.restSeconds),
                 exerciseName: ex.prescription.name,
@@ -242,13 +299,20 @@ final class WorkoutSessionManager {
         }
     }
 
+    /// Время считаем от даты старта, а не тиками: в заблокированном телефоне
+    /// таймер не тикает, и часовая тренировка показывала пятнадцать минут.
     private func startTimer() {
         stopTimer()
         timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                self?.elapsedSeconds += 1
+                self?.refreshElapsed()
             }
+    }
+
+    func refreshElapsed(now: Date = Date()) {
+        guard activeWorkout != nil else { return }
+        elapsedSeconds = max(0, Int(now.timeIntervalSince(startDate)))
     }
 
     private func stopTimer() {

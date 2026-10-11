@@ -424,13 +424,12 @@ struct ActiveWorkoutSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Готово") {
-                        if !sessionManager.noteText.isEmpty {
-                            profile.setNote(
-                                sessionManager.noteText,
-                                week: workout.week,
-                                day: workout.day.number
-                            )
-                        }
+                        // Пустой текст — тоже ответ: заметку стёрли, её надо удалить.
+                        profile.setNote(
+                            sessionManager.noteText,
+                            week: workout.week,
+                            day: workout.day.number
+                        )
                         sessionManager.showingNoteSheet = false
                     }
                     .font(.body.weight(.bold))

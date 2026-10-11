@@ -9,7 +9,8 @@ on:
 
 jobs:
   test:
-    if: github.event_name == 'pull_request'
+    # Тесты и сборка на Xcode 16: проверяют, что запасной путь без iOS 26 SDK компилируется.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
     runs-on: macos-14
     steps:
@@ -40,11 +41,22 @@ jobs:
 
   unsigned-ipa:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+        # Самый свежий Xcode 26: только с его SDK на iOS 26 включается настоящее
+        # жидкое стекло. Если его на раннере нет — последний Xcode 16.
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -z "$XCODE" ]; then
+            XCODE="$(ls -d /Applications/Xcode_16*.app | sort -V | tail -n 1)"
+          fi
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
       - name: Build unsigned app
         run: |
           rm -rf TexasProgram/Assets.xcassets

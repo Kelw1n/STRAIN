@@ -106,8 +106,18 @@ struct WorkoutHubView: View {
             .sheet(isPresented: $showingGoalSheet) {
                 GoalSettingsSheet(profile: profile)
             }
-            .sheet(isPresented: $showingProgramCatalog) {
+            .sheet(isPresented: $showingProgramCatalog, onDismiss: {
+                WorkoutSessionManager.shared.representAfterSheet()
+            }) {
                 PlanView(profile: profile, onOpenBench: onOpenBench)
+            }
+            // Тренировку начали из дня в «Программах» — лист закрываем, иначе
+            // полноэкранная тренировка под ним так и не покажется.
+            .onChange(of: WorkoutSessionManager.shared.isPresented) { _, presented in
+                if presented { showingProgramCatalog = false }
+            }
+            .onChange(of: WorkoutSessionManager.shared.showingReplaceConfirm) { _, showing in
+                if showing { showingProgramCatalog = false }
             }
         }
         .preferredColorScheme(.dark)
@@ -226,7 +236,7 @@ struct WorkoutHubView: View {
             .padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(schedule.today != nil ? "Сегодня" : "Завтра")
+                Text(focus.map { schedule.relativeTitle(for: $0) } ?? "Программа пройдена")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
                 Text("Тренировка в \(String(format: "%02d:%02d", profile.reminderHour, profile.reminderMinute))")

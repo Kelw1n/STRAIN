@@ -24,46 +24,78 @@ struct MainTabView: View {
         guard isUpperLower else { return nil }
         return { session in
             benchFocus = session
-            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { selectedTab = .workout }
+            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.workout) }
+        }
+    }
+
+    /// В какую сторону листаем: новый экран въезжает с той стороны, куда ушла линза.
+    @State private var movingForward = true
+
+    /// Направление выставляется в той же транзакции, что и вкладка, —
+    /// через `onChange` оно опоздало бы на один переход.
+    private func select(_ tab: MainTabItem) {
+        movingForward = tab.index >= selectedTab.index
+        selectedTab = tab
+    }
+
+    private var tabSelection: Binding<MainTabItem> {
+        Binding(get: { selectedTab }, set: { select($0) })
+    }
+
+    /// Уходящий экран просто гаснет и чуть уменьшается, направление важно только
+    /// входящему. Так переход не зависит от того, с каким направлением уходящий
+    /// экран был нарисован в последний раз.
+    private var tabTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        return .asymmetric(
+            insertion: .offset(x: movingForward ? 36 : -36).combined(with: .opacity),
+            removal: .scale(scale: 0.97).combined(with: .opacity)
+        )
+    }
+
+    @ViewBuilder
+    private func screen(for tab: MainTabItem) -> some View {
+        switch tab {
+        case .today:
+            TodayView(
+                profile: profile,
+                onSettings: { showingSettings = true },
+                onOpenBench: benchHandler,
+                onStartWorkout: { workout in
+                    sessionManager.requestStart(workout: workout, profile: profile)
+                }
+            )
+        case .workout:
+            WorkoutHubView(
+                profile: profile,
+                onStartWorkout: { workout in
+                    sessionManager.requestStart(workout: workout, profile: profile)
+                },
+                onOpenBench: benchHandler
+            )
+        case .progress:
+            ActivityProgressView(
+                profile: profile,
+                onStartWorkout: {
+                    if let focus = profile.schedule.focus {
+                        sessionManager.requestStart(workout: focus, profile: profile)
+                    }
+                }
+            )
+        case .community:
+            BroTrackerView(profile: profile)
+        case .profile:
+            SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
         }
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             // Экраны контента
-            Group {
-                switch selectedTab {
-                case .today:
-                    TodayView(
-                        profile: profile,
-                        onSettings: { showingSettings = true },
-                        onOpenBench: benchHandler,
-                        onStartWorkout: { workout in
-                            sessionManager.startWorkout(workout: workout, profile: profile)
-                        }
-                    )
-                case .workout:
-                    WorkoutHubView(
-                        profile: profile,
-                        onStartWorkout: { workout in
-                            sessionManager.startWorkout(workout: workout, profile: profile)
-                        },
-                        onOpenBench: benchHandler
-                    )
-                case .progress:
-                    ActivityProgressView(
-                        profile: profile,
-                        onStartWorkout: {
-                            if let focus = profile.schedule.focus {
-                                sessionManager.startWorkout(workout: focus, profile: profile)
-                            }
-                        }
-                    )
-                case .community:
-                    BroTrackerView(profile: profile)
-                case .profile:
-                    SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
-                }
+            ZStack {
+                screen(for: selectedTab)
+                    .id(selectedTab)
+                    .transition(tabTransition)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -79,8 +111,23 @@ struct MainTabView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                LiquidGlassTabBar(selectedTab: $selectedTab)
+                LiquidGlassTabBar(selectedTab: tabSelection)
             }
+            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: sessionManager.isRunning && !sessionManager.isPresented)
+            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: restTimer.isRunning)
+        }
+        .confirmationDialog(
+            sessionManager.replaceTitle,
+            isPresented: $sessionManager.showingReplaceConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Вернуться к текущей") { sessionManager.cancelReplace() }
+            Button("Отменить текущую и начать новую", role: .destructive) {
+                sessionManager.confirmReplace(profile: profile)
+            }
+            Button("Закрыть", role: .cancel) { sessionManager.pendingWorkout = nil }
+        } message: {
+            Text("Подходы текущей тренировки, отмеченные в этой сессии, будут сброшены.")
         }
         .fullScreenCover(isPresented: $sessionManager.isPresented) {
             if let workout = sessionManager.activeWorkout {
@@ -242,11 +289,12 @@ struct TodayView: View {
                 } else {
                     let completedCount = profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise)
                     let details: String = {
+                        // Через kilogramsPrecise: Int() обрезал 52,5 до 52, а kilograms округлял до 53.
                         if let item = profile.entries(week: workout.week, day: workout.day.number, exercise: exercise).first(where: { $0.index == index }) {
-                            return "\(Int(item.entry.weight)) кг × \(item.entry.reps)"
+                            return "\(WeightFormat.kilogramsPrecise(item.entry.weight)) × \(item.entry.reps)"
                         }
                         if case .kilograms(let kg) = exercise.load {
-                            return "\(Int(kg)) кг × \(exercise.reps)"
+                            return "\(WeightFormat.kilogramsPrecise(kg)) × \(exercise.reps)"
                         }
                         return "\(exercise.reps) повт."
                     }()
@@ -787,7 +835,7 @@ struct DayDetailView: View {
             LazyVStack(alignment: .leading, spacing: 14) {
                 Button {
                     UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                    WorkoutSessionManager.shared.startWorkout(workout: targetWorkout, profile: profile)
+                    WorkoutSessionManager.shared.requestStart(workout: targetWorkout, profile: profile)
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
@@ -817,10 +865,10 @@ struct DayDetailView: View {
                                     let completedCount = profile.completedSets(week: week, day: day.number, exercise: exercise)
                                     let details: String = {
                                         if let item = profile.entries(week: week, day: day.number, exercise: exercise).first(where: { $0.index == dot }) {
-                                            return "\(Int(item.entry.weight)) кг × \(item.entry.reps)"
+                                            return "\(WeightFormat.kilogramsPrecise(item.entry.weight)) × \(item.entry.reps)"
                                         }
                                         if case .kilograms(let kg) = exercise.load {
-                                            return "\(Int(kg)) кг × \(exercise.reps)"
+                                            return "\(WeightFormat.kilogramsPrecise(kg)) × \(exercise.reps)"
                                         }
                                         return "\(exercise.reps) повт."
                                     }()
