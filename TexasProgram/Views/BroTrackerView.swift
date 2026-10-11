@@ -590,7 +590,7 @@ private struct BuddyProgramView: View {
         } label: {
             VStack(spacing: 3) {
                 Text("\(weekNum)")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 if isCurrent {
                     Circle()
                         .fill(isSelected ? Color.white : Theme.accent)

@@ -76,7 +76,7 @@ struct WorkoutHubView: View {
                                     Text("НАЧАТЬ ТРЕНИРОВКУ")
                                 }
                             }
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .font(.system(size: 16, weight: .black, design: Theme.fontDesign))
                             .tracking(1.2)
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
@@ -149,7 +149,7 @@ struct WorkoutHubView: View {
                         .foregroundStyle(streak.current > 0 ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.white.opacity(0.2)))
 
                     Text("\(streak.current)")
-                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .font(.system(size: 20, weight: .black, design: Theme.fontDesign))
                         .foregroundStyle(.white)
 
                     Text(streakWord(streak.current))
@@ -322,7 +322,7 @@ struct WorkoutHubView: View {
                         Spacer()
 
                         Text(ex.sets > 0 ? "\(ex.sets) × \(ex.reps)" : ex.reps)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(Color.white.opacity(0.65))
                     }
                     .padding(.vertical, 4)

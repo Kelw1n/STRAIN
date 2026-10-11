@@ -209,7 +209,7 @@ struct TodayView: View {
                                     Image(systemName: "play.fill")
                                         .font(.system(size: 14, weight: .bold))
                                     Text("НАЧАТЬ ТРЕНИРОВКУ")
-                                        .font(.system(size: 15, weight: .black, design: .rounded))
+                                        .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                                         .tracking(1.0)
                                 }
                                 .foregroundStyle(.black)
@@ -382,7 +382,7 @@ struct TodayView: View {
                         .foregroundStyle(Theme.accentGradient)
                     HStack(spacing: 8) {
                         Text("Неделя \(workout.week)")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         if profile.isPeaking {
                             TagBadge(text: "Пик", systemImage: "mountain.2.fill", gradient: Theme.recordGradient)
@@ -397,7 +397,7 @@ struct TodayView: View {
                 RingProgress(value: overallProgress, lineWidth: 9) {
                     VStack(spacing: 0) {
                         Text("\(profile.completedDayCount)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         Text("из \(profile.totalDays)").font(.system(size: 10)).foregroundStyle(.secondary)
                     }
@@ -453,7 +453,7 @@ struct TodayWorkoutPreviewCard: View {
 
                 Spacer()
 
-                Text("\(exercises.count) упражнений")
+                Text(RuPlural.exercises(exercises.count))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
@@ -501,21 +501,21 @@ struct TodayWorkoutPreviewCard: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(exercise.benchSession != nil ? Theme.record.opacity(0.18) : Theme.accent.opacity(0.14))
-                                    .frame(width: 32, height: 32)
-                                Text("\(index + 1)")
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundStyle(exercise.benchSession != nil ? Theme.record : Theme.accent)
-                            }
+                            // Номер в нейтральном кружке, как у REBRN: оранжевым
+                            // выделен только жим волны — на него стоит обратить внимание.
+                            Text("\(index + 1)")
+                                .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
+                                .monospacedDigit()
+                                .foregroundStyle(exercise.benchSession != nil ? Theme.accent : Color.white.opacity(0.8))
+                                .frame(width: 32, height: 32)
+                                .background(Color.white.opacity(0.07), in: Circle())
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(exercise.name)
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)
-                                Text("\(exercise.sets) подходов × \(exercise.reps)")
+                                Text(exercise.sets > 0 ? "\(RuPlural.sets(exercise.sets)) × \(exercise.reps)" : exercise.reps)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -524,15 +524,17 @@ struct TodayWorkoutPreviewCard: View {
 
                             let hint = profile.accessoryHint(for: exercise, week: workout.week, day: workout.day.number)
                             if let weight = hint?.weight {
-                                Text("\(formatWeight(weight)) кг")
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Theme.accent)
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 4)
-                                    .background(Theme.accent.opacity(0.12), in: Capsule())
+                                // Через WeightFormat: подпись «кг» была вшита и не менялась на фунты.
+                                Text(WeightFormat.kilogramsPrecise(weight))
+                                    .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.white.opacity(0.08), in: Capsule())
                             } else {
                                 Text(exercise.load.displayText)
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .font(.system(size: 12, weight: .semibold, design: Theme.fontDesign))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
@@ -555,9 +557,6 @@ struct TodayWorkoutPreviewCard: View {
         }
     }
 
-    private func formatWeight(_ weight: Double) -> String {
-        weight == weight.rounded() ? String(Int(weight)) : String(format: "%.1f", weight)
-    }
 }
 
 // MARK: - Промо-карточка волны жима
@@ -715,7 +714,7 @@ struct PlanView: View {
             withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { selectedWeek = week.number }
         } label: {
             VStack(spacing: 3) {
-                Text("\(week.number)").font(.system(size: 17, weight: .bold, design: .rounded))
+                Text("\(week.number)").font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 if done {
                     Image(systemName: "checkmark").font(.system(size: 8, weight: .black))
                 } else {
@@ -841,7 +840,7 @@ struct DayDetailView: View {
                         Image(systemName: "play.fill")
                             .font(.system(size: 14, weight: .bold))
                         Text("НАЧАТЬ ТРЕНИРОВКУ")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                             .tracking(1.0)
                     }
                     .foregroundStyle(.black)
@@ -1127,7 +1126,7 @@ struct ExerciseCard: View {
     private func weightChip(_ weight: Double, stepUp: Bool) -> some View {
         VStack(alignment: .trailing, spacing: 1) {
             Text(WeightFormat.kilogramsPrecise(weight))
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(stepUp ? AnyShapeStyle(Theme.success) : AnyShapeStyle(Theme.accentGradient))
             Text(exercise.load.displayText)
@@ -1141,7 +1140,7 @@ struct ExerciseCard: View {
         switch exercise.load {
         case .kilograms:
             Text(exercise.load.displayText)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(Theme.accentGradient)
         case .testOneRepMax:

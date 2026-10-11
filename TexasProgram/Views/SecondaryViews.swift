@@ -97,7 +97,7 @@ struct ProgressScreen: View {
                 RingProgress(value: ratio, lineWidth: 12) {
                     VStack(spacing: 0) {
                         Text("\(Int((ratio * 100).rounded()))")
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .font(.system(size: 24, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         Text("%").font(.caption2).foregroundStyle(.secondary)
                     }
@@ -110,7 +110,7 @@ struct ProgressScreen: View {
                         .foregroundStyle(Theme.accentGradient)
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
                         Text("\(completed)")
-                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .font(.system(size: 40, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         Text("из \(profile.totalDays)").foregroundStyle(.secondary)
                     }
@@ -136,7 +136,7 @@ struct ProgressScreen: View {
                             .foregroundStyle(Theme.accentGradient)
                         HStack(alignment: .firstTextBaseline, spacing: 5) {
                             Text("\(streakValue.current)")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
                                 .contentTransition(.numericText())
                             Text(weekWord(streakValue.current)).foregroundStyle(.secondary)
                         }
@@ -148,7 +148,7 @@ struct ProgressScreen: View {
                         Text("ЛУЧШАЯ").font(.caption2.weight(.bold)).tracking(1.3)
                             .foregroundStyle(.secondary)
                         Text("\(streakValue.best)")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(.system(size: 22, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(streakValue.current >= streakValue.best ? AnyShapeStyle(Theme.success) : AnyShapeStyle(.secondary))
                     }
                 }
@@ -185,7 +185,7 @@ struct ProgressScreen: View {
                     .font(.headline)
                 Spacer()
                 Text("\(done)/\(total)")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                     .foregroundStyle(Theme.recordGradient)
                     .contentTransition(.numericText())
             }
@@ -208,7 +208,7 @@ struct ProgressScreen: View {
                     let done = week.days.filter { profile.isCompleted(week: week.number, day: $0.number) }.count
                     HStack(spacing: 6) {
                         Text("\(week.number)")
-                            .font(.system(size: 11, weight: .bold, design: .rounded).monospacedDigit())
+                            .font(.system(size: 11, weight: .bold, design: Theme.fontDesign).monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 18, alignment: .trailing)
                         ForEach(week.days) { day in
@@ -266,7 +266,7 @@ struct PRRow: View {
             Text(title).font(.subheadline)
             Spacer()
             Text(WeightFormat.kilogramsPrecise(value))
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .contentTransition(.numericText())
         }
@@ -653,7 +653,7 @@ struct SettingsView: View {
                             Label("Отмечено тренировок", systemImage: "waveform.path.ecg")
                             Spacer()
                             Text("\(profile.completedBenchCount) / \(UpperLowerCalculator.benchSessionCount)")
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                                 .foregroundStyle(Theme.recordGradient)
                         }
                         Button("Сбросить отметки жима", role: .destructive) {
@@ -988,7 +988,7 @@ struct PeakingView: View {
             TextField("кг", value: value, format: .number)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .frame(width: 80)
             Text("кг").font(.caption).foregroundStyle(.secondary)
         }

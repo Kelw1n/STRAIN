@@ -55,7 +55,7 @@ struct ExerciseHistoryView: View {
                     .foregroundStyle(Theme.accentGradient)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(WeightFormat.kilogramsPrecise(last))
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .font(.system(size: 38, weight: .bold, design: Theme.fontDesign))
                         .contentTransition(.numericText())
                     if delta != 0 {
                         Text((delta > 0 ? "+" : "") + WeightFormat.kilogramsPrecise(delta))

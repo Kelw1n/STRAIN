@@ -21,7 +21,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DEST="$(xcodebuild -showdestinations -project TexasProgram.xcodeproj -scheme TexasProgram 2>/dev/null | sed -n 's/.*platform:iOS Simulator, id:\([^,}]*\).*/platform=iOS Simulator,id:\1/p' | head -n 1)"
+          # Нужен конкретный симулятор: «Any iOS Simulator Device» для тестов не годится.
+          # Между platform и id новые Xcode вставляют arch, поэтому id ищем отдельно.
+          DEST="$(xcodebuild -showdestinations -project TexasProgram.xcodeproj -scheme TexasProgram 2>/dev/null \
+            | grep 'platform:iOS Simulator' | grep -v -i placeholder \
+            | sed -n 's/.*[{ ]id:\([^,}]*\).*/platform=iOS Simulator,id=\1/p' | head -n 1 || true)"
           if [ -n "$DEST" ]; then
             echo "Testing on $DEST"
             xcodebuild test \

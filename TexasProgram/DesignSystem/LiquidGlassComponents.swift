@@ -75,7 +75,7 @@ struct SlideToConfirmView: View {
                 HStack {
                     Spacer(minLength: thumbWidth)
                     Text(title)
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                         .tracking(2.0)
                         .foregroundStyle(Color.white.opacity(0.85))
                     Spacer()

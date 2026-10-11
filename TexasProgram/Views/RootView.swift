@@ -121,7 +121,7 @@ struct ProgramSelectionView: View {
                             .scaleEffect(breathe ? 1.05 : 1)
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Выбери программу")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
                             Text("После выбора введи свои максимумы. Вернуться сюда можно полным сбросом в настройках.")
                                 .foregroundStyle(.secondary)
                         }
@@ -443,7 +443,7 @@ struct NumberField: View {
                 TextField("0", text: $text)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.system(size: 18, weight: .bold, design: Theme.fontDesign))
                     .frame(width: 62)
                 Text("кг").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }

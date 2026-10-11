@@ -315,7 +315,7 @@ struct WorkoutCompletionSummaryView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatDuration(durationSeconds))
-                        .font(.system(size: 26, weight: .black, design: .rounded))
+                        .font(.system(size: 26, weight: .black, design: Theme.fontDesign))
                         .foregroundStyle(.white)
 
                     Text("В приложении: \(formatDuration(sessionManager.elapsedSeconds))")
@@ -419,7 +419,7 @@ struct WorkoutCompletionSummaryView: View {
             handleComplete()
         } label: {
             Text("ДАЛЬШЕ")
-                .font(.system(size: 16, weight: .heavy, design: .rounded))
+                .font(.system(size: 16, weight: .heavy, design: Theme.fontDesign))
                 .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)

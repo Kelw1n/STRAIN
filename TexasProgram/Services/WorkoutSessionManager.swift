@@ -283,6 +283,34 @@ final class WorkoutSessionManager {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
+    /// Вес из поля ввода. Если подход уже отмечен, запись правим сразу:
+    /// иначе до «Завершить» в истории висел бы старый вес.
+    func setWeight(_ weight: Double, exIdx: Int, sIdx: Int, profile: ProgramProfile) {
+        guard exIdx < exercises.count, sIdx < exercises[exIdx].sets.count else { return }
+        exercises[exIdx].sets[sIdx].weight = max(0, weight)
+        rerecordIfDone(exIdx: exIdx, sIdx: sIdx, profile: profile)
+    }
+
+    func setReps(_ reps: Int, exIdx: Int, sIdx: Int, profile: ProgramProfile) {
+        guard exIdx < exercises.count, sIdx < exercises[exIdx].sets.count else { return }
+        exercises[exIdx].sets[sIdx].reps = max(0, reps)
+        rerecordIfDone(exIdx: exIdx, sIdx: sIdx, profile: profile)
+    }
+
+    private func rerecordIfDone(exIdx: Int, sIdx: Int, profile: ProgramProfile) {
+        guard let workout = activeWorkout else { return }
+        let set = exercises[exIdx].sets[sIdx]
+        guard set.isDone else { return }
+        profile.recordSet(
+            week: workout.week,
+            day: workout.day.number,
+            exercise: exercises[exIdx].prescription,
+            index: set.index,
+            reps: set.reps,
+            weight: set.weight
+        )
+    }
+
     func adjustWeight(exIdx: Int, sIdx: Int, delta: Double) {
         guard exIdx < exercises.count, sIdx < exercises[exIdx].sets.count else { return }
         exercises[exIdx].sets[sIdx].weight = max(0, exercises[exIdx].sets[sIdx].weight + delta)

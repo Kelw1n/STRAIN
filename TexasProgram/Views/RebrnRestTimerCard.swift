@@ -28,7 +28,7 @@ struct RebrnRestTimerCard: View {
                     Spacer()
 
                     Text(timer.elapsedText)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                         .foregroundStyle(.white.opacity(0.85))
                 }
 
@@ -86,7 +86,7 @@ struct RebrnRestTimerCard: View {
                     Spacer()
 
                     Text(timer.remainingText)
-                        .font(.system(size: 30, weight: .black, design: .rounded))
+                        .font(.system(size: 30, weight: .black, design: Theme.fontDesign))
                         .monospacedDigit()
                         .foregroundStyle(Theme.accent)
 

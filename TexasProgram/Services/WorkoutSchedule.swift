@@ -1,5 +1,21 @@
 import Foundation
 
+/// Согласование числа со словом: 1 подход, 3 подхода, 5 подходов, 11 подходов.
+enum RuPlural {
+    static func word(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
+        let value = abs(count)
+        if (11...14).contains(value % 100) { return many }
+        switch value % 10 {
+        case 1: return one
+        case 2...4: return few
+        default: return many
+        }
+    }
+
+    static func sets(_ count: Int) -> String { "\(count) " + word(count, "подход", "подхода", "подходов") }
+    static func exercises(_ count: Int) -> String { "\(count) " + word(count, "упражнение", "упражнения", "упражнений") }
+}
+
 /// Русские названия без `DateFormatter`: он дорогой, а набор строк фиксированный.
 enum RuDate {
     static let weekdayFull = ["", "воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"]

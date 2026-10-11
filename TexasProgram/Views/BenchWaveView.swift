@@ -141,7 +141,7 @@ struct BenchWaveView: View {
                         .foregroundStyle(Theme.accentGradient)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("\(completed.count)")
-                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                            .font(.system(size: 38, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         Text("из \(sessions.count) тренировок")
                             .font(.subheadline).foregroundStyle(.secondary)
@@ -178,7 +178,7 @@ struct BenchWaveView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
             Text(WeightFormat.kilograms(value))
-                .font(.system(size: 19, weight: .bold, design: .rounded))
+                .font(.system(size: 19, weight: .bold, design: Theme.fontDesign))
                 .foregroundStyle(gradient)
                 .contentTransition(.numericText())
         }
@@ -266,7 +266,7 @@ struct BenchWaveChart: View {
                             value: grown
                         )
                         Text("\(session.id)")
-                            .font(.system(size: 9, weight: isSelected ? .heavy : .medium, design: .rounded))
+                            .font(.system(size: 9, weight: isSelected ? .heavy : .medium, design: Theme.fontDesign))
                             .foregroundStyle(isSelected ? session.accentColor : Color.secondary)
                     }
                     .frame(maxWidth: .infinity)
@@ -334,7 +334,7 @@ struct BenchSessionCard: View {
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(session.topWeightText)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                         .foregroundStyle(session.accent)
                     Text("\(session.sets.count) подх.")
                         .font(.caption2)
@@ -416,7 +416,7 @@ struct BenchSessionCard: View {
                     .transition(.scale.combined(with: .opacity))
             } else {
                 Text("\(session.id)")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                     .foregroundStyle(session.accent)
             }
         }
@@ -431,11 +431,11 @@ struct BenchSetRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text("\(set.id)")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(size: 12, weight: .bold, design: Theme.fontDesign))
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
             Text(set.weightText)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(.system(size: 16, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(set.kind.isSpecial ? AnyShapeStyle(set.kind.gradient) : AnyShapeStyle(Color.primary))
             Text("×\(set.reps)")

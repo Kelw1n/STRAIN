@@ -116,7 +116,7 @@ struct ActivityProgressView: View {
                 .chartXAxis {
                     AxisMarks { _ in
                         AxisValueLabel()
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .font(.system(size: 10, weight: .semibold, design: Theme.fontDesign))
                             .foregroundStyle(Color.white.opacity(0.45))
                     }
                 }
@@ -141,7 +141,7 @@ struct ActivityProgressView: View {
                 onStartWorkout()
             } label: {
                 Text("НАЧАТЬ ТРЕНИРОВКУ")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                     .tracking(1.0)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
@@ -189,14 +189,14 @@ struct ActivityProgressView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     if let weight = profile.latestBodyWeight {
                         Text(WeightFormat.kilogramsPrecise(weight))
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(.white)
                         Text("Текущий вес")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.white.opacity(0.45))
                     } else {
                         Text("— кг")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(.white)
                         Text("Нужен первый замер")
                             .font(.system(size: 11))
@@ -310,7 +310,7 @@ struct ActivityProgressView: View {
             Spacer()
 
             Text(WeightFormat.kilogramsPrecise(weight))
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(Theme.accentGradient)
         }
@@ -382,7 +382,7 @@ struct MuscleGroupsDetailSheet: View {
 
                                     VStack(alignment: .trailing, spacing: 2) {
                                         Text("\(group.percentage)%")
-                                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                                            .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                                             .foregroundStyle(Theme.accent)
                                         Text("\(group.sets) подх.")
                                             .font(.system(size: 11))

@@ -39,7 +39,7 @@ struct GoalSettingsSheet: View {
                                     }
                                 } label: {
                                     Text(item.label)
-                                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                                        .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                                         .foregroundStyle(isSelected ? .white : Color.white.opacity(0.65))
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 48)
@@ -169,7 +169,7 @@ struct GoalSettingsSheet: View {
                         saveGoal()
                     } label: {
                         Text("СОХРАНИТЬ ЦЕЛЬ")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .font(.system(size: 16, weight: .bold, design: Theme.fontDesign))
                             .tracking(1.0)
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
