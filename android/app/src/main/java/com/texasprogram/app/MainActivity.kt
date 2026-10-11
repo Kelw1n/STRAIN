@@ -91,6 +91,12 @@ import com.texasprogram.app.ui.Theme
 import com.texasprogram.app.ui.TodayScreen
 import com.texasprogram.app.ui.RestTimerBar
 import com.texasprogram.app.ui.pressable
+import com.texasprogram.app.service.WorkoutSessionManager
+import com.texasprogram.app.ui.ActiveWorkoutSessionScreen
+import com.texasprogram.app.ui.LiquidGlassTabBar
+import com.texasprogram.app.ui.MainTabItem
+import com.texasprogram.app.ui.MinimizedWorkoutBar
+import com.texasprogram.app.ui.WorkoutHubScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -160,14 +166,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppTab(val title: String, val icon: ImageVector) {
-    TODAY("Сегодня", Icons.Filled.Bolt),
-    PLAN("План", Icons.Filled.Layers),
-    BENCH("Жим 14", Icons.Filled.MonitorHeart),
-    PROGRESS("Прогресс", Icons.Filled.BarChart),
-    GUIDE("Инструкция", Icons.Filled.MenuBook)
-}
-
 @Composable
 private fun AppRoot(store: AppStore, timer: RestTimer) {
     val active = store.active
@@ -197,9 +195,9 @@ private fun AppRoot(store: AppStore, timer: RestTimer) {
 
 @Composable
 private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTimer, onAddProfile: () -> Unit) {
-    var tab by remember(profile.id) { mutableStateOf(AppTab.TODAY) }
+    var tab by remember(profile.id) { mutableStateOf(MainTabItem.TODAY) }
     var benchFocus by remember { mutableStateOf<Int?>(null) }
-    var showSettings by remember { mutableStateOf(false) }
+    var showPlan by remember { mutableStateOf(false) }
     var dayDetail by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var customizing by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var entryTarget by remember { mutableStateOf<com.texasprogram.app.ui.SetEntryTarget?>(null) }
@@ -207,16 +205,13 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     var showHistoryList by remember { mutableStateOf(false) }
     var historyFor by remember { mutableStateOf<String?>(null) }
     var showNotes by remember { mutableStateOf(false) }
-    var showBroTracker by remember { mutableStateOf(false) }
 
     val isUpperLower = profile.programKind == TrainingProgramKind.UPPER_LOWER
-    val tabs = AppTab.entries.filter { it != AppTab.BENCH || isUpperLower }
 
     val openBench: ((Int) -> Unit)? = if (isUpperLower) {
         { session ->
             benchFocus = session
             dayDetail = null
-            tab = AppTab.BENCH
         }
     } else null
 
@@ -274,19 +269,20 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         }
     }
 
-    val contentPadding = screenPadding(bottomExtra = 96.dp)
+    val contentPadding = screenPadding(bottomExtra = 110.dp)
 
     BackHandler(
-        enabled = showSettings || dayDetail != null || customizing != null ||
-            showHistoryList || historyFor != null || showNotes || showBroTracker
+        enabled = WorkoutSessionManager.isPresented || showPlan || benchFocus != null ||
+            dayDetail != null || customizing != null || showHistoryList || historyFor != null || showNotes
     ) {
         when {
-            showBroTracker -> showBroTracker = false
+            WorkoutSessionManager.isPresented -> WorkoutSessionManager.minimize()
+            showPlan -> showPlan = false
+            benchFocus != null -> benchFocus = null
             customizing != null -> customizing = null
             historyFor != null -> historyFor = null
             showHistoryList -> showHistoryList = false
             showNotes -> showNotes = false
-            showSettings -> showSettings = false
             dayDetail != null -> dayDetail = null
         }
     }
@@ -303,7 +299,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             label = "tab"
         ) { current ->
             when (current) {
-                AppTab.TODAY -> TodayScreen(
+                MainTabItem.TODAY -> TodayScreen(
                     profile = profile,
                     timer = timer,
                     onToggleDay = { week, day ->
@@ -335,43 +331,63 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         )
                     },
                     onOpenHistory = { name -> historyFor = name },
-                    onOpenBroTracker = { showBroTracker = true },
-                    onSettings = { showSettings = true },
-                    contentPadding = contentPadding
-                )
-                AppTab.PLAN -> PlanScreen(
-                    profile = profile,
-                    onOpenDay = { week, day -> dayDetail = week to day },
-                    onSetCurrent = { week, day -> store.updateActive { it.setCurrentWorkout(week, day) } },
-                    contentPadding = contentPadding
-                )
-                AppTab.BENCH -> BenchWaveScreen(
-                    profile = profile,
-                    focused = benchFocus,
-                    onFocusHandled = { benchFocus = null },
-                    onToggleBench = { session ->
-                        store.updateActive { it.toggleBenchCompleted(session) }
-                        syncProfileInBackground()
+                    onOpenBroTracker = { tab = MainTabItem.COMMUNITY },
+                    onSettings = { tab = MainTabItem.PROFILE },
+                    onStartWorkout = { workout ->
+                        WorkoutSessionManager.startWorkout(workout, profile)
                     },
-                    onSetCurrentBench = { session -> store.updateActive { it.setCurrentBenchSession(session) } },
                     contentPadding = contentPadding
                 )
-                AppTab.PROGRESS -> ProgressScreen(
+                MainTabItem.WORKOUT -> WorkoutHubScreen(
+                    profile = profile,
+                    contentPadding = contentPadding,
+                    onStartWorkout = { workout ->
+                        WorkoutSessionManager.startWorkout(workout, profile)
+                    },
+                    onOpenPlan = { showPlan = true }
+                )
+                MainTabItem.PROGRESS -> ProgressScreen(
                     profile = profile,
                     contentPadding = contentPadding,
                     onOpenHistory = { showHistoryList = true },
                     onOpenNotes = { showNotes = true },
                     onUpdate = { updated -> store.update(updated.id) { updated } }
                 )
-                AppTab.GUIDE -> GuideScreen(profile.programKind, contentPadding)
+                MainTabItem.COMMUNITY -> BroTrackerScreen(
+                    profile = profile,
+                    onCopyProgram = { newProfile -> store.add(newProfile) },
+                    onUpdateProfile = { updated -> store.update(updated.id) { updated } },
+                    onClose = { tab = MainTabItem.TODAY },
+                    contentPadding = contentPadding
+                )
+                MainTabItem.PROFILE -> SettingsScreen(
+                    profile = profile,
+                    profiles = store.profiles,
+                    onUpdate = { updated -> store.update(updated.id) { updated } },
+                    onSwitchProfile = { id -> store.setActive(id) },
+                    onAddProfile = { onAddProfile() },
+                    onDeleteProfile = { store.delete(profile.id) },
+                    onExportBackup = { exportLauncher.launch(BackupService.FILE_NAME) },
+                    onImportBackup = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                    onExportCsv = { csvLauncher.launch(CSVExport.FILE_NAME) },
+                    backupMessage = backupMessage,
+                    onClose = { tab = MainTabItem.TODAY },
+                    contentPadding = contentPadding
+                )
             }
         }
 
         Column(Modifier.align(Alignment.BottomCenter)) {
+            if (WorkoutSessionManager.isRunning && !WorkoutSessionManager.isPresented) {
+                MinimizedWorkoutBar(profile = profile)
+            }
             if (timer.isRunning) {
                 RestTimerBar(timer, Modifier.padding(bottom = 8.dp))
             }
-            BottomBar(tabs = tabs, selected = tab) { tab = it }
+            LiquidGlassTabBar(
+                selectedTab = tab,
+                onTabSelected = { tab = it }
+            )
         }
 
         // Детали дня и настройки — поверх вкладок, как модальные экраны в iOS.
@@ -458,71 +474,67 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             }
         }
 
+        // Модальный экран плана тренировок
         AnimatedContent(
-            targetState = showSettings,
-            transitionSpec = {
-                if (targetState) {
-                    (slideInVertically(tween(320)) { it / 3 } + fadeIn(tween(220))) togetherWith fadeOut(tween(180))
-                } else {
-                    fadeIn(tween(180)) togetherWith (slideOutVertically(tween(320)) { it / 3 } + fadeOut(tween(200)))
-                }
-            },
-            label = "settings"
+            targetState = showPlan,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            label = "plan"
         ) { visible ->
             if (visible) {
                 Box(Modifier.fillMaxSize().background(Theme.base)) {
-                    SettingsScreen(
+                    PlanScreen(
                         profile = profile,
-                        onExportBackup = { exportLauncher.launch(BackupService.FILE_NAME) },
-                        onImportBackup = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
-                        onExportCsv = { csvLauncher.launch(CSVExport.FILE_NAME) },
-                        backupMessage = backupMessage,
-                        profiles = store.profiles,
-                        onUpdate = { updated -> store.update(updated.id) { updated } },
-                        onSwitchProfile = { id ->
-                            showSettings = false
-                            store.setActive(id)
+                        onOpenDay = { week, day -> dayDetail = week to day },
+                        onSetCurrent = { week, day ->
+                            store.updateActive { it.copy(currentWeek = week, currentDay = day) }
                         },
-                        onAddProfile = {
-                            showSettings = false
-                            onAddProfile()
-                        },
-                        onDeleteProfile = {
-                            showSettings = false
-                            store.delete(profile.id)
-                        },
-                        onClose = { showSettings = false },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
                 }
             }
         }
 
+        // Модальный экран жимовой волны
         AnimatedContent(
-            targetState = showBroTracker,
-            transitionSpec = {
-                if (targetState) {
-                    (slideInVertically(tween(320)) { it / 3 } + fadeIn(tween(220))) togetherWith fadeOut(tween(180))
-                } else {
-                    fadeIn(tween(180)) togetherWith (slideOutVertically(tween(320)) { it / 3 } + fadeOut(tween(200)))
-                }
-            },
-            label = "broTracker"
-        ) { visible ->
-            if (visible) {
+            targetState = benchFocus,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            label = "benchFocus"
+        ) { session ->
+            if (session != null) {
                 Box(Modifier.fillMaxSize().background(Theme.base)) {
-                    BroTrackerScreen(
+                    BenchWaveScreen(
                         profile = profile,
-                        onCopyProgram = { newProfile ->
-                            store.add(newProfile)
+                        focused = session,
+                        onFocusHandled = { benchFocus = null },
+                        onToggleBench = { index ->
+                            store.updateActive { it.toggleBenchSession(index) }
                         },
-                        onUpdateProfile = { updated ->
-                            store.update(updated.id) { updated }
+                        onSetCurrentBench = { index ->
+                            store.updateActive { it.copy(currentBenchSession = index) }
                         },
-                        onClose = { showBroTracker = false },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { benchFocus = null }
                 }
+            }
+        }
+
+        // Полноэкранный режим активной тренировки
+        AnimatedContent(
+            targetState = WorkoutSessionManager.isPresented,
+            transitionSpec = {
+                (slideInVertically(tween(350)) { it } + fadeIn(tween(250))) togetherWith
+                        (slideOutVertically(tween(300)) { it } + fadeOut(tween(200)))
+            },
+            label = "activeWorkout"
+        ) { presented ->
+            if (presented) {
+                ActiveWorkoutSessionScreen(
+                    profile = profile,
+                    restTimer = timer,
+                    onUpdateProfile = { updated -> store.update(updated.id) { updated } }
+                )
             }
         }
 
@@ -592,49 +604,6 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     }
 }
 
-@Composable
-private fun BottomBar(
-    tabs: List<AppTab>,
-    selected: AppTab,
-    modifier: Modifier = Modifier,
-    onSelect: (AppTab) -> Unit
-) {
-    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val barBackground = if (Theme.isDark) Color(0xE60D1116) else Theme.surface.copy(alpha = 0.94f)
-    Row(
-        modifier
-            .fillMaxWidth()
-            .background(barBackground)
-            .border(width = 0.5.dp, color = Theme.hairline)
-            .padding(top = 10.dp, bottom = bottomInset + 10.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        tabs.forEach { item ->
-            val isSelected = item == selected
-            Column(
-                Modifier
-                    .weight(1f)
-                    .pressable { onSelect(item) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Icon(
-                    item.icon,
-                    contentDescription = item.title,
-                    tint = if (isSelected) Theme.accent else Theme.textTertiary,
-                    modifier = Modifier.size(22.dp)
-                )
-                Text(
-                    item.title,
-                    color = if (isSelected) Theme.accent else Theme.textTertiary,
-                    fontSize = 10.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun CloseButton(modifier: Modifier = Modifier, onClick: () -> Unit) {

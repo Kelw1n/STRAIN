@@ -122,6 +122,7 @@ fun SettingsScreen(
                                 .clip(CircleShape)
                                 .background(
                                     when (themeStyle) {
+                                        AppThemeStyle.REBRN_BLACK -> Color(0xFF0B0B0D)
                                         AppThemeStyle.CLAUDE_LIGHT -> Color(0xFFFBF8F3)
                                         AppThemeStyle.CLAUDE_DARK -> Color(0xFF1B1917)
                                         AppThemeStyle.STRAIN_DARK -> Color(0xFF0B0E13)

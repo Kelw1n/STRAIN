@@ -15,6 +15,7 @@ object RuDate {
         "", "января", "февраля", "марта", "апреля", "мая", "июня",
         "июля", "августа", "сентября", "октября", "ноября", "декабря"
     )
+    val monthShort = listOf("", "янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек")
 
     /// Номера дней недели в порядке «понедельник → воскресенье» (1 — воскресенье).
     val weekOrder = listOf(2, 3, 4, 5, 6, 7, 1)
@@ -24,6 +25,8 @@ object RuDate {
     fun short(weekday: Int): String = weekdayShort.getOrElse(weekday) { "" }
 
     fun dayMonth(date: LocalDate): String = "${date.dayOfMonth} ${monthGenitive.getOrElse(date.monthValue) { "" }}"
+
+    fun shortDayMonth(date: LocalDate): String = "${date.dayOfMonth} ${monthShort.getOrElse(date.monthValue) { "" }}"
 
     /// Нумерация как в Calendar на iOS: 1 — воскресенье, 2 — понедельник.
     fun weekdayOf(date: LocalDate): Int = (date.dayOfWeek.value % 7) + 1

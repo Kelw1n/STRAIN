@@ -162,7 +162,7 @@ fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier) 
                 )
                 Text("Неделя ${record.week} · день ${record.day}", color = Theme.textPrimary, fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
-                Text(RuDate.dayMonth(date), color = Theme.textSecondary, fontSize = 10.sp)
+                Text(RuDate.shortDayMonth(date), color = Theme.textSecondary, fontSize = 10.sp)
             }
         }
     }

@@ -1,7 +1,9 @@
 package com.texasprogram.app.ui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,25 +16,38 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.model.formatWeight
+import com.texasprogram.app.service.MuscleGroupAnalytics
 import com.texasprogram.app.service.UpperLowerCalculator
 
 @Composable
@@ -47,6 +62,7 @@ fun ProgressScreen(
     val done = profile.completedDayCount
     val total = profile.totalDays
     val ratio = if (total > 0) done.toFloat() / total else 0f
+    var showMuscleDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -88,6 +104,12 @@ fun ProgressScreen(
 
         item(key = "bodyweight") {
             BodyWeightCard(profile, Modifier.appearIn(1), onUpdate)
+        }
+
+        item(key = "muscles") {
+            MuscleGroupsRadarCard(profile, Modifier.appearIn(1)) {
+                showMuscleDialog = true
+            }
         }
 
         item(key = "links") {
@@ -197,6 +219,10 @@ fun ProgressScreen(
             }
         }
     }
+
+    if (showMuscleDialog) {
+        MuscleGroupsDetailDialog(profile) { showMuscleDialog = false }
+    }
 }
 
 @Composable
@@ -273,4 +299,272 @@ private fun countText(count: Int, one: String, few: String, many: String): Strin
         last in 2..4 -> "$count $few"
         else -> "$count $many"
     }
+}
+
+@Composable
+fun MuscleGroupsRadarCard(
+    profile: ProgramProfile,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val result = remember(profile) { MuscleGroupAnalytics.calculate(profile) }
+
+    CardView(
+        modifier = modifier.clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Группы мышц",
+                color = Theme.textPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "Баланс нагрузки",
+                color = Theme.textSecondary,
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "›",
+                color = Theme.textSecondary,
+                fontSize = 20.sp
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(110.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            RadarWebCanvas(
+                values = result.radarValues,
+                levels = 3,
+                modifier = Modifier.size(100.dp)
+            )
+        }
+
+        Text(
+            text = result.subtitle,
+            color = Theme.textSecondary,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+fun RadarWebCanvas(
+    values: List<Float>,
+    levels: Int = 3,
+    modifier: Modifier = Modifier
+) {
+    val accent = Theme.accent
+    val sides = values.size.coerceAtLeast(3)
+
+    Canvas(modifier = modifier) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val radius = (minOf(size.width, size.height) / 2f) * 0.90f
+        val angleStep = (2.0 * Math.PI) / sides.toDouble()
+
+        // 1. Осевые линии
+        for (i in 0 until sides) {
+            val angle = i * angleStep - (Math.PI / 2.0)
+            val px = center.x + (radius * Math.cos(angle)).toFloat()
+            val py = center.y + (radius * Math.sin(angle)).toFloat()
+            drawLine(
+                color = Color.White.copy(alpha = 0.12f),
+                start = center,
+                end = Offset(px, py),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
+
+        // 2. Концентрические кольца паутины
+        for (lvl in 1..levels) {
+            val curRadius = radius * (lvl.toFloat() / levels.toFloat())
+            val path = Path()
+            for (i in 0 until sides) {
+                val angle = i * angleStep - (Math.PI / 2.0)
+                val px = center.x + (curRadius * Math.cos(angle)).toFloat()
+                val py = center.y + (curRadius * Math.sin(angle)).toFloat()
+                if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+            }
+            path.close()
+            drawPath(
+                path = path,
+                color = Color.White.copy(alpha = 0.10f),
+                style = Stroke(width = 1.dp.toPx())
+            )
+        }
+
+        // 3. Данные полигона
+        if (values.isNotEmpty()) {
+            val dataPath = Path()
+            for (i in 0 until sides) {
+                val valRatio = values.getOrElse(i) { 0.2f }.coerceIn(0.1f, 1.0f)
+                val angle = i * angleStep - (Math.PI / 2.0)
+                val curRadius = radius * valRatio
+                val px = center.x + (curRadius * Math.cos(angle)).toFloat()
+                val py = center.y + (curRadius * Math.sin(angle)).toFloat()
+                if (i == 0) dataPath.moveTo(px, py) else dataPath.lineTo(px, py)
+            }
+            dataPath.close()
+
+            // Заливка
+            drawPath(
+                path = dataPath,
+                color = accent.copy(alpha = 0.25f)
+            )
+            // Обводка
+            drawPath(
+                path = dataPath,
+                color = accent,
+                style = Stroke(width = 2.dp.toPx())
+            )
+        }
+    }
+}
+
+@Composable
+fun MuscleGroupsDetailDialog(
+    profile: ProgramProfile,
+    onDismiss: () -> Unit
+) {
+    val result = remember(profile) { MuscleGroupAnalytics.calculate(profile) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF141416),
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Группы мышц",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "Закрыть",
+                    color = Theme.accent,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { onDismiss() }
+                )
+            }
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Color(0xFF1C1C1F))
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Баланс распределения нагрузки",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        RadarWebCanvas(
+                            values = result.radarValues,
+                            levels = 4,
+                            modifier = Modifier.size(160.dp)
+                        )
+
+                        Text(
+                            text = result.subtitle,
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                items(result.items.size) { idx ->
+                    val group = result.items[idx]
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF1C1C1F))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = group.category.displayName,
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = group.exercises,
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "${group.percentage}%",
+                                    color = Theme.accent,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${group.sets} подх.",
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        // Полоса прогресса
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.08f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(group.percentage / 100f)
+                                    .height(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Theme.accentGradient)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {}
+    )
 }

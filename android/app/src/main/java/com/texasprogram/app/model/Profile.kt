@@ -906,6 +906,32 @@ data class ProgramProfile(
         return copy(setProgress = updated)
     }
 
+    /// Обновляет количество выполненных подходов в упражнении.
+    fun updateCompletedSets(week: Int, day: Int, exercise: ExercisePrescription, count: Int): ProgramProfile {
+        val key = setKey(week, day, exercise)
+        val updated = setProgress.toMutableMap()
+        if (count <= 0) {
+            updated.remove(key)
+        } else {
+            updated[key] = count
+        }
+        return copy(setProgress = updated)
+    }
+
+    /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
+    fun resetDaySets(week: Int, day: Int): ProgramProfile {
+        val prefix = dayKey(week, day) + "|"
+        val updatedProgress = setProgress.filterNot { it.key.startsWith(prefix) }
+        val updatedLog = setLog.filterNot { it.key.startsWith(prefix) }
+        val dKey = dayKey(week, day)
+        val updatedCompletionLog = completionLog.filterNot { it.key == dKey }
+        return setDayCompleted(week, day, false).copy(
+            setProgress = updatedProgress,
+            setLog = updatedLog,
+            completionLog = updatedCompletionLog
+        )
+    }
+
     /// Упражнения без подходов (тест 1ПМ) не считаются — там нечего отмечать.
     fun allSetsDone(workout: ScheduledWorkout): Boolean {
         val list = exercises(workout).filter { it.sets > 0 }

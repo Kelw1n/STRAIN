@@ -24,6 +24,10 @@ import kotlin.math.PI
 
 /// Стили оформления приложения, идентичные iOS-версии.
 enum class AppThemeStyle(val displayName: String, val description: String) {
+    REBRN_BLACK(
+        "REBRN Чёрная (OLED)",
+        "Глубокий матовый OLED-чёрный фон, графитовые карточки и фирменный пламенный оранжевый акцент REBRN"
+    ),
     CLAUDE_LIGHT(
         "Claude Светлая",
         "Нежный молочно-пергаментный фон, карточки слоновой кости и тёплый терракотовый акцент"
@@ -46,17 +50,23 @@ enum class AppThemeStyle(val displayName: String, val description: String) {
 object ThemeManager {
     private var prefs: SharedPreferences? = null
     var appContext: Context? = null
-    var style by mutableStateOf(AppThemeStyle.CLAUDE_LIGHT)
+    var style by mutableStateOf(AppThemeStyle.REBRN_BLACK)
 
     fun init(context: Context) {
         appContext = context.applicationContext
         val p = context.getSharedPreferences("strain.theme", Context.MODE_PRIVATE)
         prefs = p
-        val raw = p.getString("theme_style", AppThemeStyle.CLAUDE_LIGHT.name)
+        val migratedKey = "has_migrated_to_rebrn_black_v2"
+        if (!p.getBoolean(migratedKey, false)) {
+            p.edit().putBoolean(migratedKey, true).putString("theme_style", AppThemeStyle.REBRN_BLACK.name).apply()
+            style = AppThemeStyle.REBRN_BLACK
+            return
+        }
+        val raw = p.getString("theme_style", AppThemeStyle.REBRN_BLACK.name)
         style = try {
-            AppThemeStyle.valueOf(raw ?: AppThemeStyle.CLAUDE_LIGHT.name)
+            AppThemeStyle.valueOf(raw ?: AppThemeStyle.REBRN_BLACK.name)
         } catch (_: Exception) {
-            AppThemeStyle.CLAUDE_LIGHT
+            AppThemeStyle.REBRN_BLACK
         }
     }
 
@@ -74,38 +84,64 @@ object ThemeManager {
 
     val isDark: Boolean
         get() = when (style) {
+            AppThemeStyle.REBRN_BLACK -> true
             AppThemeStyle.CLAUDE_LIGHT -> false
             AppThemeStyle.CLAUDE_DARK -> true
             AppThemeStyle.STRAIN_DARK -> true
             AppThemeStyle.SYSTEM -> isSystemDark
         }
 
+    val isRebrn: Boolean
+        get() = style == AppThemeStyle.REBRN_BLACK
+
     val isClaude: Boolean
-        get() = style != AppThemeStyle.STRAIN_DARK
+        get() = style == AppThemeStyle.CLAUDE_LIGHT || style == AppThemeStyle.CLAUDE_DARK || style == AppThemeStyle.SYSTEM
 }
 
-/// Динамическая палитра оформления, поддерживающая темы Claude и Strain.
+/// Динамическая палитра оформления, поддерживающая темы Claude, Strain и REBRN.
 object Theme {
+    val isRebrn: Boolean get() = ThemeManager.isRebrn
     val isClaude: Boolean get() = ThemeManager.isClaude
     val isDark: Boolean get() = ThemeManager.isDark
 
     val accent: Color
-        get() = if (isClaude) Color(0xFFD97757) else Color(0xFF29D6C2)
+        get() = when {
+            isRebrn -> Color(0xFFFF6029)
+            isClaude -> Color(0xFFD97757)
+            else -> Color(0xFF29D6C2)
+        }
 
     val accentDeep: Color
-        get() = if (isClaude) Color(0xFFC16141) else Color(0xFF5978FA)
+        get() = when {
+            isRebrn -> Color(0xFFE0471A)
+            isClaude -> Color(0xFFC16141)
+            else -> Color(0xFF5978FA)
+        }
 
     val success: Color
-        get() = if (isClaude) Color(0xFF4CB079) else Color(0xFF45D987)
+        get() = when {
+            isRebrn -> Color(0xFF2ED573)
+            isClaude -> Color(0xFF4CB079)
+            else -> Color(0xFF45D987)
+        }
 
     val warning: Color
-        get() = if (isClaude) Color(0xFFEBA048) else Color(0xFFFFA342)
+        get() = when {
+            isRebrn -> Color(0xFFFFA533)
+            isClaude -> Color(0xFFEBA048)
+            else -> Color(0xFFFFA342)
+        }
 
     val record: Color
-        get() = if (isClaude) Color(0xFFE25E4C) else Color(0xFFFF6B85)
+        get() = when {
+            isRebrn -> Color(0xFFFF5252)
+            isClaude -> Color(0xFFE25E4C)
+            else -> Color(0xFFFF6B85)
+        }
 
     val base: Color
         get() = when {
+            isRebrn -> Color(0xFF0B0B0D)
             !isClaude -> Color(0xFF0B0E13)
             isDark -> Color(0xFF1B1917)
             else -> Color(0xFFFBF8F3)
@@ -113,6 +149,7 @@ object Theme {
 
     val textPrimary: Color
         get() = when {
+            isRebrn -> Color(0xFFFFFFFF)
             !isClaude -> Color(0xFFF2F5F8)
             isDark -> Color(0xFFF5F3EF)
             else -> Color(0xFF1E1D1B)
@@ -120,6 +157,7 @@ object Theme {
 
     val textSecondary: Color
         get() = when {
+            isRebrn -> Color(0xFF9E9EA4)
             !isClaude -> Color(0xFF98A2B0)
             isDark -> Color(0xFFA69F97)
             else -> Color(0xFF6E6A64)
@@ -127,6 +165,7 @@ object Theme {
 
     val textTertiary: Color
         get() = when {
+            isRebrn -> Color(0xFF606068)
             !isClaude -> Color(0xFF6B7482)
             isDark -> Color(0xFF756F68)
             else -> Color(0xFF9E9991)
@@ -134,6 +173,7 @@ object Theme {
 
     val surface: Color
         get() = when {
+            isRebrn -> Color(0xFF141416)
             !isClaude -> Color.White.copy(alpha = 0.055f)
             isDark -> Color(0xFF262422)
             else -> Color(0xFFFFFFFF)
@@ -144,13 +184,23 @@ object Theme {
 
     val surfaceSoft: Color
         get() = when {
+            isRebrn -> Color(0xFF1C1C1F)
             !isClaude -> Color(0x0DFFFFFF)
             isDark -> Color(0xFF32302D)
             else -> Color(0xFFF3EEE7)
         }
 
+    val surfaceElevated: Color
+        get() = when {
+            isRebrn -> Color(0xFF242428)
+            !isClaude -> Color(0x1AFFFFFF)
+            isDark -> Color(0xFF3A3733)
+            else -> Color(0xFFEBE6DD)
+        }
+
     val dialog: Color
         get() = when {
+            isRebrn -> Color(0xFF18181B)
             !isClaude -> Color(0xFF161B24)
             isDark -> Color(0xFF262422)
             else -> Color(0xFFFFFFFF)
@@ -158,6 +208,7 @@ object Theme {
 
     val hairline: Color
         get() = when {
+            isRebrn -> Color(0x1FFFFFFF)
             !isClaude -> Color(0x1FFFFFFF)
             isDark -> Color(0x28FFFFFF)
             else -> Color(0x14000000)

@@ -61,6 +61,7 @@ fun TodayScreen(
     onOpenHistory: (String) -> Unit,
     onOpenBroTracker: () -> Unit = {},
     onSettings: () -> Unit,
+    onStartWorkout: (ScheduledWorkout) -> Unit = {},
     contentPadding: PaddingValues
 ) {
     val today = LocalDate.now()
@@ -76,49 +77,7 @@ fun TodayScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item(key = "title") {
-            ScreenTitle("Сегодня") {
-                if (focus != null) {
-                    val edited = profile.edits(focus.week, focus.day.number).isNotEmpty()
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Theme.surfaceSoft)
-                            .pressable { onCustomize(focus.week, focus.day.number) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // Изменённый день подсвечиваем цветом значка, а не отдельной меткой.
-                        Icon(
-                            Icons.Filled.Edit,
-                            contentDescription = "Свои упражнения",
-                            tint = if (edited) Theme.warning else Theme.textPrimary,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                }
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Theme.surfaceSoft)
-                        .pressable(onClick = onOpenBroTracker),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Filled.Group, contentDescription = "Бро-трекер", tint = Theme.accent, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Theme.surfaceSoft)
-                        .pressable(onClick = onSettings),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Filled.Tune, contentDescription = "Настройки", tint = Theme.textPrimary, modifier = Modifier.size(20.dp))
-                }
-            }
+            ScreenTitle("Сегодня")
         }
 
         if (focus == null) {
@@ -150,6 +109,54 @@ fun TodayScreen(
 
         item(key = "hero") {
             HeroCard(profile, focus, schedule, Modifier.appearIn(1))
+        }
+
+        item(key = "startWorkout") {
+            val isRunning = com.texasprogram.app.service.WorkoutSessionManager.isRunning
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(androidx.compose.ui.graphics.Color.White)
+                    .clickable {
+                        if (isRunning) {
+                            com.texasprogram.app.service.WorkoutSessionManager.expand()
+                        } else {
+                            onStartWorkout(focus)
+                        }
+                    }
+                    .padding(vertical = 15.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isRunning) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(androidx.compose.ui.graphics.Color(0xFF2ED573))
+                        )
+                        Text(
+                            text = "ПРОДОЛЖИТЬ ТРЕНИРОВКУ",
+                            color = androidx.compose.ui.graphics.Color.Black,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                    } else {
+                        Text(
+                            text = "НАЧАТЬ ТРЕНИРОВКУ",
+                            color = androidx.compose.ui.graphics.Color.Black,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+            }
         }
 
         if (schedule.overdue.isNotEmpty()) {
