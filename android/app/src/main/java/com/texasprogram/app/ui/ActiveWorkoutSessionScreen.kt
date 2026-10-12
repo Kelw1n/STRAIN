@@ -194,7 +194,7 @@ fun formatClock(seconds: Int): String {
 @Composable
 fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
     val workout = WorkoutSessionManager.activeWorkout ?: return
-    val haptics = rememberHaptics()
+    val haptics = rememberHapticEngine()
     val pulse = rememberInfiniteTransition(label = "pulse")
     val phase by pulse.animateFloat(
         initialValue = 0f,
@@ -524,7 +524,7 @@ fun ActiveWorkoutSessionScreen(
     onUpdateProfile: (ProgramProfile) -> Unit
 ) {
     val workout = WorkoutSessionManager.activeWorkout ?: return
-    val haptics = rememberHaptics()
+    val haptics = rememberHapticEngine()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current

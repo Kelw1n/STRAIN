@@ -34,7 +34,7 @@ class Haptics(private val view: View) {
 }
 
 @Composable
-fun rememberHaptics(): Haptics {
+fun rememberHapticEngine(): Haptics {
     val view = LocalView.current
     return remember(view) { Haptics(view) }
 }

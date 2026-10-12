@@ -54,7 +54,7 @@ fun RebrnRestTimerCard(
     timer: RestTimer,
     modifier: Modifier = Modifier
 ) {
-    val haptics = rememberHaptics()
+    val haptics = rememberHapticEngine()
     val shape = RoundedCornerShape(26.dp)
 
     AnimatedVisibility(

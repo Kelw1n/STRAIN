@@ -111,7 +111,7 @@ fun LiquidGlassTabBar(
     onTabSelected: (MainTabItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptics = rememberHaptics()
+    val haptics = rememberHapticEngine()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val tabs = remember { MainTabItem.entries.toList() }
