@@ -246,31 +246,14 @@ private fun ActivityStreakCard(profile: ProgramProfile) {
 
             Spacer(Modifier.weight(1f))
 
-            // Матрица точек (4 недели по 7 дней)
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                for (weekOffset in 0 until 4) {
-                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        for (dayOffset in 0 until 7) {
-                            val daysAgo = (3 - weekOffset) * 7 + (6 - dayOffset)
-                            val targetDate = today.minusDays(daysAgo.toLong())
-                            val isDone = completionDates.contains(targetDate)
-                            val isToday = targetDate == today
-
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isDone) Theme.accent else Color.Transparent)
-                                    .border(
-                                        width = if (isToday) 2.dp else 1.2.dp,
-                                        color = if (isToday) Color.White else (if (isDone) Theme.accent else Color.White.copy(alpha = 0.18f)),
-                                        shape = CircleShape
-                                    )
-                            )
-                        }
-                    }
-                }
-            }
+            // Календарь текущего месяца, как у REBRN: столбцы — дни недели
+            // с понедельника, строки — недели. Закрытые дни залиты акцентом,
+            // прошедшие — серым, будущие тренировочные обведены, сегодня подчёркнуто.
+            MonthCalendar(
+                today = today,
+                done = completionDates,
+                trainingWeekdays = remember(profile.weekdays) { profile.weekdays.toSet() }
+            )
         }
 
         Text(
@@ -278,6 +261,63 @@ private fun ActivityStreakCard(profile: ProgramProfile) {
             color = Color.White.copy(alpha = 0.45f),
             fontSize = 12.sp
         )
+    }
+}
+
+/// Дни месяца по неделям с понедельника; пустые клетки — `null`.
+internal fun monthRows(date: LocalDate): List<List<LocalDate?>> {
+    val first = date.withDayOfMonth(1)
+    val leading = first.dayOfWeek.value - 1
+    val cells = ArrayList<LocalDate?>()
+    repeat(leading) { cells.add(null) }
+    for (day in 0 until date.lengthOfMonth()) cells.add(first.plusDays(day.toLong()))
+    while (cells.size % 7 != 0) cells.add(null)
+    return cells.chunked(7)
+}
+
+/// Календарь одним холстом: три десятка точек без отдельного узла на каждую.
+@Composable
+private fun MonthCalendar(today: LocalDate, done: Set<LocalDate>, trainingWeekdays: Set<Int>) {
+    val rows = remember(today) { monthRows(today) }
+    val accent = Theme.accent
+    val dot = 11.dp
+    val gap = 7.dp
+    androidx.compose.foundation.Canvas(
+        Modifier
+            .width(dot * 7 + gap * 6)
+            .height(dot * rows.size + gap * (rows.size - 1) + 4.dp)
+    ) {
+        val d = dot.toPx()
+        val g = gap.toPx()
+        val stroke = 1.6.dp.toPx()
+        rows.forEachIndexed { row, week ->
+            week.forEachIndexed { column, date ->
+                if (date == null) return@forEachIndexed
+                val center = androidx.compose.ui.geometry.Offset(column * (d + g) + d / 2, row * (d + g) + d / 2)
+                // Нумерация дней недели как в профиле: 1 — воскресенье.
+                val weekday = date.dayOfWeek.value % 7 + 1
+                when {
+                    date in done -> drawCircle(accent, d / 2, center)
+                    date.isBefore(today) -> drawCircle(Color.White.copy(alpha = 0.16f), d / 2, center)
+                    else -> drawCircle(
+                        if (weekday in trainingWeekdays) accent else Color.White.copy(alpha = 0.18f),
+                        d / 2 - stroke / 2,
+                        center,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(stroke)
+                    )
+                }
+                if (date == today) {
+                    val w = 8.dp.toPx()
+                    val h = 2.dp.toPx()
+                    drawRoundRect(
+                        Color.White,
+                        topLeft = androidx.compose.ui.geometry.Offset(center.x - w / 2, center.y + d / 2 + 3.dp.toPx() - h),
+                        size = androidx.compose.ui.geometry.Size(w, h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2)
+                    )
+                }
+            }
+        }
     }
 }
 

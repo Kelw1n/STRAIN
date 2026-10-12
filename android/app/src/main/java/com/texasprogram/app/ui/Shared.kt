@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -99,14 +100,22 @@ fun ExerciseCard(
 
     CardView(base, padding = 16.dp, spacing = 10.dp) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Box(
-                Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(iconGradient),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            // Картинка движения, как в iOS-версии; значок поверх — волна жима
+            // или необязательное упражнение.
+            Box(Modifier.size(48.dp)) {
+                ExerciseThumb(name = exercise.name, size = 44.dp)
+                if (exercise.benchSession != null || exercise.isOptional) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(iconGradient),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
+                    }
+                }
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -117,7 +126,7 @@ fun ExerciseCard(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    if (exercise.sets > 0) "${exercise.sets} подходов × ${exercise.reps}" else exercise.reps,
+                    if (exercise.sets > 0) "${com.texasprogram.app.service.RuPlural.sets(exercise.sets)} × ${exercise.reps}" else exercise.reps,
                     color = Theme.textSecondary,
                     fontSize = 12.sp
                 )

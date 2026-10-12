@@ -239,4 +239,14 @@ class WorkoutSessionTest {
         assertEquals("21 подход", RuPlural.sets(21))
         assertEquals("22 упражнения", RuPlural.exercises(22))
     }
+
+    @Test
+    fun monthCalendarStartsOnMonday() {
+        // Октябрь 2026 начинается в четверг: три пустые клетки перед первым числом.
+        val rows = com.texasprogram.app.ui.monthRows(java.time.LocalDate.of(2026, 10, 12))
+        assertTrue(rows.all { it.size == 7 })
+        assertEquals(listOf(null, null, null), rows[0].take(3))
+        assertEquals(1, rows[0][3]?.dayOfMonth)
+        assertEquals(31, rows.flatten().filterNotNull().size)
+    }
 }
