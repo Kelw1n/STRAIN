@@ -186,8 +186,8 @@ final class WeightStepTests: XCTestCase {
         profile.defaultWeightStep = 5
         profile.setWeightStep(1.25, for: "Сгибание рук")
         profile.dismissStall(for: "Тяга", weight: 60)
-        let data = try BackupArchive.export([profile])
-        let archive = try BackupArchive.archive(from: data)
+        let data = try BackupService.export([profile])
+        let archive = try BackupService.archive(from: data)
         let snapshot = try XCTUnwrap(archive.profiles.first)
         XCTAssertEqual(snapshot.defaultWeightStep, 5)
         XCTAssertEqual(snapshot.weightSteps?["сгибание рук"], 1.25)
