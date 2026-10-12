@@ -441,7 +441,7 @@ fun MuscleGroupsDetailDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141416),
+        containerColor = Color(0xFF161616),
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),

@@ -184,7 +184,7 @@ private fun ActivityStreakCard(profile: ProgramProfile) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF141416))
+            .background(Color(0xFF161616))
             .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -302,7 +302,7 @@ private fun GoalCard(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF141416))
+            .background(Color(0xFF161616))
             .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -367,7 +367,7 @@ private fun ProgramsCard(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF141416))
+            .background(Color(0xFF161616))
             .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -437,7 +437,7 @@ private fun TodaysWorkoutPreviewCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF141416))
+            .background(Color(0xFF161616))
             .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -502,7 +502,7 @@ private fun RestDayCard() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF141416))
+            .background(Color(0xFF161616))
             .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

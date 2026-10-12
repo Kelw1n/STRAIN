@@ -122,7 +122,7 @@ fun SettingsScreen(
                                 .clip(CircleShape)
                                 .background(
                                     when (themeStyle) {
-                                        AppThemeStyle.REBRN_BLACK -> Color(0xFF0B0B0D)
+                                        AppThemeStyle.REBRN_BLACK -> Color(0xFF000000)
                                         AppThemeStyle.CLAUDE_LIGHT -> Color(0xFFFBF8F3)
                                         AppThemeStyle.CLAUDE_DARK -> Color(0xFF1B1917)
                                         AppThemeStyle.STRAIN_DARK -> Color(0xFF0B0E13)
@@ -358,6 +358,16 @@ fun SettingsScreen(
                 ) { onUpdate(profile.copy(keepScreenOn = it == 0)) }
                 Text(
                     "Пока приложение открыто, экран не уходит в сон. Телефон на лавке между подходами перестанет тухнуть.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+                val restTimer = com.texasprogram.app.service.RestTimer.get(androidx.compose.ui.platform.LocalContext.current)
+                SegmentedControl(
+                    options = listOf("Отдых в шторке", "Только в приложении"),
+                    selectedIndex = if (restTimer.liveNotification) 0 else 1
+                ) { restTimer.updateLiveNotification(it == 0) }
+                Text(
+                    "Отсчёт отдыха с упражнением и кнопками −30 с, +30 с и «Пропустить» — в шторке и на экране блокировки, пока телефон лежит.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )

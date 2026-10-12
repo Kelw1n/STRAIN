@@ -116,14 +116,27 @@ data class ProgramProfile(
     /// План программы с наложенными пользовательскими правками.
     /// Правки входят в ключ кэша: иначе добавленное упражнение не появилось бы,
     /// пока не поменяются максимумы.
-    val workoutPlan: WorkoutPlan
-        get() {
-            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports)
-            // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
-            // правки подставляют свои упражнения. Наоборот задержка стёрла бы
-            // то, что пользователь вписал руками.
-            return PlanCache.resolve(id, key) { applyEdits(applyAutoregulation(applyHolds(generatedPlan))) }
-        }
+    ///
+    /// Профиль неизменяемый, поэтому план считается один раз на экземпляр:
+    /// раньше ключ кэша из двадцати полей собирался и сравнивался при каждом
+    /// обращении, а экраны обращаются к плану десятки раз за перерисовку.
+    /// Общий кэш остаётся — новый экземпляр с теми же входными данными
+    /// (поменяли, например, время отдыха) берёт готовый план.
+    val workoutPlan: WorkoutPlan by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports)
+        // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
+        // правки подставляют свои упражнения. Наоборот задержка стёрла бы
+        // то, что пользователь вписал руками.
+        PlanCache.resolve(id, key) { applyEdits(applyAutoregulation(applyHolds(generatedPlan))) }
+    }
+
+    /// Расписание на сегодня — тоже один раз на экземпляр и дату.
+    @kotlinx.serialization.Transient
+    private var scheduleMemo: Pair<LocalDate, WorkoutSchedule>? = null
+
+    /// История движений: экран тренировки и истории спрашивают её на каждое упражнение.
+    @kotlinx.serialization.Transient
+    private val historyMemo = java.util.concurrent.ConcurrentHashMap<String, List<ExerciseHistoryPoint>>()
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
@@ -434,7 +447,10 @@ data class ProgramProfile(
         }
 
     /// Весь путь одного движения по текущему циклу.
-    fun history(exerciseName: String): List<ExerciseHistoryPoint> {
+    fun history(exerciseName: String): List<ExerciseHistoryPoint> =
+        historyMemo.getOrPut(exerciseName) { buildHistory(exerciseName) }
+
+    private fun buildHistory(exerciseName: String): List<ExerciseHistoryPoint> {
         val points = mutableListOf<ExerciseHistoryPoint>()
         for (week in workoutPlan.weeks) {
             for (day in week.days) {
@@ -933,7 +949,6 @@ data class ProgramProfile(
         return copy(setProgress = updated)
     }
 
-    /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
     /// Возвращает отметки дня к состоянию из `snapshot` (профиль на момент старта
     /// тренировки). Выполненность дня и история не трогаются: отмена сессии по уже
     /// закрытому дню раньше выбрасывала его из истории.
@@ -947,6 +962,7 @@ data class ProgramProfile(
         ).refreshCompletion(week, day, today)
     }
 
+    /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
     fun resetDaySets(week: Int, day: Int): ProgramProfile {
         val prefix = dayKey(week, day) + "|"
         val updatedProgress = setProgress.filterNot { it.key.startsWith(prefix) }
@@ -1112,8 +1128,10 @@ data class ProgramProfile(
 
     fun lastCompletionDate(): LocalDate? = lastCompletionEpochDay?.let { LocalDate.ofEpochDay(it) }
 
-    fun schedule(today: LocalDate = LocalDate.now()): WorkoutSchedule =
-        WorkoutScheduler.build(this, workoutPlan, today)
+    fun schedule(today: LocalDate = LocalDate.now()): WorkoutSchedule {
+        scheduleMemo?.let { (date, cached) -> if (date == today) return cached }
+        return WorkoutScheduler.build(this, workoutPlan, today).also { scheduleMemo = today to it }
+    }
 
     /// Ближайшая дата, на которую попадёт тренировочный день с его днём недели.
     fun nextOccurrence(day: Int, today: LocalDate = LocalDate.now()): LocalDate {

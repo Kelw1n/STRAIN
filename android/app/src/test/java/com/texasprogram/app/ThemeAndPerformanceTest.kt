@@ -87,22 +87,22 @@ class ThemeAndPerformanceTest {
     @Test
     fun testExerciseHistoryMapPrecomputation() {
         var profile = ProgramProfile.texas(ProgramInput.demo)
+        val squat = profile.workoutPlan.weeks.first().days.first().exercises.first { it.name == "Приседания" }
         profile = profile.recordSet(
             week = 1,
             day = 1,
-            exerciseName = "Присед",
-            setIndex = 0,
-            weight = 100.0,
+            exercise = squat,
+            index = 0,
             reps = 5,
-            rpe = null
+            weight = 100.0
         )
 
         val names = profile.loggedExerciseNames
-        assertTrue("Logged exercises must contain Присед", names.contains("Присед"))
+        assertTrue("Logged exercises must contain Приседания", names.contains("Приседания"))
 
         val historyMap = names.associateWith { profile.history(it) }
-        assertTrue("History map must contain points for Присед", historyMap.containsKey("Присед"))
-        val squatPoints = historyMap["Присед"].orEmpty()
+        assertTrue("History map must contain points for Приседания", historyMap.containsKey("Приседания"))
+        val squatPoints = historyMap["Приседания"].orEmpty()
         assertEquals(1, squatPoints.size)
         assertEquals(100.0, squatPoints.first().best, 0.001)
     }
@@ -110,8 +110,9 @@ class ThemeAndPerformanceTest {
     @Test
     fun testBodyWeightMemoizationMetrics() {
         var profile = ProgramProfile.texas(ProgramInput.demo)
-        profile = profile.recordBodyWeight(80.0)
-        profile = profile.recordBodyWeight(82.5)
+        // Один замер на день: второй за те же сутки заменил бы первый.
+        profile = profile.recordBodyWeight(80.0, java.time.LocalDate.of(2026, 10, 1))
+        profile = profile.recordBodyWeight(82.5, java.time.LocalDate.of(2026, 10, 8))
 
         val series = profile.bodyWeightSeries
         assertEquals(2, series.size)
@@ -131,8 +132,8 @@ class ThemeAndPerformanceTest {
     @Test
     fun testNotesParsingAndSortingLogic() {
         var profile = ProgramProfile.texas(ProgramInput.demo)
-        profile = profile.saveNote(week = 1, day = 1, text = "Week 1 Day 1 note")
-        profile = profile.saveNote(week = 2, day = 3, text = "Week 2 Day 3 note")
+        profile = profile.setNote("Week 1 Day 1 note", week = 1, day = 1)
+        profile = profile.setNote("Week 2 Day 3 note", week = 2, day = 3)
 
         val prefix = profile.keyPrefix
         val notes = profile.workoutNotes

@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -53,6 +55,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalDensity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.texasprogram.app.ui.LaunchReveal
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,19 +111,23 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // До super: системный экран запуска (чёрный фон и знак) живёт до первого кадра.
+        installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         ThemeManager.init(applicationContext)
+        WorkoutSessionManager.attach(filesDir)
         handleDeepLink(intent)
         setContent {
             val store = remember { AppStore(applicationContext) }
-            val timer = remember { RestTimer(applicationContext) }
+            val timer = remember { RestTimer.get(applicationContext) }
             // Отсчёт в интерфейсе: сам таймер считает от даты окончания,
-            // это лишь перерисовка раз в секунду.
+            // это лишь перерисовка — на границе каждой секунды до конца.
             LaunchedEffect(timer.isRunning) {
                 while (timer.isRunning) {
                     timer.tick()
-                    delay(1000)
+                    val phase = Math.floorMod(timer.endsAtMillis - System.currentTimeMillis(), 1000L)
+                    delay(if (phase < 20) 1000L else phase + 5)
                 }
             }
             val isDark = Theme.isDark
@@ -146,10 +156,27 @@ class MainActivity : ComponentActivity() {
                     onSurface = Theme.textPrimary
                 )
             }
+            // Заставка — один раз на запуск, не на каждый поворот экрана.
+            var revealed by rememberSaveable { mutableStateOf(false) }
             MaterialTheme(colorScheme = colorScheme) {
-                AppBackground { AppRoot(store, timer) }
+                Box(Modifier.fillMaxSize()) {
+                    AppBackground { AppRoot(store, timer) }
+                    if (!revealed) LaunchReveal { revealed = true }
+                }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Вернулись из фона: отсчёт сразу догоняет часы, а не ждёт тика.
+        RestTimer.get(applicationContext).tick()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Уходим в фон — тренировка ложится на диск сразу, а не через задержку.
+        WorkoutSessionManager.writeNow()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -160,6 +187,15 @@ class MainActivity : ComponentActivity() {
     private fun handleDeepLink(intent: android.content.Intent?) {
         val data = intent?.data ?: return
         val url = data.toString()
+        if (data.host == "timer") {
+            val timer = RestTimer.get(applicationContext)
+            when (data.lastPathSegment) {
+                "minus30" -> timer.add(-30)
+                "add30" -> timer.add(30)
+                "stop" -> timer.stop()
+            }
+            return
+        }
         if (url.contains("bro")) {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 com.texasprogram.app.service.BroTrackerService.getInstance(applicationContext).addBuddy(url)
@@ -273,6 +309,29 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
     val contentPadding = screenPadding(bottomExtra = 110.dp)
 
+    // Поднимаем тренировку, прерванную выгрузкой приложения, — свёрнутой.
+    LaunchedEffect(profile.id) { WorkoutSessionManager.restoreIfNeeded(profile) }
+
+    // Профиль на момент нажатия, а не на момент последней перерисовки:
+    // два быстрых нажатия по подходам не затирают друг друга.
+    val freshProfile = remember(store) { { store.active } }
+    val updateProfile = remember(store) { { updated: ProgramProfile -> store.update(updated.id) { updated } } }
+
+    // На Android 13+ уведомления (конец отдыха, отсчёт в шторке) нужно разрешить.
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+    fun startWorkout(workout: com.texasprogram.app.service.ScheduledWorkout) {
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+        }
+        WorkoutSessionManager.requestStart(workout, store.active ?: profile)
+    }
+
     BackHandler(
         enabled = WorkoutSessionManager.isPresented || showPlan || benchFocus != null ||
             dayDetail != null || customizing != null || showHistoryList || historyFor != null || showNotes
@@ -293,10 +352,16 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     KeepScreenOn(profile.keepScreenOn)
 
     Box(Modifier.fillMaxSize()) {
+        // Как в iOS-версии: новый раздел въезжает со стороны, куда ведёшь
+        // по панели, старый чуть уменьшается и гаснет.
+        val tabShift = with(LocalDensity.current) { 36.dp.roundToPx() }
         AnimatedContent(
             targetState = tab,
             transitionSpec = {
-                (fadeIn(tween(200)) + slideInVertically(tween(260)) { it / 24 }) togetherWith fadeOut(tween(160))
+                val forward = targetState.ordinal > initialState.ordinal
+                (slideInHorizontally(Motion.sheet()) { if (forward) tabShift else -tabShift } + fadeIn(tween(220))) togetherWith
+                    (scaleOut(tween(200), targetScale = 0.97f) + fadeOut(tween(160))) using
+                    SizeTransform(clip = false)
             },
             label = "tab"
         ) { current ->
@@ -320,7 +385,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             } else {
                                 val completedCount = updated?.completedSets(workout.week, workout.day.number, exercise) ?: 0
                                 val weightVal = (exercise.load as? LoadPrescription.Kilograms)?.value
-                                val weightStr = if (weightVal != null) "${weightVal.toInt()} кг" else ""
+                                val weightStr = if (weightVal != null) "${com.texasprogram.app.model.formatWeight(weightVal)} кг" else ""
                                 val details = if (weightStr.isNotEmpty()) "$weightStr × ${exercise.reps}" else "${exercise.reps} повт."
                                 timer.start(
                                     seconds = profile.defaultRestSeconds.toLong(),
@@ -345,17 +410,13 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onOpenHistory = { name -> historyFor = name },
                     onOpenBroTracker = { tab = MainTabItem.COMMUNITY },
                     onSettings = { tab = MainTabItem.PROFILE },
-                    onStartWorkout = { workout ->
-                        WorkoutSessionManager.startWorkout(workout, profile)
-                    },
+                    onStartWorkout = { workout -> startWorkout(workout) },
                     contentPadding = contentPadding
                 )
                 MainTabItem.WORKOUT -> WorkoutHubScreen(
                     profile = profile,
                     contentPadding = contentPadding,
-                    onStartWorkout = { workout ->
-                        WorkoutSessionManager.startWorkout(workout, profile)
-                    },
+                    onStartWorkout = { workout -> startWorkout(workout) },
                     onOpenPlan = { showPlan = true }
                 )
                 MainTabItem.PROGRESS -> ProgressScreen(
@@ -391,11 +452,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         Column(Modifier.align(Alignment.BottomCenter)) {
             if (WorkoutSessionManager.isRunning && !WorkoutSessionManager.isPresented) {
-                MinimizedWorkoutBar(profile = profile)
+                MinimizedWorkoutBar()
             }
-            if (timer.isRunning) {
-                RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
-            }
+            // Карточка сама прячется и показывается с анимацией.
+            RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
             LiquidGlassTabBar(
                 selectedTab = tab,
                 onTabSelected = { tab = it }
@@ -543,11 +603,37 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         ) { presented ->
             if (presented) {
                 ActiveWorkoutSessionScreen(
-                    profile = profile,
+                    profile = freshProfile,
                     restTimer = timer,
-                    onUpdateProfile = { updated -> store.update(updated.id) { updated } }
+                    onUpdateProfile = updateProfile
                 )
             }
+        }
+
+        // Просят начать другую тренировку, пока идёт эта: не подменяем молча.
+        WorkoutSessionManager.pendingWorkout?.let { next ->
+            val current = WorkoutSessionManager.activeWorkout
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { WorkoutSessionManager.cancelReplace() },
+                containerColor = Theme.dialog,
+                title = { Text("Идёт другая тренировка", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "Сейчас идёт «${current?.fullTitle.orEmpty()}». Начать «${next.fullTitle}»? Отметки текущей тренировки будут отменены.",
+                        color = Theme.textSecondary
+                    )
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        WorkoutSessionManager.confirmReplace(store.active ?: profile, updateProfile)
+                    }) { Text("Начать новую", color = Theme.record, fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { WorkoutSessionManager.cancelReplace() }) {
+                        Text("Продолжить текущую", color = Theme.accent)
+                    }
+                }
+            )
         }
 
         // Список движений, история одного и заметки — тоже поверх вкладок.

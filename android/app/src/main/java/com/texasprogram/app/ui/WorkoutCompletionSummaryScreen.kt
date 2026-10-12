@@ -114,7 +114,7 @@ fun WorkoutCompletionSummaryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D0D0F))
+            .background(Color(0xFF000000))
     ) {
         Column(
             modifier = Modifier
@@ -183,7 +183,7 @@ fun WorkoutCompletionSummaryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF141416))
+                        .background(Color(0xFF161616))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                         .clickable {
                             photoPickerLauncher.launch(
@@ -296,7 +296,7 @@ fun WorkoutCompletionSummaryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF141416))
+                    .background(Color(0xFF161616))
                     .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
             ) {
                 Column {
@@ -378,7 +378,7 @@ fun WorkoutCompletionSummaryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF141416))
+                        .background(Color(0xFF161616))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                         .padding(18.dp)
                 ) {
@@ -462,7 +462,7 @@ fun WorkoutCompletionSummaryScreen(
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(
                                     if (isSelected) effort.color.copy(alpha = 0.18f)
-                                    else Color(0xFF141416)
+                                    else Color(0xFF161616)
                                 )
                                 .border(
                                     width = if (isSelected) 2.dp else 1.dp,
@@ -512,8 +512,8 @@ fun WorkoutCompletionSummaryScreen(
                     Brush.verticalGradient(
                         listOf(
                             Color.Transparent,
-                            Color(0xFF0D0D0F).copy(alpha = 0.95f),
-                            Color(0xFF0D0D0F)
+                            Color(0xFF000000).copy(alpha = 0.95f),
+                            Color(0xFF000000)
                         )
                     )
                 )

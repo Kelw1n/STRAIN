@@ -422,12 +422,12 @@ class BroTrackerSyncTest {
     private data class HttpRequest(val method: HttpMethod, val url: String, val body: String?)
     private data class HttpResponse(val code: Int, val body: String)
 
-    private class MockHttpSyncServer {
+    private open class MockHttpSyncServer {
         private val objects = HashMap<String, String>()
         val requestLog = ArrayList<HttpRequest>()
         var evictNextPut = false
 
-        fun handle(method: HttpMethod, url: String, body: String?): HttpResponse {
+        open fun handle(method: HttpMethod, url: String, body: String?): HttpResponse {
             requestLog.add(HttpRequest(method, url, body))
             val id = url.substringAfterLast("/")
 
@@ -563,7 +563,10 @@ class BroTrackerSyncTest {
                 programTitle = "Техасский метод",
                 currentWeek = 1,
                 currentDay = 1,
-                lastActiveEpoch = 123456L
+                lastActiveEpoch = 123456L,
+                squat5RM = 100.0,
+                bench5RM = 100.0,
+                deadlift5RM = 100.0
             )
         )
 

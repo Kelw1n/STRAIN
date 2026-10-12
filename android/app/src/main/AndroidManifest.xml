@@ -34,7 +34,7 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.Strain">
+            android:theme="@style/Theme.Strain.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -50,6 +50,11 @@
         <!-- Напоминание о тренировке в назначенное время. -->
         <receiver
             android:name=".service.ReminderReceiver"
+            android:exported="false" />
+
+        <!-- Кнопки отсчёта отдыха в шторке: −30 с, +30 с, «Пропустить». -->
+        <receiver
+            android:name=".service.RestActionReceiver"
             android:exported="false" />
 
         <!-- Срабатывает в момент окончания отдыха, когда приложение свёрнуто. -->
