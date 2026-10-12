@@ -53,8 +53,8 @@ class ThemeAndPerformanceTest {
         assertTrue("REBRN Black theme must be REBRN style", Theme.isRebrn)
         assertFalse("REBRN Black theme must not be Claude style", Theme.isClaude)
 
-        assertEquals("Theme.base must be OLED black", Color(0xFF0B0B0D), Theme.base)
-        assertEquals("Theme.surface must be dark graphite", Color(0xFF141416), Theme.surface)
+        assertEquals("Theme.base must be OLED black", Color(0xFF000000), Theme.base)
+        assertEquals("Theme.surface must be dark graphite", Color(0xFF161617), Theme.surface)
         assertEquals("Theme.accent must be REBRN orange", Color(0xFFFF6029), Theme.accent)
         assertEquals("Theme.textPrimary must be pure white", Color(0xFFFFFFFF), Theme.textPrimary)
     }

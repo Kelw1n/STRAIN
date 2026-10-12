@@ -767,8 +767,9 @@ class BroTrackerSyncTest {
         // Simulate backend TTL eviction: object disappears from server
         server.evictNextPut = true
 
-        // User finishes Week 8 Day 2 workout -> auto-sync triggered
-        profile = profile.toggleCompleted(8, 2)
+        // User finishes Week 8 Day 1 and Day 2 workouts -> auto-sync triggered
+        // (иначе ближайшим невыполненным остаётся первый день, а не третий).
+        profile = profile.toggleCompleted(8, 1).toggleCompleted(8, 2)
         val payload2 = buildSpecificationPayload(profile, id1)
 
         // Sync triggers PUT -> receives 404 -> self-heals by POSTing -> receives id2
