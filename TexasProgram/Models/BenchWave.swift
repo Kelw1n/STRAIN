@@ -73,8 +73,7 @@ enum WeightFormat {
     static func short(_ value: Double) -> String {
         switch unit {
         case .kg:
-            if value.rounded() == value { return String(Int(value)) }
-            return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
+            return decimal(value)
         case .lbs:
             return String(Int((value * 2.20462).rounded()))
         }
@@ -96,16 +95,23 @@ enum WeightFormat {
 
     /// Число без единиц — для полей ввода, куда «кг» подставлять нельзя.
     static func plain(_ value: Double) -> String {
-        if value == value.rounded() { return String(Int(value)) }
-        return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
+        decimal(value)
+    }
+
+    /// До двух знаков без хвостовых нулей: 52,5 и 56,25 — оба реальные веса
+    /// (шаг 1,25 на тренажёрах), а «56,2» такого веса не существует.
+    static func decimal(_ value: Double) -> String {
+        let hundredths = (value * 100).rounded()
+        if hundredths.truncatingRemainder(dividingBy: 100) == 0 { return String(Int(hundredths / 100)) }
+        let format = hundredths.truncatingRemainder(dividingBy: 10) == 0 ? "%.1f" : "%.2f"
+        return String(format: format, hundredths / 100).replacingOccurrences(of: ".", with: ",")
     }
 
     /// Веса основных программ идут с шагом 2,5 кг, поэтому дробная часть — только «,5».
     static func kilogramsPrecise(_ value: Double) -> String {
         switch unit {
         case .kg:
-            if value.rounded() == value { return String(Int(value)) + " кг" }
-            return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",") + " кг"
+            return decimal(value) + " кг"
         case .lbs:
             let lbs = (value * 2.20462 * 10).rounded() / 10
             if lbs.rounded() == lbs { return String(Int(lbs)) + " lbs" }

@@ -888,7 +888,15 @@ struct DayDetailView: View {
                             logged: Set(profile.entries(week: week, day: day.number, exercise: exercise).map(\.index))
                         ),
                         onOpenHistory: { historyFor = exercise.name },
-                        hint: profile.accessoryHint(for: exercise, week: week, day: day.number)
+                        hint: profile.accessoryHint(for: exercise, week: week, day: day.number),
+                        step: profile.weightStep(for: exercise.name),
+                        onSelectStep: { profile.setWeightStep($0, for: exercise.name) },
+                        onKeepWeight: {
+                            if let working = profile.history(forExerciseNamed: exercise.name)
+                                .last(where: { !$0.entries.isEmpty })?.best {
+                                profile.dismissStall(for: exercise.name, weight: working)
+                            }
+                        }
                     )
                     .appearIn(index)
                     .softScroll()
@@ -1020,6 +1028,11 @@ struct ExerciseCard: View {
     var onOpenHistory: (() -> Void)?
     /// Подсказка по весу подсобки. Нет — упражнение со своим весом в плане.
     var hint: AccessoryHint?
+    /// Шаг прибавки упражнения и выбор другого. Нет обработчика — выбора нет.
+    var step: Double?
+    var onSelectStep: ((Double) -> Void)?
+    /// «Не сбрасывать» в подсказке о застое.
+    var onKeepWeight: (() -> Void)?
 
     private var isBenchLink: Bool { exercise.benchSession != nil && onOpenBench != nil }
 
@@ -1108,14 +1121,34 @@ struct ExerciseCard: View {
 
             if let hint {
                 HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: hint.isStepUp ? "arrow.up.circle.fill" : "target")
+                    Image(systemName: hint.isDeload ? "arrow.down.circle.fill" : hint.isStepUp ? "arrow.up.circle.fill" : "target")
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(hint.isStepUp ? Theme.success : Theme.accent)
+                        .foregroundStyle(hint.isDeload ? Theme.warning : hint.isStepUp ? Theme.success : Theme.accent)
                     Text(hint.text)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
+                }
+
+                if hint.weight != nil, (onSelectStep != nil || (hint.isDeload && onKeepWeight != nil)) {
+                    HStack(spacing: 8) {
+                        if let step, let onSelectStep {
+                            WeightStepMenu(step: step, onSelect: onSelectStep)
+                        }
+                        if hint.isDeload, let onKeepWeight {
+                            Button(action: onKeepWeight) {
+                                Text("Не сбрасывать")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.primary.opacity(0.06), in: Capsule())
+                            }
+                            .buttonStyle(.pressable)
+                        }
+                        Spacer(minLength: 0)
+                    }
                 }
             }
 
@@ -1127,7 +1160,7 @@ struct ExerciseCard: View {
     }
 
     private var setsText: String {
-        exercise.sets > 0 ? "\(exercise.sets) подходов × \(exercise.reps)" : exercise.reps
+        exercise.sets > 0 ? "\(RuPlural.sets(exercise.sets)) × \(exercise.reps)" : exercise.reps
     }
 
     /// Вес подсобки. Прибавку подсвечиваем зелёным — это маленькая победа,
@@ -1157,6 +1190,38 @@ struct ExerciseCard: View {
         default:
             OutlineBadge(text: exercise.load.displayText, tint: Theme.warning)
         }
+    }
+}
+
+// MARK: - Шаг прибавки
+
+/// Чип «Шаг 2,5 кг ▾» с выбором: у каждого зала свои блины и тренажёры.
+struct WeightStepMenu: View {
+    let step: Double
+    let onSelect: (Double) -> Void
+
+    var body: some View {
+        Menu {
+            Picker("Шаг прибавки", selection: Binding(get: { step }, set: onSelect)) {
+                ForEach(ProgramProfile.weightStepOptions, id: \.self) { option in
+                    Text(ProgramProfile.weightStepTitle(option)).tag(option)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "scalemass")
+                    .font(.system(size: 10, weight: .bold))
+                Text("Шаг \(WeightFormat.kilogramsPrecise(step))")
+                    .font(.caption2.weight(.semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Theme.accent.opacity(0.12), in: Capsule())
+        }
+        .accessibilityLabel("Шаг прибавки \(WeightFormat.kilogramsPrecise(step))")
     }
 }
 

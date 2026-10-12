@@ -48,6 +48,10 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var liftReports: [LiftReport]?
     var workoutNotes: [String: String]?
     var bodyWeightLog: [BodyWeightEntry]?
+    /// Шаг прибавки по упражнениям. Необязательное: в старых копиях его нет.
+    var weightSteps: [String: Double]?
+    var defaultWeightStep: Double?
+    var stallDismissed: [String: Double]?
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -144,7 +148,10 @@ enum BackupService {
             autoregulationEnabled: profile.autoregulationEnabled,
             liftReports: profile.liftReports,
             workoutNotes: profile.workoutNotes,
-            bodyWeightLog: profile.bodyWeightLog
+            bodyWeightLog: profile.bodyWeightLog,
+            weightSteps: profile.weightSteps,
+            defaultWeightStep: profile.defaultWeightStep,
+            stallDismissed: profile.stallDismissed
         )
     }
 
@@ -214,6 +221,9 @@ enum BackupService {
         result.liftReports = snapshot.liftReports ?? []
         result.workoutNotes = snapshot.workoutNotes ?? [:]
         result.bodyWeightLog = snapshot.bodyWeightLog ?? []
+        result.weightSteps = snapshot.weightSteps ?? [:]
+        result.defaultWeightStep = snapshot.defaultWeightStep ?? AccessoryHint.step
+        result.stallDismissed = snapshot.stallDismissed ?? [:]
         return result
     }
 

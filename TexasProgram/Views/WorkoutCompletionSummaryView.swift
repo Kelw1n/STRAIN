@@ -51,6 +51,8 @@ struct WorkoutCompletionSummaryView: View {
     // Редактирование времени тренировки
     @State private var durationSeconds: Int = 0
     @State private var showingDurationPicker: Bool = false
+    /// Готовая картинка для сторис — открывает лист «Поделиться».
+    @State private var shareImage: ShareImage? = nil
     @State private var pickerHours: Int = 1
     @State private var pickerMinutes: Int = 15
 
@@ -70,6 +72,9 @@ struct WorkoutCompletionSummaryView: View {
 
                         // УСИЛИЕ
                         effortSection
+
+                        // КАРТОЧКА ДЛЯ СТОРИС
+                        shareSection
 
                         // Зазор под нижнюю кнопку
                         Spacer(minLength: 90)
@@ -130,6 +135,10 @@ struct WorkoutCompletionSummaryView: View {
             }
             .sheet(isPresented: $showingDurationPicker) {
                 durationPickerSheet
+            }
+            .sheet(item: $shareImage) { item in
+                ShareSheet(items: [item.image])
+                    .presentationDetents([.medium, .large])
             }
         }
         .preferredColorScheme(.dark)
@@ -409,6 +418,70 @@ struct WorkoutCompletionSummaryView: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    // MARK: - Карточка для сторис
+
+    private var shareSummary: WorkoutShareSummary {
+        WorkoutShareSummary.current(
+            title: workoutTitle.isEmpty ? workout.fullTitle : workoutTitle,
+            durationSeconds: durationSeconds
+        )
+    }
+
+    /// Превью карточки и кнопка. Своё фото из раздела выше становится фоном.
+    private var shareSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ПОДЕЛИТЬСЯ")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .padding(.leading, 4)
+
+            HStack(alignment: .center, spacing: 16) {
+                WorkoutShareCard(summary: shareSummary, photo: selectedImages.first)
+                    .scaleEffect(0.3, anchor: .topLeading)
+                    .frame(width: WorkoutShareCard.size.width * 0.3, height: WorkoutShareCard.size.height * 0.3, alignment: .topLeading)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Карточка для сторис")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(selectedImages.isEmpty
+                         ? "Время, тоннаж, рекорды и упражнения. Добавь фото выше — оно станет фоном."
+                         : "Первое фото выше — фоном карточки.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        if let image = WorkoutShareCard.render(shareSummary, photo: selectedImages.first) {
+                            shareImage = ShareImage(image: image)
+                        }
+                    } label: {
+                        Label("Поделиться", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .background(Theme.accent, in: Capsule())
+                    }
+                    .buttonStyle(.pressable)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
         }
     }
 

@@ -249,6 +249,8 @@ struct AccessoryHint: Equatable, Sendable {
     /// Вес вырос по сравнению с прошлым разом.
     let isStepUp: Bool
     let text: String
+    /// Застой: три тренировки на одном весе без роста — предлагаем сбросить.
+    var isDeload: Bool = false
 }
 
 struct WorkoutDayPlan: Identifiable, Equatable, Hashable, Codable, Sendable {
@@ -320,6 +322,16 @@ final class ProgramProfile {
     var bodyWeightLog: [BodyWeightEntry] = []
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
     var accessoryProgressionEnabled: Bool = true
+    /// Шаг прибавки по упражнениям: ключ — нормализованное название.
+    /// Нет записи — обычные 2,5 кг. Нужен там, где мелких блинов нет
+    /// (жим лёжа, тренажёр с плитками по 5 кг) или, наоборот, шаг мельче.
+    var weightSteps: [String: Double] = [:]
+    /// Шаг для всех упражнений без своего: зависит от самых мелких блинов в зале.
+    /// По умолчанию 2,5 кг — пара блинов по 1,25.
+    var defaultWeightStep: Double = AccessoryHint.step
+    /// Застой, который человек решил не сбрасывать: упражнение → вес.
+    /// На другом весе предложение вернётся.
+    var stallDismissed: [String: Double] = [:]
     /// Напоминание о тренировке в дни расписания.
     var reminderEnabled: Bool = false
     var reminderHour: Int = 18
@@ -427,7 +439,7 @@ final class ProgramProfile {
     /// Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
     /// правки подставляют свои упражнения. Наоборот задержка стёрла бы то,
     /// что пользователь вписал руками.
-    var workoutPlan: WorkoutPlan { applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan))) }
+    var workoutPlan: WorkoutPlan { applySteps(to: applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan)))) }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
@@ -891,6 +903,95 @@ final class ProgramProfile {
         }
     }
 
+    // MARK: - Шаг прибавки
+
+    /// Варианты шага: от тренажёров с шагом 1 кг до плиток по 10 кг.
+    static let weightStepOptions: [Double] = [1, 1.25, 2.5, 5, 10]
+
+    /// Ключ упражнения для шага: одно и то же движение во всех днях и неделях.
+    static func weightStepKey(_ name: String) -> String {
+        name.lowercased()
+            .replacingOccurrences(of: "ё", with: "е")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Подпись варианта: что это значит в зале.
+    static func weightStepTitle(_ step: Double) -> String {
+        switch step {
+        case 1: return "1 кг — тренажёр"
+        case 1.25: return "1,25 кг"
+        case 2.5: return "2,5 кг — есть блины 1,25"
+        case 5: return "5 кг — мельче 2,5 нет"
+        case 10: return "10 кг — плитки по 10"
+        default: return WeightFormat.kilogramsPrecise(step)
+        }
+    }
+
+    static func weightStepHint(_ step: Double) -> String {
+        switch step {
+        case 5: return "Самые мелкие блины — 2,5 кг: вес растёт на 5 кг, а веса программы округляются до того, что можно повесить."
+        case 2.5: return "Есть блины по 1,25 кг: вес растёт на 2,5 кг — обычная прибавка."
+        default: return "Вес растёт на \(WeightFormat.kilogramsPrecise(step)), веса программы округляются под этот шаг."
+        }
+    }
+
+    func weightStep(for name: String) -> Double {
+        weightSteps[Self.weightStepKey(name)] ?? defaultWeightStep
+    }
+
+    /// Свой ли шаг у упражнения — меню показывает «как в зале» или выбранный.
+    func hasOwnWeightStep(for name: String) -> Bool {
+        weightSteps[Self.weightStepKey(name)] != nil
+    }
+
+    func setWeightStep(_ step: Double, for name: String) {
+        let key = Self.weightStepKey(name)
+        // Шаг, совпадающий с общим, не храним: поменяешь общий — упражнение пойдёт за ним.
+        if step == defaultWeightStep || step <= 0 {
+            weightSteps.removeValue(forKey: key)
+        } else {
+            weightSteps[key] = step
+        }
+    }
+
+    /// Округляет вес до того, что реально можно повесить при этом шаге.
+    /// Ровно посередине — вниз: лишний вес на штанге хуже недостающего.
+    static func roundWeight(_ value: Double, step: Double) -> Double {
+        guard value.isFinite, step > 0 else { return value }
+        let units = value / step
+        let lower = units.rounded(.down)
+        let rounded = units - lower > 0.5 + 1e-9 ? lower + 1 : lower
+        return (rounded * step * 100).rounded() / 100
+    }
+
+    /// Веса программы для упражнений со своим шагом: 82,5 в жиме при шаге 5 кг
+    /// не повесить, поэтому план показывает 80.
+    private func applySteps(to plan: WorkoutPlan) -> WorkoutPlan {
+        // Обычный зал и ни одного своего шага — план ровно тот, что посчитала программа.
+        guard !weightSteps.isEmpty || defaultWeightStep != AccessoryHint.step else { return plan }
+        return WorkoutPlan(weeks: plan.weeks.map { week in
+            WorkoutWeekPlan(id: week.id, number: week.number, days: week.days.map { day in
+                WorkoutDayPlan(id: day.id, number: day.number, title: day.title, exercises: day.exercises.map { exercise in
+                    guard case .kilograms(let value) = exercise.load else { return exercise }
+                    let step = weightStep(for: exercise.name)
+                    // Программа считает с шагом 2,5 — такие веса и так вешаются.
+                    guard step != AccessoryHint.step else { return exercise }
+                    let rounded = Self.roundWeight(value, step: step)
+                    guard rounded != value else { return exercise }
+                    return ExercisePrescription(
+                        id: exercise.id,
+                        name: exercise.name,
+                        sets: exercise.sets,
+                        reps: exercise.reps,
+                        load: .kilograms(rounded),
+                        isOptional: exercise.isOptional,
+                        benchSession: exercise.benchSession
+                    )
+                })
+            })
+        }, isPeaking: plan.isPeaking)
+    }
+
     // MARK: - Прогрессия подсобки
 
     /// Что делать с весом подсобки на этой тренировке.
@@ -918,11 +1019,23 @@ final class ProgramProfile {
         let allTop = last.entries.allSatisfy { $0.reps >= top }
 
         if allSets && allTop {
-            let next = ProgramCalculator.roundToPlate(working + AccessoryHint.step)
+            // Шаг — свой у упражнения: на блоке 2,5, на жиме без мелких блинов 5.
+            // От рабочего веса, без округления к сетке: он уже реально висел на штанге.
+            let step = weightStep(for: exercise.name)
+            let next = ((working + step) * 100).rounded() / 100
             return AccessoryHint(
                 weight: next,
                 isStepUp: next > working,
                 text: "В прошлый раз \(top) во всех подходах — прибавь до \(WeightFormat.kilogramsPrecise(next))."
+            )
+        }
+
+        if let deload = stallDeload(for: exercise, top: top, previous: previous, working: working) {
+            return AccessoryHint(
+                weight: deload,
+                isStepUp: false,
+                text: "Три тренировки подряд на \(WeightFormat.kilogramsPrecise(working)) без роста. Сбрось до \(WeightFormat.kilogramsPrecise(deload)) и набери \(top) заново — так вес снова пойдёт вверх.",
+                isDeload: true
             )
         }
 
@@ -931,6 +1044,34 @@ final class ProgramProfile {
             isStepUp: false,
             text: "Держи \(WeightFormat.kilogramsPrecise(working)) и добери до \(top) в каждом подходе — тогда вес вырастет."
         )
+    }
+
+    /// Сколько тренировок подряд на одном весе без роста считаем застоем.
+    static let stallSessions = 3
+
+    /// Вес разгрузки, если движение встало: последние три раза один и тот же
+    /// рабочий вес, ни разу не закрыт верх диапазона и повторов не прибавилось. Минус 10% под шаг —
+    /// достаточно, чтобы снова пойти вверх, и не так много, чтобы откатиться.
+    private func stallDeload(for exercise: ExercisePrescription, top: Int, previous: [ExerciseHistoryPoint], working: Double) -> Double? {
+        let key = Self.weightStepKey(exercise.name)
+        if stallDismissed[key] == working { return nil }
+        let recent = previous.filter { !$0.entries.isEmpty }.suffix(Self.stallSessions)
+        guard recent.count == Self.stallSessions else { return nil }
+        let stuck = recent.allSatisfy { point in
+            point.entries.map(\.weight).max() == working
+                && !(point.entries.count >= exercise.sets && point.entries.allSatisfy { $0.reps >= top })
+        }
+        // Повторы растут на том же весе — двойная прогрессия идёт, это не застой.
+        guard stuck, let first = recent.first, let last = recent.last, last.totalReps <= first.totalReps else { return nil }
+        let step = weightStep(for: exercise.name)
+        var deload = Self.roundWeight(working * 0.9, step: step)
+        if deload >= working { deload = working - step }
+        return deload > 0 ? deload : nil
+    }
+
+    /// «Не сбрасывать»: застой на этом весе больше не предлагаем.
+    func dismissStall(for name: String, weight: Double) {
+        stallDismissed[Self.weightStepKey(name)] = weight
     }
 
     // MARK: - История по старым отметкам

@@ -23,7 +23,7 @@ struct ActiveSetState: Identifiable, Equatable, Codable {
 
 struct ActiveExerciseState: Identifiable, Equatable, Codable {
     var id: String { prescription.id }
-    let prescription: ExercisePrescription
+    var prescription: ExercisePrescription
     var restSeconds: Int
     var sets: [ActiveSetState]
     /// Лучший вес до этой тренировки — от него считается рекорд.
@@ -414,6 +414,39 @@ final class WorkoutSessionManager {
             exercises[idx].restSeconds = seconds
             save()
         }
+    }
+
+    /// Меняет шаг прибавки упражнения прямо в тренировке. Неотмеченные подходы
+    /// с плановым весом сразу получают вес под новый шаг; то, что человек
+    /// вписал руками или уже сделал, не трогаем.
+    func changeWeightStep(_ step: Double, for exIdx: Int, profile: ProgramProfile) {
+        guard let workout = activeWorkout, exercises.indices.contains(exIdx) else { return }
+        let key = ProgramProfile.weightStepKey(exercises[exIdx].prescription.name)
+        // Одно движение может стоять в дне дважды — шаг у него один.
+        let affected = exercises.indices.filter { ProgramProfile.weightStepKey(exercises[$0].prescription.name) == key }
+        let before = affected.map { plannedWeight(for: exercises[$0].prescription, profile: profile, workout: workout) }
+
+        profile.setWeightStep(step, for: exercises[exIdx].prescription.name)
+
+        let fresh = profile.exercises(for: workout)
+        for (offset, idx) in affected.enumerated() {
+            if let updated = fresh.first(where: { $0.id == exercises[idx].prescription.id }) {
+                exercises[idx].prescription = updated
+            }
+            let after = plannedWeight(for: exercises[idx].prescription, profile: profile, workout: workout)
+            guard after != before[offset] else { continue }
+            for s in exercises[idx].sets.indices where !exercises[idx].sets[s].isDone && exercises[idx].sets[s].weight == before[offset] {
+                exercises[idx].sets[s].weight = after
+            }
+        }
+        save()
+    }
+
+    private func plannedWeight(for presc: ExercisePrescription, profile: ProgramProfile, workout: ScheduledWorkout) -> Double {
+        let last = profile.history(forExerciseNamed: presc.name)
+            .filter { !($0.week == workout.week && $0.day == workout.day.number) }
+            .last { !$0.entries.isEmpty }?.entries ?? []
+        return plannedWeight(for: presc, profile: profile, workout: workout, last: last)
     }
 
     private func plannedWeight(for presc: ExercisePrescription, profile: ProgramProfile, workout: ScheduledWorkout, last: [SetEntry]) -> Double {

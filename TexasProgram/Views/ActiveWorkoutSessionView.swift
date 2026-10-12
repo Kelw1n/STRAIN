@@ -523,6 +523,22 @@ private struct ExerciseSessionCard: View {
             } label: {
                 Label("Картинка упражнения", systemImage: "photo")
             }
+            // Шаг прибавки этого движения: у кого есть блины 1,25 — 2,5 кг,
+            // у кого нет — 5; на блоке бывает и 1 кг.
+            Menu {
+                Picker("Шаг прибавки", selection: Binding(
+                    get: { profile.weightStep(for: exercise.prescription.name) },
+                    set: { step in
+                        withAnimation(Motion.snappy) { manager.changeWeightStep(step, for: index, profile: profile) }
+                    }
+                )) {
+                    ForEach(ProgramProfile.weightStepOptions, id: \.self) { option in
+                        Text(ProgramProfile.weightStepTitle(option)).tag(option)
+                    }
+                }
+            } label: {
+                Label("Шаг прибавки: \(WeightFormat.kilogramsPrecise(profile.weightStep(for: exercise.prescription.name)))", systemImage: "scalemass")
+            }
             if index > 0 {
                 Button {
                     withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index - 1) }
