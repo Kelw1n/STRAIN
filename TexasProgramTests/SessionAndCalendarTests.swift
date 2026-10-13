@@ -195,7 +195,10 @@ final class SessionAndCalendarTests: XCTestCase {
     func testMoveExerciseKeepsEveryExercise() throws {
         let profile = texas()
         let manager = WorkoutSessionManager.shared
-        manager.startWorkout(workout: try XCTUnwrap(profile.schedule.focus), profile: profile)
+        // Тренировка, где упражнений хватает для перестановки: ближайшая по дате
+        // зависит от дня недели, и по вторникам в ней их меньше трёх.
+        let workout = try XCTUnwrap(profile.schedule.allPending.first { profile.exercises(for: $0).count > 2 })
+        manager.startWorkout(workout: workout, profile: profile)
         let ids = manager.exercises.map(\.id)
         XCTAssertGreaterThan(ids.count, 2)
 

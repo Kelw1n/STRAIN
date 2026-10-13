@@ -73,11 +73,6 @@ import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.service.ScheduledWorkout
 import com.texasprogram.app.service.WorkoutSessionManager
 
-enum class AndroidWorkoutEffort(val title: String, val color: Color) {
-    EASY("ЛЕГКО", Color(0xFF2ED573)),
-    NORMAL("НОРМАЛЬНО", Color(0xFFFFA533)),
-    VERY_HARD("ОЧЕНЬ ТЯЖЕЛО", Color(0xFFFF4757))
-}
 
 @Composable
 fun WorkoutCompletionSummaryScreen(
@@ -96,7 +91,8 @@ fun WorkoutCompletionSummaryScreen(
             else profile.note(workout.week, workout.day.number)
         )
     }
-    var selectedEffort by remember { mutableStateOf<AndroidWorkoutEffort?>(null) }
+    /// Оценка усилия 1–10; пусто — не ставили.
+    var effortScore by remember { mutableStateOf<Int?>(null) }
     val selectedImages = remember { mutableStateListOf<Uri>() }
 
     var durationSeconds by remember { mutableIntStateOf(maxOf(WorkoutSessionManager.elapsedSeconds, 60)) }
@@ -428,78 +424,14 @@ fun WorkoutCompletionSummaryScreen(
 
             // УСИЛИЕ
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "УСИЛИЕ",
-                        color = Color.White.copy(alpha = 0.45f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "Можно пропустить",
-                        color = Color.White.copy(alpha = 0.45f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    AndroidWorkoutEffort.entries.forEach { effort ->
-                        val isSelected = selectedEffort == effort
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(
-                                    if (isSelected) effort.color.copy(alpha = 0.18f)
-                                    else Color(0xFF161616)
-                                )
-                                .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
-                                    color = if (isSelected) effort.color else Color.White.copy(alpha = 0.08f),
-                                    shape = RoundedCornerShape(18.dp)
-                                )
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    selectedEffort = if (selectedEffort == effort) null else effort
-                                }
-                                .padding(vertical = 16.dp, horizontal = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) effort.color
-                                            else effort.color.copy(alpha = 0.35f)
-                                        )
-                                )
-                                Text(
-                                    text = effort.title,
-                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.70f),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
+                Text(
+                    text = "УСИЛИЕ",
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+                EffortSlider(score = effortScore, onChange = { effortScore = it })
             }
 
             // КАРТОЧКА ДЛЯ СТОРИС
@@ -542,7 +474,7 @@ fun WorkoutCompletionSummaryScreen(
                         WorkoutSessionManager.finishWorkout(
                             profile = updatedProfile,
                             customDuration = durationSeconds,
-                            effort = selectedEffort?.title,
+                            effort = EffortScale.text(effortScore),
                             onUpdateProfile = onUpdateProfile
                         )
                         WorkoutSessionManager.showingSummary = false

@@ -1,37 +1,6 @@
 import SwiftUI
 import PhotosUI
 
-/// Оценка субъективного усилия тренировки в стиле REBRN
-enum WorkoutEffort: String, CaseIterable, Identifiable {
-    case easy = "ЛЕГКО"
-    case normal = "НОРМАЛЬНО"
-    case veryHard = "ОЧЕНЬ ТЯЖЕЛО"
-
-    var id: String { rawValue }
-
-    var color: Color {
-        switch self {
-        case .easy:
-            return Color(red: 0.18, green: 0.84, blue: 0.45) // #2ED573
-        case .normal:
-            return Color(red: 1.0, green: 0.65, blue: 0.20) // #FFA533
-        case .veryHard:
-            return Color(red: 1.0, green: 0.28, blue: 0.34) // #FF4757
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .easy:
-            return "leaf.fill"
-        case .normal:
-            return "flame.fill"
-        case .veryHard:
-            return "bolt.heart.fill"
-        }
-    }
-}
-
 /// Экран подведения итогов тренировки «Твоя тренировка» в стиле REBRN
 struct WorkoutCompletionSummaryView: View {
     @Environment(\.dismiss) private var dismiss
@@ -42,7 +11,8 @@ struct WorkoutCompletionSummaryView: View {
 
     @State private var workoutTitle: String = ""
     @State private var workoutDescription: String = ""
-    @State private var selectedEffort: WorkoutEffort? = nil
+    /// Оценка усилия 1–10; пусто — не ставили.
+    @State private var effortScore: Int? = nil
 
     // Выбор фото/видео (до 5 штук)
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
@@ -361,63 +331,11 @@ struct WorkoutCompletionSummaryView: View {
 
     private var effortSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("УСИЛИЕ")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.45))
-
-                Spacer()
-
-                Text("Можно пропустить")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.45))
-            }
-            .padding(.horizontal, 4)
-
-            HStack(spacing: 10) {
-                ForEach(WorkoutEffort.allCases) { effort in
-                    let isSelected = selectedEffort == effort
-
-                    Button {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        if selectedEffort == effort {
-                            selectedEffort = nil
-                        } else {
-                            selectedEffort = effort
-                        }
-                    } label: {
-                        VStack(spacing: 8) {
-                            Circle()
-                                .fill(isSelected ? effort.color : effort.color.opacity(0.35))
-                                .frame(width: 10, height: 10)
-
-                            Text(effort.rawValue)
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(isSelected ? .white : Color.white.opacity(0.70))
-                                .multilineTextAlignment(.center)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .padding(.horizontal, 6)
-                        .background(
-                            isSelected
-                                ? effort.color.opacity(0.18)
-                                : Color(red: 0.10, green: 0.10, blue: 0.12)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(
-                                    isSelected ? effort.color : Color.white.opacity(0.08),
-                                    lineWidth: isSelected ? 2 : 1
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            Text("УСИЛИЕ")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .padding(.leading, 4)
+            EffortSlider(score: $effortScore)
         }
     }
 
@@ -582,7 +500,7 @@ struct WorkoutCompletionSummaryView: View {
         sessionManager.finishWorkout(
             profile: profile,
             customDuration: durationSeconds,
-            effort: selectedEffort?.rawValue
+            effort: EffortScale.text(effortScore)
         )
 
         // Закрываем окно итогов
