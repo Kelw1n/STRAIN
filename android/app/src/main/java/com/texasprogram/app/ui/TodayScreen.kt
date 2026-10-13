@@ -174,7 +174,9 @@ fun TodayScreen(
         }
 
         // Вспомогательные упражнения — из дня программы, жим — из волны.
-        itemsIndexed(exercises, key = { _, item -> item.name }) { index, exercise ->
+        // Ключ с номером: одно упражнение может стоять в дне дважды,
+        // а одинаковые ключи роняют список.
+        itemsIndexed(exercises, key = { index, item -> "ex-$index-${item.key}" }) { index, exercise ->
             ExerciseCard(
                 exercise = exercise,
                 modifier = Modifier.appearIn(index + 4),
