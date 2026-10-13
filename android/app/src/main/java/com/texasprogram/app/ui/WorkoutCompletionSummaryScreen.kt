@@ -501,6 +501,13 @@ fun WorkoutCompletionSummaryScreen(
                     }
                 }
             }
+
+            // КАРТОЧКА ДЛЯ СТОРИС
+            ShareCardSection(
+                title = workoutTitle.ifBlank { workout.fullTitle },
+                durationSeconds = durationSeconds,
+                photo = selectedImages.firstOrNull()
+            )
         }
 
         // Нижняя фиксированная кнопка «ДАЛЬШЕ»

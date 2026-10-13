@@ -215,19 +215,24 @@ object WorkoutSessionManager {
             .filterNot { it.week == workout.week && it.day == workout.day.number }
         val last = history.lastOrNull { it.entries.isNotEmpty() }?.entries.orEmpty()
         val best = history.maxOfOrNull { it.best } ?: 0.0
-        val planned = (presc.load as? LoadPrescription.Kilograms)?.value
-            ?: profile.accessoryHint(presc, workout.week, workout.day.number)?.weight
-            ?: last.maxOfOrNull { it.weight }
-            ?: 50.0
+        val planned = plannedWeight(presc, profile, workout, last)
         val reps = presc.plannedReps ?: 10
+        // Подходы этого дня, уже записанные до старта (точками на «Главном»
+        // или в прошлой сессии), приходят отмеченными. Раньше они показывались
+        // пустыми, и казалось, что сделанное пропало.
+        val logged = (0 until maxOf(presc.sets, 0) + ProgramProfile.EXTRA_SET_ALLOWANCE)
+            .mapNotNull { index -> profile.setEntry(workout.week, workout.day.number, presc, index)?.let { index to it } }
+            .toMap()
+        val count = maxOf(presc.sets, 1, (logged.keys.maxOrNull() ?: -1) + 1)
         // Сколько подходов в плане, столько и строк: два — значит два.
-        val sets = (0 until maxOf(presc.sets, 1)).map { index ->
+        val sets = (0 until count).map { index ->
+            val entry = logged[index]
             ActiveSetState(
                 index = index,
                 previous = last.getOrNull(index) ?: last.firstOrNull(),
-                weight = planned,
-                reps = reps,
-                isDone = false
+                weight = entry?.weight ?: planned,
+                reps = entry?.reps ?: reps,
+                isDone = entry != null
             )
         }
         return ActiveExerciseState(
@@ -236,6 +241,66 @@ object WorkoutSessionManager {
             sets = sets,
             bestBefore = best
         )
+    }
+
+    private fun plannedWeight(
+        presc: ExercisePrescription,
+        profile: ProgramProfile,
+        workout: ScheduledWorkout,
+        last: List<SetEntry>? = null
+    ): Double {
+        (presc.load as? LoadPrescription.Kilograms)?.let { return it.value }
+        profile.accessoryHint(presc, workout.week, workout.day.number)?.weight?.let { return it }
+        val previous = last ?: profile.history(presc.name)
+            .filterNot { it.week == workout.week && it.day == workout.day.number }
+            .lastOrNull { it.entries.isNotEmpty() }?.entries.orEmpty()
+        return previous.maxOfOrNull { it.weight } ?: 50.0
+    }
+
+    /// Меняет шаг прибавки упражнения прямо в тренировке. Неотмеченные подходы
+    /// с плановым весом сразу получают вес под новый шаг; то, что человек
+    /// вписал руками или уже сделал, не трогаем.
+    fun changeWeightStep(step: Double, exIdx: Int, profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
+        val workout = activeWorkout ?: return
+        val target = exercises.getOrNull(exIdx) ?: return
+        val key = ProgramProfile.weightStepKey(target.prescription.name)
+        // Одно движение может стоять в дне дважды — шаг у него один.
+        val affected = exercises.indices.filter { ProgramProfile.weightStepKey(exercises[it].prescription.name) == key }
+        val before = affected.map { plannedWeight(exercises[it].prescription, profile, workout) }
+
+        val updated = profile.setWeightStep(step, target.prescription.name)
+        onUpdateProfile(updated)
+
+        val fresh = updated.exercises(workout)
+        affected.forEachIndexed { offset, idx ->
+            val ex = exercises[idx]
+            val presc = fresh.firstOrNull { it.key == ex.key } ?: ex.prescription
+            val after = plannedWeight(presc, updated, workout)
+            exercises[idx] = ex.copy(
+                prescription = presc,
+                sets = if (after == before[offset]) ex.sets else ex.sets.map {
+                    if (!it.isDone && it.weight == before[offset]) it.copy(weight = after) else it
+                }
+            )
+        }
+        save()
+    }
+
+    /// Сменили профиль посреди тренировки: она принадлежит прежнему, и подходы
+    /// не должны писаться в чужой. Кладём её на диск и убираем из памяти —
+    /// вернёшься в тот профиль, и она поднимется.
+    fun detachIfOtherProfile(profile: ProgramProfile) {
+        val owner = profileId ?: return
+        if (activeWorkout == null || owner == profile.id) return
+        writeNow()
+        saveJob?.cancel()
+        activeWorkout = null
+        isPresented = false
+        showingSummary = false
+        showingZeroSetsAlert = false
+        pendingWorkout = null
+        this.profileId = null
+        exercises.clear()
     }
 
     fun minimize() { isPresented = false }

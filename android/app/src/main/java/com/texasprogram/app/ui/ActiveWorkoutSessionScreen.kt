@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -341,6 +342,13 @@ private class SessionActions(
 
     fun chooseArt(name: String) {
         manager.artTarget = name
+    }
+
+    fun step(name: String): Double = profile()?.weightStep(name) ?: com.texasprogram.app.model.AccessoryHint.STEP
+
+    fun changeStep(ex: Int, step: Double) = withProfile {
+        haptics.light()
+        manager.changeWeightStep(step, ex, it, update)
     }
 }
 
@@ -808,6 +816,7 @@ private fun ExerciseHeader(
     actions: SessionActions
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    var stepMenuExpanded by remember { mutableStateOf(false) }
     val name = exercise.prescription.name
 
     Row(
@@ -882,6 +891,12 @@ private fun ExerciseHeader(
                         menuExpanded = false
                         actions.chooseArt(name)
                     }
+                    // Шаг прибавки этого движения: у кого есть блины 1,25 — 2,5 кг,
+                    // у кого нет — 5; на блоке бывает и 1 кг.
+                    MenuItem("Шаг прибавки: ${formatWeight(actions.step(name))} кг", Icons.Filled.Scale) {
+                        menuExpanded = false
+                        stepMenuExpanded = true
+                    }
                     if (index > 0) {
                         MenuItem("Переместить выше", Icons.Filled.ArrowUpward) {
                             menuExpanded = false
@@ -893,6 +908,16 @@ private fun ExerciseHeader(
                             menuExpanded = false
                             actions.move(index, index + 1)
                         }
+                    }
+                }
+                if (stepMenuExpanded) {
+                    WeightStepMenu(
+                        expanded = true,
+                        current = actions.step(name),
+                        onDismiss = { stepMenuExpanded = false }
+                    ) { step ->
+                        stepMenuExpanded = false
+                        actions.changeStep(index, step)
                     }
                 }
             }

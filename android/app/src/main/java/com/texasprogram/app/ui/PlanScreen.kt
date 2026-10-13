@@ -266,7 +266,14 @@ fun DayDetailScreen(
                     done = profile.completedSets(week, day.number, exercise)
                 ) { dot -> onToggleSet(exercise, dot) },
                 onOpenHistory = { onOpenHistory(exercise.name) },
-                hint = profile.accessoryHint(exercise, week, day.number)
+                hint = profile.accessoryHint(exercise, week, day.number),
+                step = profile.weightStep(exercise.name),
+                onSelectStep = { step -> onUpdateProfile(profile.setWeightStep(step, exercise.name)) },
+                onKeepWeight = {
+                    profile.history(exercise.name).lastOrNull { it.entries.isNotEmpty() }?.best?.let { working ->
+                        onUpdateProfile(profile.dismissStall(exercise.name, working))
+                    }
+                }
             )
         }
         item(key = "asplanned") {

@@ -306,25 +306,32 @@ final class RestTimer {
     // MARK: - Уведомление
 
     private func scheduleNotification(after duration: TimeInterval) {
-        guard duration > 0 else { return }
+        guard duration > 0, let endsAt else { return }
+        // Идентификатор заводим сразу, а не в ответе на запрос разрешения:
+        // ответ приходит позже, и «Пропустить» в этот промежуток не находил,
+        // что отменять, — «Отдых закончен» приходил уже после пропуска.
+        let id = UUID().uuidString
+        notificationID = id
+        persist()
+
+        let content = UNMutableNotificationContent()
+        content.title = exerciseName.map { "Отдых закончен: \($0)" } ?? "Отдых закончен"
+        content.body = setDetails.map { "Пора к следующему подходу. Прошлый: \($0)." } ?? "Пора к следующему подходу."
+        content.sound = .default
+
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = self.exerciseName != nil ? "Отдых закончен: \(self.exerciseName!)" : "Отдых закончен"
-            content.body = self.setDetails != nil ? "Следующий подход: \(self.setDetails!). Пора!" : "Пора к следующему подходу."
-            content.sound = .default
-
-            let id = UUID().uuidString
-            let request = UNNotificationRequest(
-                identifier: id,
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: duration, repeats: false)
-            )
-            center.add(request)
             DispatchQueue.main.async {
-                self.notificationID = id
-                self.persist()
+                // Пока спрашивали разрешение, отдых могли пропустить или продлить.
+                guard self.notificationID == id else { return }
+                let left = endsAt.timeIntervalSinceNow
+                guard left > 0 else { return }
+                center.add(UNNotificationRequest(
+                    identifier: id,
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: left, repeats: false)
+                ))
             }
         }
     }
@@ -332,6 +339,7 @@ final class RestTimer {
     private func cancelNotification() {
         guard let notificationID else { return }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [notificationID])
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [notificationID])
         self.notificationID = nil
     }
 }

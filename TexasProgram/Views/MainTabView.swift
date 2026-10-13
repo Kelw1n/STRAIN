@@ -141,6 +141,8 @@ struct MainTabView: View {
         .onAppear {
             WidgetBridge.publish(profile)
             ReminderScheduler.reschedule(for: profile)
+            // Тренировка другого профиля в этот не пишет.
+            sessionManager.detachIfOtherProfile(profile)
             // Приложение выгружали посреди тренировки — поднимаем её свёрнутой.
             sessionManager.restoreIfNeeded(for: profile)
         }

@@ -185,7 +185,14 @@ fun TodayScreen(
                     done = profile.completedSets(focus.week, focus.day.number, exercise)
                 ) { dot -> onToggleSet(focus, exercise, dot) },
                 onOpenHistory = { onOpenHistory(exercise.name) },
-                hint = profile.accessoryHint(exercise, focus.week, focus.day.number)
+                hint = profile.accessoryHint(exercise, focus.week, focus.day.number),
+                step = profile.weightStep(exercise.name),
+                onSelectStep = { step -> onUpdateProfile(profile.setWeightStep(step, exercise.name)) },
+                onKeepWeight = {
+                    profile.history(exercise.name).lastOrNull { it.entries.isNotEmpty() }?.best?.let { working ->
+                        onUpdateProfile(profile.dismissStall(exercise.name, working))
+                    }
+                }
             )
         }
 

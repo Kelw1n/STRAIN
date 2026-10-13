@@ -65,7 +65,9 @@ data class AccessoryHint(
     val weight: Double?,
     /// Вес вырос по сравнению с прошлым разом.
     val isStepUp: Boolean,
-    val text: String
+    val text: String,
+    /// Застой: три тренировки на одном весе без роста — предлагаем сбросить.
+    val isDeload: Boolean = false
 ) {
     companion object {
         /// Шаг прибавки. Два блина по 1,25 — самая мелкая пара, которая есть

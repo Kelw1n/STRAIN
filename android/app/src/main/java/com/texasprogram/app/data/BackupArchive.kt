@@ -60,7 +60,20 @@ data class ProfileSnapshot(
     val euthanasiaInput: EuthanasiaInput? = null,
     val autoregulationEnabled: Boolean = false,
     val liftReports: List<LiftReport> = emptyList(),
-    val workoutNotes: Map<String, String> = emptyMap()
+    val workoutNotes: Map<String, String> = emptyMap(),
+    /// Замеры веса тела. Дата — ISO-строка, как пишет iOS: раньше вес тела
+    /// в копию не попадал вовсе и терялся при восстановлении.
+    val bodyWeightLog: List<BodyWeightSnapshot> = emptyList(),
+    /// Шаг прибавки и отклонённые застои. В старых копиях их нет.
+    val weightSteps: Map<String, Double> = emptyMap(),
+    val defaultWeightStep: Double = 2.5,
+    val stallDismissed: Map<String, Double> = emptyMap()
+)
+
+@Serializable
+data class BodyWeightSnapshot(
+    val date: String,
+    val weight: Double
 )
 
 @Serializable
@@ -132,7 +145,16 @@ object BackupService {
         euthanasiaInput = profile.euthanasiaInput,
         autoregulationEnabled = profile.autoregulationEnabled,
         liftReports = profile.liftReports,
-        workoutNotes = profile.workoutNotes
+        workoutNotes = profile.workoutNotes,
+        bodyWeightLog = profile.bodyWeightLog.map {
+            BodyWeightSnapshot(
+                java.time.LocalDate.ofEpochDay(it.epochDay).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toString(),
+                it.weight
+            )
+        },
+        weightSteps = profile.weightSteps,
+        defaultWeightStep = profile.defaultWeightStep,
+        stallDismissed = profile.stallDismissed
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(
@@ -170,6 +192,15 @@ object BackupService {
         autoregulationEnabled = snapshot.autoregulationEnabled,
         liftReports = snapshot.liftReports,
         workoutNotes = snapshot.workoutNotes,
+        bodyWeightLog = snapshot.bodyWeightLog.mapNotNull { entry ->
+            // iOS пишет начало дня в своём часовом поясе — переводим обратно в дату.
+            runCatching {
+                java.time.Instant.parse(entry.date).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
+            }.getOrNull()?.let { com.texasprogram.app.model.BodyWeightEntry(it, entry.weight) }
+        },
+        weightSteps = snapshot.weightSteps,
+        defaultWeightStep = snapshot.defaultWeightStep,
+        stallDismissed = snapshot.stallDismissed,
         scheduleWeekdays = snapshot.scheduleWeekdays,
         scheduleMode = if (snapshot.scheduleMode == "QUEUE") ScheduleMode.QUEUE else ScheduleMode.WEEKDAY,
         cycleStartedEpochDay = snapshot.cycleStartedEpochDay,

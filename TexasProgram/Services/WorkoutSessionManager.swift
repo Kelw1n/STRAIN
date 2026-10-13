@@ -185,14 +185,22 @@ final class WorkoutSessionManager {
             let best = history.map(\.best).max() ?? 0
             let plannedWeight = plannedWeight(for: presc, profile: profile, workout: workout, last: last)
             let plannedReps = presc.plannedReps ?? 10
+            // Подходы этого дня, уже записанные до старта (точками на «Главном»
+            // или в прошлой сессии), приходят отмеченными. Раньше они показывались
+            // пустыми, и казалось, что сделанное пропало.
+            let logged = Dictionary(
+                profile.entries(week: workout.week, day: workout.day.number, exercise: presc).map { ($0.index, $0.entry) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            let count = max(presc.sets, 1, (logged.keys.max() ?? -1) + 1)
             // Сколько подходов в плане, столько и строк: два — значит два.
-            let sets = (0..<max(presc.sets, 1)).map { index in
+            let sets = (0..<count).map { index in
                 ActiveSetState(
                     index: index,
                     previous: index < last.count ? last[index] : last.first,
-                    weight: plannedWeight,
-                    reps: plannedReps,
-                    isDone: false
+                    weight: logged[index]?.weight ?? plannedWeight,
+                    reps: logged[index]?.reps ?? plannedReps,
+                    isDone: logged[index] != nil
                 )
             }
             return ActiveExerciseState(
@@ -205,6 +213,19 @@ final class WorkoutSessionManager {
 
         save()
         withAnimation(Motion.sheet) { isPresented = true }
+    }
+
+    /// Сменили профиль посреди тренировки: она принадлежит прежнему, и подходы
+    /// не должны писаться в чужой. Кладём её на диск и убираем из памяти —
+    /// вернёшься в тот профиль, и она поднимется.
+    func detachIfOtherProfile(_ profile: ProgramProfile) {
+        guard activeWorkout != nil, let owner = profileID, owner != profile.profileID else { return }
+        writeNow()
+        forgetForTesting()
+        showingSummary = false
+        showingZeroSetsAlert = false
+        showingReplaceConfirm = false
+        pendingWorkout = nil
     }
 
     func minimize() {

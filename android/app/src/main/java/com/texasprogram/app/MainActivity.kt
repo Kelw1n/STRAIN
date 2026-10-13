@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
         WorkoutSessionManager.attach(filesDir)
         handleDeepLink(intent)
         setContent {
-            val store = remember { AppStore(applicationContext) }
+            val store = remember { AppStore.get(applicationContext) }
             val timer = remember { RestTimer.get(applicationContext) }
             // Отсчёт в интерфейсе: сам таймер считает от даты окончания,
             // это лишь перерисовка — на границе каждой секунды до конца.
@@ -177,6 +177,8 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // Уходим в фон — тренировка ложится на диск сразу, а не через задержку.
         WorkoutSessionManager.writeNow()
+        // И профили: система может выгрузить свёрнутое приложение в любой момент.
+        AppStore.get(applicationContext).flush()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -310,7 +312,11 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     val contentPadding = screenPadding(bottomExtra = 110.dp)
 
     // Поднимаем тренировку, прерванную выгрузкой приложения, — свёрнутой.
-    LaunchedEffect(profile.id) { WorkoutSessionManager.restoreIfNeeded(profile) }
+    LaunchedEffect(profile.id) {
+        // Тренировка другого профиля в этот не пишет.
+        WorkoutSessionManager.detachIfOtherProfile(profile)
+        WorkoutSessionManager.restoreIfNeeded(profile)
+    }
 
     // Профиль на момент нажатия, а не на момент последней перерисовки:
     // два быстрых нажатия по подходам не затирают друг друга.
@@ -494,7 +500,17 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             onToggleSet = { exercise, dot ->
                                 val adds = profile.willAddSet(week, dayNumber, exercise, dot)
                                 store.updateActive { it.toggleSet(week, dayNumber, exercise, dot) }
-                                if (adds) timer.start(profile.defaultRestSeconds.toLong())
+                                if (adds) {
+                                    // С названием и подходами — как на «Главном»: в шторке
+                                    // и на карточке отдыха видно, после чего отдыхаешь.
+                                    val updated = store.active
+                                    timer.start(
+                                        seconds = profile.defaultRestSeconds.toLong(),
+                                        exerciseName = exercise.name,
+                                        completedSets = updated?.completedSets(week, dayNumber, exercise) ?: 0,
+                                        totalSets = exercise.sets
+                                    )
+                                }
                             },
                             onOpenBench = openBench,
                             onCustomize = { customizing = week to dayNumber },

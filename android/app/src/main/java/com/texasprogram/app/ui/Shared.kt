@@ -18,6 +18,15 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ArrowCircleUp
+import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Scale
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -78,7 +87,12 @@ fun ExerciseCard(
     /// Открыть историю движения. Нет обработчика — значка нет.
     onOpenHistory: (() -> Unit)? = null,
     /// Подсказка по весу подсобки. Нет — упражнение со своим весом в плане.
-    hint: AccessoryHint? = null
+    hint: AccessoryHint? = null,
+    /// Шаг прибавки упражнения и выбор другого. Нет обработчика — выбора нет.
+    step: Double? = null,
+    onSelectStep: ((Double) -> Unit)? = null,
+    /// «Не сбрасывать» в подсказке о застое.
+    onKeepWeight: (() -> Unit)? = null
 ) {
     val isBenchLink = exercise.benchSession != null && onOpenBench != null
     val iconGradient = when {
@@ -190,13 +204,41 @@ fun ExerciseCard(
         if (hint != null) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Icon(
-                    if (hint.isStepUp) Icons.Filled.ArrowCircleUp else Icons.Filled.TrackChanges,
+                    when {
+                        hint.isDeload -> Icons.Filled.ArrowCircleDown
+                        hint.isStepUp -> Icons.Filled.ArrowCircleUp
+                        else -> Icons.Filled.TrackChanges
+                    },
                     contentDescription = null,
-                    tint = if (hint.isStepUp) Theme.success else Theme.accent,
+                    tint = when {
+                        hint.isDeload -> Theme.warning
+                        hint.isStepUp -> Theme.success
+                        else -> Theme.accent
+                    },
                     modifier = Modifier.size(13.dp)
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(hint.text, color = Theme.textSecondary, fontSize = 11.sp)
+            }
+            if (hint.weight != null && (onSelectStep != null || (hint.isDeload && onKeepWeight != null))) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (step != null && onSelectStep != null) {
+                        WeightStepChip(step, onSelectStep)
+                    }
+                    if (hint.isDeload && onKeepWeight != null) {
+                        Text(
+                            "Не сбрасывать",
+                            color = Theme.textSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Theme.surfaceSoft)
+                                .pressable(onClick = onKeepWeight)
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -205,6 +247,53 @@ fun ExerciseCard(
         }
 
         // Блины и разминка есть только там, где задан конкретный вес.
+    }
+}
+
+/// Чип «Шаг 2,5 кг ▾» с выбором: у каждого зала свои блины и тренажёры.
+@Composable
+fun WeightStepChip(step: Double, onSelect: (Double) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier
+                .clip(CircleShape)
+                .background(Theme.accent.copy(alpha = 0.12f))
+                .pressable { expanded = true }
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(Icons.Filled.Scale, null, tint = Theme.accent, modifier = Modifier.size(11.dp))
+            Text("Шаг ${formatWeight(step)} кг", color = Theme.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Filled.KeyboardArrowDown, null, tint = Theme.accent, modifier = Modifier.size(12.dp))
+        }
+        WeightStepMenu(expanded = expanded, current = step, onDismiss = { expanded = false }) {
+            expanded = false
+            onSelect(it)
+        }
+    }
+}
+
+/// Список вариантов шага с отметкой текущего.
+@Composable
+fun WeightStepMenu(expanded: Boolean, current: Double, onDismiss: () -> Unit, onSelect: (Double) -> Unit) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss, modifier = Modifier.background(Theme.dialog)) {
+        com.texasprogram.app.model.ProgramProfile.weightStepOptions.forEach { option ->
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        com.texasprogram.app.model.ProgramProfile.weightStepTitle(option),
+                        color = Theme.textPrimary,
+                        fontWeight = if (option == current) FontWeight.Bold else FontWeight.Normal
+                    )
+                },
+                trailingIcon = {
+                    if (option == current) Icon(Icons.Filled.Check, null, tint = Theme.accent, modifier = Modifier.size(16.dp))
+                },
+                onClick = { onSelect(option) }
+            )
+        }
     }
 }
 

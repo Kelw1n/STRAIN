@@ -79,6 +79,38 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertEqual(manager.exercises.map(\.sets.count), planned)
     }
 
+    /// Подходы, отмеченные до старта, приходят в тренировку отмеченными, а не пустыми.
+    func testSessionPicksUpSetsLoggedBeforeStart() throws {
+        let profile = texas()
+        let manager = WorkoutSessionManager.shared
+        let workout = try XCTUnwrap(profile.schedule.focus)
+        let first = try XCTUnwrap(profile.exercises(for: workout).first { $0.sets > 0 })
+        profile.recordSet(week: workout.week, day: workout.day.number, exercise: first, index: 0, reps: 4, weight: 77.5)
+
+        manager.startWorkout(workout: workout, profile: profile)
+        let state = try XCTUnwrap(manager.exercises.first { $0.prescription.id == first.id })
+        XCTAssertTrue(state.sets[0].isDone)
+        XCTAssertEqual(state.sets[0].weight, 77.5)
+        XCTAssertEqual(state.sets[0].reps, 4)
+        XCTAssertFalse(state.sets.dropFirst().contains(where: \.isDone))
+    }
+
+    /// Сменили профиль посреди тренировки — в новый ничего не пишется,
+    /// а вернулись — тренировка снова на месте.
+    func testSwitchingProfileDetachesSession() throws {
+        let owner = texas()
+        let other = texas()
+        let manager = WorkoutSessionManager.shared
+        let workout = try XCTUnwrap(owner.schedule.focus)
+        manager.startWorkout(workout: workout, profile: owner)
+
+        manager.detachIfOtherProfile(other)
+        XCTAssertFalse(manager.isRunning)
+
+        manager.restoreIfNeeded(for: owner)
+        XCTAssertEqual(manager.activeWorkout?.id, workout.id)
+    }
+
     func testElapsedTimeCountsFromStartNotTicks() throws {
         let profile = texas()
         let manager = WorkoutSessionManager.shared

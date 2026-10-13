@@ -95,6 +95,15 @@ data class ProgramProfile(
     val bodyWeightLog: List<BodyWeightEntry> = emptyList(),
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
     val accessoryProgressionEnabled: Boolean = true,
+    /// Шаг прибавки по упражнениям: ключ — нормализованное название.
+    /// Нет записи — общий шаг зала. Нужен там, где мелких блинов нет
+    /// (жим лёжа, тренажёр с плитками по 5 кг) или, наоборот, шаг мельче.
+    val weightSteps: Map<String, Double> = emptyMap(),
+    /// Шаг для всех упражнений без своего: зависит от самых мелких блинов в зале.
+    /// По умолчанию 2,5 кг — пара блинов по 1,25.
+    val defaultWeightStep: Double = AccessoryHint.STEP,
+    /// Застой, который человек решил не сбрасывать: упражнение → вес.
+    val stallDismissed: Map<String, Double> = emptyMap(),
     /// Напоминание о тренировке в дни расписания.
     val reminderEnabled: Boolean = false,
     val reminderHour: Int = 18,
@@ -123,11 +132,11 @@ data class ProgramProfile(
     /// Общий кэш остаётся — новый экземпляр с теми же входными данными
     /// (поменяли, например, время отдыха) берёт готовый план.
     val workoutPlan: WorkoutPlan by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports)
+        val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports, weightSteps, defaultWeightStep)
         // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
         // правки подставляют свои упражнения. Наоборот задержка стёрла бы
         // то, что пользователь вписал руками.
-        PlanCache.resolve(id, key) { applyEdits(applyAutoregulation(applyHolds(generatedPlan))) }
+        PlanCache.resolve(id, key) { applySteps(applyEdits(applyAutoregulation(applyHolds(generatedPlan)))) }
     }
 
     /// Расписание на сегодня — тоже один раз на экземпляр и дату.
@@ -152,6 +161,39 @@ data class ProgramProfile(
                 euthanasiaInput?.let { EuthanasiaCalculator.generate(it) } ?: WorkoutPlan(emptyList(), false)
             TrainingProgramKind.CUSTOM -> customProgram?.plan ?: WorkoutPlan(emptyList(), false)
         }
+
+    // MARK: - Шаг прибавки
+
+    fun weightStep(name: String): Double = weightSteps[weightStepKey(name)] ?: defaultWeightStep
+
+    /// Свой ли шаг у упражнения.
+    fun hasOwnWeightStep(name: String): Boolean = weightSteps.containsKey(weightStepKey(name))
+
+    /// Шаг, совпадающий с общим, не храним: поменяешь общий — упражнение пойдёт за ним.
+    fun setWeightStep(step: Double, name: String): ProgramProfile {
+        val key = weightStepKey(name)
+        val next = if (step == defaultWeightStep || step <= 0) weightSteps - key else weightSteps + (key to step)
+        return copy(weightSteps = next)
+    }
+
+    /// Веса программы для упражнений со своим шагом: 82,5 в жиме при шаге 5 кг
+    /// не повесить, поэтому план показывает 80.
+    private fun applySteps(plan: WorkoutPlan): WorkoutPlan {
+        // Обычный зал и ни одного своего шага — план ровно тот, что посчитала программа.
+        if (weightSteps.isEmpty() && defaultWeightStep == AccessoryHint.STEP) return plan
+        return plan.copy(weeks = plan.weeks.map { week ->
+            week.copy(days = week.days.map { day ->
+                day.copy(exercises = day.exercises.map { exercise ->
+                    val load = exercise.load as? LoadPrescription.Kilograms ?: return@map exercise
+                    val step = weightStep(exercise.name)
+                    // Программа считает с шагом 2,5 — такие веса и так вешаются.
+                    if (step == AccessoryHint.STEP) return@map exercise
+                    val rounded = roundWeight(load.value, step)
+                    if (rounded == load.value) exercise else exercise.copy(load = LoadPrescription.Kilograms(rounded))
+                })
+            })
+        })
+    }
 
     private fun applyEdits(plan: WorkoutPlan): WorkoutPlan {
         // Быстрый выход: у профиля без правок расчёт остаётся прежним.
@@ -517,11 +559,22 @@ data class ProgramProfile(
 
         // Верх диапазона должен быть закрыт во всех подходах, а не в одном.
         if (last.entries.size >= exercise.sets && last.entries.all { it.reps >= top }) {
-            val next = ProgramCalculator.roundToPlate(working + AccessoryHint.STEP)
+            // Шаг — свой у упражнения: на блоке 2,5, на жиме без мелких блинов 5.
+            // От рабочего веса, без округления к сетке: он уже реально висел на штанге.
+            val next = Math.round((working + weightStep(exercise.name)) * 100) / 100.0
             return AccessoryHint(
                 weight = next,
                 isStepUp = next > working,
                 text = "В прошлый раз $top во всех подходах — прибавь до ${formatWeight(next)} кг."
+            )
+        }
+
+        stallDeload(exercise, top, working, week, day)?.let { deload ->
+            return AccessoryHint(
+                weight = deload,
+                isStepUp = false,
+                text = "Три тренировки подряд на ${formatWeight(working)} кг без роста. Сбрось до ${formatWeight(deload)} кг и набери $top заново — так вес снова пойдёт вверх.",
+                isDeload = true
             )
         }
 
@@ -531,6 +584,32 @@ data class ProgramProfile(
             text = "Держи ${formatWeight(working)} кг и добери до $top в каждом подходе — тогда вес вырастет."
         )
     }
+
+    /// Вес разгрузки, если движение встало: последние три раза один и тот же
+    /// рабочий вес, ни разу не закрыт верх диапазона и повторов не прибавилось.
+    /// Минус 10% под шаг — достаточно, чтобы снова пойти вверх.
+    private fun stallDeload(exercise: ExercisePrescription, top: Int, working: Double, week: Int, day: Int): Double? {
+        if (stallDismissed[weightStepKey(exercise.name)] == working) return null
+        val recent = history(exercise.name)
+            .filter { it.week < week || (it.week == week && it.day < day) }
+            .filter { it.entries.isNotEmpty() }
+            .takeLast(STALL_SESSIONS)
+        if (recent.size < STALL_SESSIONS) return null
+        val stuck = recent.all { point ->
+            point.entries.maxOf { it.weight } == working &&
+                !(point.entries.size >= exercise.sets && point.entries.all { it.reps >= top })
+        }
+        // Повторы растут на том же весе — двойная прогрессия идёт, это не застой.
+        if (!stuck || recent.last().entries.sumOf { it.reps } > recent.first().entries.sumOf { it.reps }) return null
+        val step = weightStep(exercise.name)
+        var deload = roundWeight(working * 0.9, step)
+        if (deload >= working) deload = working - step
+        return deload.takeIf { it > 0 }
+    }
+
+    /// «Не сбрасывать»: застой на этом весе больше не предлагаем.
+    fun dismissStall(name: String, weight: Double): ProgramProfile =
+        copy(stallDismissed = stallDismissed + (weightStepKey(name) to weight))
 
     // MARK: - Закрыть день как по плану
 
@@ -1187,6 +1266,41 @@ data class ProgramProfile(
     companion object {
         /// Сколько подходов сверх плана ищем в записях.
         const val EXTRA_SET_ALLOWANCE = 12
+
+        /// Сколько тренировок подряд на одном весе без роста считаем застоем.
+        const val STALL_SESSIONS = 3
+
+        /// Варианты шага: от тренажёров с шагом 1 кг до плиток по 10 кг.
+        val weightStepOptions = listOf(1.0, 1.25, 2.5, 5.0, 10.0)
+
+        /// Ключ упражнения для шага: одно и то же движение во всех днях и неделях.
+        fun weightStepKey(name: String): String = name.lowercase().replace('ё', 'е').trim()
+
+        /// Подпись варианта: что это значит в зале.
+        fun weightStepTitle(step: Double): String = when (step) {
+            1.0 -> "1 кг — тренажёр"
+            1.25 -> "1,25 кг"
+            2.5 -> "2,5 кг — есть блины 1,25"
+            5.0 -> "5 кг — мельче 2,5 нет"
+            10.0 -> "10 кг — плитки по 10"
+            else -> "${formatWeight(step)} кг"
+        }
+
+        fun weightStepHint(step: Double): String = when (step) {
+            5.0 -> "Самые мелкие блины — 2,5 кг: вес растёт на 5 кг, а веса программы округляются до того, что можно повесить."
+            2.5 -> "Есть блины по 1,25 кг: вес растёт на 2,5 кг — обычная прибавка."
+            else -> "Вес растёт на ${formatWeight(step)} кг, веса программы округляются под этот шаг."
+        }
+
+        /// Округляет вес до того, что реально можно повесить при этом шаге.
+        /// Ровно посередине — вниз: лишний вес на штанге хуже недостающего.
+        fun roundWeight(value: Double, step: Double): Double {
+            if (!value.isFinite() || step <= 0) return value
+            val units = value / step
+            val lower = kotlin.math.floor(units)
+            val rounded = if (units - lower > 0.5 + 1e-9) lower + 1 else lower
+            return Math.round(rounded * step * 100) / 100.0
+        }
 
         fun texas(input: ProgramInput, name: String = "Профиль") = ProgramProfile(
             name = name,

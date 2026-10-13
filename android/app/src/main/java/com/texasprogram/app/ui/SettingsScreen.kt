@@ -286,7 +286,24 @@ fun SettingsScreen(
                     selectedIndex = if (profile.accessoryProgressionEnabled) 0 else 1
                 ) { onUpdate(profile.copy(accessoryProgressionEnabled = it == 0)) }
                 Text(
-                    "У подсобки в плане веса нет — только повторы. Приложение возьмёт вес из прошлой тренировки и подскажет, когда прибавить: сначала добираешь верх диапазона во всех подходах, потом растёт вес на 2,5 кг.",
+                    "У подсобки в плане веса нет — только повторы. Приложение возьмёт вес из прошлой тренировки и подскажет, когда прибавить: сначала добираешь верх диапазона во всех подходах, потом растёт вес на шаг прибавки. Три тренировки подряд без роста — предложит сбросить вес и набрать заново.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        item(key = "plates") {
+            val options = com.texasprogram.app.model.ProgramProfile.weightStepOptions
+            CardView(Modifier.appearIn(5)) {
+                SectionLabel("Блины в зале · шаг прибавки, кг")
+                SegmentedControl(
+                    options = options.map { com.texasprogram.app.model.formatWeight(it).replace('.', ',') },
+                    selectedIndex = options.indexOf(profile.defaultWeightStep).coerceAtLeast(0)
+                ) { onUpdate(profile.copy(defaultWeightStep = options[it])) }
+                Text(
+                    com.texasprogram.app.model.ProgramProfile.weightStepHint(profile.defaultWeightStep) +
+                        " Для отдельного упражнения шаг меняется в его меню на тренировке или в подсказке под упражнением — например, 2,5 кг на блоке и 5 кг на жиме, если мелких блинов нет.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
