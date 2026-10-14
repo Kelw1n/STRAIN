@@ -6,6 +6,7 @@ struct WorkoutHubView: View {
     var onOpenBench: ((Int) -> Void)?
 
     @State private var showingGoalSheet = false
+    @State private var showingStreak = false
     @State private var showingProgramCatalog = false
     @State private var showingCustomizing = false
 
@@ -18,8 +19,14 @@ struct WorkoutHubView: View {
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(spacing: 16) {
-                        // Карточка 1: Серия активностей (Streak Grid)
-                        activityStreakCard
+                        // Карточка 1: Серия активностей — по нажатию календарь месяца
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            showingStreak = true
+                        } label: {
+                            activityStreakCard
+                        }
+                        .buttonStyle(.pressable)
 
                         // Карточки 2 и 3: Цель и Программы
                         HStack(spacing: 12) {
@@ -109,6 +116,9 @@ struct WorkoutHubView: View {
             .sheet(isPresented: $showingGoalSheet) {
                 GoalSettingsSheet(profile: profile)
             }
+            .sheet(isPresented: $showingStreak) {
+                StreakCalendarSheet(profile: profile)
+            }
             .sheet(isPresented: $showingProgramCatalog, onDismiss: {
                 WorkoutSessionManager.shared.representAfterSheet()
             }) {
@@ -129,7 +139,8 @@ struct WorkoutHubView: View {
     // MARK: - Карточка «Серия активностей» (Скриншот 4)
 
     private var activityStreakCard: some View {
-        let streak = profile.weekStreak
+        // Серия по календарю, как в листе: неделя с тренировкой засчитана.
+        let streak = (current: profile.calendarStreak().weeks, best: 0)
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Серия активностей")
@@ -242,25 +253,31 @@ struct WorkoutHubView: View {
                     .foregroundStyle(Color.white.opacity(0.3))
             }
 
+            // Как у REBRN: кольцо из стольких частей, сколько тренировок в неделе;
+            // каждая сделанная закрашивает одну. С понедельника — снова с нуля.
+            let goal = profile.weekGoal()
             ZStack {
-                Circle()
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 3)
-                    .frame(width: 44, height: 44)
+                SegmentedRing(total: goal.target, filled: goal.done)
+                    .frame(width: 48, height: 48)
 
-                Image(systemName: "calendar")
+                Image(systemName: goal.done >= goal.target ? "checkmark" : "calendar")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(goal.done >= goal.target ? Theme.accent : Color.white.opacity(0.85))
+                    .contentTransition(.symbolEffect(.replace))
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
+            .animation(Motion.snappy, value: goal.done)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(focus.map { schedule.relativeTitle(for: $0) } ?? "Программа пройдена")
+                Text(goal.done >= goal.target ? "Цель недели есть" : "На этой неделе")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
-                Text("Тренировка в \(String(format: "%02d:%02d", profile.reminderHour, profile.reminderMinute))")
+                    .lineLimit(1)
+                Text("\(min(goal.done, 99)) из \(goal.target) \(RuPlural.word(goal.target, "тренировки", "тренировок", "тренировок"))")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.45))
                     .lineLimit(1)
+                    .contentTransition(.numericText())
             }
         }
         .padding(16)
@@ -367,6 +384,33 @@ struct WorkoutHubView: View {
         .padding(24)
         .frame(maxWidth: .infinity)
         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+/// Кольцо цели недели: по части на тренировку, сделанные — акцентом.
+struct SegmentedRing: View {
+    let total: Int
+    let filled: Int
+    var lineWidth: CGFloat = 4
+
+    var body: some View {
+        let count = max(total, 1)
+        // Зазор между частями — в долях окружности; у одной части зазора нет.
+        let gap = count > 1 ? 0.035 : 0
+        ZStack {
+            ForEach(0..<count, id: \.self) { index in
+                let start = Double(index) / Double(count) + gap / 2
+                let end = Double(index + 1) / Double(count) - gap / 2
+                Circle()
+                    .trim(from: start, to: max(start, end))
+                    .stroke(index < filled ? Theme.accent : Color.white.opacity(0.14),
+                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+        }
+        .padding(lineWidth / 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Сделано \(min(filled, count)) из \(count)")
     }
 }
 

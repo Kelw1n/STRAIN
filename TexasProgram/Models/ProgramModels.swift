@@ -564,6 +564,49 @@ final class ProgramProfile {
         return (current, best)
     }
 
+    // MARK: - Серия и цель недели по календарю
+
+    struct CalendarStreak: Equatable {
+        let weeks: Int
+        let workouts: Int
+    }
+
+    /// Серия как у REBRN: неделя (пн–вс) засчитана, если в ней была хотя бы одна
+    /// тренировка. Начатая неделя серию не обрывает — до воскресенья есть время,
+    /// поэтому пустую текущую неделю пропускаем и считаем от прошлой.
+    func calendarStreak(now: Date = Date(), calendar base: Calendar = .current) -> CalendarStreak {
+        let calendar = WorkoutScheduler.trainingCalendar(base)
+        var perWeek: [Date: Int] = [:]
+        for record in completionLog {
+            guard let start = calendar.dateInterval(of: .weekOfYear, for: record.date)?.start else { continue }
+            perWeek[start, default: 0] += 1
+        }
+        guard var cursor = calendar.dateInterval(of: .weekOfYear, for: now)?.start else {
+            return CalendarStreak(weeks: 0, workouts: 0)
+        }
+        if perWeek[cursor] == nil, let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) {
+            cursor = previous
+        }
+        var weeks = 0
+        var workouts = 0
+        while let count = perWeek[cursor] {
+            weeks += 1
+            workouts += count
+            guard let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+        return CalendarStreak(weeks: weeks, workouts: workouts)
+    }
+
+    /// Цель недели: сколько тренировок сделано на этой календарной неделе
+    /// и сколько задумано — по числу дней в расписании. С понедельника снова с нуля.
+    func weekGoal(now: Date = Date(), calendar base: Calendar = .current) -> (done: Int, target: Int) {
+        let calendar = WorkoutScheduler.trainingCalendar(base)
+        let target = max(weekdays.count, 1)
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else { return (0, target) }
+        return (completionLog.filter { week.contains($0.date) }.count, target)
+    }
+
     // MARK: - Авторегуляция
 
     /// Умеет ли программа подстраиваться. Механизм завязан на тяжёлый день,
@@ -798,6 +841,14 @@ final class ProgramProfile {
         let matched = exercises.filter { exerciseNames.contains($0.name) }
         let weights = matched.flatMap { entries(week: week, day: day, exercise: $0).map(\.entry.weight) }
         return weights.max()
+    }
+
+    /// Тоннаж дня по записанным подходам: ключ дня из истории отметок.
+    func tonnage(forDayKey key: String) -> Double {
+        let prefix = key + "|"
+        return setLog.reduce(0) { sum, item in
+            item.key.hasPrefix(prefix) ? sum + item.value.tonnage : sum
+        }
     }
 
     // MARK: - История упражнения
