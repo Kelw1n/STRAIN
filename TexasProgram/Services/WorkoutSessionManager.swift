@@ -263,6 +263,13 @@ final class WorkoutSessionManager {
                 durationSeconds: finalDuration,
                 effort: effort
             )
+        } else {
+            profile.setWorkoutSummary(
+                week: workout.week,
+                day: workout.day.number,
+                durationSeconds: finalDuration,
+                effort: effort
+            )
         }
 
         reset()

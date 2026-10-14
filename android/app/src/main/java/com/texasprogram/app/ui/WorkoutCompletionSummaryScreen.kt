@@ -57,8 +57,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import android.graphics.ImageDecoder
-import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -155,7 +153,7 @@ fun WorkoutCompletionSummaryScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Увидят подписчики в твоём профиле",
+                        text = "Время, усилие и заметка — в историю",
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
@@ -168,7 +166,7 @@ fun WorkoutCompletionSummaryScreen(
             // ФОТО И ВИДЕО (0/5)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "ФОТО И ВИДЕО (${selectedImages.size}/5)",
+                    text = "ФОТО (${selectedImages.size}/5)",
                     color = Color.White.copy(alpha = 0.45f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -183,7 +181,7 @@ fun WorkoutCompletionSummaryScreen(
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                         .clickable {
                             photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
                         }
                         .padding(vertical = if (selectedImages.isEmpty()) 28.dp else 16.dp, horizontal = 16.dp),
@@ -211,13 +209,13 @@ fun WorkoutCompletionSummaryScreen(
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Добавить фото и видео",
+                                    text = "Добавить фото",
                                     color = Color.White,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "до 5 штук · видео до 30 секунд",
+                                    text = "до 5 штук · первое ляжет на карточку для сторис",
                                     color = Color.White.copy(alpha = 0.50f),
                                     fontSize = 13.sp
                                 )
@@ -232,18 +230,9 @@ fun WorkoutCompletionSummaryScreen(
                         ) {
                             selectedImages.forEachIndexed { index, uri ->
                                 val context = LocalContext.current
-                                val bitmap = remember(uri) {
-                                    try {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                                            ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
-                                        } else {
-                                            @Suppress("DEPRECATION")
-                                            android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                                        }
-                                    } catch (_: Exception) {
-                                        null
-                                    }
-                                }
+                                // Миниатюра 80 dp: 12 Мп целиком в память не тянем — на слабых
+                                // телефонах пять таких фото роняли экран итогов.
+                                val bitmap = remember(uri) { decodeThumbnail(context, uri, 240) }
 
                                 Box(
                                     modifier = Modifier
@@ -550,3 +539,14 @@ private fun formatDurationRu(seconds: Int): String {
     val mins = maxOf(1, (seconds % 3600) / 60)
     return if (hours > 0) "${hours}ч ${mins}м" else "${mins}м"
 }
+
+/// Фото из галереи, уменьшенное при чтении до стороны не меньше `target` пикселей.
+private fun decodeThumbnail(context: android.content.Context, uri: Uri, target: Int): android.graphics.Bitmap? = runCatching {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+    var sample = 1
+    while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= target) sample *= 2
+    context.contentResolver.openInputStream(uri)?.use {
+        android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+}.getOrNull()

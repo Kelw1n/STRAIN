@@ -123,6 +123,27 @@ class StreakAndGoalTest {
         assertEquals(day(0).toEpochDay(), record.epochDay)
     }
 
+    /// Исправленный после тренировки подход не стирает её время и усилие.
+    @Test
+    fun editingSetKeepsWorkoutSummary() {
+        val base = texas().toggleCompleted(1, 1, day(0), durationSeconds = 3_600, effort = "7")
+        val squat = base.workoutPlan.weeks.first().days.first().exercises.first()
+        val edited = base.recordSet(1, 1, squat, 0, reps = 5, weight = 100.0, today = day(2))
+        val record = edited.completionLog.first { it.key == edited.dayKey(1, 1) }
+        assertEquals(3_600, record.durationSeconds)
+        assertEquals("7", record.effort)
+        assertEquals(day(0).toEpochDay(), record.epochDay)
+    }
+
+    /// День закрыт раньше экрана завершения — время и усилие всё равно попадают в историю.
+    @Test
+    fun summaryReachesAlreadyCompletedDay() {
+        val profile = texas().toggleCompleted(1, 1, day(0)).withWorkoutSummary(1, 1, 2_700, "6")
+        val record = profile.completionLog.first { it.key == profile.dayKey(1, 1) }
+        assertEquals(2_700, record.durationSeconds)
+        assertEquals("6", record.effort)
+    }
+
     /// Расписание из листа «Цель» — с понедельника: воскресенье последнее, а не первое.
     @Test
     fun goalScheduleIsMondayFirst() {

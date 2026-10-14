@@ -229,13 +229,26 @@ data class ProgramProfile(
         })
     }
 
+    /// Время и усилие уже отмеченной тренировки. День мог закрыться раньше —
+    /// отметкой на «Сегодня» или последним подходом, — а итог пришёл с экрана
+    /// завершения; без этого он терялся, и в истории не было ни времени, ни усилия.
+    fun withWorkoutSummary(week: Int, day: Int, durationSeconds: Int?, effort: String?): ProgramProfile {
+        val key = dayKey(week, day)
+        if (completionLog.none { it.key == key }) return this
+        return copy(completionLog = completionLog.map {
+            if (it.key == key) it.copy(durationSeconds = durationSeconds ?: it.durationSeconds, effort = effort ?: it.effort) else it
+        })
+    }
+
     /// Обновляет запись истории, если день уже отмечен: факт мог появиться позже.
     /// Дату оставляем исходную — тренировка была тогда, а не в момент правки.
     private fun refreshCompletion(week: Int, day: Int, today: LocalDate): ProgramProfile {
         if (!isCompleted(week, day)) return this
         val key = dayKey(week, day)
-        val original = completionLog.firstOrNull { it.key == key }?.epochDay ?: today.toEpochDay()
-        return recordCompletion(week, day, LocalDate.ofEpochDay(original))
+        val previous = completionLog.firstOrNull { it.key == key }
+        val original = previous?.epochDay ?: today.toEpochDay()
+        // Время и усилие тоже исходные: правка подхода после тренировки их не стирает.
+        return recordCompletion(week, day, LocalDate.ofEpochDay(original), previous?.durationSeconds, previous?.effort)
     }
 
     // MARK: - Пространство имён отметок

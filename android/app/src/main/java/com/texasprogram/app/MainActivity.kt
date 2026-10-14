@@ -757,6 +757,15 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         profile.scheduleWeekdays
     ) {
         ReminderScheduler.reschedule(context, profile)
+        // Будильник без разрешения на уведомления срабатывает молча: на Android 13+
+        // просим его, как только напоминания включены, а не только при старте тренировки.
+        if (profile.reminderEnabled && android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+        }
     }
 }
 

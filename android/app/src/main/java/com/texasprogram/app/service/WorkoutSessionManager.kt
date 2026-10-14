@@ -330,6 +330,8 @@ object WorkoutSessionManager {
                 durationSeconds = customDuration ?: elapsedSeconds,
                 effort = effort
             )
+        } else {
+            next = next.withWorkoutSummary(workout.week, workout.day.number, customDuration ?: elapsedSeconds, effort)
         }
         onUpdateProfile(next)
         reset()

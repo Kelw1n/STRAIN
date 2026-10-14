@@ -1422,6 +1422,16 @@ final class ProgramProfile {
 
     /// Обновляет запись истории, если день уже отмечен: факт мог появиться позже.
     /// Дату оставляем исходную — тренировка была тогда, а не в момент правки.
+    /// Время и усилие уже отмеченной тренировки. День мог закрыться раньше —
+    /// отметкой на «Сегодня» или последним подходом, — а итог пришёл с экрана
+    /// завершения; без этого он терялся, и в истории не было ни времени, ни усилия.
+    func setWorkoutSummary(week: Int, day: Int, durationSeconds: Int?, effort: String?) {
+        let key = dayKey(week: week, day: day)
+        guard let index = completionLog.firstIndex(where: { $0.key == key }) else { return }
+        if let durationSeconds { completionLog[index].durationSeconds = durationSeconds }
+        if let effort { completionLog[index].effort = effort }
+    }
+
     private func refreshCompletion(week: Int, day: Int, now: Date) {
         guard isCompleted(week: week, day: day) else { return }
         let key = dayKey(week: week, day: day)

@@ -100,6 +100,16 @@ final class StreakAndGoalTests: XCTestCase {
         XCTAssertEqual(BackupService.epochDay(restored), record.epochDay)
     }
 
+    /// День закрыт раньше экрана завершения — время и усилие всё равно попадают в историю.
+    func testSummaryReachesAlreadyCompletedDay() throws {
+        let profile = texas()
+        profile.toggleCompleted(week: 1, day: 1, now: day(0))
+        profile.setWorkoutSummary(week: 1, day: 1, durationSeconds: 2_700, effort: "6")
+        let record = try XCTUnwrap(profile.completionLog.first { $0.key == profile.dayKey(week: 1, day: 1) })
+        XCTAssertEqual(record.durationSeconds, 2_700)
+        XCTAssertEqual(record.effort, "6")
+    }
+
     func testStreakCalendarCoversWholeWeeks() {
         let weeks = StreakCalendarSheet.weeks(of: day(0), calendar: calendar)
         XCTAssertTrue(weeks.allSatisfy { $0.count == 7 })

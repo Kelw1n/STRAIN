@@ -14,7 +14,7 @@ struct WorkoutCompletionSummaryView: View {
     /// Оценка усилия 1–10; пусто — не ставили.
     @State private var effortScore: Int? = nil
 
-    // Выбор фото/видео (до 5 штук)
+    // Выбор фото (до 5 штук): первое ложится на карточку для сторис
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
 
@@ -31,7 +31,7 @@ struct WorkoutCompletionSummaryView: View {
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(spacing: 20) {
-                        // ФОТО И ВИДЕО (0/5)
+                        // ФОТО (0/5)
                         photoVideoSection
 
                         // НАЗВАНИЕ И ОПИСАНИЕ ТРЕНИРОВКИ
@@ -97,7 +97,7 @@ struct WorkoutCompletionSummaryView: View {
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(.white)
 
-                        Text("Увидят подписчики в твоём профиле")
+                        Text("Время, усилие и заметка — в историю")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.white.opacity(0.55))
                     }
@@ -127,7 +127,7 @@ struct WorkoutCompletionSummaryView: View {
 
     private var photoVideoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ФОТО И ВИДЕО (\(selectedImages.count)/5)")
+            Text("ФОТО (\(selectedImages.count)/5)")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Color.white.opacity(0.45))
                 .padding(.leading, 4)
@@ -135,7 +135,7 @@ struct WorkoutCompletionSummaryView: View {
             PhotosPicker(
                 selection: $selectedPhotoItems,
                 maxSelectionCount: 5,
-                matching: .any(of: [.images, .videos])
+                matching: .images
             ) {
                 VStack(spacing: 12) {
                     if selectedImages.isEmpty {
@@ -150,11 +150,11 @@ struct WorkoutCompletionSummaryView: View {
                         }
 
                         VStack(spacing: 4) {
-                            Text("Добавить фото и видео")
+                            Text("Добавить фото")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(.white)
 
-                            Text("до 5 штук · видео до 30 секунд")
+                            Text("до 5 штук · первое ляжет на карточку для сторис")
                                 .font(.system(size: 13, weight: .regular))
                                 .foregroundStyle(Color.white.opacity(0.50))
                         }
