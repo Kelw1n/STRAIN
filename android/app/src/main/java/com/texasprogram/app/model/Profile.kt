@@ -525,6 +525,22 @@ data class ProgramProfile(
         return copy(bodyWeightLog = if (value > 0) rest + BodyWeightEntry(day, value) else rest)
     }
 
+    /// Удаляет замер за этот день — ошибся цифрой, а второй замер за день уже не нужен.
+    fun removeBodyWeight(epochDay: Long): ProgramProfile =
+        copy(bodyWeightLog = bodyWeightLog.filterNot { it.epochDay == epochDay })
+
+    /// Изменение веса за последние дни: от замера на начало окна (или самого
+    /// раннего внутри него) до последнего. Один замер — сравнивать не с чем.
+    fun bodyWeightChange(days: Int): Double? {
+        val series = bodyWeightSeries
+        val last = series.lastOrNull() ?: return null
+        if (series.size < 2) return null
+        val from = last.epochDay - days
+        val base = series.lastOrNull { it.epochDay <= from } ?: series.firstOrNull { it.epochDay >= from } ?: return null
+        if (base.epochDay == last.epochDay) return null
+        return last.weight - base.weight
+    }
+
     /// Отношение максимума к своему весу: на сушке штанга стоит,
     /// а это число растёт — и видно, что работа не впустую.
     fun relativeStrength(maximum: Double): Double? {
@@ -730,6 +746,42 @@ data class ProgramProfile(
         }
 
     // MARK: - Серия без пропусков
+
+    /// Серия как у REBRN: неделя (пн–вс) засчитана, если в ней была хотя бы одна
+    /// тренировка. Начатая неделя серию не обрывает — до воскресенья есть время,
+    /// поэтому пустую текущую неделю пропускаем и считаем от прошлой.
+    fun calendarStreak(today: LocalDate = LocalDate.now()): CalendarStreak {
+        val perWeek = completionLog.groupingBy { RuDate.mondayOf(LocalDate.ofEpochDay(it.epochDay)) }.eachCount()
+        var cursor = RuDate.mondayOf(today)
+        if (perWeek[cursor] == null) cursor = cursor.minusWeeks(1)
+        var weeks = 0
+        var workouts = 0
+        while (true) {
+            val count = perWeek[cursor] ?: break
+            weeks++
+            workouts += count
+            cursor = cursor.minusWeeks(1)
+        }
+        return CalendarStreak(weeks, workouts)
+    }
+
+    /// Цель недели: сколько тренировок сделано на этой календарной неделе
+    /// и сколько задумано — по числу дней в расписании. С понедельника снова с нуля.
+    fun weekGoal(today: LocalDate = LocalDate.now()): Pair<Int, Int> {
+        val monday = RuDate.mondayOf(today)
+        val next = monday.plusWeeks(1)
+        val done = completionLog.count {
+            val date = LocalDate.ofEpochDay(it.epochDay)
+            !date.isBefore(monday) && date.isBefore(next)
+        }
+        return done to maxOf(weekdays.size, 1)
+    }
+
+    /// Тоннаж дня по записанным подходам: ключ дня из истории отметок.
+    fun tonnage(dayKey: String): Double {
+        val prefix = "$dayKey|"
+        return setLog.entries.sumOf { (key, entry) -> if (key.startsWith(prefix)) entry.reps * entry.weight else 0.0 }
+    }
 
     /// Недели подряд, закрытые полностью.
     ///
@@ -1351,3 +1403,6 @@ data class ProgramProfile(
         )
     }
 }
+
+/// Серия по календарю: недели подряд с тренировкой и сколько тренировок в них.
+data class CalendarStreak(val weeks: Int, val workouts: Int)

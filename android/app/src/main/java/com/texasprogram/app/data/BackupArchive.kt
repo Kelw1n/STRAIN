@@ -84,7 +84,14 @@ data class CompletionSnapshot(
     val day: Int,
     val squat: Double? = null,
     val bench: Double? = null,
-    val deadlift: Double? = null
+    val deadlift: Double? = null,
+    /// Факт, время и усилие тренировки. Необязательные: в копиях, снятых
+    /// раньше, их нет — без них история теряла бы итоги тренировок.
+    val actualSquat: Double? = null,
+    val actualBench: Double? = null,
+    val actualDeadlift: Double? = null,
+    val durationSeconds: Int? = null,
+    val effort: String? = null
 )
 
 @Serializable
@@ -133,7 +140,10 @@ object BackupService {
         peakBench5RM = profile.peakBench5RM,
         peakDeadlift5RM = profile.peakDeadlift5RM,
         completionLog = profile.completionLog.map {
-            CompletionSnapshot(it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift)
+            CompletionSnapshot(
+                it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift,
+                it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort
+            )
         },
         planEdits = profile.planEdits,
         setLog = profile.setLog,
@@ -177,7 +187,10 @@ object BackupService {
         completedDayKeys = snapshot.completedDayKeys,
         completedBenchSessions = snapshot.completedBenchSessions,
         completionLog = snapshot.completionLog.map {
-            CompletionRecord(it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift)
+            CompletionRecord(
+                it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift,
+                it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort
+            )
         },
         planEdits = snapshot.planEdits,
         setLog = snapshot.setLog,

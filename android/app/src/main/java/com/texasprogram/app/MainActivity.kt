@@ -77,6 +77,7 @@ import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.ui.AppBackground
 import com.texasprogram.app.ui.BenchWaveScreen
+import com.texasprogram.app.ui.BodyWeightScreen
 import com.texasprogram.app.ui.BroTrackerScreen
 import com.texasprogram.app.ui.DayCustomizeScreen
 import com.texasprogram.app.ui.DayDetailScreen
@@ -206,10 +207,39 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/// Восстановление из файла копии. Общее для первого экрана и настроек:
+/// после переустановки копию можно поднять сразу, не создавая пустой профиль.
+@Composable
+private fun rememberBackupImport(store: AppStore, onResult: (String) -> Unit) =
+    rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val context = store.context
+        onResult(
+            try {
+                val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                val archive = BackupService.parse(text.orEmpty())
+                val restored = archive.profiles.map { BackupService.profile(it) }
+                if (restored.isEmpty()) {
+                    "В файле нет профилей"
+                } else {
+                    store.restoreAll(restored)
+                    "Восстановлено профилей: ${restored.size}. Открыт «${restored.first().name}»."
+                }
+            } catch (e: Exception) {
+                "Файл не читается как копия STRAIN"
+            }
+        )
+    }
+
 @Composable
 private fun AppRoot(store: AppStore, timer: RestTimer) {
     val active = store.active
     var addingProfile by remember { mutableStateOf(false) }
+    var restoreMessage by remember { mutableStateOf<String?>(null) }
+    val restoreLauncher = rememberBackupImport(store) { message ->
+        restoreMessage = message
+        if (store.active != null) addingProfile = false
+    }
 
     if (active == null || addingProfile) {
         val insets = screenPadding(bottomExtra = 24.dp)
@@ -220,6 +250,8 @@ private fun AppRoot(store: AppStore, timer: RestTimer) {
                 store.add(profile.copy(name = store.suggestedName()))
                 addingProfile = false
             },
+            onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+            restoreMessage = restoreMessage,
             contentPadding = insets
         )
         return
@@ -245,6 +277,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     var showHistoryList by remember { mutableStateOf(false) }
     var historyFor by remember { mutableStateOf<String?>(null) }
     var showNotes by remember { mutableStateOf(false) }
+    var showBodyWeight by remember { mutableStateOf(false) }
 
     val isUpperLower = profile.programKind == TrainingProgramKind.UPPER_LOWER
 
@@ -295,19 +328,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         }
     }
 
-    val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        backupMessage = try {
-            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-            val archive = BackupService.parse(text.orEmpty())
-            archive.profiles.forEach { store.restore(BackupService.profile(it)) }
-            "Восстановлено профилей: ${archive.profiles.size}"
-        } catch (e: Exception) {
-            "Файл не читается как копия STRAIN"
-        }
-    }
+    val importLauncher = rememberBackupImport(store) { backupMessage = it }
 
     val contentPadding = screenPadding(bottomExtra = 110.dp)
 
@@ -340,7 +361,8 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
     BackHandler(
         enabled = WorkoutSessionManager.isPresented || showPlan || benchFocus != null ||
-            dayDetail != null || customizing != null || showHistoryList || historyFor != null || showNotes
+            dayDetail != null || customizing != null || showHistoryList || historyFor != null || showNotes ||
+            showBodyWeight
     ) {
         when {
             WorkoutSessionManager.isPresented -> WorkoutSessionManager.minimize()
@@ -350,6 +372,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             historyFor != null -> historyFor = null
             showHistoryList -> showHistoryList = false
             showNotes -> showNotes = false
+            showBodyWeight -> showBodyWeight = false
             dayDetail != null -> dayDetail = null
         }
     }
@@ -423,13 +446,15 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     profile = profile,
                     contentPadding = contentPadding,
                     onStartWorkout = { workout -> startWorkout(workout) },
-                    onOpenPlan = { showPlan = true }
+                    onOpenPlan = { showPlan = true },
+                    onUpdateProfile = { updated -> store.update(updated.id) { updated } }
                 )
                 MainTabItem.PROGRESS -> ProgressScreen(
                     profile = profile,
                     contentPadding = contentPadding,
                     onOpenHistory = { showHistoryList = true },
                     onOpenNotes = { showNotes = true },
+                    onOpenBodyWeight = { showBodyWeight = true },
                     onUpdate = { updated -> store.update(updated.id) { updated } }
                 )
                 MainTabItem.COMMUNITY -> BroTrackerScreen(
@@ -701,6 +726,23 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
                     CloseButton(Modifier.align(Alignment.TopEnd)) { showNotes = false }
+                }
+            }
+        }
+
+        AnimatedContent(
+            targetState = showBodyWeight,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            label = "bodyWeight"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    BodyWeightScreen(
+                        profile = profile,
+                        onUpdate = { updated -> store.update(updated.id) { updated } },
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showBodyWeight = false }
                 }
             }
         }

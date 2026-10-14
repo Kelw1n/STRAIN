@@ -56,6 +56,7 @@ fun ProgressScreen(
     contentPadding: PaddingValues,
     onOpenHistory: () -> Unit = {},
     onOpenNotes: () -> Unit = {},
+    onOpenBodyWeight: () -> Unit = {},
     onUpdate: (ProgramProfile) -> Unit = {}
 ) {
     val plan = profile.workoutPlan
@@ -103,7 +104,7 @@ fun ProgressScreen(
         }
 
         item(key = "bodyweight") {
-            BodyWeightCard(profile, Modifier.appearIn(1), onUpdate)
+            BodyWeightCard(profile, Modifier.appearIn(1), onOpen = onOpenBodyWeight)
         }
 
         item(key = "muscles") {

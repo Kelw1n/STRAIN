@@ -13,8 +13,25 @@ android {
         applicationId = "com.texasprogram.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "2.7.2"
+        versionCode = 24
+        versionName = "2.8.0"
+    }
+
+    // Постоянный ключ подписи из секретов CI. Без одного и того же ключа Android
+    // не ставит новую версию поверх старой: приходилось удалять приложение,
+    // а вместе с ним пропадали профили. Ключа нет (локальная сборка) — отладочный.
+    val keystorePath = System.getenv("STRAIN_KEYSTORE_PATH")
+    val keystorePassword = System.getenv("STRAIN_KEYSTORE_PASSWORD")
+    val hasReleaseKey = !keystorePath.isNullOrBlank() && !keystorePassword.isNullOrBlank() && file(keystorePath).exists()
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("strain") {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                keyAlias = "strain"
+                keyPassword = keystorePassword
+            }
+        }
     }
 
     buildTypes {
@@ -24,8 +41,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Подпись отладочным ключом: APK ставится вручную, магазина нет.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "strain" else "debug")
         }
     }
 

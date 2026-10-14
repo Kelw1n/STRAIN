@@ -11,7 +11,7 @@ import kotlinx.serialization.json.Json
 
 /// Локальное хранилище профилей. Аналог SwiftData из iOS-версии:
 /// список профилей плюс идентификатор активного.
-class AppStore private constructor(context: Context) {
+class AppStore private constructor(val context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("strain.store", Context.MODE_PRIVATE)
@@ -116,6 +116,18 @@ class AppStore private constructor(context: Context) {
     fun restore(profile: ProgramProfile) {
         profiles = profiles.filterNot { it.id == profile.id } + profile
         if (activeId.isEmpty()) activeId = profile.id
+        persist()
+    }
+
+    /// Восстановление копии целиком: профили с теми же идентификаторами
+    /// заменяются, и сразу открывается первый из копии. Раньше открытым
+    /// оставался текущий — после переустановки это был только что созданный
+    /// пустой профиль, и казалось, что копия «импортировалась, но не применилась».
+    fun restoreAll(restored: List<ProgramProfile>) {
+        if (restored.isEmpty()) return
+        val ids = restored.map { it.id }.toSet()
+        profiles = profiles.filterNot { it.id in ids } + restored
+        activeId = restored.first().id
         persist()
     }
 
