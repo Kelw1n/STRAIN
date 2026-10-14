@@ -825,8 +825,17 @@ struct SettingsView: View {
 
         do {
             let archive = try BackupService.archive(from: try Data(contentsOf: url))
+            guard let first = archive.profiles.first else {
+                backupMessage = "В файле нет профилей"
+                return
+            }
             let count = BackupService.restore(archive, into: modelContext, existing: profiles)
-            backupMessage = "Восстановлено профилей: \(count)"
+            // Сразу открываем восстановленный профиль: иначе после переустановки
+            // на экране остаётся новый пустой, и кажется, что копия не применилась.
+            backupMessage = "Восстановлено профилей: \(count). Открыт «\(first.name)»."
+            if first.id != profile.profileID.uuidString {
+                closeThen { activeProfileID = first.id }
+            }
         } catch {
             backupMessage = "Файл не читается как копия STRAIN"
         }

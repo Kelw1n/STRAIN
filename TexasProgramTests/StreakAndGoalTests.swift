@@ -79,6 +79,27 @@ final class StreakAndGoalTests: XCTestCase {
         XCTAssertEqual(profile.tonnage(forDayKey: profile.dayKey(week: 1, day: 2)), 0)
     }
 
+    /// Копия переносит время и усилие тренировки, а день — по местной дате:
+    /// тренировка в половине первого ночи не уезжает во вчера.
+    func testBackupKeepsSummaryAndLocalDay() throws {
+        let profile = texas()
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = .current
+        let lateNight = try XCTUnwrap(local.date(from: DateComponents(year: 2026, month: 10, day: 13, hour: 0, minute: 30)))
+        profile.toggleCompleted(week: 1, day: 1, now: lateNight, durationSeconds: 3_900, effort: "8")
+
+        let archive = try BackupService.archive(from: try BackupService.export([profile]))
+        let record = try XCTUnwrap(archive.profiles.first?.completionLog.first)
+        XCTAssertEqual(record.durationSeconds, 3_900)
+        XCTAssertEqual(record.effort, "8")
+
+        let restored = BackupService.date(record.epochDay)
+        let parts = local.dateComponents([.year, .month, .day], from: restored)
+        XCTAssertEqual(parts.day, 13)
+        XCTAssertEqual(parts.month, 10)
+        XCTAssertEqual(BackupService.epochDay(restored), record.epochDay)
+    }
+
     func testStreakCalendarCoversWholeWeeks() {
         let weeks = StreakCalendarSheet.weeks(of: day(0), calendar: calendar)
         XCTAssertTrue(weeks.allSatisfy { $0.count == 7 })
