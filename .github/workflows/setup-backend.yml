@@ -1,0 +1,111 @@
+name: Setup backend
+
+# Разовая настройка ленты: база Neon и сервер Render во Франкфурте, оба рядом
+# друг с другом. Нужны секреты RENDER_API_KEY и NEON_API_KEY. Строка подключения
+# к базе нигде не печатается: она маскируется в логе и сразу уходит в Render.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/possible-improvements-b00203"]
+    paths: [".github/workflows/setup-backend.yml"]
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      SERVICE_NAME: strain-feed
+      NEON_PROJECT: strain
+      BRANCH: ${{ github.ref_name }}
+      REPO_URL: https://github.com/${{ github.repository }}
+    steps:
+      # Ключей ещё нет — просто выходим: сценарий запустится снова после их добавления.
+      - name: Check keys
+        id: keys
+        run: |
+          if [ -n "$RENDER_API_KEY" ] && [ -n "$NEON_API_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Нет секретов RENDER_API_KEY и/или NEON_API_KEY — настройка пропущена"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Neon database
+        if: steps.keys.outputs.ready == 'true'
+        id: neon
+        run: |
+          set -euo pipefail
+          api() { curl -fsS -H "Authorization: Bearer $NEON_API_KEY" -H "Accept: application/json" -H "Content-Type: application/json" "$@"; }
+          projects=$(api "https://console.neon.tech/api/v2/projects?limit=100")
+          id=$(echo "$projects" | jq -r --arg n "$NEON_PROJECT" '.projects[] | select(.name == $n) | .id' | head -1)
+          if [ -z "$id" ]; then
+            echo "Создаю проект Neon «$NEON_PROJECT» во Франкфурте"
+            created=$(api -X POST https://console.neon.tech/api/v2/projects \
+              -d "{\"project\":{\"name\":\"$NEON_PROJECT\",\"region_id\":\"aws-eu-central-1\",\"pg_version\":16}}")
+            id=$(echo "$created" | jq -r '.project.id')
+            uri=$(echo "$created" | jq -r '.connection_uris[0].connection_uri')
+          else
+            echo "Проект Neon уже есть: $id"
+            branch=$(api "https://console.neon.tech/api/v2/projects/$id/branches" | jq -r '.branches[] | select(.default == true) | .id' | head -1)
+            db=$(api "https://console.neon.tech/api/v2/projects/$id/branches/$branch/databases" | jq -r '.databases[0].name')
+            role=$(api "https://console.neon.tech/api/v2/projects/$id/branches/$branch/databases" | jq -r '.databases[0].owner_name')
+            uri=$(api "https://console.neon.tech/api/v2/projects/$id/connection_uri?branch_id=$branch&database_name=$db&role_name=$role" | jq -r '.uri')
+          fi
+          [ -n "$uri" ] && [ "$uri" != "null" ] || { echo "::error::Neon не отдал строку подключения"; exit 1; }
+          echo "::add-mask::$uri"
+          echo "uri=$uri" >> "$GITHUB_OUTPUT"
+          echo "Neon готов: проект $id"
+
+      - name: Render service
+        if: steps.keys.outputs.ready == 'true'
+        id: render
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.uri }}
+        run: |
+          set -euo pipefail
+          api() { curl -fsS -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" -H "Content-Type: application/json" "$@"; }
+          owner=$(api "https://api.render.com/v1/owners?limit=20" | jq -r '.[0].owner.id')
+          [ -n "$owner" ] && [ "$owner" != "null" ] || { echo "::error::Render не отдал аккаунт — проверь ключ"; exit 1; }
+          service=$(api "https://api.render.com/v1/services?name=$SERVICE_NAME&limit=20" | jq -r '.[0].service.id // empty')
+          if [ -z "$service" ]; then
+            echo "Создаю сервис Render «$SERVICE_NAME» во Франкфурте"
+            body=$(jq -n --arg owner "$owner" --arg name "$SERVICE_NAME" --arg repo "$REPO_URL" --arg branch "$BRANCH" --arg db "$DATABASE_URL" '{
+              type: "web_service", name: $name, ownerId: $owner, repo: $repo, branch: $branch,
+              rootDir: "server", autoDeploy: "yes",
+              envVars: [{key: "DATABASE_URL", value: $db}, {key: "NODE_VERSION", value: "20"}],
+              serviceDetails: {
+                runtime: "node", plan: "free", region: "frankfurt", healthCheckPath: "/health",
+                envSpecificDetails: {buildCommand: "npm install", startCommand: "npm start"}
+              }
+            }')
+            created=$(api -X POST https://api.render.com/v1/services -d "$body")
+            service=$(echo "$created" | jq -r '.service.id')
+          else
+            echo "Сервис уже есть: $service — обновляю базу и ветку"
+            api -X PUT "https://api.render.com/v1/services/$service/env-vars/DATABASE_URL" -d "$(jq -n --arg v "$DATABASE_URL" '{value: $v}')" > /dev/null
+            api -X PATCH "https://api.render.com/v1/services/$service" -d "$(jq -n --arg b "$BRANCH" '{branch: $b, rootDir: "server"}')" > /dev/null
+            api -X POST "https://api.render.com/v1/services/$service/deploys" -d '{}' > /dev/null
+          fi
+          url=$(api "https://api.render.com/v1/services/$service" | jq -r '.serviceDetails.url')
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Адрес сервера: $url"
+
+      - name: Wait for the server
+        if: steps.keys.outputs.ready == 'true'
+        env:
+          URL: ${{ steps.render.outputs.url }}
+        run: |
+          for i in $(seq 1 60); do
+            body=$(curl -fsS --max-time 30 "$URL/health" || true)
+            if echo "$body" | grep -q '"social":true'; then
+              echo "Сервер отвечает и база подключена: $URL"
+              echo "### Лента готова: $URL" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Жду запуска ($i)…"
+            sleep 20
+          done
+          echo "::error::Сервер не поднялся за 20 минут — посмотри логи сборки в Render"
+          exit 1
