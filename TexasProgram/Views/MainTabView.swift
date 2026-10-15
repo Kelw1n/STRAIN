@@ -57,13 +57,11 @@ struct MainTabView: View {
     private func screen(for tab: MainTabItem) -> some View {
         switch tab {
         case .today:
-            TodayView(
-                profile: profile,
-                onSettings: { showingSettings = true },
-                onOpenBench: benchHandler,
-                onStartWorkout: { workout in
-                    sessionManager.requestStart(workout: workout, profile: profile)
-                }
+            // «Главное» — лента тренировок, как в REBRN. Прежний экран дня
+            // открывается кнопкой в «Тренировке».
+            FeedView(
+                onFindPeople: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.community) } },
+                onCreateProfile: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.profile) } }
             )
         case .workout:
             WorkoutHubView(
@@ -83,9 +81,9 @@ struct MainTabView: View {
                 }
             )
         case .community:
-            BroTrackerView(profile: profile)
+            CommunityView(onCreateProfile: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.profile) } })
         case .profile:
-            SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
+            ProfileTabView(profile: profile, onSettings: { showingSettings = true })
         }
     }
 
@@ -145,7 +143,13 @@ struct MainTabView: View {
             sessionManager.detachIfOtherProfile(profile)
             // Приложение выгружали посреди тренировки — поднимаем её свёрнутой.
             sessionManager.restoreIfNeeded(for: profile)
+            // Лента: неотправленные посты — в путь, программа и медали — в профиль.
+            SocialService.shared.flushOutbox()
+            SocialService.shared.scheduleSync(from: profile)
+            Task { await SocialService.shared.refreshMe() }
         }
+        .onChange(of: profile.completionLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
+        .onChange(of: profile.bodyWeightLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         // Расписание напоминаний собирается заново на каждое изменение
         .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.reminderHour) { _, _ in ReminderScheduler.reschedule(for: profile) }
@@ -171,7 +175,6 @@ struct TodayView: View {
     @State private var entryTarget: SetEntryTarget?
     /// Имя движения, чью историю открыли: `navigationDestination` ждёт Hashable.
     @State private var historyFor: String?
-    @State private var showingBroTracker = false
 
     private var overallProgress: Double {
         guard profile.totalDays > 0 else { return 0 }
@@ -256,9 +259,6 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle("Сегодня")
-            .sheet(isPresented: $showingBroTracker) {
-                BroTrackerView(profile: profile, showsCloseButton: true)
-            }
             .sheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)
             }

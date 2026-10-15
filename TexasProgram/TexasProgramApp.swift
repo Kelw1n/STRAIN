@@ -18,6 +18,9 @@ struct TexasProgramApp: App {
             bar.largeTitleTextAttributes = [.font: UIFont.systemFont(ofSize: 34, weight: .heavy)]
             bar.titleTextAttributes = [.font: UIFont.systemFont(ofSize: 17, weight: .bold)]
         }
+        // Фото ленты по одному адресу не меняются: пусть лежат в кэше,
+        // а не качаются заново при каждой прокрутке.
+        URLCache.shared = URLCache(memoryCapacity: 40 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
     }
 
     var body: some Scene {
@@ -40,6 +43,7 @@ struct TexasProgramApp: App {
             switch phase {
             case .active:
                 restTimer.refresh()
+                SocialService.shared.flushOutbox()
             case .background:
                 // Свёрнутое приложение iOS может выгрузить — тренировку пишем сразу.
                 WorkoutSessionManager.shared.writeNow()
@@ -49,9 +53,8 @@ struct TexasProgramApp: App {
         }
     }
 
-    /// Разбираем по хосту, а не поиском подстроки по всей ссылке: в ссылке
-    /// на бро есть имя и случайный ID, и «add» или «stop» внутри них
-    /// превращали приглашение в «+30 секунд к отдыху».
+    /// Разбираем по хосту, а не поиском подстроки по всей ссылке: «add» или
+    /// «stop» внутри чужой ссылки не должны превращаться в «+30 секунд к отдыху».
     private func handleDeepLink(_ url: URL) {
         switch url.host?.lowercased() {
         case "timer":
@@ -68,10 +71,6 @@ struct TexasProgramApp: App {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             default:
                 break
-            }
-        case "bro":
-            Task {
-                _ = await BroTrackerService.shared.addBuddy(from: url.absoluteString)
             }
         default:
             break

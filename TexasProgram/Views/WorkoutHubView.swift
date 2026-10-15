@@ -9,6 +9,7 @@ struct WorkoutHubView: View {
     @State private var showingStreak = false
     @State private var showingProgramCatalog = false
     @State private var showingCustomizing = false
+    @State private var showingToday = false
 
     var body: some View {
         // Расписание — один раз за проход: каждое обращение к profile.schedule
@@ -103,14 +104,16 @@ struct WorkoutHubView: View {
             .navigationTitle("Тренировка")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                // Прежний экран «Сегодня» с точками подходов: «Главное» теперь лента.
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        showingGoalSheet = true
+                        showingToday = true
                     } label: {
-                        Image(systemName: "figure.run.circle")
-                            .font(.system(size: 20, weight: .semibold))
+                        Image(systemName: "list.bullet.rectangle.portrait")
+                            .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(.white)
                     }
+                    .accessibilityLabel("План на сегодня")
                 }
             }
             .sheet(isPresented: $showingGoalSheet) {
@@ -118,6 +121,11 @@ struct WorkoutHubView: View {
             }
             .sheet(isPresented: $showingStreak) {
                 StreakCalendarSheet(profile: profile)
+            }
+            .sheet(isPresented: $showingToday, onDismiss: {
+                WorkoutSessionManager.shared.representAfterSheet()
+            }) {
+                TodayView(profile: profile, onSettings: {}, onOpenBench: onOpenBench, onStartWorkout: onStartWorkout)
             }
             .sheet(isPresented: $showingProgramCatalog, onDismiss: {
                 WorkoutSessionManager.shared.representAfterSheet()
@@ -127,10 +135,16 @@ struct WorkoutHubView: View {
             // Тренировку начали из дня в «Программах» — лист закрываем, иначе
             // полноэкранная тренировка под ним так и не покажется.
             .onChange(of: WorkoutSessionManager.shared.isPresented) { _, presented in
-                if presented { showingProgramCatalog = false }
+                if presented {
+                    showingProgramCatalog = false
+                    showingToday = false
+                }
             }
             .onChange(of: WorkoutSessionManager.shared.showingReplaceConfirm) { _, showing in
-                if showing { showingProgramCatalog = false }
+                if showing {
+                    showingProgramCatalog = false
+                    showingToday = false
+                }
             }
         }
         .preferredColorScheme(.dark)

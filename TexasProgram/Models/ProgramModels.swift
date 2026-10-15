@@ -1378,15 +1378,9 @@ final class ProgramProfile {
                     title: "\(self.name) · Неделя \(week), день \(day)"
                 )
             }
-            Task {
-                await BroTrackerService.shared.syncMyProfile(profile: self)
-            }
         } else {
             let key = dayKey(week: week, day: day)
             completionLog.removeAll { $0.key == key }
-            Task {
-                await BroTrackerService.shared.syncMyProfile(profile: self)
-            }
         }
     }
 
@@ -1710,9 +1704,6 @@ final class ProgramProfile {
         let target = day(forBenchSession: session)
         setDayCompleted(week: target.week, day: target.day, done)
         if done { lastCompletionDate = now }
-        Task {
-            await BroTrackerService.shared.syncMyProfile(profile: self)
-        }
     }
 
     private func setBenchCompleted(_ session: Int, _ done: Bool) {

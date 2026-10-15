@@ -77,6 +77,9 @@ struct BackupArchive: Codable, Equatable, Sendable {
     var version: Int = 1
     var exportedAt: Date = .now
     var profiles: [ProfileSnapshot]
+    /// Код входа в профиль ленты: после переустановки профиль возвращается
+    /// вместе с данными. Необязательный — в старых копиях его нет.
+    var socialToken: String? = nil
 }
 
 enum BackupService {
@@ -97,8 +100,8 @@ enum BackupService {
 
     // MARK: - Выгрузка
 
-    static func export(_ profiles: [ProgramProfile]) throws -> Data {
-        try encoder.encode(BackupArchive(profiles: profiles.map(snapshot)))
+    static func export(_ profiles: [ProgramProfile], socialToken: String? = SocialKeychain.load()) throws -> Data {
+        try encoder.encode(BackupArchive(profiles: profiles.map(snapshot), socialToken: socialToken))
     }
 
     /// Пишет копию во временный файл — его отдаёт системный лист «Поделиться».

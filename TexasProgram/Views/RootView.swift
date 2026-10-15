@@ -47,6 +47,7 @@ struct RootView: View {
     /// и до настроек без новой программы не добраться.
     private func restore(_ archive: BackupArchive) {
         BackupService.restore(archive, into: modelContext, existing: profiles)
+        SocialService.shared.adoptBackupToken(archive.socialToken)
         if let first = archive.profiles.first { activeProfileID = first.id }
         isAddingProfile = false
     }
