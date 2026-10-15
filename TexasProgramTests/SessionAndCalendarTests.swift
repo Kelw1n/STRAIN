@@ -153,10 +153,16 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertEqual(profile.setEntry(week: workout.week, day: workout.day.number, exercise: exercise, index: 0)?.weight, 77.5)
     }
 
+    /// Тренировка, где у первого упражнения несколько подходов: ближайшая по дате
+    /// зависит от дня недели, и в силовой день там один подход — удалять нечего.
+    private func workoutWithSeveralSets(_ profile: ProgramProfile) throws -> ScheduledWorkout {
+        try XCTUnwrap(profile.schedule.allPending.first { (profile.exercises(for: $0).first?.sets ?? 0) > 1 })
+    }
+
     func testAddSetAfterDeleteGetsFreshIndex() throws {
         let profile = texas()
         let manager = WorkoutSessionManager.shared
-        manager.startWorkout(workout: try XCTUnwrap(profile.schedule.focus), profile: profile)
+        manager.startWorkout(workout: try workoutWithSeveralSets(profile), profile: profile)
         let before = manager.exercises[0].sets.map(\.index)
         XCTAssertGreaterThan(before.count, 1)
 
@@ -170,7 +176,7 @@ final class SessionAndCalendarTests: XCTestCase {
 
     func testDeletingDoneSetClearsItsEntry() throws {
         let profile = texas()
-        let workout = try XCTUnwrap(profile.schedule.focus)
+        let workout = try workoutWithSeveralSets(profile)
         let manager = WorkoutSessionManager.shared
         manager.startWorkout(workout: workout, profile: profile)
         let timer = RestTimer()

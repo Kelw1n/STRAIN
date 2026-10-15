@@ -958,7 +958,7 @@ struct AchievementsView: View {
                         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     }
                 }
-                Spacer(minLength: 40)
+                Spacer(minLength: 120)
             }
             .padding(.horizontal, 16)
         }
@@ -1047,6 +1047,7 @@ struct BadgeListView: View {
             if badges.isEmpty {
                 Text("Медалей пока нет").foregroundStyle(Color.white.opacity(0.5)).padding(30)
             }
+            Spacer(minLength: 120)
         }
         .background(Color.black.ignoresSafeArea())
         .navigationTitle("Достижения")
@@ -1095,6 +1096,7 @@ struct ProgramDayView: View {
                 .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
             .padding(16)
+            .padding(.bottom, 110)
         }
         .background(Color.black.ignoresSafeArea())
         .navigationTitle(day.title)

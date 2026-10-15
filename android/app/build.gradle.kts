@@ -13,8 +13,8 @@ android {
         applicationId = "com.texasprogram.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "2.8.0"
+        versionCode = 25
+        versionName = "3.0.0"
     }
 
     // Постоянный ключ подписи из секретов CI. Без одного и того же ключа Android
@@ -79,8 +79,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    implementation("com.google.zxing:core:3.5.3")
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    // Фото ленты: загрузка с кэшем на диске; поворот снимков по EXIF перед отправкой.
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
     // Готовые профили Compose компилируются при установке APK, а не во время
     // первых прокруток — иначе первые минуты интерфейс подтормаживает.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")

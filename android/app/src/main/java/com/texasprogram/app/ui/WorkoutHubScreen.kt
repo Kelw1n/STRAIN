@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -55,6 +56,7 @@ fun WorkoutHubScreen(
     contentPadding: PaddingValues,
     onStartWorkout: (ScheduledWorkout) -> Unit,
     onOpenPlan: () -> Unit,
+    onOpenToday: () -> Unit = {},
     onUpdateProfile: (ProgramProfile) -> Unit = {}
 ) {
     val haptic = LocalHapticFeedback.current
@@ -72,7 +74,19 @@ fun WorkoutHubScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item(key = "title") {
-                ScreenTitle("Тренировка")
+                // Прежний экран «Сегодня» с точками подходов: «Главное» теперь лента.
+                ScreenTitle("Тренировка") {
+                    Box(
+                        Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .pressable(onClick = onOpenToday),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.ViewAgenda, contentDescription = "План на сегодня", tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
             }
 
             item(key = "streak") {

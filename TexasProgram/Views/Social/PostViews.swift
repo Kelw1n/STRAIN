@@ -302,6 +302,7 @@ struct PostDetailView: View {
     @State private var draft = ""
     @State private var sending = false
     @State private var error: String?
+    @State private var composing = false
     @FocusState private var typing: Bool
 
     private var social: SocialService { .shared }
@@ -323,18 +324,19 @@ struct PostDetailView: View {
                 PostTitleBlock(post: post)
                 PostStatsRow(post: post)
                 if !post.photos.isEmpty { PhotoCarousel(ids: post.photos) }
-                PostActions(post: post, onComments: { typing = true }, onChange: update)
+                PostActions(post: post, onComments: { if social.isSignedIn { composing = true } }, onChange: update)
 
                 exercises
 
                 commentsSection
+                composeButton
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            // Место под плавающую панель вкладок.
+            .padding(.bottom, 120)
         }
-        .scrollDismissesKeyboard(.interactively)
         .background(Color.black.ignoresSafeArea())
-        .safeAreaInset(edge: .bottom) { inputBar }
+        .sheet(isPresented: $composing) { composer }
         .navigationTitle(post.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadComments() }
@@ -443,38 +445,70 @@ struct PostDetailView: View {
         .padding(.top, 6)
     }
 
+    /// Кнопка «Написать комментарий»: само поле — в листе снизу. Лист перекрывает
+    /// плавающую панель вкладок, а поле внизу экрана оказалось бы под ней.
     @ViewBuilder
-    private var inputBar: some View {
+    private var composeButton: some View {
         if social.isSignedIn {
-            HStack(spacing: 10) {
-                TextField("Комментарий…", text: $draft, axis: .vertical)
-                    .lineLimit(1...4)
+            Button { composing = true } label: {
+                HStack(spacing: 10) {
+                    AvatarView(imageId: social.me?.avatar, username: social.me?.username ?? "s", size: 32)
+                    Text("Написать комментарий…")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.white.opacity(0.45))
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 50)
+                .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.pressable)
+        } else {
+            Text("Создай профиль во вкладке «Профиль», чтобы комментировать")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.white.opacity(0.5))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+        }
+    }
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Комментарий")
+                .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
+                .foregroundStyle(.white)
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField("Поддержи или спроси про технику", text: $draft, axis: .vertical)
+                    .lineLimit(1...5)
                     .focused($typing)
-                    .font(.system(size: 15))
+                    .font(.system(size: 16))
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
                     .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 Button(action: send) {
-                    Image(systemName: sending ? "ellipsis" : "arrow.up")
-                        .font(.system(size: 16, weight: .heavy))
-                        .foregroundStyle(.black)
-                        .frame(width: 40, height: 40)
-                        .background(canSend ? Color.white : Color(white: 0.3), in: Circle())
+                    Group {
+                        if sending { ProgressView().tint(.black) } else {
+                            Image(systemName: "arrow.up").font(.system(size: 17, weight: .heavy))
+                        }
+                    }
+                    .foregroundStyle(.black)
+                    .frame(width: 44, height: 44)
+                    .background(canSend ? Color.white : Color(white: 0.3), in: Circle())
                 }
                 .disabled(!canSend)
                 .accessibilityLabel("Отправить")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial)
-        } else {
-            Text("Создай профиль во вкладке «Профиль», чтобы комментировать")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.55))
-                .frame(maxWidth: .infinity)
-                .padding(12)
-                .background(.ultraThinMaterial)
+            if let error {
+                Text(error).font(.system(size: 12)).foregroundStyle(Theme.warning)
+            }
+            Spacer(minLength: 0)
         }
+        .padding(20)
+        .presentationDetents([.height(230)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Color(white: 0.07))
+        .preferredColorScheme(.dark)
+        .onAppear { typing = true }
     }
 
     private var canSend: Bool { !sending && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -510,6 +544,7 @@ struct PostDetailView: View {
                 update(updated)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 error = nil
+                composing = false
             } catch {
                 self.error = (error as? SocialError)?.message ?? error.localizedDescription
             }

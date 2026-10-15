@@ -137,6 +137,16 @@ final class SocialTests: XCTestCase {
 
     // MARK: Копия
 
+    /// Старые копии с Android писали пустую дату выгрузки — копия всё равно читается.
+    func testBackupWithEmptyExportDateStillOpens() throws {
+        let data = try BackupService.export([texas()], socialToken: nil)
+        var json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json["exportedAt"] = ""
+        let patched = try JSONSerialization.data(withJSONObject: json)
+        let archive = try BackupService.archive(from: patched)
+        XCTAssertEqual(archive.profiles.count, 1)
+    }
+
     func testBackupCarriesSocialToken() throws {
         let token = String(repeating: "a", count: 64)
         let archive = try BackupService.archive(from: try BackupService.export([texas()], socialToken: token))

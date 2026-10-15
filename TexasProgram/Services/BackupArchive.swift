@@ -80,6 +80,23 @@ struct BackupArchive: Codable, Equatable, Sendable {
     /// Код входа в профиль ленты: после переустановки профиль возвращается
     /// вместе с данными. Необязательный — в старых копиях его нет.
     var socialToken: String? = nil
+
+    init(version: Int = 1, exportedAt: Date = .now, profiles: [ProfileSnapshot], socialToken: String? = nil) {
+        self.version = version
+        self.exportedAt = exportedAt
+        self.profiles = profiles
+        self.socialToken = socialToken
+    }
+
+    /// Дата выгрузки — только для справки. Android-версия долго писала сюда
+    /// пустую строку, и строгий разбор отвергал всю копию целиком.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        exportedAt = (try? c.decodeIfPresent(Date.self, forKey: .exportedAt)) ?? .now
+        profiles = try c.decode([ProfileSnapshot].self, forKey: .profiles)
+        socialToken = try c.decodeIfPresent(String.self, forKey: .socialToken)
+    }
 }
 
 enum BackupService {

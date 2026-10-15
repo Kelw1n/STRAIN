@@ -12,13 +12,13 @@
         android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
 
-    <!-- Сеть для синхронизации с бро и облаком -->
+    <!-- Сеть для ленты тренировок -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Вибрация при таймере и тапах -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Камера для сканирования QR-кода -->
-    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Фото к тренировке снимает системная камера: своего разрешения на камеру
+         не нужно, а объявленное, но не выданное, роняло бы её запуск. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application

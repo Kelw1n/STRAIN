@@ -11,7 +11,5 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
-# Приёмники из манифеста и QR-сканер находятся по имени.
+# Приёмники из манифеста находятся по имени.
 -keep class com.texasprogram.app.service.** extends android.content.BroadcastReceiver { *; }
--keep class com.journeyapps.barcodescanner.** { *; }
--dontwarn com.google.zxing.**

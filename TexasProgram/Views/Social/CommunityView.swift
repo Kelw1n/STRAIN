@@ -207,6 +207,7 @@ struct PeopleListView: View {
                     Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 64)
                 }
                 if loading { ProgressView().tint(.white).padding(24) }
+                Spacer(minLength: 120)
             }
         }
         .background(Color.black.ignoresSafeArea())

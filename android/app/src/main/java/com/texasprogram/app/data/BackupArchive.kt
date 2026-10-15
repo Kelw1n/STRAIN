@@ -97,8 +97,12 @@ data class CompletionSnapshot(
 @Serializable
 data class BackupArchive(
     val version: Int = 1,
+    /// ISO 8601 без долей секунды: так дату читает и iOS-версия.
     val exportedAt: String = "",
-    val profiles: List<ProfileSnapshot> = emptyList()
+    val profiles: List<ProfileSnapshot> = emptyList(),
+    /// Код входа в профиль ленты: после переустановки профиль возвращается
+    /// вместе с данными. В старых копиях его нет.
+    val socialToken: String? = null
 )
 
 object BackupService {
@@ -110,8 +114,14 @@ object BackupService {
         prettyPrint = true
     }
 
-    fun export(profiles: List<ProgramProfile>): String =
-        json.encodeToString(BackupArchive(profiles = profiles.map(::snapshot)))
+    fun export(profiles: List<ProgramProfile>, socialToken: String? = null): String =
+        json.encodeToString(
+            BackupArchive(
+                exportedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString(),
+                profiles = profiles.map(::snapshot),
+                socialToken = socialToken
+            )
+        )
 
     fun parse(text: String): BackupArchive = json.decodeFromString(text)
 

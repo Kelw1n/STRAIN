@@ -70,6 +70,11 @@ import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.service.ScheduledWorkout
 import com.texasprogram.app.service.WorkoutSessionManager
+import com.texasprogram.app.model.SocialPostDraft
+import com.texasprogram.app.model.SocialWorkout
+import com.texasprogram.app.service.SocialService
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PersonAdd
 
 
 @Composable
@@ -99,11 +104,26 @@ fun WorkoutCompletionSummaryScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(5)
     ) { uris ->
-        if (uris.isNotEmpty()) {
-            selectedImages.clear()
-            selectedImages.addAll(uris.take(5))
-        }
+        // Добавляем к уже выбранным и снятым, а не заменяем их.
+        uris.forEach { if (selectedImages.size < 5 && it !in selectedImages) selectedImages.add(it) }
     }
+    val context = LocalContext.current
+    // Снимок сразу из экрана итогов: не надо выходить в «Камеру» и искать фото в галерее.
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = cameraUri
+        if (ok && uri != null && selectedImages.size < 5) selectedImages.add(uri)
+    }
+    fun openCamera() {
+        val uri = cameraFileUri(context)
+        cameraUri = uri
+        runCatching { cameraLauncher.launch(uri) }
+    }
+    fun openGallery() {
+        photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    /// Публиковать ли тренировку в ленту — по умолчанию да, если есть профиль.
+    var publishToFeed by remember { mutableStateOf(true) }
 
     Box(
         modifier = Modifier
@@ -179,37 +199,17 @@ fun WorkoutCompletionSummaryScreen(
                         .clip(RoundedCornerShape(22.dp))
                         .background(Color(0xFF161616))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
-                        .clickable {
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                        .padding(vertical = if (selectedImages.isEmpty()) 28.dp else 16.dp, horizontal = 16.dp),
+                        .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (selectedImages.isEmpty()) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.08f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.CameraAlt,
-                                    contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.90f),
-                                    modifier = Modifier.size(26.dp)
-                                )
-                            }
-
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Добавить фото",
+                                    text = "Добавь фото к тренировке",
                                     color = Color.White,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
@@ -220,6 +220,10 @@ fun WorkoutCompletionSummaryScreen(
                                     fontSize = 13.sp
                                 )
                             }
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                PhotoSourceTile(Icons.Filled.CameraAlt, "Снять", large = true, modifier = Modifier.weight(1f), onClick = ::openCamera)
+                                PhotoSourceTile(Icons.Filled.PhotoLibrary, "Галерея", large = true, modifier = Modifier.weight(1f), onClick = ::openGallery)
+                            }
                         }
                     } else {
                         Row(
@@ -229,7 +233,6 @@ fun WorkoutCompletionSummaryScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             selectedImages.forEachIndexed { index, uri ->
-                                val context = LocalContext.current
                                 // Миниатюра 80 dp: 12 Мп целиком в память не тянем — на слабых
                                 // телефонах пять таких фото роняли экран итогов.
                                 val bitmap = remember(uri) { decodeThumbnail(context, uri, 240) }
@@ -270,6 +273,10 @@ fun WorkoutCompletionSummaryScreen(
                                         )
                                     }
                                 }
+                            }
+                            if (selectedImages.size < 5) {
+                                PhotoSourceTile(Icons.Filled.CameraAlt, "Снять", large = false, onClick = ::openCamera)
+                                PhotoSourceTile(Icons.Filled.PhotoLibrary, "Галерея", large = false, onClick = ::openGallery)
                             }
                         }
                     }
@@ -423,6 +430,9 @@ fun WorkoutCompletionSummaryScreen(
                 EffortSlider(score = effortScore, onChange = { effortScore = it })
             }
 
+            // ЛЕНТА STRAIN
+            PublishSection(publishToFeed) { publishToFeed = it }
+
             // КАРТОЧКА ДЛЯ СТОРИС
             ShareCardSection(
                 title = workoutTitle.ifBlank { workout.fullTitle },
@@ -460,6 +470,20 @@ fun WorkoutCompletionSummaryScreen(
                             profile.setNote(workoutDescription, workout.week, workout.day.number)
                         } else profile
 
+                        // Пост в ленту — до завершения: потом подходы сессии уже сброшены.
+                        if (publishToFeed && SocialService.isSignedIn) {
+                            SocialService.enqueue(
+                                context,
+                                feedDraft(
+                                    title = workoutTitle.ifBlank { workout.fullTitle },
+                                    description = workoutDescription.trim(),
+                                    durationSeconds = durationSeconds,
+                                    effort = effortScore,
+                                    program = profile.programKind.title
+                                ),
+                                selectedImages.toList()
+                            )
+                        }
                         WorkoutSessionManager.finishWorkout(
                             profile = updatedProfile,
                             customDuration = durationSeconds,
@@ -550,3 +574,91 @@ private fun decodeThumbnail(context: android.content.Context, uri: Uri, target: 
         android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
     }
 }.getOrNull()
+
+@Composable
+private fun PhotoSourceTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    large: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier
+            .then(if (large) Modifier.height(76.dp) else Modifier.size(80.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.07f))
+            .pressable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(if (large) 24.dp else 20.dp))
+        Text(title, color = Color.White.copy(alpha = if (large) 0.9f else 0.6f), fontSize = if (large) 14.sp else 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun PublishSection(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "ЛЕНТА",
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF161616))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (SocialService.isSignedIn) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Опубликовать в ленте STRAIN", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Фото, время, объём и все подходы с весами. Друзья смогут поставить лайк и написать комментарий.",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 12.sp
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = checked,
+                    onCheckedChange = onChange,
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Theme.accent)
+                )
+            } else {
+                Icon(Icons.Filled.PersonAdd, contentDescription = null, tint = Theme.accent)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Создай профиль во вкладке «Профиль» — и тренировки можно будет публиковать в ленту.",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+}
+
+/// Пост собирается до finishWorkout: после него менеджер сбрасывает подходы.
+private fun feedDraft(title: String, description: String, durationSeconds: Int, effort: Int?, program: String): SocialPostDraft {
+    val exercises = WorkoutSessionManager.exercises.mapNotNull { exercise ->
+        val done = exercise.sets.filter { it.isDone }
+        if (done.isEmpty()) null
+        else SocialWorkout.Exercise(exercise.prescription.name, done.map { SocialWorkout.SetLine(it.reps, it.weight, it.isRecord) })
+    }
+    return SocialPostDraft(
+        clientId = SocialService.newClientId(),
+        createdAtMillis = System.currentTimeMillis(),
+        title = title,
+        description = description,
+        durationSeconds = durationSeconds,
+        volumeKg = WorkoutSessionManager.totalTonnage,
+        sets = WorkoutSessionManager.totalCompletedSets,
+        effort = effort,
+        workout = SocialWorkout(program, exercises)
+    )
+}

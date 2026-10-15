@@ -60,7 +60,6 @@ fun TodayScreen(
     onHoldSet: (ScheduledWorkout, com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onUpdateProfile: (com.texasprogram.app.model.ProgramProfile) -> Unit,
     onOpenHistory: (String) -> Unit,
-    onOpenBroTracker: () -> Unit = {},
     onSettings: () -> Unit,
     onStartWorkout: (ScheduledWorkout) -> Unit = {},
     contentPadding: PaddingValues
