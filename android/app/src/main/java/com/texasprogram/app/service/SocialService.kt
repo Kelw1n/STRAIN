@@ -23,6 +23,7 @@ import com.texasprogram.app.model.SocialProgramDay
 import com.texasprogram.app.model.SocialUser
 import com.texasprogram.app.model.SocialUserShort
 import com.texasprogram.app.model.SocialWorkout
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -86,6 +87,16 @@ object SocialService {
     var feedVersion by mutableIntStateOf(0)
         private set
 
+    /// Последняя загруженная лента: при переходе между вкладками она видна сразу,
+    /// а свежая подгружается без пустого экрана со спиннером.
+    val feedCache = mutableMapOf<FeedScope, SocialFeedPage>()
+
+    /// Профили и комментарии, которые уже открывали. Экран под открытым поверх
+    /// создаётся заново при возврате «Назад» — с кэшем он сразу показывает
+    /// прошлое содержимое, а не пустой экран со спиннером.
+    val userCache = mutableMapOf<String, Pair<SocialUser, SocialFeedPage>>()
+    val commentCache = mutableMapOf<String, List<SocialComment>>()
+
     val isSignedIn: Boolean get() = token != null
 
     fun init(context: Context) {
@@ -147,6 +158,9 @@ object SocialService {
             throw e
         } catch (e: IOException) {
             throw SocialException("Нет связи с сервером. Если ленту давно не открывали, сервер просыпается — попробуй через полминуты.")
+        } catch (e: RuntimeException) {
+            // Сбой внутри HttpURLConnection не должен ронять приложение.
+            throw SocialException("Не удалось связаться с сервером")
         } finally {
             connection.disconnect()
         }
@@ -196,6 +210,9 @@ object SocialService {
 
     suspend fun deleteAccount() {
         call("DELETE", "/me", requiresAuth = true)
+        // Неотправленные посты удалённого профиля не должны уйти от имени следующего.
+        withContext(Dispatchers.IO) { outbox.forEach { OutboxStore.remove(it.clientId) } }
+        outbox = emptyList()
         signOut()
     }
 
@@ -203,6 +220,9 @@ object SocialService {
         token = value
         prefs().edit().apply { if (value == null) remove("token") else putString("token", value) }.apply()
         prefs().edit().remove("sync_fingerprint").apply()
+        feedCache.clear()
+        userCache.clear()
+        commentCache.clear()
         feedVersion++
     }
 
@@ -378,7 +398,12 @@ object SocialService {
         scope.launch {
             val files = withContext(Dispatchers.IO) { photos.take(5).mapNotNull { jpeg(context, it) } }
             val saved = draft.copy(photoCount = files.size, uploadedPhotos = List(files.size) { null })
-            withContext(Dispatchers.IO) { OutboxStore.save(saved, files) }
+            // Нет места на диске — пост не сохранится, но и приложение не упадёт.
+            val stored = withContext(Dispatchers.IO) { runCatching { OutboxStore.save(saved, files) }.isSuccess }
+            if (!stored) {
+                outboxError = "Не удалось сохранить тренировку для ленты — мало места на телефоне"
+                return@launch
+            }
             outbox = OutboxStore.loadAll()
             flushOutbox()
         }
@@ -410,6 +435,9 @@ object SocialService {
             try {
                 for (pending in outbox) {
                     var draft = pending
+                    if (draft.uploadedPhotos.size != draft.photoCount) {
+                        draft = draft.copy(uploadedPhotos = List(draft.photoCount) { null })
+                    }
                     try {
                         for (index in 0 until draft.photoCount) {
                             if (draft.uploadedPhotos.getOrNull(index) != null) continue
@@ -433,8 +461,12 @@ object SocialService {
                         withContext(Dispatchers.IO) { OutboxStore.remove(draft.clientId) }
                         outbox = OutboxStore.loadAll()
                         feedVersion++
-                    } catch (e: SocialException) {
-                        outboxError = e.message
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Любая ошибка — пост остаётся в очереди. Раньше всё, кроме
+                        // ошибки сервера, роняло приложение.
+                        outboxError = (e as? SocialException)?.message ?: "Не удалось отправить тренировку"
                         break
                     }
                 }

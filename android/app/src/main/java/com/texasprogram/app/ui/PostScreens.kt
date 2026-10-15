@@ -2,6 +2,8 @@ package com.texasprogram.app.ui
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,10 +91,17 @@ fun PostCard(
 
     Column(Modifier.fillMaxWidth().padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         PostHeader(post, onOpenAuthor, onDelete = { confirmDelete = true })
-        Column(Modifier.pressable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.fillMaxWidth().pressable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PostTitleBlock(post)
             PostStatsRow(post)
-            if (post.photos.isEmpty()) WorkoutSummary(post.workout, limit = 4) else PhotoPager(post.photos)
+            if (post.photos.isEmpty()) WorkoutSummary(post.workout, limit = 4)
+        }
+        if (post.photos.isNotEmpty()) {
+            // Фото — без сжатия при нажатии: оно дёргало карточку на каждом свайпе.
+            PhotoPager(
+                post.photos,
+                Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)
+            )
         }
         PostActions(post, onComments = onOpen, onChange = { onChange(it) })
         error?.let { Text(it, color = Theme.warning, fontSize = 12.sp) }
@@ -353,10 +362,11 @@ fun PostDetailScreen(
 ) {
     val scope = rememberCoroutineScope()
     var post by remember { mutableStateOf(initial) }
-    val comments = remember { mutableStateListOf<SocialComment>() }
+    val comments = remember { mutableStateListOf<SocialComment>().apply { SocialService.commentCache[initial.id]?.let { addAll(it) } } }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var composing by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val me = SocialService.me
 
     fun update(value: SocialPost) {
@@ -367,13 +377,16 @@ fun PostDetailScreen(
     LaunchedEffect(initial.id) {
         loading = true
         try {
+            val loaded = SocialService.comments(initial.id)
             comments.clear()
-            comments.addAll(SocialService.comments(initial.id))
+            comments.addAll(loaded)
+            SocialService.commentCache[initial.id] = loaded
             error = null
         } catch (e: SocialException) {
             error = e.message
+        } finally {
+            loading = false
         }
-        loading = false
     }
 
     LazyColumn(
@@ -382,14 +395,7 @@ fun PostDetailScreen(
     ) {
         item { SocialTopBar(post.title, onBack = { navigator.pop() }) }
         item {
-            PostHeader(post, onOpenAuthor = { navigator.push(SocialRoute.User(post.author.username)) }, onDelete = {
-                scope.launch {
-                    runCatching { SocialService.deletePost(post.id) }.onSuccess {
-                        onChange(null)
-                        navigator.pop()
-                    }
-                }
-            })
+            PostHeader(post, onOpenAuthor = { navigator.push(SocialRoute.User(post.author.username)) }, onDelete = { confirmDelete = true })
         }
         item { PostTitleBlock(post) }
         item { PostStatsRow(post) }
@@ -471,6 +477,29 @@ fun PostDetailScreen(
                 Text("Создай профиль во вкладке «Профиль», чтобы комментировать", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
             }
         }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            containerColor = Theme.dialog,
+            title = { Text("Удалить тренировку из ленты?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    scope.launch {
+                        try {
+                            SocialService.deletePost(post.id)
+                            onChange(null)
+                            navigator.pop()
+                        } catch (e: SocialException) {
+                            error = e.message
+                        }
+                    }
+                }) { Text("Удалить", color = Theme.record) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена", color = Theme.textSecondary) } }
+        )
     }
 
     if (composing) {

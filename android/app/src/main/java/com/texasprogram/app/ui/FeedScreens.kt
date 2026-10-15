@@ -28,12 +28,14 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -56,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.SocialFeedPage
 import com.texasprogram.app.model.SocialFormat
 import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialUserShort
@@ -106,14 +109,29 @@ fun FeedScreen(
     var scopeMenu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
+    fun cache() {
+        SocialService.feedCache[feedScope] = SocialFeedPage(posts.toList(), next)
+    }
+
     fun replace(id: String, value: SocialPost?) {
         val index = posts.indexOfFirst { it.id == id }
         if (index < 0) return
         if (value != null) posts[index] = value else posts.removeAt(index)
+        cache()
     }
 
     suspend fun reload() {
-        if (!SocialService.isSignedIn && feedScope == SocialService.FeedScope.FOLLOWING) feedScope = SocialService.FeedScope.ALL
+        // Без профиля подписок нет: смена ленты сама перезапустит загрузку.
+        if (!SocialService.isSignedIn && feedScope == SocialService.FeedScope.FOLLOWING) {
+            feedScope = SocialService.FeedScope.ALL
+            return
+        }
+        // Прошлая версия ленты — сразу, свежая придёт следом без пустого экрана.
+        val cached = SocialService.feedCache[feedScope]
+        if (cached != null && posts.isEmpty()) {
+            posts.addAll(cached.posts)
+            next = cached.next
+        }
         loading = true
         SocialService.flushOutbox()
         try {
@@ -122,10 +140,12 @@ fun FeedScreen(
             posts.addAll(page.posts)
             next = page.next
             error = null
+            cache()
         } catch (e: SocialException) {
             error = e.message
+        } finally {
+            loading = false
         }
-        loading = false
     }
 
     LaunchedEffect(feedScope, SocialService.feedVersion) { reload() }
@@ -145,6 +165,7 @@ fun FeedScreen(
                 val known = posts.map { it.id }.toSet()
                 posts.addAll(page.posts.filter { it.id !in known })
                 next = page.next
+                cache()
             }
             loadingMore = false
         }
@@ -182,7 +203,14 @@ fun FeedScreen(
                                     trailingIcon = { if (item == feedScope) Icon(Icons.Filled.Check, contentDescription = null) },
                                     onClick = {
                                         scopeMenu = false
-                                        feedScope = item
+                                        if (item != feedScope) {
+                                            // Другая лента — сразу её прошлая версия, если была.
+                                            val cached = SocialService.feedCache[item]
+                                            posts.clear()
+                                            posts.addAll(cached?.posts.orEmpty())
+                                            next = cached?.next
+                                            feedScope = item
+                                        }
                                     }
                                 )
                             }
@@ -257,6 +285,7 @@ private fun SignUpTeaser(onCreateProfile: () -> Unit) {
 
 @Composable
 private fun OutboxCard() {
+    var confirmDiscard by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -285,14 +314,42 @@ private fun OutboxCard() {
             }
         }
         if (!SocialService.isFlushing) {
-            Text(
-                "Отправить",
-                color = Theme.accent,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.pressable { SocialService.flushOutbox() }
-            )
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Отправить",
+                    color = Theme.accent,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.pressable { SocialService.flushOutbox() }
+                )
+                // Сервер отказал — пост не застрянет в очереди навсегда.
+                if (SocialService.outboxError != null) {
+                    Text(
+                        "Удалить",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.pressable { confirmDiscard = true }
+                    )
+                }
+            }
         }
+    }
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            containerColor = Theme.dialog,
+            title = { Text("Не публиковать тренировку?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Пост не уйдёт в ленту. Сама тренировка останется в приложении.", color = Theme.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscard = false
+                    SocialService.outbox.forEach { SocialService.discard(it) }
+                }) { Text("Убрать из очереди", color = Theme.record) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Отмена", color = Theme.textSecondary) } }
+        )
     }
 }
 

@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -82,6 +83,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -167,7 +169,9 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                             loadingPosts = true
                             scope.launch {
                                 runCatching { SocialService.posts(me.username, cursor) }.onSuccess { page ->
-                                    posts.addAll(page.posts)
+                                    // Повтор поста дал бы два одинаковых ключа — LazyColumn падает.
+                                    val known = posts.map { it.id }.toSet()
+                                    posts.addAll(page.posts.filter { it.id !in known })
                                     next = page.next
                                 }
                                 loadingPosts = false
@@ -232,9 +236,11 @@ private fun RoundIcon(icon: ImageVector, description: String, onClick: () -> Uni
 @Composable
 fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPadding: PaddingValues) {
     val scope = rememberCoroutineScope()
-    var user by remember { mutableStateOf<SocialUser?>(null) }
-    val posts = remember { mutableStateListOf<SocialPost>() }
-    var next by remember { mutableStateOf<Double?>(null) }
+    // Вернулись «Назад» из поста — профиль сразу на месте, свежий подгрузится следом.
+    val cached = remember(username) { SocialService.userCache[username] }
+    var user by remember { mutableStateOf(cached?.first) }
+    val posts = remember { mutableStateListOf<SocialPost>().apply { cached?.let { addAll(it.second.posts) } } }
+    var next by remember { mutableStateOf(cached?.second?.next) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -242,16 +248,19 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
     suspend fun reload() {
         loading = true
         try {
-            user = SocialService.user(username)
+            val loaded = SocialService.user(username)
             val page = SocialService.posts(username)
+            user = loaded
             posts.clear()
             posts.addAll(page.posts)
             next = page.next
             error = null
+            SocialService.userCache[username] = loaded to page
         } catch (e: SocialException) {
             error = e.message
+        } finally {
+            loading = false
         }
-        loading = false
     }
     LaunchedEffect(username) { reload() }
 
@@ -275,7 +284,8 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                         loading = true
                         scope.launch {
                             runCatching { SocialService.posts(username, cursor) }.onSuccess { page ->
-                                posts.addAll(page.posts)
+                                val known = posts.map { it.id }.toSet()
+                                posts.addAll(page.posts.filter { it.id !in known })
                                 next = page.next
                             }
                             loading = false
@@ -429,13 +439,13 @@ fun ProfileContent(
 @Composable
 private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(contentPadding.calculateTopPadding() + 230.dp)) {
+        // Обложка — от края до края экрана, сквозь боковые отступы списка.
+        Box(Modifier.bleed(16.dp).fillMaxWidth().height(contentPadding.calculateTopPadding() + 230.dp)) {
             ProfileCover(
                 user.cover,
                 Modifier
                     .fillMaxWidth()
                     .height(contentPadding.calculateTopPadding() + 170.dp)
-                    .padding(horizontal = 0.dp)
             )
             Avatar(
                 user.avatar,
@@ -452,6 +462,15 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
             Text(user.bio, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp, textAlign = TextAlign.Center)
         }
     }
+}
+
+/// Растягивает элемент списка на `horizontal` за его боковые отступы.
+private fun Modifier.bleed(horizontal: Dp): Modifier = layout { measurable, constraints ->
+    val extra = (horizontal * 2).roundToPx()
+    val placeable = measurable.measure(
+        constraints.copy(minWidth = constraints.minWidth + extra, maxWidth = constraints.maxWidth + extra)
+    )
+    layout(constraints.maxWidth, placeable.height) { placeable.place(-extra / 2, 0) }
 }
 
 /// Обложка профиля: своё фото или фирменный узор STRAIN.
@@ -685,7 +704,8 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
     var showingCode by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    // Камера — другое приложение: пока оно открыто, наш экран могут пересоздать.
+    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     fun upload(uri: Uri, avatar: Boolean) {
         uploading = true
@@ -723,9 +743,13 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                             error = "Юзернейм: 3–24 символа — латиница, цифры, точка и подчёркивание"
                             return@pressable
                         }
+                        val heightValue = height.trim().toIntOrNull()?.takeIf { it in 100..250 }
+                        if (height.isNotBlank() && heightValue == null) {
+                            error = "Рост — от 100 до 250 см или пусто"
+                            return@pressable
+                        }
                         saving = true
                         error = null
-                        val heightValue = height.trim().toIntOrNull()?.takeIf { it in 100..250 }
                         scope.launch {
                             try {
                                 SocialService.update(
@@ -751,7 +775,15 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
         }
         item {
             Box(Modifier.fillMaxWidth().height(210.dp)) {
-                ProfileCover(me?.cover, Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(22.dp)))
+                // Тонкая рамка: чёрная обложка на чёрном фоне иначе сливается с экраном.
+                ProfileCover(
+                    me?.cover,
+                    Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                )
                 Row(
                     Modifier
                         .align(Alignment.TopEnd)
@@ -807,7 +839,13 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                                 leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = Theme.record) },
                                 onClick = {
                                     avatarMenu = false
-                                    scope.launch { runCatching { SocialService.update(SocialService.ProfilePatch(avatar = "")) } }
+                                    scope.launch {
+                                        try {
+                                            SocialService.update(SocialService.ProfilePatch(avatar = ""))
+                                        } catch (e: SocialException) {
+                                            error = e.message
+                                        }
+                                    }
                                 }
                             )
                         }

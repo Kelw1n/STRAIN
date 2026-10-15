@@ -50,6 +50,7 @@ import com.texasprogram.app.ui.ProfileContent
 import com.texasprogram.app.ui.ProgramDayScreen
 import com.texasprogram.app.ui.SignUpScreen
 import com.texasprogram.app.ui.SocialNavigator
+import com.texasprogram.app.ui.Theme
 import com.texasprogram.app.ui.WorkoutCompletionSummaryScreen
 import org.junit.Rule
 import org.junit.Test
@@ -198,7 +199,15 @@ private fun Screen(content: @Composable androidx.compose.foundation.layout.BoxSc
         LocalOnBackPressedDispatcherOwner provides backOwner,
         LocalActivityResultRegistryOwner provides registryOwner
     ) {
-        MaterialTheme(colorScheme = darkColorScheme()) {
+        MaterialTheme(
+            colorScheme = darkColorScheme(
+                primary = Theme.accent,
+                onPrimary = Color.White,
+                background = Theme.base,
+                surface = Theme.surface,
+                onSurface = Theme.textPrimary
+            )
+        ) {
             Box(Modifier.fillMaxSize().background(Color.Black), content = content)
         }
     }

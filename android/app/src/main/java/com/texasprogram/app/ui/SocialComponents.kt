@@ -54,7 +54,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -321,8 +323,10 @@ fun SocialHost(
     root: @Composable () -> Unit
 ) {
     BackHandler(enabled = navigator.stack.isNotEmpty()) { navigator.pop() }
+    val covered = navigator.stack.isNotEmpty()
     Box(Modifier.fillMaxSize()) {
-        root()
+        // Корень под открытым экраном не должен читаться TalkBack.
+        Box(if (covered) Modifier.fillMaxSize().clearAndSetSemantics {} else Modifier.fillMaxSize()) { root() }
         AnimatedContent(
             targetState = navigator.stack.toList(),
             transitionSpec = {
@@ -336,7 +340,14 @@ fun SocialHost(
         ) { stack ->
             val top = stack.lastOrNull()
             if (top != null) {
-                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                // Экран ловит все касания: раньше нажатие в пустое место под
+                // коротким списком проходило насквозь в ленту и открывало чужой пост.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black)
+                        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
+                ) {
                     screen(top)
                 }
             }

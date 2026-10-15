@@ -149,6 +149,8 @@ class MainActivity : ComponentActivity() {
             val colorScheme = if (isDark) {
                 darkColorScheme(
                     primary = Theme.accent,
+                    // Белое на акценте: иначе у включённых переключателей тёмно-фиолетовый кружок.
+                    onPrimary = Color.White,
                     background = Theme.base,
                     surface = Theme.surface,
                     onSurface = Theme.textPrimary

@@ -49,7 +49,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,7 +100,10 @@ fun WorkoutCompletionSummaryScreen(
     }
     /// Оценка усилия 1–10; пусто — не ставили.
     var effortScore by remember { mutableStateOf<Int?>(null) }
-    val selectedImages = remember { mutableStateListOf<Uri>() }
+    // Фото и файл снимка переживают пересоздание экрана, пока открыта камера.
+    val selectedImages = rememberSaveable(
+        saver = listSaver<SnapshotStateList<Uri>, Uri>(save = { it.toList() }, restore = { it.toMutableStateList() })
+    ) { mutableStateListOf() }
 
     var durationSeconds by remember { mutableIntStateOf(maxOf(WorkoutSessionManager.elapsedSeconds, 60)) }
     var showingDurationPicker by remember { mutableStateOf(false) }
@@ -109,7 +116,7 @@ fun WorkoutCompletionSummaryScreen(
     }
     val context = LocalContext.current
     // Снимок сразу из экрана итогов: не надо выходить в «Камеру» и искать фото в галерее.
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = cameraUri
         if (ok && uri != null && selectedImages.size < 5) selectedImages.add(uri)
