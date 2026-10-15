@@ -170,7 +170,7 @@ object SocialService {
         if (!SocialFormat.isValidUsername(name)) throw SocialException("Юзернейм: 3–24 символа — латиница, цифры, точка и подчёркивание")
         val body = buildJsonObject { put("username", name) }.toString()
         val response = decode<RegisterResponse>(call("POST", "/register", body = body, useToken = null))
-        setToken(response.token)
+        storeToken(response.token)
         me = response.user
     }
 
@@ -179,7 +179,7 @@ object SocialService {
         val cleaned = code.trim().lowercase()
         if (!Regex("^[a-f0-9]{64}$").matches(cleaned)) throw SocialException("Код входа — 64 символа из цифр и латинских букв a–f")
         val user = decode<SocialUser>(call("GET", "/me", useToken = cleaned))
-        setToken(cleaned)
+        storeToken(cleaned)
         me = user
     }
 
@@ -190,7 +190,7 @@ object SocialService {
     }
 
     fun signOut() {
-        setToken(null)
+        storeToken(null)
         me = null
     }
 
@@ -199,7 +199,7 @@ object SocialService {
         signOut()
     }
 
-    private fun setToken(value: String?) {
+    private fun storeToken(value: String?) {
         token = value
         prefs().edit().apply { if (value == null) remove("token") else putString("token", value) }.apply()
         prefs().edit().remove("sync_fingerprint").apply()
