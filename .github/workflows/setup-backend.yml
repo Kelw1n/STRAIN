@@ -37,20 +37,33 @@ jobs:
         id: neon
         run: |
           set -euo pipefail
-          api() { curl -fsS -H "Authorization: Bearer $NEON_API_KEY" -H "Accept: application/json" -H "Content-Type: application/json" "$@"; }
-          projects=$(api "https://console.neon.tech/api/v2/projects?limit=100")
+          # Ответ при ошибке печатаем коротко: в нём нет секретов, а без него не понять, что не так.
+          api() {
+            local out code
+            out=$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $NEON_API_KEY" -H "Accept: application/json" -H "Content-Type: application/json" "$@")
+            code=${out##*$'\n'}
+            out=${out%$'\n'*}
+            if [ "$code" -ge 400 ]; then echo "::error::Neon $code: $(printf '%s' "$out" | head -c 400)" >&2; return 1; fi
+            printf '%s' "$out"
+          }
+          # Новые аккаунты Neon живут в «организации»: без её id список проектов не отдают.
+          org=$(api "https://console.neon.tech/api/v2/users/me/organizations" | jq -r '.organizations[0].id // empty')
+          query=""
+          [ -n "$org" ] && query="org_id=$org"
+          projects=$(api "https://console.neon.tech/api/v2/projects?$query")
           id=$(echo "$projects" | jq -r --arg n "$NEON_PROJECT" '.projects[] | select(.name == $n) | .id' | head -1)
           if [ -z "$id" ]; then
             echo "Создаю проект Neon «$NEON_PROJECT» во Франкфурте"
-            created=$(api -X POST https://console.neon.tech/api/v2/projects \
-              -d "{\"project\":{\"name\":\"$NEON_PROJECT\",\"region_id\":\"aws-eu-central-1\",\"pg_version\":16}}")
+            body=$(jq -n --arg name "$NEON_PROJECT" --arg org "$org" '{project: ({name: $name, region_id: "aws-eu-central-1", pg_version: 16} + (if $org == "" then {} else {org_id: $org} end))}')
+            created=$(api -X POST https://console.neon.tech/api/v2/projects -d "$body")
             id=$(echo "$created" | jq -r '.project.id')
             uri=$(echo "$created" | jq -r '.connection_uris[0].connection_uri')
           else
             echo "Проект Neon уже есть: $id"
             branch=$(api "https://console.neon.tech/api/v2/projects/$id/branches" | jq -r '.branches[] | select(.default == true) | .id' | head -1)
-            db=$(api "https://console.neon.tech/api/v2/projects/$id/branches/$branch/databases" | jq -r '.databases[0].name')
-            role=$(api "https://console.neon.tech/api/v2/projects/$id/branches/$branch/databases" | jq -r '.databases[0].owner_name')
+            dbs=$(api "https://console.neon.tech/api/v2/projects/$id/branches/$branch/databases")
+            db=$(echo "$dbs" | jq -r '.databases[0].name')
+            role=$(echo "$dbs" | jq -r '.databases[0].owner_name')
             uri=$(api "https://console.neon.tech/api/v2/projects/$id/connection_uri?branch_id=$branch&database_name=$db&role_name=$role" | jq -r '.uri')
           fi
           [ -n "$uri" ] && [ "$uri" != "null" ] || { echo "::error::Neon не отдал строку подключения"; exit 1; }
@@ -65,7 +78,14 @@ jobs:
           DATABASE_URL: ${{ steps.neon.outputs.uri }}
         run: |
           set -euo pipefail
-          api() { curl -fsS -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" -H "Content-Type: application/json" "$@"; }
+          api() {
+            local out code
+            out=$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" -H "Content-Type: application/json" "$@")
+            code=${out##*$'\n'}
+            out=${out%$'\n'*}
+            if [ "$code" -ge 400 ]; then echo "::error::Render $code: $(printf '%s' "$out" | head -c 400)" >&2; return 1; fi
+            printf '%s' "$out"
+          }
           owner=$(api "https://api.render.com/v1/owners?limit=20" | jq -r '.[0].owner.id')
           [ -n "$owner" ] && [ "$owner" != "null" ] || { echo "::error::Render не отдал аккаунт — проверь ключ"; exit 1; }
           service=$(api "https://api.render.com/v1/services?name=$SERVICE_NAME&limit=20" | jq -r '.[0].service.id // empty')
@@ -109,4 +129,4 @@ jobs:
           done
           echo "::error::Сервер не поднялся за 20 минут — посмотри логи сборки в Render"
           exit 1
-# Повторный запуск — любая правка этого файла в ветке.
+# Повторный запуск — любая правка этого файла в ветке. Попытка 2.
