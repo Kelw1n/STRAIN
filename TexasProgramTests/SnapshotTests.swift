@@ -134,6 +134,36 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    @MainActor func testWorkoutHub() throws {
+        let profile = ProgramProfile(input: .demo)
+        try snap("12-workout-hub") {
+            WorkoutHubView(profile: profile, onStartWorkout: { _ in })
+        }
+    }
+
+    @MainActor func testProgress() throws {
+        let profile = ProgramProfile(input: .demo)
+        try snap("13-progress") {
+            ActivityProgressView(profile: profile, onStartWorkout: {})
+        }
+    }
+
+    /// Идущая тренировка с парой закрытых подходов — как её видно в зале.
+    @MainActor func testActiveWorkout() throws {
+        let profile = ProgramProfile(input: .demo)
+        let workout = try XCTUnwrap(profile.schedule.focus)
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: workout, profile: profile)
+        defer { manager.discardWorkout(profile: profile) }
+        if let first = workout.day.exercises.first {
+            profile.recordSet(week: workout.week, day: workout.day.number, exercise: first, index: 0, reps: 5, weight: 100)
+            profile.recordSet(week: workout.week, day: workout.day.number, exercise: first, index: 1, reps: 5, weight: 100)
+        }
+        try snap("14-active-workout", wait: 2) {
+            ActiveWorkoutSessionView(profile: profile, workout: workout)
+        }
+    }
+
     // MARK: Съёмка
 
     /// Экран рисуется в настоящем окне — так работают прокрутка, навигация и
