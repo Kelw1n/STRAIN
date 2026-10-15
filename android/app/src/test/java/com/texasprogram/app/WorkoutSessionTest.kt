@@ -40,7 +40,10 @@ class WorkoutSessionTest {
         dir.deleteRecursively()
     }
 
-    private fun workout(p: ProgramProfile = profile): ScheduledWorkout = p.schedule().allPending.first()
+    /// Тренировка, где у первого упражнения несколько подходов. Ближайшая по дате
+    /// зависит от дня недели, а в силовой день там один подход — удалять нечего.
+    private fun workout(p: ProgramProfile = profile): ScheduledWorkout =
+        p.schedule().allPending.first { (p.exercises(it).firstOrNull()?.sets ?: 0) >= 2 }
 
     private fun start(): ScheduledWorkout {
         val w = workout()
