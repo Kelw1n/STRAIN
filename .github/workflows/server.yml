@@ -1,0 +1,39 @@
+name: Server
+
+on:
+  pull_request:
+    paths: ["server/**", ".github/workflows/server.yml"]
+  push:
+    branches: ["main"]
+    paths: ["server/**", ".github/workflows/server.yml"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: strain
+          POSTGRES_PASSWORD: strain
+          POSTGRES_DB: strain_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U strain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        working-directory: server
+        run: npm ci
+      - name: Test on Postgres
+        working-directory: server
+        env:
+          TEST_DATABASE_URL: postgres://strain:strain@localhost:5432/strain_test
+        run: npm test

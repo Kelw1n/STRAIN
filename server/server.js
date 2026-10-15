@@ -3,8 +3,14 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
+const { createSocial } = require('./social');
+
 const app = express();
 const PORT = process.env.PORT || 10000;
+
+// Render стоит за прокси: без этого у всех запросов один и тот же IP,
+// и ограничение частоты регистраций срабатывало бы на всех сразу.
+app.set('trust proxy', 1);
 
 // Enable CORS for mobile apps and web
 app.use(cors());
@@ -77,7 +83,8 @@ app.get('/health', (req, res) => {
         service: 'strain-backend',
         timestamp: Date.now(),
         profilesCount: profilesCache.size,
-        channelsCount: channelsCache.size
+        channelsCount: channelsCache.size,
+        social: !!process.env.DATABASE_URL
     });
 });
 
@@ -258,6 +265,16 @@ app.get('/api/chat/:channelId/messages', (req, res) => {
 
     res.json(filtered);
 });
+
+// -----------------------------------------------------------------------------
+// Лента, профили и комментарии (Postgres)
+// -----------------------------------------------------------------------------
+const social = createSocial({ databaseUrl: process.env.DATABASE_URL });
+app.use('/v2', social.router);
+social.init().then(
+    (ok) => console.log(ok ? 'Social: database ready' : 'Social: DATABASE_URL not set, /v2 disabled'),
+    (error) => console.error('Social: database init failed:', error.message)
+);
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {

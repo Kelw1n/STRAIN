@@ -23,3 +23,7 @@ Payload/
 .DS_Store
 Thumbs.db
 .agents/
+
+# Сервер
+server/node_modules/
+server/data/

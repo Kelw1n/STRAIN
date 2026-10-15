@@ -1,0 +1,20 @@
+name: Keep server awake
+
+# Бесплатный Render засыпает через 15 минут без запросов, и первый вход
+# в ленту после этого ждёт полминуты. Пинг раз в 10 минут держит его бодрым;
+# 750 бесплатных часов в месяц на один сервер хватает с запасом.
+# Расписание GitHub запускает только с основной ветки (main).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /health
+        env:
+          SERVER_URL: ${{ vars.STRAIN_SERVER_URL || 'https://strain-y94r.onrender.com' }}
+        run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 "$SERVER_URL/health" || true

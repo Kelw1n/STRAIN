@@ -10,7 +10,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 # Copy application source
-COPY server.js ./
+COPY *.js ./
 
 # Create data directory
 RUN mkdir -p /app/data
