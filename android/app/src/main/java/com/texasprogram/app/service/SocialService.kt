@@ -57,7 +57,7 @@ class SocialException(message: String, val status: Int = 0) : Exception(message)
 /// Состояние — в Compose-переменных: экраны перерисовываются сами, когда
 /// меняется профиль или очередь публикаций. Сеть — на фоновом потоке.
 object SocialService {
-    const val DEFAULT_SERVER = "https://strain-y94r.onrender.com"
+    const val DEFAULT_SERVER = "https://strain-feed.onrender.com"
     private const val PREFS = "social"
 
     private lateinit var appContext: Context

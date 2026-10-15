@@ -72,10 +72,11 @@ final class SocialService {
 
     var isSignedIn: Bool { token != nil }
 
-    static let defaultServer = "https://strain-y94r.onrender.com"
+    static let defaultServer = "https://strain-feed.onrender.com"
 
     var serverURL: String {
-        UserDefaults.standard.string(forKey: "strain_backend_url") ?? Self.defaultServer
+        // Свой ключ, а не «strain_backend_url» бро-трекера: там мог остаться старый адрес.
+        UserDefaults.standard.string(forKey: "social_server_url") ?? Self.defaultServer
     }
 
     private let session: URLSession

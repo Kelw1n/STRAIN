@@ -16,5 +16,5 @@ jobs:
     steps:
       - name: Ping /health
         env:
-          SERVER_URL: ${{ vars.STRAIN_SERVER_URL || 'https://strain-y94r.onrender.com' }}
+          SERVER_URL: ${{ vars.STRAIN_SERVER_URL || 'https://strain-feed.onrender.com' }}
         run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 "$SERVER_URL/health" || true

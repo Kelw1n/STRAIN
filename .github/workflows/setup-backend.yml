@@ -94,6 +94,7 @@ jobs:
             body=$(jq -n --arg owner "$owner" --arg name "$SERVICE_NAME" --arg repo "$REPO_URL" --arg branch "$BRANCH" --arg db "$DATABASE_URL" '{
               type: "web_service", name: $name, ownerId: $owner, repo: $repo, branch: $branch,
               rootDir: "server", autoDeploy: "yes",
+              buildFilter: {paths: ["server/**"], ignoredPaths: []},
               envVars: [{key: "DATABASE_URL", value: $db}, {key: "NODE_VERSION", value: "20"}],
               serviceDetails: {
                 runtime: "node", plan: "free", region: "frankfurt", healthCheckPath: "/health",
@@ -105,7 +106,8 @@ jobs:
           else
             echo "Сервис уже есть: $service — обновляю базу и ветку"
             api -X PUT "https://api.render.com/v1/services/$service/env-vars/DATABASE_URL" -d "$(jq -n --arg v "$DATABASE_URL" '{value: $v}')" > /dev/null
-            api -X PATCH "https://api.render.com/v1/services/$service" -d "$(jq -n --arg b "$BRANCH" '{branch: $b, rootDir: "server"}')" > /dev/null
+            # Пересборка только на правки сервера: коммиты в приложения его не трогают.
+            api -X PATCH "https://api.render.com/v1/services/$service" -d "$(jq -n --arg b "$BRANCH" '{branch: $b, rootDir: "server", buildFilter: {paths: ["server/**"], ignoredPaths: []}}')" > /dev/null
             api -X POST "https://api.render.com/v1/services/$service/deploys" -d '{}' > /dev/null
           fi
           url=$(api "https://api.render.com/v1/services/$service" | jq -r '.serviceDetails.url')
@@ -129,4 +131,32 @@ jobs:
           done
           echo "::error::Сервер не поднялся за 20 минут — посмотри логи сборки в Render"
           exit 1
-# Повторный запуск — любая правка этого файла в ветке. Попытка 2.
+
+      # Живая проверка: тестовый профиль, фото, пост, лайк, комментарий, лента —
+      # и всё удаляется за собой.
+      - name: Smoke test
+        if: steps.keys.outputs.ready == 'true'
+        env:
+          URL: ${{ steps.render.outputs.url }}
+        run: |
+          set -euo pipefail
+          name="smoke_$(date +%s)"
+          reg=$(curl -fsS -X POST "$URL/v2/register" -H 'Content-Type: application/json' -d "{\"username\":\"$name\"}")
+          token=$(echo "$reg" | jq -r .token)
+          echo "::add-mask::$token"
+          auth="Authorization: Bearer $token"
+          printf '\xff\xd8\xff\xe0smoke\xff\xd9' > photo.jpg
+          image=$(curl -fsS -X POST "$URL/v2/images" -H "$auth" -H 'Content-Type: image/jpeg' --data-binary @photo.jpg | jq -r .id)
+          post=$(curl -fsS -X POST "$URL/v2/posts" -H "$auth" -H 'Content-Type: application/json' \
+            -d "{\"clientId\":\"smoke\",\"title\":\"Проверка\",\"volumeKg\":100,\"durationSeconds\":600,\"photos\":[\"$image\"],\"workout\":{\"exercises\":[{\"name\":\"Жим лёжа\",\"sets\":[{\"reps\":5,\"weight\":20}]}]}}" | jq -r .id)
+          curl -fsS -X POST "$URL/v2/posts/$post/like" -H "$auth" | jq -e '.likes == 1' > /dev/null
+          curl -fsS -X POST "$URL/v2/posts/$post/comments" -H "$auth" -H 'Content-Type: application/json' -d '{"text":"ok"}' > /dev/null
+          curl -fsS "$URL/v2/feed" | jq -e --arg id "$post" '[.posts[].id] | index($id) != null' > /dev/null
+          curl -fsS "$URL/v2/images/$image" -o back.jpg && cmp photo.jpg back.jpg
+          start=$(date +%s%N); curl -fsS "$URL/v2/feed" > /dev/null; end=$(date +%s%N)
+          echo "Лента ответила за $(( (end - start) / 1000000 )) мс"
+          curl -fsS -X DELETE "$URL/v2/me" -H "$auth" > /dev/null
+          echo "Живая проверка прошла: регистрация, фото, пост, лайк, комментарий, лента"
+          echo "Живая проверка прошла" >> "$GITHUB_STEP_SUMMARY"
+
+# Повторный запуск — любая правка этого файла в ветке. Попытка 3.
