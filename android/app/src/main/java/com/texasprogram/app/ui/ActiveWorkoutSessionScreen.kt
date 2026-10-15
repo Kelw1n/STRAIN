@@ -840,6 +840,26 @@ private fun ExerciseHeader(
                 maxLines = if (compact) 1 else 2,
                 overflow = TextOverflow.Ellipsis
             )
+            if (!compact) {
+                // Отдых — под названием, как в REBRN: справа он отнимал место,
+                // и длинные названия рвались посреди слова.
+                Row(
+                    Modifier
+                        .background(Color.White.copy(alpha = 0.10f), CircleShape)
+                        .clip(CircleShape)
+                        .pressable { actions.chooseRest(index) }
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(Icons.Filled.Timer, "Время отдыха", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(13.dp))
+                    Text(
+                        text = String.format(Locale.US, "%02d:%02d", exercise.restSeconds / 60, exercise.restSeconds % 60),
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
+                    )
+                }
+            }
             if (compact) {
                 Text(
                     text = "${exercise.doneCount} из ${RuPlural.sets(exercise.sets.size)}",
@@ -851,23 +871,6 @@ private fun ExerciseHeader(
         }
 
         if (!compact) {
-            Row(
-                Modifier
-                    .background(Color.White.copy(alpha = 0.10f), CircleShape)
-                    .clip(CircleShape)
-                    .pressable { actions.chooseRest(index) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                Icon(Icons.Filled.Timer, "Время отдыха", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(13.dp))
-                Text(
-                    text = String.format(Locale.US, "%02d:%02d", exercise.restSeconds / 60, exercise.restSeconds % 60),
-                    color = Color.White.copy(alpha = 0.85f),
-                    style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
-                )
-            }
-
             Box {
                 Box(
                     Modifier

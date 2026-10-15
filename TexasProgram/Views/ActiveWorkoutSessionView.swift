@@ -445,6 +445,13 @@ private struct ExerciseSessionCard: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(compact ? 1 : 2)
+                        .minimumScaleFactor(0.85)
+                    if !compact {
+                        // Отдых — под названием, как в REBRN: справа он отнимал место,
+                        // и «Приседания» рвались посреди слова.
+                        restChip
+                            .transition(.opacity)
+                    }
                     if compact {
                         Text("\(doneCount) из \(RuPlural.sets(exercise.sets.count))")
                             .font(.system(size: 12, weight: .medium))
@@ -468,8 +475,6 @@ private struct ExerciseSessionCard: View {
             }
 
             if !compact {
-                restChip
-                    .transition(.opacity)
                 menu
                     .transition(.opacity)
             }
@@ -503,8 +508,8 @@ private struct ExerciseSessionCard: View {
                     .monospacedDigit()
             }
             .foregroundStyle(Color.white.opacity(0.85))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
             .background(Color.white.opacity(0.10), in: Capsule())
         }
         .buttonStyle(.pressable)
