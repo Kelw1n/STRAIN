@@ -421,37 +421,48 @@ struct ProfileContent<Action: View>: View {
 }
 
 /// Обложка профиля: своё фото или фирменный узор STRAIN.
+///
+/// Фото и узор лежат в `overlay` поверх фона: так обложка всегда ровно той
+/// ширины, которую ей дали. Раньше узор из длинных надписей задавал ширину
+/// сам и растягивал весь экран профиля за края телефона.
 struct ProfileCover: View {
     let imageId: String?
 
     var body: some View {
-        ZStack {
-            if imageId != nil {
-                RemoteImage(id: imageId)
-            } else {
-                Color.black
-                VStack(alignment: .trailing, spacing: -14) {
-                    ForEach(0..<4, id: \.self) { row in
-                        Text("STRAINSTRAIN")
-                            .font(.system(size: 64, weight: .black, design: .default))
-                            .italic()
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Theme.accent.opacity(0.85 - Double(row) * 0.2), Theme.accentDeep.opacity(0.4 - Double(row) * 0.08)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .lineLimit(1)
-                            .fixedSize()
-                            .offset(x: CGFloat(row) * 26 + 90)
-                    }
+        Color.black
+            .overlay {
+                if imageId != nil {
+                    RemoteImage(id: imageId)
+                } else {
+                    pattern
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .clipped()
-                .mask(LinearGradient(colors: [.black, .black.opacity(0.15)], startPoint: .top, endPoint: .bottom))
             }
-            LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .center, endPoint: .bottom)
+            .overlay {
+                LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .center, endPoint: .bottom)
+            }
+            .clipped()
+    }
+
+    private var pattern: some View {
+        Color.clear.overlay(alignment: .topTrailing) {
+            VStack(alignment: .trailing, spacing: -14) {
+                ForEach(0..<4, id: \.self) { row in
+                    Text("STRAINSTRAIN")
+                        .font(.system(size: 64, weight: .black, design: .default))
+                        .italic()
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Theme.accent.opacity(0.85 - Double(row) * 0.2), Theme.accentDeep.opacity(0.4 - Double(row) * 0.08)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .lineLimit(1)
+                        .fixedSize()
+                        .offset(x: CGFloat(row) * 26 + 90)
+                }
+            }
+            .mask(LinearGradient(colors: [.black, .black.opacity(0.15)], startPoint: .top, endPoint: .bottom))
         }
     }
 }
