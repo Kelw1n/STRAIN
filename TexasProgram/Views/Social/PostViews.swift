@@ -141,7 +141,17 @@ struct PostStatsRow: View {
     let post: SocialPost
 
     var body: some View {
-        HStack(alignment: .top, spacing: 26) {
+        // На узком iPhone большие числа не влезают с обычными промежутками —
+        // тогда берём промежутки поуже, а не обрезаем показатели.
+        ViewThatFits(in: .horizontal) {
+            row(spacing: 26)
+            row(spacing: 16)
+            row(spacing: 10)
+        }
+    }
+
+    private func row(spacing: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: spacing) {
             stat(SocialFormat.duration(post.durationSeconds), unit: nil, title: "Время")
             stat(SocialFormat.grouped(post.volumeKg), unit: "кг", title: "Объём")
             if post.density > 0 {
@@ -159,6 +169,7 @@ struct PostStatsRow: View {
                 Text(value)
                     .font(.system(size: 18, weight: .heavy, design: Theme.fontDesign))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
                 if let unit {
                     Text(unit)
                         .font(.system(size: 12, weight: .semibold))

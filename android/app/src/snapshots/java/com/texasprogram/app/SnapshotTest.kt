@@ -100,11 +100,29 @@ class SnapshotTest {
         }
     }
 
+    /// Узкий телефон 360 dp: четыре показателя с крупными числами должны влезть.
+    @Test
+    fun feedPostsNarrow() {
+        paparazzi.unsafeUpdateConfig(deviceConfig = DeviceConfig.NEXUS_5)
+        paparazzi.snapshot("02b-feed-posts-narrow") {
+            Screen {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+                    items(Fixtures.posts(), key = { it.id }) { post ->
+                        Column {
+                            PostCard(post, onOpen = {}, onOpenAuthor = {}, onChange = {})
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     fun postDetail() {
         tall()
         paparazzi.snapshot("03-post-detail") {
-            Screen { PostDetailScreen(Fixtures.posts()[1], padding, SocialNavigator(), onChange = {}) }
+            Screen { PostDetailScreen(Fixtures.posts()[2], padding, SocialNavigator(), onChange = {}) }
         }
     }
 
@@ -230,6 +248,12 @@ private object Fixtures {
         return SocialService.json.decodeFromString(
             """
             [
+             {"id":"p3","author":{"id":"u3","username":"heavy.anna"},"createdAt":${now - 3 * 60_000},
+              "title":"Объёмный понедельник","description":"",
+              "durationSeconds":6000,"volumeKg":123456,"sets":30,"effort":10,
+              "photos":[],
+              "workout":{"exercises":[{"name":"Приседания со штангой","sets":[{"reps":8,"weight":120}]}]},
+              "likes":12,"comments":4,"liked":false},
              {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"createdAt":${now - 25 * 60_000},
               "title":"Неделя 3 · День 1 — объём","description":"Присед зашёл легко, жим тяжело. Завтра отдых.",
               "durationSeconds":4980,"volumeKg":12450,"sets":18,"effort":8,

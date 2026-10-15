@@ -90,9 +90,12 @@ struct FeedView: View {
                 Text(scope == .all ? "Главное" : "Подписки")
                     .font(.system(size: 30, weight: .heavy, design: Theme.fontDesign))
                     .foregroundStyle(.white)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                // Без профиля подписок нет — и выбирать нечего.
+                if social.isSignedIn {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                }
             }
             .fixedSize()
         }

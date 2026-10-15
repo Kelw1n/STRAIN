@@ -59,10 +59,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.SocialComment
@@ -201,13 +203,28 @@ fun PostTitleBlock(post: SocialPost) {
     }
 }
 
+/// Промежутки сжимаются от 26 до 10 dp: на телефоне шириной 360 dp четыре
+/// показателя с крупными числами иначе не влезали и последний обрезался.
 @Composable
 fun PostStatsRow(post: SocialPost) {
-    Row(horizontalArrangement = Arrangement.spacedBy(26.dp)) {
+    Layout(content = {
         PostStat(SocialFormat.duration(post.durationSeconds), null, "Время")
         PostStat(SocialFormat.grouped(post.volumeKg), "кг", "Объём")
         if (post.density > 0) PostStat(SocialFormat.grouped(post.density), "кг/мин", "Плотность")
         post.effort?.let { PostStat("$it", "/10", "Усилие") }
+    }) { measurables, constraints ->
+        val placeables = measurables.map { it.measure(Constraints()) }
+        val total = placeables.sumOf { it.width }
+        val gaps = (placeables.size - 1).coerceAtLeast(1)
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else total + gaps * 26.dp.roundToPx()
+        val spacing = ((width - total) / gaps).coerceIn(10.dp.roundToPx(), 26.dp.roundToPx())
+        layout(width, placeables.maxOfOrNull { it.height } ?: 0) {
+            var x = 0
+            placeables.forEach { placeable ->
+                placeable.placeRelative(x, 0)
+                x += placeable.width + spacing
+            }
+        }
     }
 }
 
@@ -215,7 +232,7 @@ fun PostStatsRow(post: SocialPost) {
 private fun PostStat(value: String, unit: String?, title: String) {
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
+            Text(value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false)
             if (unit != null) Text(unit, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 2.dp))
         }
         Text(title, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)

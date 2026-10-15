@@ -48,7 +48,7 @@ final class SnapshotTests: XCTestCase {
     }
 
     @MainActor func testPostDetail() throws {
-        let post = try Fixtures.posts()[1]
+        let post = try Fixtures.posts()[2]
         try snap("03-post-detail", height: 2200) {
             NavigationStack { PostDetailView(post: post) }
         }
@@ -83,7 +83,7 @@ final class SnapshotTests: XCTestCase {
             }
             .preferredColorScheme(.dark)
         }
-        try snap("05-profile-full", height: 3000) {
+        try snap("05-profile-full", height: 2600) {
             NavigationStack {
                 VStack { content(); Spacer(minLength: 0) }
                     .background(Color.black.ignoresSafeArea())
@@ -154,7 +154,8 @@ final class SnapshotTests: XCTestCase {
             window.frame = CGRect(x: 0, y: 0, width: scene.screen.bounds.width, height: height)
         }
         window.overrideUserInterfaceStyle = .dark
-        window.rootViewController = UIHostingController(rootView: content().environment(RestTimer()))
+        // Цвет кнопок — как в приложении: его задаёт RootView.
+        window.rootViewController = UIHostingController(rootView: content().tint(Theme.accent).environment(RestTimer()))
         window.makeKeyAndVisible()
         // Даём SwiftUI отрисоваться, запустить .task и дождаться ответа сервера.
         RunLoop.main.run(until: Date().addingTimeInterval(wait))
@@ -192,6 +193,12 @@ private enum Fixtures {
         let now = Date().timeIntervalSince1970 * 1000
         return try decode("""
         [
+         {"id":"p3","author":{"id":"u3","username":"heavy.anna"},"createdAt":\(now - 3 * 60_000),
+          "title":"Объёмный понедельник","description":"",
+          "durationSeconds":6000,"volumeKg":123456,"sets":30,"effort":10,
+          "photos":[],
+          "workout":{"exercises":[{"name":"Приседания со штангой","sets":[{"reps":8,"weight":120}]}]},
+          "likes":12,"comments":4,"liked":false},
          {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"createdAt":\(now - 25 * 60_000),
           "title":"Неделя 3 · День 1 — объём","description":"Присед зашёл легко, жим тяжело. Завтра отдых.",
           "durationSeconds":4980,"volumeKg":12450,"sets":18,"effort":8,
