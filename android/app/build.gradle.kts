@@ -89,3 +89,10 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
 }
+
+// Снимки экранов ленты и профиля для проверки вёрстки (workflow snapshots.yml):
+// gradle -Psnapshots recordPaparazziDebug. В обычной сборке Paparazzi не подключается.
+if (providers.gradleProperty("snapshots").isPresent) {
+    apply(plugin = "app.cash.paparazzi")
+    android.sourceSets.getByName("test").java.srcDir("src/snapshots/java")
+}

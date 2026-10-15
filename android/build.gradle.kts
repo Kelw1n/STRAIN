@@ -3,4 +3,6 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.0.21" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21" apply false
+    // Снимки экранов для проверки вёрстки — подключается только с -Psnapshots.
+    id("app.cash.paparazzi") version "1.3.5" apply false
 }

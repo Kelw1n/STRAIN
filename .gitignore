@@ -5,6 +5,9 @@ android/app/build/
 android/local.properties
 android/.idea/
 android/.kotlin/
+# Снимки экранов из snapshots.yml — только для проверки вёрстки
+android/app/src/test/snapshots/
+/snapshots/
 
 # Сборка Xcode
 build/
