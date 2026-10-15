@@ -30,19 +30,23 @@ struct PostCardView: View {
                 }
             }
 
-            Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 14) {
-                    PostTitleBlock(post: post)
-                    PostStatsRow(post: post)
-                    if post.photos.isEmpty {
-                        PostWorkoutSummary(workout: post.workout, limit: 4)
-                    } else {
-                        PhotoCarousel(ids: post.photos)
-                    }
+            VStack(alignment: .leading, spacing: 14) {
+                PostTitleBlock(post: post)
+                PostStatsRow(post: post)
+                if post.photos.isEmpty {
+                    PostWorkoutSummary(workout: post.workout, limit: 4)
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onOpen)
+            .accessibilityAddTraits(.isButton)
+
+            if !post.photos.isEmpty {
+                // Карусель не внутри кнопки: кнопка перехватывала свайп между фото.
+                PhotoCarousel(ids: post.photos)
+                    .onTapGesture(perform: onOpen)
+            }
 
             PostActions(post: post, onComments: onOpen, onChange: { onChange($0) })
 
@@ -60,7 +64,7 @@ struct PostCardView: View {
                         try await social.deletePost(post.id)
                         onChange(nil)
                     } catch {
-                        self.error = (error as? SocialError)?.message ?? error.localizedDescription
+                        self.error = error.socialMessage
                     }
                 }
             }
@@ -303,6 +307,7 @@ struct PostDetailView: View {
     @State private var sending = false
     @State private var error: String?
     @State private var composing = false
+    @State private var confirmDelete = false
     @FocusState private var typing: Bool
 
     private var social: SocialService { .shared }
@@ -312,13 +317,9 @@ struct PostDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 PostHeader(post: post, onOpenAuthor: { openAuthor?(post.author.username) }) {
                     if social.me?.id == post.author.id {
-                        Button(role: .destructive) {
-                            Task {
-                                try? await social.deletePost(post.id)
-                                onChange(nil)
-                                dismiss()
-                            }
-                        } label: { Label("Удалить пост", systemImage: "trash") }
+                        Button(role: .destructive) { confirmDelete = true } label: {
+                            Label("Удалить пост", systemImage: "trash")
+                        }
                     }
                 }
                 PostTitleBlock(post: post)
@@ -337,6 +338,20 @@ struct PostDetailView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $composing) { composer }
+        .confirmationDialog("Удалить тренировку из ленты?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Удалить", role: .destructive) {
+                Task {
+                    do {
+                        try await social.deletePost(post.id)
+                        onChange(nil)
+                        dismiss()
+                    } catch {
+                        self.error = error.socialMessage
+                    }
+                }
+            }
+            Button("Отмена", role: .cancel) {}
+        }
         .navigationTitle(post.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadComments() }
@@ -525,7 +540,7 @@ struct PostDetailView: View {
             comments = try await social.comments(post.id)
             error = nil
         } catch {
-            self.error = (error as? SocialError)?.message ?? error.localizedDescription
+            self.error = error.socialMessage
         }
     }
 
@@ -546,7 +561,7 @@ struct PostDetailView: View {
                 error = nil
                 composing = false
             } catch {
-                self.error = (error as? SocialError)?.message ?? error.localizedDescription
+                self.error = error.socialMessage
             }
         }
     }
@@ -560,7 +575,7 @@ struct PostDetailView: View {
                 updated.comments = max(0, updated.comments - 1)
                 update(updated)
             } catch {
-                self.error = (error as? SocialError)?.message ?? error.localizedDescription
+                self.error = error.socialMessage
             }
         }
     }

@@ -12,6 +12,7 @@ struct FeedView: View {
     @State private var loadingMore = false
     @State private var error: String?
     @State private var path = NavigationPath()
+    @State private var confirmDiscard = false
 
     private var social: SocialService { .shared }
 
@@ -67,6 +68,14 @@ struct FeedView: View {
         }
         .preferredColorScheme(.dark)
         .task(id: "\(scope.rawValue)-\(social.feedVersion)") { await reload() }
+        .onChange(of: scope) { _, value in
+            // Другая лента — сразу показываем её прошлую версию, если она была.
+            posts = social.feedCache[value]?.posts ?? []
+            next = social.feedCache[value]?.next
+        }
+        .onChange(of: posts) { _, value in
+            social.feedCache[scope] = SocialFeedPage(posts: value, next: next)
+        }
     }
 
     private var scopeMenu: some View {
@@ -114,14 +123,30 @@ struct FeedView: View {
                 }
                 Spacer()
                 if !social.isFlushing {
-                    Button("Отправить") { social.flushOutbox() }
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Theme.accent)
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Button("Отправить") { social.flushOutbox() }
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                        // Сервер отказал — пост не застрянет в очереди навсегда.
+                        if social.outboxError != nil {
+                            Button("Удалить") { confirmDiscard = true }
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.5))
+                        }
+                    }
                 }
             }
             .padding(16)
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .padding(.top, 8)
+            .confirmationDialog("Не публиковать тренировку?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+                Button("Убрать из очереди", role: .destructive) {
+                    for draft in social.outbox { social.discard(draft) }
+                }
+                Button("Отмена", role: .cancel) {}
+            } message: {
+                Text("Пост не уйдёт в ленту. Сама тренировка останется в приложении.")
+            }
         }
     }
 
@@ -182,17 +207,22 @@ struct FeedView: View {
     }
 
     private func reload() async {
-        if !social.isSignedIn && scope == .following { scope = .all }
+        // Без профиля подписок нет: смена ленты сама перезапустит загрузку.
+        if !social.isSignedIn && scope == .following { scope = .all; return }
+        if posts.isEmpty, let cached = social.feedCache[scope] {
+            posts = cached.posts
+            next = cached.next
+        }
         loading = true
         defer { loading = false }
         social.flushOutbox()
         do {
             let page = try await social.feed(scope)
-            posts = page.posts
             next = page.next
+            posts = page.posts
             error = nil
         } catch {
-            self.error = (error as? SocialError)?.message ?? error.localizedDescription
+            self.error = error.socialMessage
         }
     }
 
@@ -202,8 +232,8 @@ struct FeedView: View {
         defer { loadingMore = false }
         if let page = try? await social.feed(scope, before: next) {
             let known = Set(posts.map(\.id))
-            posts.append(contentsOf: page.posts.filter { !known.contains($0.id) })
             self.next = page.next
+            posts.append(contentsOf: page.posts.filter { !known.contains($0.id) })
         }
     }
 }

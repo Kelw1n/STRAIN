@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import TexasProgram
 
@@ -133,6 +134,24 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(SocialFormat.ago(day(-1), now: now, calendar: calendar), "вчера")
         XCTAssertEqual(SocialFormat.duration(6480), "1ч 48м")
         XCTAssertEqual(SocialFormat.duration(45 * 60), "45м")
+    }
+
+    /// Отменённый запрос (ушли с экрана, набрали следующую букву) — не ошибка для человека.
+    func testCancelledRequestHasNoMessage() {
+        XCTAssertNil(CancellationError().socialMessage)
+        XCTAssertNil(URLError(.cancelled).socialMessage)
+        XCTAssertEqual(SocialError.offline.socialMessage, SocialError.offline.message)
+    }
+
+    func testDownscaledPhotoKeepsAspect() {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4000, height: 3000), format: format).image { _ in }
+        let small = image.downscaled(maxSide: 2048)
+        XCTAssertEqual(max(small.size.width, small.size.height), 2048, accuracy: 1)
+        XCTAssertEqual(small.size.width / small.size.height, 4.0 / 3.0, accuracy: 0.01)
+        let tiny = UIGraphicsImageRenderer(size: CGSize(width: 100, height: 100), format: format).image { _ in }
+        XCTAssertTrue(tiny.downscaled() === tiny, "маленькое фото не перерисовывается")
     }
 
     // MARK: Копия

@@ -146,6 +146,22 @@ struct PhotoCarousel: View {
 
 // MARK: - Камера
 
+extension UIImage {
+    /// Уменьшенная копия. Снимок камеры на 12 Мп в памяти весит под 50 МБ —
+    /// пять таких на экране итогов могли выгрузить приложение на старом iPhone.
+    func downscaled(maxSide: CGFloat = 2048) -> UIImage {
+        let longest = max(size.width, size.height)
+        guard longest > maxSide else { return self }
+        let ratio = maxSide / longest
+        let target = CGSize(width: (size.width * ratio).rounded(), height: (size.height * ratio).rounded())
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+}
+
 /// Съёмка прямо из приложения: не нужно уходить в «Камеру» и потом искать фото в галерее.
 struct CameraPicker: UIViewControllerRepresentable {
     @Binding var isPresented: Bool

@@ -202,7 +202,7 @@ struct WorkoutCompletionSummaryView: View {
                     for item in newItems {
                         if let data = try? await item.loadTransferable(type: Data.self),
                            let image = UIImage(data: data) {
-                            loaded.append(image)
+                            loaded.append(image.downscaled())
                         }
                     }
                     await MainActor.run {
@@ -214,7 +214,7 @@ struct WorkoutCompletionSummaryView: View {
             }
             .cameraSheet(isPresented: $showingCamera) { image in
                 guard selectedImages.count < 5 else { return }
-                selectedImages.append(image)
+                selectedImages.append(image.downscaled())
             }
         }
     }

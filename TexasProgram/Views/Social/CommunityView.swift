@@ -119,7 +119,7 @@ struct CommunityView: View {
             people = try await social.searchUsers(SocialFormat.normalizedUsername(query)).filter { !$0.isMe }
             error = nil
         } catch {
-            self.error = (error as? SocialError)?.message ?? error.localizedDescription
+            self.error = error.socialMessage
         }
     }
 }
@@ -224,7 +224,7 @@ struct PeopleListView: View {
             people = try await load()
             error = nil
         } catch {
-            self.error = (error as? SocialError)?.message ?? error.localizedDescription
+            self.error = error.socialMessage
         }
     }
 }

@@ -116,7 +116,7 @@ struct ProfileTabView: View {
             next = page.next
             postsError = nil
         } catch {
-            postsError = (error as? SocialError)?.message ?? error.localizedDescription
+            postsError = error.socialMessage
         }
     }
 
@@ -125,7 +125,8 @@ struct ProfileTabView: View {
         loadingPosts = true
         defer { loadingPosts = false }
         if let page = try? await social.posts(of: username, before: next) {
-            posts.append(contentsOf: page.posts)
+            let known = Set(posts.map(\.id))
+            posts.append(contentsOf: page.posts.filter { !known.contains($0.id) })
             self.next = page.next
         }
     }
@@ -199,7 +200,7 @@ struct UserProfileView: View {
             next = loadedPage.next
             error = nil
         } catch {
-            self.error = (error as? SocialError)?.message ?? error.localizedDescription
+            self.error = error.socialMessage
         }
     }
 
@@ -208,7 +209,8 @@ struct UserProfileView: View {
         loading = true
         defer { loading = false }
         if let page = try? await SocialService.shared.posts(of: username, before: next) {
-            posts.append(contentsOf: page.posts)
+            let known = Set(posts.map(\.id))
+            posts.append(contentsOf: page.posts.filter { !known.contains($0.id) })
             self.next = page.next
         }
     }
@@ -582,7 +584,7 @@ struct SignUpView: View {
                 try await SocialService.shared.register(username: normalized)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch {
-                self.error = (error as? SocialError)?.message ?? error.localizedDescription
+                self.error = error.socialMessage
             }
         }
     }
@@ -596,7 +598,7 @@ struct SignUpView: View {
                 try await SocialService.shared.signIn(code: code)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch {
-                self.error = (error as? SocialError)?.message ?? error.localizedDescription
+                self.error = error.socialMessage
             }
         }
     }
@@ -674,7 +676,7 @@ struct EditProfileView: View {
                             try await social.deleteAccount()
                             dismiss()
                         } catch {
-                            self.error = (error as? SocialError)?.message ?? error.localizedDescription
+                            self.error = error.socialMessage
                         }
                     }
                 }
@@ -692,6 +694,9 @@ struct EditProfileView: View {
                 .frame(maxWidth: .infinity)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                // Тонкая рамка: чёрная обложка на чёрном фоне иначе сливается с экраном.
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                .overlay { if uploading == "cover" { ProgressView().tint(.white) } }
                 .overlay(alignment: .topTrailing) {
                     PhotosPicker(selection: $coverItem, matching: .images) {
                         Label("Изменить обложку", systemImage: "photo")
@@ -717,7 +722,7 @@ struct EditProfileView: View {
                     AvatarView(imageId: social.me?.avatar, username: social.me?.username ?? "s", size: 104)
                         .overlay(Circle().strokeBorder(Color.black, lineWidth: 4))
                         .overlay {
-                            if uploading != nil { ProgressView().tint(.white) }
+                            if uploading == "avatar" { ProgressView().tint(.white) }
                         }
                     Image(systemName: "camera.fill")
                         .font(.system(size: 14, weight: .bold))
@@ -880,7 +885,7 @@ struct EditProfileView: View {
                 if kind == .avatar { patch.avatar = id } else { patch.cover = id }
                 try await social.update(patch)
             } catch {
-                self.error = (error as? SocialError)?.message ?? error.localizedDescription
+                self.error = error.socialMessage
             }
         }
     }
@@ -889,7 +894,11 @@ struct EditProfileView: View {
         Task {
             var patch = SocialService.ProfilePatch()
             patch.avatar = ""
-            try? await social.update(patch)
+            do {
+                try await social.update(patch)
+            } catch {
+                self.error = error.socialMessage
+            }
         }
     }
 
@@ -897,6 +906,11 @@ struct EditProfileView: View {
         let name = SocialFormat.normalizedUsername(username)
         guard SocialFormat.isValidUsername(name) else {
             error = "Юзернейм: 3–24 символа — латиница, цифры, точка и подчёркивание"
+            return
+        }
+        let heightText = height.trimmingCharacters(in: .whitespaces)
+        guard heightText.isEmpty || Int(heightText).map({ (100...250).contains($0) }) == true else {
+            error = "Рост — от 100 до 250 см или пусто"
             return
         }
         saving = true
@@ -918,7 +932,7 @@ struct EditProfileView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 dismiss()
             } catch {
-                self.error = (error as? SocialError)?.message ?? error.localizedDescription
+                self.error = error.socialMessage
             }
         }
     }

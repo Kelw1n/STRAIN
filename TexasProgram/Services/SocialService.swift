@@ -16,6 +16,16 @@ struct SocialError: LocalizedError, Equatable {
     static let signedOut = SocialError(message: "Сначала создай профиль STRAIN во вкладке «Профиль».", status: 401)
 }
 
+extension Error {
+    /// Текст ошибки для человека. Отменённый запрос — ушли с экрана или набрали
+    /// следующую букву поиска — не ошибка: для него `nil`, и плашка не мигает.
+    var socialMessage: String? {
+        if self is CancellationError { return nil }
+        if (self as? URLError)?.code == .cancelled { return nil }
+        return (self as? SocialError)?.message ?? localizedDescription
+    }
+}
+
 // MARK: - Код входа
 
 /// Код входа хранится в связке ключей: она переживает переустановку приложения
@@ -70,6 +80,10 @@ final class SocialService {
     /// Меняется после каждой публикации или удаления: ленты по нему перезагружаются.
     private(set) var feedVersion = 0
 
+    /// Последняя загруженная лента: при переходе между вкладками она видна сразу,
+    /// а свежая подгружается без пустого экрана со спиннером.
+    @ObservationIgnored var feedCache: [FeedScope: SocialFeedPage] = [:]
+
     var isSignedIn: Bool { token != nil }
 
     static let defaultServer = "https://strain-feed.onrender.com"
@@ -109,7 +123,8 @@ final class SocialService {
         json: Encodable? = nil,
         data: Data? = nil,
         contentType: String? = nil,
-        requiresAuth: Bool = false
+        requiresAuth: Bool = false,
+        token tokenOverride: String? = nil
     ) async throws -> T {
         guard var components = URLComponents(string: serverURL + "/v2" + path) else {
             throw SocialError(message: "Неверный адрес сервера")
@@ -119,7 +134,7 @@ final class SocialService {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
-        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let token = tokenOverride ?? token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         else if requiresAuth { throw SocialError.signedOut }
         if let json {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -133,13 +148,15 @@ final class SocialService {
         do {
             (body, response) = try await session.data(for: request)
         } catch {
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { throw CancellationError() }
             throw SocialError.offline
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let message = (try? JSONDecoder().decode(ErrorBody.self, from: body).error)
                 ?? (status == 503 ? "Сервер ленты ещё не настроен или перезапускается." : "Ошибка сервера (\(status))")
-            if status == 401 && token != nil && path == "/me" { signOut() }
+            // Профиль удалён на сервере — выходим. Но не при проверке чужого кода входа.
+            if status == 401 && tokenOverride == nil && token != nil && path == "/me" { signOut() }
             throw SocialError(message: message, status: status)
         }
         if T.self == Empty.self { return Empty() as! T }
@@ -173,15 +190,10 @@ final class SocialService {
         guard cleaned.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else {
             throw SocialError(message: "Код входа — 64 символа из цифр и латинских букв a–f")
         }
-        let previous = token
-        token = cleaned
-        do {
-            me = try await request("GET", "/me")
-            setToken(cleaned)
-        } catch {
-            token = previous
-            throw error
-        }
+        // Код проверяем отдельно: неверный код не должен трогать текущий вход.
+        let user: SocialUser = try await request("GET", "/me", token: cleaned)
+        setToken(cleaned)
+        me = user
     }
 
     /// Код из копии подхватываем молча, только если своего профиля ещё нет.
@@ -198,12 +210,18 @@ final class SocialService {
 
     func deleteAccount() async throws {
         let _: Empty = try await request("DELETE", "/me", requiresAuth: true)
+        // Неотправленные посты удалённого профиля не должны уйти от имени следующего.
+        for draft in outbox { SocialOutboxStore.remove(draft.clientId) }
+        outbox = []
         signOut()
     }
 
     private func setToken(_ value: String?) {
         token = value
         SocialKeychain.save(value)
+        // Другой профиль — программу и медали в него надо отправить заново.
+        UserDefaults.standard.removeObject(forKey: "social_sync_fingerprint")
+        feedCache = [:]
         feedVersion += 1
     }
 
@@ -407,6 +425,9 @@ final class SocialService {
             defer { isFlushing = false }
             for var draft in outbox {
                 do {
+                    if draft.uploadedPhotos.count != draft.photoCount {
+                        draft.uploadedPhotos = Array(repeating: nil, count: draft.photoCount)
+                    }
                     for index in 0..<draft.photoCount where draft.uploadedPhotos[index] == nil {
                         guard let data = SocialOutboxStore.photo(draft.clientId, index) else { continue }
                         draft.uploadedPhotos[index] = try await uploadImage(data)
@@ -428,7 +449,7 @@ final class SocialService {
                     outbox = SocialOutboxStore.loadAll()
                     feedVersion += 1
                 } catch {
-                    outboxError = (error as? SocialError)?.message ?? error.localizedDescription
+                    outboxError = error.socialMessage
                     break
                 }
             }
