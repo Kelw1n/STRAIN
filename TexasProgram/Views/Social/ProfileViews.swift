@@ -618,6 +618,7 @@ struct EditProfileView: View {
     @State private var avatarItem: PhotosPickerItem?
     @State private var coverItem: PhotosPickerItem?
     @State private var showingCamera = false
+    @State private var showingAvatarGallery = false
     @State private var showingCode = false
     @State private var confirmSignOut = false
     @State private var confirmDelete = false
@@ -654,6 +655,7 @@ struct EditProfileView: View {
                 }
             }
             .onAppear(perform: fill)
+            .photosPicker(isPresented: $showingAvatarGallery, selection: $avatarItem, matching: .images)
             .onChange(of: avatarItem) { _, item in upload(item, kind: .avatar) }
             .onChange(of: coverItem) { _, item in upload(item, kind: .cover) }
             .cameraSheet(isPresented: $showingCamera) { image in upload(image, kind: .avatar) }
@@ -703,7 +705,8 @@ struct EditProfileView: View {
                 }
             Menu {
                 Button { showingCamera = true } label: { Label("Снять фото", systemImage: "camera") }
-                PhotosPicker(selection: $avatarItem, matching: .images) {
+                // Не PhotosPicker прямо в меню: оттуда он на iOS не открывается.
+                Button { showingAvatarGallery = true } label: {
                     Label("Выбрать из галереи", systemImage: "photo.on.rectangle")
                 }
                 if social.me?.avatar != nil {
