@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// Вкладка «Друзья»: поиск по юзернейму и люди, которые недавно тренировались.
+/// Вкладка «Друзья»: поиск по юзернейму, люди, которые недавно тренировались,
+/// и личные сообщения.
 struct CommunityView: View {
     var onCreateProfile: () -> Void
 
+    private enum Part: Hashable { case people, messages }
+
+    @State private var section: Part = .people
     @State private var query = ""
     @State private var people: [SocialUserShort] = []
     @State private var loading = false
@@ -16,58 +20,17 @@ struct CommunityView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    searchField
-                    if !social.isSignedIn {
-                        Button(action: onCreateProfile) {
-                            HStack {
-                                Image(systemName: "person.crop.circle.badge.plus")
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundStyle(Theme.accent)
-                                Text("Создай профиль, чтобы подписываться на друзей")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .multilineTextAlignment(.leading)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(Color.white.opacity(0.35))
-                            }
-                            .padding(16)
-                            .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    if social.isSignedIn {
+                        Picker("Раздел", selection: $section) {
+                            Text("Люди").tag(Part.people)
+                            Text(social.unreadMessages > 0 ? "Сообщения · \(social.unreadMessages)" : "Сообщения").tag(Part.messages)
                         }
-                        .buttonStyle(.pressable)
+                        .pickerStyle(.segmented)
                     }
-
-                    Text(query.isEmpty ? "НЕДАВНО ТРЕНИРОВАЛИСЬ" : "НАЙДЕНО")
-                        .font(.system(size: 12, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(Color.white.opacity(0.45))
-                        .padding(.top, 6)
-
-                    if let error, people.isEmpty {
-                        SocialErrorCard(message: error) { Task { await search() } }
-                    } else if people.isEmpty && !loading {
-                        Text(query.isEmpty ? "Пока никого. Позови друзей в STRAIN — их юзернеймы появятся здесь." : "Никого с таким юзернеймом")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.white.opacity(0.5))
-                            .padding(.vertical, 12)
-                    }
-
-                    VStack(spacing: 0) {
-                        ForEach(people) { person in
-                            PersonRow(person: person, onOpen: { path.append(FeedRoute.user(person.username)) }) { updated in
-                                if let index = people.firstIndex(where: { $0.id == updated.id }) { people[index] = updated }
-                            }
-                            if person.id != people.last?.id {
-                                Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 64)
-                            }
-                        }
-                    }
-                    .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .opacity(people.isEmpty ? 0 : 1)
-
-                    if loading && people.isEmpty {
-                        ProgressView().tint(.white).frame(maxWidth: .infinity).padding(20)
+                    if section == .messages && social.isSignedIn {
+                        ChatListView { path.append(FeedRoute.chat($0)) }
+                    } else {
+                        peopleSection
                     }
                     Spacer(minLength: 110)
                 }
@@ -75,7 +38,9 @@ struct CommunityView: View {
                 .padding(.top, 8)
             }
             .scrollDismissesKeyboard(.interactively)
-            .refreshable { await search() }
+            .refreshable {
+                if section == .people { await search() } else { await social.refreshUnread() }
+            }
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Друзья")
             .navigationBarTitleDisplayMode(.large)
@@ -89,6 +54,63 @@ struct CommunityView: View {
             try? await Task.sleep(nanoseconds: query.isEmpty ? 0 : 350_000_000)
             guard !Task.isCancelled else { return }
             await search()
+        }
+    }
+
+    @ViewBuilder
+    private var peopleSection: some View {
+        searchField
+        if !social.isSignedIn {
+            Button(action: onCreateProfile) {
+                HStack {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                    Text("Создай профиль, чтобы подписываться на друзей")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.35))
+                }
+                .padding(16)
+                .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.pressable)
+        }
+
+        Text(query.isEmpty ? "НЕДАВНО ТРЕНИРОВАЛИСЬ" : "НАЙДЕНО")
+            .font(.system(size: 12, weight: .bold))
+            .tracking(1.2)
+            .foregroundStyle(Color.white.opacity(0.45))
+            .padding(.top, 6)
+
+        if let error, people.isEmpty {
+            SocialErrorCard(message: error) { Task { await search() } }
+        } else if people.isEmpty && !loading {
+            Text(query.isEmpty ? "Пока никого. Позови друзей в STRAIN — их юзернеймы появятся здесь." : "Никого с таким юзернеймом")
+                .font(.system(size: 14))
+                .foregroundStyle(Color.white.opacity(0.5))
+                .padding(.vertical, 12)
+        }
+
+        VStack(spacing: 0) {
+            ForEach(people) { person in
+                PersonRow(person: person, onOpen: { path.append(FeedRoute.user(person.username)) }) { updated in
+                    if let index = people.firstIndex(where: { $0.id == updated.id }) { people[index] = updated }
+                }
+                if person.id != people.last?.id {
+                    Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 64)
+                }
+            }
+        }
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .opacity(people.isEmpty ? 0 : 1)
+
+        if loading && people.isEmpty {
+            ProgressView().tint(.white).frame(maxWidth: .infinity).padding(20)
         }
     }
 

@@ -44,6 +44,7 @@ struct TexasProgramApp: App {
             case .active:
                 restTimer.refresh()
                 SocialService.shared.flushOutbox()
+                Task { await SocialService.shared.refreshUnread() }
             case .background:
                 // Свёрнутое приложение iOS может выгрузить — тренировку пишем сразу.
                 WorkoutSessionManager.shared.writeNow()

@@ -10,6 +10,8 @@ struct PostCardView: View {
     var onOpen: () -> Void
     var onOpenAuthor: () -> Void
     var onChange: (SocialPost?) -> Void
+    /// Упражнения с весами и под фото — в списке тренировок профиля.
+    var showsWorkout = false
 
     @State private var confirmDelete = false
     @State private var error: String?
@@ -46,6 +48,11 @@ struct PostCardView: View {
                 // Карусель не внутри кнопки: кнопка перехватывала свайп между фото.
                 PhotoCarousel(ids: post.photos)
                     .onTapGesture(perform: onOpen)
+                if showsWorkout {
+                    PostWorkoutSummary(workout: post.workout, limit: 4)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onOpen)
+                }
             }
 
             PostActions(post: post, onComments: onOpen, onChange: { onChange($0) })
@@ -319,6 +326,8 @@ struct PostDetailView: View {
     @State private var error: String?
     @State private var composing = false
     @State private var confirmDelete = false
+    /// На какой комментарий отвечаем; `nil` — обычный комментарий к посту.
+    @State private var replyingTo: SocialComment?
     @FocusState private var typing: Bool
 
     private var social: SocialService { .shared }
@@ -336,9 +345,19 @@ struct PostDetailView: View {
                 PostTitleBlock(post: post)
                 PostStatsRow(post: post)
                 if !post.photos.isEmpty { PhotoCarousel(ids: post.photos) }
-                PostActions(post: post, onComments: { if social.isSignedIn { composing = true } }, onChange: update)
+                PostActions(post: post, onComments: { compose(replyTo: nil) }, onChange: update)
 
                 exercises
+
+                // Чужую тренировку можно взять себе: её саму или программу автора.
+                if social.me?.id != post.author.id && !post.workout.exercises.isEmpty {
+                    CopyProgramButton(
+                        days: [],
+                        author: post.author.username,
+                        workout: (title: post.title, workout: post.workout),
+                        loadsAuthorProgram: true
+                    )
+                }
 
                 commentsSection
                 composeButton
@@ -433,35 +452,11 @@ struct PostDetailView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(Color.white.opacity(0.5))
             }
-            ForEach(comments) { comment in
-                HStack(alignment: .top, spacing: 10) {
-                    Button { openAuthor?(comment.author.username) } label: {
-                        AvatarView(imageId: comment.author.avatar, username: comment.author.username, size: 34)
-                    }
-                    .buttonStyle(.plain)
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text("@\(comment.author.username)")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                            Text(SocialFormat.ago(comment.date))
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.white.opacity(0.4))
-                        }
-                        Text(comment.text)
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color.white.opacity(0.88))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .textSelection(.enabled)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .contextMenu {
-                    if canDelete(comment) {
-                        Button(role: .destructive) { delete(comment) } label: {
-                            Label("Удалить комментарий", systemImage: "trash")
-                        }
-                    }
+            ForEach(SocialComment.threads(comments)) { thread in
+                commentRow(thread.root)
+                ForEach(thread.replies) { reply in
+                    commentRow(reply)
+                        .padding(.leading, 44)
                 }
             }
             if let error {
@@ -471,12 +466,59 @@ struct PostDetailView: View {
         .padding(.top, 6)
     }
 
+    private func commentRow(_ comment: SocialComment) -> some View {
+        let small = comment.isReply
+        return HStack(alignment: .top, spacing: 10) {
+            Button { openAuthor?(comment.author.username) } label: {
+                AvatarView(imageId: comment.author.avatar, username: comment.author.username, size: small ? 28 : 34)
+            }
+            .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("@\(comment.author.username)")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(SocialFormat.ago(comment.date))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.4))
+                }
+                (comment.replyToUsername.map { Text("@\($0) ").foregroundColor(Theme.accent) } ?? Text(""))
+                    + Text(comment.text).foregroundColor(Color.white.opacity(0.88))
+                if social.isSignedIn {
+                    Button("Ответить") { compose(replyTo: comment) }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .padding(.top, 2)
+                }
+            }
+            .font(.system(size: 15))
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = comment.text
+            } label: { Label("Скопировать", systemImage: "doc.on.doc") }
+            if canDelete(comment) {
+                Button(role: .destructive) { delete(comment) } label: {
+                    Label(comment.isReply ? "Удалить ответ" : "Удалить комментарий", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func compose(replyTo comment: SocialComment?) {
+        guard social.isSignedIn else { return }
+        replyingTo = comment
+        composing = true
+    }
+
     /// Кнопка «Написать комментарий»: само поле — в листе снизу. Лист перекрывает
     /// плавающую панель вкладок, а поле внизу экрана оказалось бы под ней.
     @ViewBuilder
     private var composeButton: some View {
         if social.isSignedIn {
-            Button { composing = true } label: {
+            Button { compose(replyTo: nil) } label: {
                 HStack(spacing: 10) {
                     AvatarView(imageId: social.me?.avatar, username: social.me?.username ?? "s", size: 32)
                     Text("Написать комментарий…")
@@ -500,11 +542,29 @@ struct PostDetailView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Комментарий")
-                .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+            HStack {
+                Text(replyingTo.map { "Ответ @\($0.author.username)" } ?? "Комментарий")
+                    .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Spacer()
+                if replyingTo != nil {
+                    Button { replyingTo = nil } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(Color.white.opacity(0.4))
+                    }
+                    .accessibilityLabel("Не отвечать, а написать к посту")
+                }
+            }
+            if let replyingTo {
+                Text(replyingTo.text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .lineLimit(1)
+            }
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Поддержи или спроси про технику", text: $draft, axis: .vertical)
+                TextField(replyingTo == nil ? "Поддержи или спроси про технику" : "Твой ответ", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($typing)
                     .font(.system(size: 16))
@@ -530,7 +590,7 @@ struct PostDetailView: View {
             Spacer(minLength: 0)
         }
         .padding(20)
-        .presentationDetents([.height(230)])
+        .presentationDetents([.height(replyingTo == nil ? 230 : 260)])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color(white: 0.07))
         .preferredColorScheme(.dark)
@@ -562,9 +622,10 @@ struct PostDetailView: View {
         Task {
             defer { sending = false }
             do {
-                let comment = try await social.addComment(post.id, text: text)
+                let comment = try await social.addComment(post.id, text: text, replyTo: replyingTo?.id)
                 withAnimation(Motion.snappy) { comments.append(comment) }
                 draft = ""
+                replyingTo = nil
                 var updated = post
                 updated.comments += 1
                 update(updated)
@@ -581,9 +642,11 @@ struct PostDetailView: View {
         Task {
             do {
                 try await social.deleteComment(comment.id)
-                withAnimation(Motion.snappy) { comments.removeAll { $0.id == comment.id } }
+                // С корнем ветки на сервере уходят и ответы на него.
+                let removed = comments.filter { $0.id == comment.id || $0.replyTo == comment.id }.count
+                withAnimation(Motion.snappy) { comments.removeAll { $0.id == comment.id || $0.replyTo == comment.id } }
                 var updated = post
-                updated.comments = max(0, updated.comments - 1)
+                updated.comments = max(0, updated.comments - removed)
                 update(updated)
             } catch {
                 self.error = error.socialMessage

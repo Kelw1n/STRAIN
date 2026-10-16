@@ -109,8 +109,16 @@ struct MainTabView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                LiquidGlassTabBar(selectedTab: tabSelection)
+                // В переписке поле ввода внизу — панель вкладок там лишняя.
+                if !AppChrome.shared.hidesTabBar {
+                    LiquidGlassTabBar(
+                        selectedTab: tabSelection,
+                        badges: SocialService.shared.unreadMessages > 0 ? [.community] : []
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: AppChrome.shared.hidesTabBar)
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: sessionManager.isRunning && !sessionManager.isPresented)
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: restTimer.isRunning)
         }
@@ -146,7 +154,17 @@ struct MainTabView: View {
             // Лента: неотправленные посты — в путь, программа и медали — в профиль.
             SocialService.shared.flushOutbox()
             SocialService.shared.scheduleSync(from: profile)
-            Task { await SocialService.shared.refreshMe() }
+            Task {
+                await SocialService.shared.refreshMe()
+                await SocialService.shared.refreshUnread()
+            }
+        }
+        // Непрочитанные сообщения — раз в минуту, пока приложение открыто.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await SocialService.shared.refreshUnread()
+            }
         }
         .onChange(of: profile.completionLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         .onChange(of: profile.bodyWeightLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }

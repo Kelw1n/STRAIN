@@ -232,8 +232,85 @@ struct SocialComment: Codable, Hashable, Identifiable, Sendable {
     let author: SocialAuthor
     let text: String
     let createdAt: Double
+    /// Корневой комментарий ветки, если это ответ.
+    var replyTo: String?
+    /// Кому отвечают — «@имя» перед текстом ответа.
+    var replyToUsername: String?
 
     var date: Date { Date(timeIntervalSince1970: createdAt / 1000) }
+    var isReply: Bool { replyTo != nil }
+
+    /// Корневые комментарии по порядку, под каждым — его ответы.
+    static func threads(_ comments: [SocialComment]) -> [SocialCommentThread] {
+        let ids = Set(comments.map(\.id))
+        var replies: [String: [SocialComment]] = [:]
+        var roots: [SocialComment] = []
+        for comment in comments {
+            // Ответ на удалённый корень показываем как обычный комментарий.
+            if let root = comment.replyTo, ids.contains(root) {
+                replies[root, default: []].append(comment)
+            } else {
+                roots.append(comment)
+            }
+        }
+        return roots.map { SocialCommentThread(root: $0, replies: replies[$0.id] ?? []) }
+    }
+}
+
+/// Комментарий и ответы под ним.
+struct SocialCommentThread: Identifiable, Hashable, Sendable {
+    let root: SocialComment
+    let replies: [SocialComment]
+    var id: String { root.id }
+}
+
+// MARK: - Личные сообщения
+
+struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
+    let id: String
+    let text: String
+    let fromMe: Bool
+    let createdAt: Double
+    var read: Bool
+
+    var date: Date { Date(timeIntervalSince1970: createdAt / 1000) }
+
+    init(id: String, text: String, fromMe: Bool, createdAt: Double, read: Bool = false) {
+        self.id = id
+        self.text = text
+        self.fromMe = fromMe
+        self.createdAt = createdAt
+        self.read = read
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? false
+        createdAt = try c.decodeIfPresent(Double.self, forKey: .createdAt) ?? 0
+        read = try c.decodeIfPresent(Bool.self, forKey: .read) ?? false
+    }
+}
+
+/// Переписка в списке: с кем, последнее сообщение и сколько не прочитано.
+struct SocialChat: Codable, Hashable, Identifiable, Sendable {
+    let user: SocialUserShort
+    let last: SocialMessage
+    var unread: Int
+
+    var id: String { user.id }
+}
+
+struct SocialChatList: Codable, Sendable {
+    let chats: [SocialChat]
+    let unread: Int
+}
+
+struct SocialChatPage: Codable, Sendable {
+    let user: SocialUserShort
+    let messages: [SocialMessage]
+    let next: Double?
 }
 
 /// Пост, который ещё не ушёл на сервер: лежит на телефоне вместе с фото

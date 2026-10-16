@@ -154,6 +154,54 @@ final class SocialTests: XCTestCase {
         XCTAssertTrue(tiny.downscaled() === tiny, "маленькое фото не перерисовывается")
     }
 
+    // MARK: Копирование и ответы
+
+    func testCopyWorkoutTakesWorkingWeight() throws {
+        let workout = try JSONDecoder().decode(SocialWorkout.self, from: Data(#"""
+        {"exercises":[{"name":"Присед","sets":[{"reps":5,"weight":100},{"reps":3,"weight":140},{"reps":3,"weight":140}]},
+                      {"name":"Подтягивания","sets":[{"reps":10,"weight":0},{"reps":8,"weight":0}]}]}
+        """#.utf8))
+        let program = ProgramCopy.program(workout: workout, title: "Тяжёлая пятница", name: "Пятница")
+        XCTAssertEqual(program.days.count, 1)
+        XCTAssertEqual(program.days[0].title, "Тяжёлая пятница")
+        let squat = program.days[0].exercises[0]
+        XCTAssertEqual(squat.sets, 3)
+        XCTAssertEqual(squat.reps, "3", "повторы рабочего веса")
+        XCTAssertEqual(squat.kilograms, 140)
+        let pullups = program.days[0].exercises[1]
+        XCTAssertNil(pullups.kilograms)
+        XCTAssertEqual(pullups.loadText, "свой вес")
+        XCTAssertTrue(program.isRunnable)
+    }
+
+    func testCopyProgramDaysParsesLoads() {
+        XCTAssertEqual(ProgramCopy.kilograms("100 кг"), 100)
+        XCTAssertEqual(ProgramCopy.kilograms("82,5 кг"), 82.5)
+        XCTAssertEqual(ProgramCopy.kilograms("220 lbs"), 100)
+        XCTAssertNil(ProgramCopy.kilograms("RPE 8"))
+        let days = SocialProgramBuilder.days(for: texas())
+        let program = ProgramCopy.program(days: days, name: "Программа @tim")
+        XCTAssertEqual(program.days.count, days.count)
+        XCTAssertEqual(program.days.map(\.number), Array(1...days.count))
+        XCTAssertEqual(program.days[0].exercises.count, days[0].exercises.count)
+        XCTAssertTrue(program.isRunnable)
+        XCTAssertFalse(ProgramProfile(customProgram: program).workoutPlan.weeks.isEmpty)
+    }
+
+    func testCommentThreadsGroupReplies() throws {
+        let comments = try JSONDecoder().decode([SocialComment].self, from: Data(#"""
+        [{"id":"a","postId":"p","author":{"id":"1","username":"a"},"text":"вопрос","createdAt":1},
+         {"id":"b","postId":"p","author":{"id":"2","username":"b"},"text":"ответ","createdAt":2,"replyTo":"a","replyToUsername":"a"},
+         {"id":"c","postId":"p","author":{"id":"3","username":"c"},"text":"просто","createdAt":3},
+         {"id":"d","postId":"p","author":{"id":"1","username":"a"},"text":"спасибо","createdAt":4,"replyTo":"a","replyToUsername":"b"},
+         {"id":"e","postId":"p","author":{"id":"1","username":"a"},"text":"сирота","createdAt":5,"replyTo":"x"}]
+        """#.utf8))
+        let threads = SocialComment.threads(comments)
+        XCTAssertEqual(threads.map(\.root.id), ["a", "c", "e"], "ответ без корня — как обычный")
+        XCTAssertEqual(threads[0].replies.map(\.id), ["b", "d"])
+        XCTAssertEqual(threads[0].replies[1].replyToUsername, "b")
+    }
+
     // MARK: Копия
 
     /// Старые копии с Android писали пустую дату выгрузки — копия всё равно читается.

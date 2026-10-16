@@ -80,6 +80,9 @@ final class SocialService {
     /// Меняется после каждой публикации или удаления: ленты по нему перезагружаются.
     private(set) var feedVersion = 0
 
+    /// Непрочитанные личные сообщения — точка на вкладке «Друзья».
+    private(set) var unreadMessages = 0
+
     /// Последняя загруженная лента: при переходе между вкладками она видна сразу,
     /// а свежая подгружается без пустого экрана со спиннером.
     @ObservationIgnored var feedCache: [FeedScope: SocialFeedPage] = [:]
@@ -205,6 +208,7 @@ final class SocialService {
     func signOut() {
         setToken(nil)
         me = nil
+        unreadMessages = 0
         feedVersion += 1
     }
 
@@ -350,12 +354,54 @@ final class SocialService {
         try await request("GET", "/posts/\(postId)/comments")
     }
 
-    func addComment(_ postId: String, text: String) async throws -> SocialComment {
-        try await request("POST", "/posts/\(postId)/comments", json: ["text": text], requiresAuth: true)
+    private struct CommentBody: Encodable {
+        let text: String
+        let replyTo: String?
+    }
+
+    /// `replyTo` — комментарий, на который отвечаем: ответ встанет в его ветку.
+    func addComment(_ postId: String, text: String, replyTo: String? = nil) async throws -> SocialComment {
+        try await request("POST", "/posts/\(postId)/comments", json: CommentBody(text: text, replyTo: replyTo), requiresAuth: true)
     }
 
     func deleteComment(_ id: String) async throws {
         let _: Empty = try await request("DELETE", "/comments/\(id)", requiresAuth: true)
+    }
+
+    // MARK: Личные сообщения
+
+    func chats() async throws -> SocialChatList {
+        let list: SocialChatList = try await request("GET", "/chats", requiresAuth: true)
+        unreadMessages = list.unread
+        return list
+    }
+
+    /// Сколько непрочитанных — для точки на вкладке «Друзья».
+    func refreshUnread() async {
+        guard token != nil else { unreadMessages = 0; return }
+        struct Unread: Decodable { let unread: Int }
+        if let value: Unread = try? await request("GET", "/chats/unread") { unreadMessages = value.unread }
+    }
+
+    /// Сообщения переписки, новые первыми. `after` — только пришедшие позже.
+    func messages(with username: String, before: Double? = nil, after: Double? = nil) async throws -> SocialChatPage {
+        var query: [URLQueryItem] = []
+        if let before { query.append(URLQueryItem(name: "before", value: String(Int(before)))) }
+        if let after { query.append(URLQueryItem(name: "after", value: String(Int(after)))) }
+        return try await request("GET", "/chats/\(username)/messages", query: query, requiresAuth: true)
+    }
+
+    private struct MessageBody: Encodable {
+        let text: String
+        let clientId: String
+    }
+
+    func sendMessage(to username: String, text: String, clientId: String = UUID().uuidString.lowercased()) async throws -> SocialMessage {
+        try await request("POST", "/chats/\(username)/messages", json: MessageBody(text: text, clientId: clientId), requiresAuth: true)
+    }
+
+    func deleteMessage(_ id: String) async throws {
+        let _: Empty = try await request("DELETE", "/messages/\(id)", requiresAuth: true)
     }
 
     // MARK: Фото

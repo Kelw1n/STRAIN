@@ -247,8 +247,10 @@ enum FeedRoute: Hashable {
     case user(String)
     case followers(String)
     case following(String)
-    case program(SocialProgramDay)
+    /// День программы; `all` и `author` — чтобы скопировать к себе один день или всю программу.
+    case program(SocialProgramDay, all: [SocialProgramDay], author: String?)
     case badges([SocialBadge])
+    case chat(String)
 
     @MainActor @ViewBuilder
     func destination(path: Binding<NavigationPath>, onPostChange: @escaping (String, SocialPost?) -> Void) -> some View {
@@ -265,10 +267,12 @@ enum FeedRoute: Hashable {
             PeopleListView(title: "Подписчики", load: { try await SocialService.shared.followers(of: username) }, path: path)
         case .following(let username):
             PeopleListView(title: "Подписки", load: { try await SocialService.shared.following(of: username) }, path: path)
-        case .program(let day):
-            ProgramDayView(day: day)
+        case .program(let day, let all, let author):
+            ProgramDayView(day: day, allDays: all, author: author)
         case .badges(let badges):
             BadgeListView(badges: badges)
+        case .chat(let username):
+            ChatView(username: username, path: path)
         }
     }
 }

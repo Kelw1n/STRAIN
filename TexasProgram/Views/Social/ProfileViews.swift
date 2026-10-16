@@ -163,8 +163,19 @@ struct UserProfileView: View {
                     path: $path,
                     primaryAction: {
                         if !user.isMe && SocialService.shared.isSignedIn {
-                            FollowButton(isFollowing: user.isFollowing) { toggleFollow(user) }
-                                .disabled(busy)
+                            HStack(spacing: 10) {
+                                FollowButton(isFollowing: user.isFollowing) { toggleFollow(user) }
+                                    .disabled(busy)
+                                Button { path.append(FeedRoute.chat(user.username)) } label: {
+                                    Text("Написать")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 50)
+                                        .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                }
+                                .buttonStyle(.pressable)
+                            }
                         }
                     },
                     onAchievements: { path.append(FeedRoute.badges(user.achievements)) },
@@ -369,7 +380,8 @@ struct ProfileContent<Action: View>: View {
                     post: post,
                     onOpen: { path.append(FeedRoute.post(post)) },
                     onOpenAuthor: {},
-                    onChange: { onPostChange(post.id, $0) }
+                    onChange: { onPostChange(post.id, $0) },
+                    showsWorkout: true
                 )
                 Divider().overlay(Color.white.opacity(0.07))
                     .onAppear { if post.id == posts.last?.id { onLoadMore() } }
@@ -391,7 +403,7 @@ struct ProfileContent<Action: View>: View {
         VStack(spacing: 12) {
             ForEach(Array(programs.enumerated()), id: \.offset) { _, day in
                 Button {
-                    path.append(FeedRoute.program(day))
+                    path.append(FeedRoute.program(day, all: programs, author: user.isMe ? nil : user.username))
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1088,6 +1100,9 @@ struct BadgeListView: View {
 
 struct ProgramDayView: View {
     let day: SocialProgramDay
+    var allDays: [SocialProgramDay] = []
+    /// Чья программа; `nil` — своя, копировать нечего.
+    var author: String?
 
     var body: some View {
         ScrollView {
@@ -1122,6 +1137,11 @@ struct ProgramDayView: View {
                     }
                 }
                 .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+                if let author {
+                    CopyProgramButton(days: allDays.isEmpty ? [day] : allDays, author: author)
+                        .padding(.top, 6)
+                }
             }
             .padding(16)
             .padding(.bottom, 110)
