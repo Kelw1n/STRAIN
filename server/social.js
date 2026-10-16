@@ -12,6 +12,13 @@ const USERNAME = /^[a-z0-9_.]{3,24}$/;
 const RESERVED = new Set(['admin', 'strain', 'support', 'root', 'api', 'me', 'help', 'official']);
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const PAGE = 20;
+// «Тренируется сейчас» гаснет само, если телефон давно не присылал статус.
+const LIVE_TTL_MS = 20 * 60 * 1000;
+// «Печатает…» держится несколько секунд после последнего сигнала.
+const TYPING_TTL_MS = 6000;
+// Насколько раньше начинать следующее «что изменилось».
+const SINCE_OVERLAP_MS = 2000;
+const REACTIONS = new Set(['🔥', '💪', '👍', '❤️', '😂', '😮']);
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -91,6 +98,20 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 -- Фото в сообщении: id из images, хозяин фото — отправитель.
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS image TEXT;
+-- Ответ на сообщение, реакции {userId: emoji} и время последней правки:
+-- открытая переписка подтягивает всё, что поменялось после прошлого запроса.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to TEXT REFERENCES messages(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS messages_updated ON messages (updated_at);
+-- «Тренируется сейчас», недельная сводка для рейтинга и когда последний раз
+-- открывали «Активность».
+ALTER TABLE users ADD COLUMN IF NOT EXISTS live JSONB;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS live_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stats JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS activity_seen_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS comments_reply_user ON comments (reply_to_user);
 CREATE INDEX IF NOT EXISTS messages_pair ON messages (LEAST(sender, recipient), GREATEST(sender, recipient), created_at DESC);
 CREATE INDEX IF NOT EXISTS messages_unread ON messages (recipient) WHERE read_at IS NULL;
 `;
@@ -238,9 +259,16 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             following: counts.following,
             isFollowing: counts.is_following,
             isMe,
+            live: liveView(row),
+            lastSeen: new Date(row.last_seen).getTime(),
             createdAt: new Date(row.created_at).getTime()
         };
     }
+
+    // Статус тренировки — только свежий: приложение могли закрыть, не завершив её.
+    const liveView = (row) => (row.live && row.live_at && Date.now() - new Date(row.live_at).getTime() < LIVE_TTL_MS
+        ? { ...row.live, updatedAt: new Date(row.live_at).getTime() }
+        : null);
 
     const shortUser = (row) => ({ id: row.id, username: row.username, avatar: row.avatar_id, bio: row.bio });
 
@@ -332,6 +360,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (body.cover !== undefined) set('cover_id', imageIds([body.cover])[0] || null);
         if (body.programs !== undefined) set('programs', JSON.stringify(jsonLimited(body.programs, 64_000, [])));
         if (body.achievements !== undefined) set('achievements', JSON.stringify(jsonLimited(body.achievements, 16_000, [])));
+        if (body.stats !== undefined) set('stats', JSON.stringify(jsonLimited(body.stats, 4_000, {})));
         if (sets.length === 0) return res.json(await userView(me, me));
         params.push(me.id);
         const rows = await q(`UPDATE users SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params);
@@ -575,17 +604,40 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     // MARK: Личные сообщения
 
-    const messageView = (row, me) => ({
-        id: row.id,
-        text: row.text,
-        image: row.image || null,
-        fromMe: row.sender === me.id,
-        createdAt: new Date(row.created_at).getTime(),
-        read: row.read_at !== null
-    });
+    // Реакции в ответе: какие, сколько и стоит ли среди них своя.
+    function reactionsView(reactions, me) {
+        const counts = new Map();
+        for (const [user, emoji] of Object.entries(reactions || {})) {
+            const entry = counts.get(emoji) || { emoji, count: 0, mine: false };
+            entry.count += 1;
+            if (user === me.id) entry.mine = true;
+            counts.set(emoji, entry);
+        }
+        return [...counts.values()];
+    }
+
+    const messageView = (row, me) => (row.deleted_at
+        ? { id: row.id, deleted: true, fromMe: row.sender === me.id, createdAt: new Date(row.created_at).getTime(), text: '' }
+        : {
+            id: row.id,
+            text: row.text,
+            image: row.image || null,
+            fromMe: row.sender === me.id,
+            createdAt: new Date(row.created_at).getTime(),
+            read: row.read_at !== null,
+            reactions: reactionsView(row.reactions, me),
+            replyTo: row.reply_id
+                ? { id: row.reply_id, text: row.reply_deleted ? '' : row.reply_text, image: row.reply_deleted ? null : row.reply_image, fromMe: row.reply_sender === me.id }
+                : null
+        });
+
+    const MESSAGE_SELECT = `
+        SELECT m.*, r.id AS reply_id, r.text AS reply_text, r.image AS reply_image, r.sender AS reply_sender,
+               r.deleted_at IS NOT NULL AS reply_deleted
+        FROM messages m LEFT JOIN messages r ON r.id = m.reply_to`;
 
     async function unreadCount(me) {
-        const [row] = await q('SELECT count(*)::int AS count FROM messages WHERE recipient = $1 AND read_at IS NULL', [me.id]);
+        const [row] = await q('SELECT count(*)::int AS count FROM messages WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL', [me.id]);
         return row.count;
     }
 
@@ -595,7 +647,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const rows = await q(
             `SELECT DISTINCT ON (other) other, m.*
              FROM (SELECT *, CASE WHEN sender = $1 THEN recipient ELSE sender END AS other
-                   FROM messages WHERE sender = $1 OR recipient = $1) m
+                   FROM messages WHERE (sender = $1 OR recipient = $1) AND deleted_at IS NULL) m
              ORDER BY other, created_at DESC`,
             [me.id]
         );
@@ -604,7 +656,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [others])).map((u) => [u.id, u]));
         const unread = new Map((await q(
             `SELECT sender, count(*)::int AS count FROM messages
-             WHERE recipient = $1 AND read_at IS NULL GROUP BY sender`,
+             WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL GROUP BY sender`,
             [me.id]
         )).map((row) => [row.sender, row.count]));
         const chats = rows
@@ -613,7 +665,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             .map((row) => ({
                 user: shortUser(users.get(row.other)),
                 last: messageView(row, me),
-                unread: unread.get(row.other) || 0
+                unread: unread.get(row.other) || 0,
+                live: liveView(users.get(row.other))
             }));
         res.json({ chats, unread: chats.reduce((sum, chat) => sum + chat.unread, 0) });
     }));
@@ -623,36 +676,68 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         res.json({ unread: await unreadCount(me) });
     }));
 
+    // Кто сейчас печатает кому: в памяти сервера, этого хватает на несколько секунд.
+    const typing = new Map();
+
+    router.post('/chats/:username/typing', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const other = await userByName(req.params.username);
+        typing.set(`${me.id}:${other.id}`, Date.now());
+        if (typing.size > 5000) {
+            const now = Date.now();
+            for (const [key, at] of typing) if (now - at > TYPING_TTL_MS) typing.delete(key);
+        }
+        res.json({ success: true });
+    }));
+
     // Сообщения переписки, новые первыми; открытая переписка помечается прочитанной.
+    // `since` — всё, что появилось или поменялось (реакции, прочтение, удаление)
+    // начиная с `serverTime` прошлого ответа.
     router.get('/chats/:username/messages', wrap(async (req, res) => {
         const me = await requireViewer(req);
         const other = await userByName(req.params.username);
+        const serverTime = Date.now();
         const before = Number(req.query.before);
         const after = Number(req.query.after);
+        const since = Number(req.query.since);
         const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
         const params = [me.id, other.id, limit];
         // Время в ответе — в миллисекундах, а в базе — в микросекундах: сравниваем
         // по миллисекундам, иначе «новее, чем последнее» вернуло бы его же.
-        let range = '';
-        if (Number.isFinite(after) && after > 0) {
+        let range = 'AND m.deleted_at IS NULL';
+        if (Number.isFinite(since) && since > 0) {
+            params.push(new Date(since));
+            range = `AND date_trunc('milliseconds', m.updated_at) >= $${params.length}`;
+        } else if (Number.isFinite(after) && after > 0) {
             params.push(new Date(after));
-            range = `AND date_trunc('milliseconds', created_at) > $${params.length}`;
+            range = `AND m.deleted_at IS NULL AND date_trunc('milliseconds', m.created_at) > $${params.length}`;
         } else if (Number.isFinite(before) && before > 0) {
             params.push(new Date(before));
-            range = `AND date_trunc('milliseconds', created_at) < $${params.length}`;
+            range = `AND m.deleted_at IS NULL AND date_trunc('milliseconds', m.created_at) < $${params.length}`;
         }
         const rows = await q(
-            `SELECT * FROM messages
-             WHERE ((sender = $1 AND recipient = $2) OR (sender = $2 AND recipient = $1)) ${range}
-             ORDER BY created_at DESC LIMIT $3`,
+            `${MESSAGE_SELECT}
+             WHERE ((m.sender = $1 AND m.recipient = $2) OR (m.sender = $2 AND m.recipient = $1)) ${range}
+             ORDER BY m.created_at DESC LIMIT $3`,
             params
         );
-        await q('UPDATE messages SET read_at = now() WHERE sender = $1 AND recipient = $2 AND read_at IS NULL', [other.id, me.id]);
+        await q(
+            `UPDATE messages SET read_at = now(), updated_at = now()
+             WHERE sender = $1 AND recipient = $2 AND read_at IS NULL AND deleted_at IS NULL`,
+            [other.id, me.id]
+        );
         const messages = rows.map((row) => messageView(row, me));
+        const typedAt = typing.get(`${other.id}:${me.id}`) || 0;
         res.json({
             user: shortUser(other),
             messages,
-            next: rows.length === limit ? messages[messages.length - 1].createdAt : null
+            next: !since && rows.length === limit ? messages[messages.length - 1].createdAt : null,
+            // С запасом: часы базы и сервера могут чуть расходиться, а повтор
+            // уже полученного приложение просто заменит тем же.
+            serverTime: serverTime - SINCE_OVERLAP_MS,
+            typing: serverTime - typedAt < TYPING_TTL_MS,
+            lastSeen: new Date(other.last_seen).getTime(),
+            live: liveView(other)
         });
     }));
 
@@ -668,23 +753,162 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (image && !(await q('SELECT 1 FROM images WHERE id = $1 AND owner = $2', [image, me.id]))[0]) {
             throw new HttpError(400, 'Фото не найдено');
         }
+        // Ответить можно только на сообщение из этой же переписки.
+        let replyTo = null;
+        if (req.body && req.body.replyTo) {
+            const target = (await q(
+                `SELECT id FROM messages WHERE id = $1 AND deleted_at IS NULL
+                 AND ((sender = $2 AND recipient = $3) OR (sender = $3 AND recipient = $2))`,
+                [String(req.body.replyTo), me.id, other.id]
+            ))[0];
+            if (!target) throw new HttpError(404, 'Сообщение удалено');
+            replyTo = target.id;
+        }
         const clientId = text(req.body && req.body.clientId, 64) || null;
         const inserted = await q(
-            `INSERT INTO messages (id, sender, recipient, client_id, text, image) VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (sender, client_id) DO NOTHING RETURNING *`,
-            [newId(), me.id, other.id, clientId, body, image]
+            `INSERT INTO messages (id, sender, recipient, client_id, text, image, reply_to) VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (sender, client_id) DO NOTHING RETURNING id`,
+            [newId(), me.id, other.id, clientId, body, image, replyTo]
         );
+        typing.delete(`${me.id}:${other.id}`);
         // Повтор отправки после обрыва связи возвращает уже созданное сообщение.
-        const row = inserted[0] || (await q('SELECT * FROM messages WHERE sender = $1 AND client_id = $2', [me.id, clientId]))[0];
+        const id = inserted[0] ? inserted[0].id : (await q('SELECT id FROM messages WHERE sender = $1 AND client_id = $2', [me.id, clientId]))[0].id;
+        const row = (await q(`${MESSAGE_SELECT} WHERE m.id = $1`, [id]))[0];
         res.status(inserted[0] ? 201 : 200).json(messageView(row, me));
     }));
 
+    // Реакция на сообщение: одна от человека, повтор той же — снимает её.
+    router.post('/messages/:id/react', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const emoji = req.body && req.body.emoji ? String(req.body.emoji) : null;
+        if (emoji && !REACTIONS.has(emoji)) throw new HttpError(400, 'Такой реакции нет');
+        const row = (await q(
+            'SELECT * FROM messages WHERE id = $1 AND (sender = $2 OR recipient = $2) AND deleted_at IS NULL',
+            [req.params.id, me.id]
+        ))[0];
+        if (!row) throw new HttpError(404, 'Сообщение не найдено');
+        const reactions = { ...(row.reactions || {}) };
+        if (!emoji || reactions[me.id] === emoji) delete reactions[me.id];
+        else reactions[me.id] = emoji;
+        await q('UPDATE messages SET reactions = $2, updated_at = now() WHERE id = $1', [row.id, JSON.stringify(reactions)]);
+        const updated = (await q(`${MESSAGE_SELECT} WHERE m.id = $1`, [row.id]))[0];
+        res.json(messageView(updated, me));
+    }));
+
+    // Удаление своего сообщения: у собеседника оно тоже пропадёт при следующем обновлении.
     router.delete('/messages/:id', wrap(async (req, res) => {
         const me = await requireViewer(req);
-        const rows = await q('DELETE FROM messages WHERE id = $1 AND sender = $2 RETURNING id, image', [req.params.id, me.id]);
-        if (!rows[0]) throw new HttpError(404, 'Сообщение не найдено');
-        if (rows[0].image) await q('DELETE FROM images WHERE id = $1 AND owner = $2', [rows[0].image, me.id]);
+        const own = (await q('SELECT id, image FROM messages WHERE id = $1 AND sender = $2 AND deleted_at IS NULL', [req.params.id, me.id]))[0];
+        if (!own) throw new HttpError(404, 'Сообщение не найдено');
+        await q(
+            `UPDATE messages SET deleted_at = now(), updated_at = now(), text = '', image = NULL, reactions = '{}' WHERE id = $1`,
+            [own.id]
+        );
+        if (own.image) await q('DELETE FROM images WHERE id = $1 AND owner = $2', [own.image, me.id]);
         res.json({ success: true });
+    }));
+
+    // MARK: Тренируется сейчас
+
+    // Статус идущей тренировки: что за тренировка, какое упражнение и сколько подходов.
+    router.put('/me/live', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const body = req.body || {};
+        const live = {
+            title: text(body.title, 80),
+            exercise: text(body.exercise, 80),
+            done: Math.round(number(body.done, 0, 100) || 0),
+            total: Math.round(number(body.total, 0, 100) || 0),
+            setsDone: Math.round(number(body.setsDone, 0, 500) || 0),
+            setsTotal: Math.round(number(body.setsTotal, 0, 500) || 0),
+            startedAt: number(body.startedAt, 0, 9e15) || Date.now()
+        };
+        await q('UPDATE users SET live = $2, live_at = now() WHERE id = $1', [me.id, JSON.stringify(live)]);
+        res.json({ success: true });
+    }));
+
+    router.delete('/me/live', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        await q('UPDATE users SET live = NULL, live_at = NULL WHERE id = $1', [me.id]);
+        res.json({ success: true });
+    }));
+
+    // Кто из подписок тренируется прямо сейчас.
+    router.get('/live', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT u.* FROM follows f JOIN users u ON u.id = f.followee
+             WHERE f.follower = $1 AND u.live IS NOT NULL AND u.live_at > $2
+             ORDER BY u.live_at DESC LIMIT 50`,
+            [me.id, new Date(Date.now() - LIVE_TTL_MS)]
+        );
+        res.json(rows.map((row) => ({ user: shortUser(row), live: liveView(row) })));
+    }));
+
+    // MARK: Рейтинг недели
+
+    // Свой профиль и подписки со сводкой недели, которую присылают сами приложения:
+    // в ней все тренировки, а не только выложенные в ленту.
+    router.get('/leaderboard', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT u.* FROM users u
+             WHERE u.id = $1 OR u.id IN (SELECT followee FROM follows WHERE follower = $1)`,
+            [me.id]
+        );
+        res.json(rows.map((row) => ({ user: { ...shortUser(row), isMe: row.id === me.id }, stats: row.stats || {} })));
+    }));
+
+    // MARK: Активность
+
+    const ACTIVITY_SQL = `
+        SELECT 'like' AS kind, l.created_at, l.user_id AS actor, p.id AS post_id, p.title AS post_title, NULL AS text
+        FROM likes l JOIN posts p ON p.id = l.post_id WHERE p.user_id = $1 AND l.user_id <> $1
+        UNION ALL
+        SELECT 'comment', c.created_at, c.user_id, p.id, p.title, c.text
+        FROM comments c JOIN posts p ON p.id = c.post_id
+        WHERE p.user_id = $1 AND c.user_id <> $1 AND (c.reply_to_user IS NULL OR c.reply_to_user <> $1)
+        UNION ALL
+        SELECT 'reply', c.created_at, c.user_id, p.id, p.title, c.text
+        FROM comments c JOIN posts p ON p.id = c.post_id WHERE c.reply_to_user = $1 AND c.user_id <> $1
+        UNION ALL
+        SELECT 'follow', f.created_at, f.follower, NULL, NULL, NULL FROM follows f WHERE f.followee = $1`;
+
+    async function unseenActivity(me) {
+        const [row] = await q(`SELECT count(*)::int AS count FROM (${ACTIVITY_SQL}) a WHERE a.created_at > $2`, [me.id, me.activity_seen_at]);
+        return row.count;
+    }
+
+    // Лайки, комментарии, ответы и новые подписчики — новые первыми.
+    router.get('/activity', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(`SELECT * FROM (${ACTIVITY_SQL}) a ORDER BY a.created_at DESC LIMIT 80`, [me.id]);
+        const actors = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [[...new Set(rows.map((r) => r.actor))]])).map((u) => [u.id, u]));
+        const seen = new Date(me.activity_seen_at).getTime();
+        res.json({
+            items: rows.filter((row) => actors.has(row.actor)).map((row) => ({
+                kind: row.kind,
+                actor: shortUser(actors.get(row.actor)),
+                postId: row.post_id,
+                postTitle: row.post_title,
+                text: row.text,
+                createdAt: new Date(row.created_at).getTime(),
+                unseen: new Date(row.created_at).getTime() > seen
+            })),
+            unseen: await unseenActivity(me)
+        });
+    }));
+
+    router.post('/activity/seen', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        await q('UPDATE users SET activity_seen_at = now() WHERE id = $1', [me.id]);
+        res.json({ success: true });
+    }));
+
+    // Точки на вкладках: непрочитанные сообщения и новая активность одним запросом.
+    router.get('/badges', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        res.json({ messages: await unreadCount(me), activity: await unseenActivity(me) });
     }));
 
     router.use((error, req, res, next) => {
