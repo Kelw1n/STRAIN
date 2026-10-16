@@ -6,19 +6,28 @@ struct WorkoutHubView: View {
     var onOpenBench: ((Int) -> Void)?
 
     @State private var showingGoalSheet = false
+    @State private var showingStreak = false
     @State private var showingProgramCatalog = false
     @State private var showingCustomizing = false
-
-    private var schedule: WorkoutSchedule { profile.schedule }
-    private var focus: ScheduledWorkout? { schedule.focus }
+    @State private var showingToday = false
 
     var body: some View {
-        NavigationStack {
+        // Расписание — один раз за проход: каждое обращение к profile.schedule
+        // заново раскладывает весь план по датам.
+        let schedule = profile.schedule
+        let focus = schedule.focus
+        return NavigationStack {
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(spacing: 16) {
-                        // Карточка 1: Серия активностей (Streak Grid)
-                        activityStreakCard
+                        // Карточка 1: Серия активностей — по нажатию календарь месяца
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            showingStreak = true
+                        } label: {
+                            activityStreakCard
+                        }
+                        .buttonStyle(.pressable)
 
                         // Карточки 2 и 3: Цель и Программы
                         HStack(spacing: 12) {
@@ -26,9 +35,9 @@ struct WorkoutHubView: View {
                             Button {
                                 showingGoalSheet = true
                             } label: {
-                                goalCard
+                                goalCard(schedule: schedule, focus: focus)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
 
                             // Карточка «Программы»
                             Button {
@@ -36,7 +45,7 @@ struct WorkoutHubView: View {
                             } label: {
                                 programsCard
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                         }
 
                         // Карточка сегодняшней программы
@@ -52,7 +61,7 @@ struct WorkoutHubView: View {
                     .padding(.top, 12)
                 }
                 .scrollIndicators(.hidden)
-                .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+                .screenBackground()
 
                 // Плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ» / «ПРОДОЛЖИТЬ»
                 if let focus {
@@ -76,15 +85,17 @@ struct WorkoutHubView: View {
                                     Text("НАЧАТЬ ТРЕНИРОВКУ")
                                 }
                             }
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .font(.system(size: 16, weight: .black, design: Theme.fontDesign))
                             .tracking(1.2)
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
                             .background(Color.white, in: Capsule())
                             .shadow(color: Color.white.opacity(0.18), radius: 14, y: 4)
+                            .contentTransition(.opacity)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
+                        .animation(Motion.snappy, value: isRunning)
                         .padding(.horizontal, 18)
                         .padding(.bottom, 74) // Зазор для Liquid Glass Dock
                     }
@@ -93,21 +104,47 @@ struct WorkoutHubView: View {
             .navigationTitle("Тренировка")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                // Прежний экран «Сегодня» с точками подходов: «Главное» теперь лента.
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        showingGoalSheet = true
+                        showingToday = true
                     } label: {
-                        Image(systemName: "figure.run.circle")
-                            .font(.system(size: 20, weight: .semibold))
+                        Image(systemName: "list.bullet.rectangle.portrait")
+                            .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(.white)
                     }
+                    .accessibilityLabel("План на сегодня")
                 }
             }
             .sheet(isPresented: $showingGoalSheet) {
                 GoalSettingsSheet(profile: profile)
             }
-            .sheet(isPresented: $showingProgramCatalog) {
+            .sheet(isPresented: $showingStreak) {
+                StreakCalendarSheet(profile: profile)
+            }
+            .sheet(isPresented: $showingToday, onDismiss: {
+                WorkoutSessionManager.shared.representAfterSheet()
+            }) {
+                TodayView(profile: profile, onSettings: {}, onOpenBench: onOpenBench, onStartWorkout: onStartWorkout)
+            }
+            .sheet(isPresented: $showingProgramCatalog, onDismiss: {
+                WorkoutSessionManager.shared.representAfterSheet()
+            }) {
                 PlanView(profile: profile, onOpenBench: onOpenBench)
+            }
+            // Тренировку начали из дня в «Программах» — лист закрываем, иначе
+            // полноэкранная тренировка под ним так и не покажется.
+            .onChange(of: WorkoutSessionManager.shared.isPresented) { _, presented in
+                if presented {
+                    showingProgramCatalog = false
+                    showingToday = false
+                }
+            }
+            .onChange(of: WorkoutSessionManager.shared.showingReplaceConfirm) { _, showing in
+                if showing {
+                    showingProgramCatalog = false
+                    showingToday = false
+                }
             }
         }
         .preferredColorScheme(.dark)
@@ -116,7 +153,8 @@ struct WorkoutHubView: View {
     // MARK: - Карточка «Серия активностей» (Скриншот 4)
 
     private var activityStreakCard: some View {
-        let streak = profile.weekStreak
+        // Серия по календарю, как в листе: неделя с тренировкой засчитана.
+        let streak = (current: profile.calendarStreak().weeks, best: 0)
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Серия активностей")
@@ -139,7 +177,7 @@ struct WorkoutHubView: View {
                         .foregroundStyle(streak.current > 0 ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.white.opacity(0.2)))
 
                     Text("\(streak.current)")
-                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .font(.system(size: 20, weight: .black, design: Theme.fontDesign))
                         .foregroundStyle(.white)
 
                     Text(streakWord(streak.current))
@@ -157,37 +195,52 @@ struct WorkoutHubView: View {
                 .foregroundStyle(Color.white.opacity(0.45))
         }
         .padding(18)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
+    /// Календарь текущего месяца, как у REBRN: столбцы — дни недели с понедельника,
+    /// строки — недели. Закрытые дни залиты акцентом, прошедшие — серым,
+    /// будущие тренировочные обведены акцентом, сегодня подчёркнуто.
     private var monthDotsMatrix: some View {
-        let completedSet = Set(profile.completionLog.map { Calendar.current.startOfDay(for: $0.date) })
-        let today = Calendar.current.startOfDay(for: Date())
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let today = calendar.startOfDay(for: Date())
+        let done = Set(profile.completionLog.map { calendar.startOfDay(for: $0.date) })
+        let trainingWeekdays = Set(profile.weekdays)
+        let rows = Self.monthRows(containing: today, calendar: calendar)
 
-        return HStack(spacing: 7) {
-            ForEach(0..<4, id: \.self) { weekOffset in
-                VStack(spacing: 7) {
-                    ForEach(0..<7, id: \.self) { dayOffset in
-                        let daysAgo = (3 - weekOffset) * 7 + (6 - dayOffset)
-                        let targetDate = Calendar.current.date(byAdding: .day, value: -daysAgo, to: today) ?? today
-                        let isDone = completedSet.contains(targetDate)
-                        let isToday = targetDate == today
-
-                        Circle()
-                            .fill(isDone ? Theme.accent : Color.clear)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(
-                                        isToday ? Color.white : (isDone ? Theme.accent : Color.white.opacity(0.18)),
-                                        lineWidth: isToday ? 2 : 1.2
-                                    )
-                            )
-                            .frame(width: 10, height: 10)
+        return VStack(spacing: 7) {
+            ForEach(rows.indices, id: \.self) { row in
+                HStack(spacing: 7) {
+                    ForEach(0..<7, id: \.self) { column in
+                        MonthDot(
+                            date: rows[row][column],
+                            today: today,
+                            isDone: rows[row][column].map { done.contains($0) } ?? false,
+                            isTrainingDay: rows[row][column].map {
+                                trainingWeekdays.contains(calendar.component(.weekday, from: $0))
+                            } ?? false
+                        )
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Тренировок в этом месяце: \(rows.joined().compactMap { $0 }.filter { done.contains($0) }.count)")
+    }
+
+    /// Дни месяца по неделям; пустые клетки до первого и после последнего числа — `nil`.
+    static func monthRows(containing date: Date, calendar: Calendar) -> [[Date?]] {
+        guard let month = calendar.dateInterval(of: .month, for: date),
+              let days = calendar.range(of: .day, in: .month, for: date) else { return [] }
+        let firstWeekday = calendar.component(.weekday, from: month.start)
+        let leading = (firstWeekday - calendar.firstWeekday + 7) % 7
+        var cells: [Date?] = Array(repeating: nil, count: leading)
+        for offset in 0..<days.count {
+            cells.append(calendar.date(byAdding: .day, value: offset, to: month.start))
+        }
+        while cells.count % 7 != 0 { cells.append(nil) }
+        return stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<$0 + 7]) }
     }
 
     private func streakWord(_ count: Int) -> String {
@@ -202,7 +255,7 @@ struct WorkoutHubView: View {
 
     // MARK: - Карточки «Цель» и «Программы»
 
-    private var goalCard: some View {
+    private func goalCard(schedule: WorkoutSchedule, focus: ScheduledWorkout?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Цель")
@@ -214,30 +267,36 @@ struct WorkoutHubView: View {
                     .foregroundStyle(Color.white.opacity(0.3))
             }
 
+            // Как у REBRN: кольцо из стольких частей, сколько тренировок в неделе;
+            // каждая сделанная закрашивает одну. С понедельника — снова с нуля.
+            let goal = profile.weekGoal()
             ZStack {
-                Circle()
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 3)
-                    .frame(width: 44, height: 44)
+                SegmentedRing(total: goal.target, filled: goal.done)
+                    .frame(width: 48, height: 48)
 
-                Image(systemName: "calendar")
+                Image(systemName: goal.done >= goal.target ? "checkmark" : "calendar")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(goal.done >= goal.target ? Theme.accent : Color.white.opacity(0.85))
+                    .contentTransition(.symbolEffect(.replace))
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
+            .animation(Motion.snappy, value: goal.done)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(schedule.today != nil ? "Сегодня" : "Завтра")
+                Text(goal.done >= goal.target ? "Цель недели есть" : "На этой неделе")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
-                Text("Тренировка в \(String(format: "%02d:%02d", profile.reminderHour, profile.reminderMinute))")
+                    .lineLimit(1)
+                Text("\(min(goal.done, 99)) из \(goal.target) \(RuPlural.word(goal.target, "тренировки", "тренировок", "тренировок"))")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.45))
                     .lineLimit(1)
+                    .contentTransition(.numericText())
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var programsCard: some View {
@@ -275,7 +334,7 @@ struct WorkoutHubView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     // MARK: - Превью сегодняшней тренировки
@@ -312,7 +371,7 @@ struct WorkoutHubView: View {
                         Spacer()
 
                         Text(ex.sets > 0 ? "\(ex.sets) × \(ex.reps)" : ex.reps)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(Color.white.opacity(0.65))
                     }
                     .padding(.vertical, 4)
@@ -320,7 +379,7 @@ struct WorkoutHubView: View {
             }
         }
         .padding(18)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var restDayCard: some View {
@@ -338,6 +397,67 @@ struct WorkoutHubView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+/// Кольцо цели недели: по части на тренировку, сделанные — акцентом.
+struct SegmentedRing: View {
+    let total: Int
+    let filled: Int
+    var lineWidth: CGFloat = 4
+
+    var body: some View {
+        let count = max(total, 1)
+        // Зазор между частями — в долях окружности; у одной части зазора нет.
+        let gap = count > 1 ? 0.035 : 0
+        ZStack {
+            ForEach(0..<count, id: \.self) { index in
+                let start = Double(index) / Double(count) + gap / 2
+                let end = Double(index + 1) / Double(count) - gap / 2
+                Circle()
+                    .trim(from: start, to: max(start, end))
+                    .stroke(index < filled ? Theme.accent : Color.white.opacity(0.14),
+                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+        }
+        .padding(lineWidth / 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Сделано \(min(filled, count)) из \(count)")
+    }
+}
+
+/// Клетка календаря серии.
+private struct MonthDot: View {
+    let date: Date?
+    let today: Date
+    let isDone: Bool
+    let isTrainingDay: Bool
+
+    var body: some View {
+        ZStack {
+            if let date {
+                if isDone {
+                    Circle().fill(Theme.accent)
+                } else if date < today {
+                    Circle().fill(Color.white.opacity(0.16))
+                } else {
+                    Circle().strokeBorder(
+                        isTrainingDay ? Theme.accent : Color.white.opacity(0.18),
+                        lineWidth: 1.6
+                    )
+                }
+            }
+        }
+        .frame(width: 11, height: 11)
+        .overlay(alignment: .bottom) {
+            if date == today {
+                Capsule()
+                    .fill(Color.white)
+                    .frame(width: 8, height: 2)
+                    .offset(y: 5)
+            }
+        }
     }
 }

@@ -60,7 +60,6 @@ fun TodayScreen(
     onHoldSet: (ScheduledWorkout, com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onUpdateProfile: (com.texasprogram.app.model.ProgramProfile) -> Unit,
     onOpenHistory: (String) -> Unit,
-    onOpenBroTracker: () -> Unit = {},
     onSettings: () -> Unit,
     onStartWorkout: (ScheduledWorkout) -> Unit = {},
     contentPadding: PaddingValues
@@ -174,7 +173,9 @@ fun TodayScreen(
         }
 
         // Вспомогательные упражнения — из дня программы, жим — из волны.
-        itemsIndexed(exercises, key = { _, item -> item.name }) { index, exercise ->
+        // Ключ с номером: одно упражнение может стоять в дне дважды,
+        // а одинаковые ключи роняют список.
+        itemsIndexed(exercises, key = { index, item -> "ex-$index-${item.key}" }) { index, exercise ->
             ExerciseCard(
                 exercise = exercise,
                 modifier = Modifier.appearIn(index + 4),
@@ -185,7 +186,14 @@ fun TodayScreen(
                     done = profile.completedSets(focus.week, focus.day.number, exercise)
                 ) { dot -> onToggleSet(focus, exercise, dot) },
                 onOpenHistory = { onOpenHistory(exercise.name) },
-                hint = profile.accessoryHint(exercise, focus.week, focus.day.number)
+                hint = profile.accessoryHint(exercise, focus.week, focus.day.number),
+                step = profile.weightStep(exercise.name),
+                onSelectStep = { step -> onUpdateProfile(profile.setWeightStep(step, exercise.name)) },
+                onKeepWeight = {
+                    profile.history(exercise.name).lastOrNull { it.entries.isNotEmpty() }?.best?.let { working ->
+                        onUpdateProfile(profile.dismissStall(exercise.name, working))
+                    }
+                }
             )
         }
 

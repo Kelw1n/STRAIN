@@ -97,7 +97,7 @@ struct ProgressScreen: View {
                 RingProgress(value: ratio, lineWidth: 12) {
                     VStack(spacing: 0) {
                         Text("\(Int((ratio * 100).rounded()))")
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .font(.system(size: 24, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         Text("%").font(.caption2).foregroundStyle(.secondary)
                     }
@@ -110,7 +110,7 @@ struct ProgressScreen: View {
                         .foregroundStyle(Theme.accentGradient)
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
                         Text("\(completed)")
-                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .font(.system(size: 40, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         Text("из \(profile.totalDays)").foregroundStyle(.secondary)
                     }
@@ -136,7 +136,7 @@ struct ProgressScreen: View {
                             .foregroundStyle(Theme.accentGradient)
                         HStack(alignment: .firstTextBaseline, spacing: 5) {
                             Text("\(streakValue.current)")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
                                 .contentTransition(.numericText())
                             Text(weekWord(streakValue.current)).foregroundStyle(.secondary)
                         }
@@ -148,7 +148,7 @@ struct ProgressScreen: View {
                         Text("ЛУЧШАЯ").font(.caption2.weight(.bold)).tracking(1.3)
                             .foregroundStyle(.secondary)
                         Text("\(streakValue.best)")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(.system(size: 22, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(streakValue.current >= streakValue.best ? AnyShapeStyle(Theme.success) : AnyShapeStyle(.secondary))
                     }
                 }
@@ -185,7 +185,7 @@ struct ProgressScreen: View {
                     .font(.headline)
                 Spacer()
                 Text("\(done)/\(total)")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                     .foregroundStyle(Theme.recordGradient)
                     .contentTransition(.numericText())
             }
@@ -208,7 +208,7 @@ struct ProgressScreen: View {
                     let done = week.days.filter { profile.isCompleted(week: week.number, day: $0.number) }.count
                     HStack(spacing: 6) {
                         Text("\(week.number)")
-                            .font(.system(size: 11, weight: .bold, design: .rounded).monospacedDigit())
+                            .font(.system(size: 11, weight: .bold, design: Theme.fontDesign).monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 18, alignment: .trailing)
                         ForEach(week.days) { day in
@@ -266,7 +266,7 @@ struct PRRow: View {
             Text(title).font(.subheadline)
             Spacer()
             Text(WeightFormat.kilogramsPrecise(value))
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .contentTransition(.numericText())
         }
@@ -556,22 +556,24 @@ struct SettingsView: View {
                     }
                 }
 
-                if profile.supportsAutoregulation {
-                    Section {
-                        Toggle("Подстраивать веса", isOn: $profile.autoregulationEnabled)
-                    } header: {
-                        Text("Авторегуляция")
-                    } footer: {
-                        Text("После тяжёлого дня приложение спросит, как прошёл рабочий подход по каждому движению, и посчитает следующую неделю от ответа. Каждое движение идёт своим темпом. Пока не отвечаешь, прибавка обычная — 2,5 кг.")
-                    }
-                }
-
                 Section {
                     Toggle("Вести вес подсобки", isOn: $profile.accessoryProgressionEnabled)
                 } header: {
                     Text("Подсобка")
                 } footer: {
-                    Text("У подсобки в плане веса нет — только повторы. Приложение возьмёт вес из прошлой тренировки и подскажет, когда прибавить: сначала добираешь верх диапазона во всех подходах, потом растёт вес на 2,5 кг. Выключишь — вернутся просто РПЕ и повторы.")
+                    Text("У подсобки в плане веса нет — только повторы. Приложение возьмёт вес из прошлой тренировки и подскажет, когда прибавить: сначала добираешь верх диапазона во всех подходах, потом растёт вес на шаг прибавки. Три тренировки подряд без роста — предложит сбросить вес и набрать заново. Выключишь — вернутся просто РПЕ и повторы.")
+                }
+
+                Section {
+                    Picker("Шаг прибавки", selection: $profile.defaultWeightStep) {
+                        ForEach(ProgramProfile.weightStepOptions, id: \.self) { step in
+                            Text(ProgramProfile.weightStepTitle(step)).tag(step)
+                        }
+                    }
+                } header: {
+                    Text("Блины в зале")
+                } footer: {
+                    Text(ProgramProfile.weightStepHint(profile.defaultWeightStep) + " Для отдельного упражнения шаг можно поменять в его меню на тренировке или в подсказке под упражнением — например, 2,5 кг на блоке и 5 кг на жиме, если мелких блинов нет.")
                 }
 
                 Section {
@@ -653,7 +655,7 @@ struct SettingsView: View {
                             Label("Отмечено тренировок", systemImage: "waveform.path.ecg")
                             Spacer()
                             Text("\(profile.completedBenchCount) / \(UpperLowerCalculator.benchSessionCount)")
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                                 .foregroundStyle(Theme.recordGradient)
                         }
                         Button("Сбросить отметки жима", role: .destructive) {
@@ -823,8 +825,18 @@ struct SettingsView: View {
 
         do {
             let archive = try BackupService.archive(from: try Data(contentsOf: url))
+            guard let first = archive.profiles.first else {
+                backupMessage = "В файле нет профилей"
+                return
+            }
             let count = BackupService.restore(archive, into: modelContext, existing: profiles)
-            backupMessage = "Восстановлено профилей: \(count)"
+            SocialService.shared.adoptBackupToken(archive.socialToken)
+            // Сразу открываем восстановленный профиль: иначе после переустановки
+            // на экране остаётся новый пустой, и кажется, что копия не применилась.
+            backupMessage = "Восстановлено профилей: \(count). Открыт «\(first.name)»."
+            if first.id != profile.profileID.uuidString {
+                closeThen { activeProfileID = first.id }
+            }
         } catch {
             backupMessage = "Файл не читается как копия STRAIN"
         }
@@ -988,7 +1000,7 @@ struct PeakingView: View {
             TextField("кг", value: value, format: .number)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .frame(width: 80)
             Text("кг").font(.caption).foregroundStyle(.secondary)
         }

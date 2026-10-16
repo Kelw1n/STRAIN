@@ -49,7 +49,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,8 +61,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import android.graphics.ImageDecoder
-import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -72,12 +74,12 @@ import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.service.ScheduledWorkout
 import com.texasprogram.app.service.WorkoutSessionManager
+import com.texasprogram.app.model.SocialPostDraft
+import com.texasprogram.app.model.SocialWorkout
+import com.texasprogram.app.service.SocialService
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PersonAdd
 
-enum class AndroidWorkoutEffort(val title: String, val color: Color) {
-    EASY("ЛЕГКО", Color(0xFF2ED573)),
-    NORMAL("НОРМАЛЬНО", Color(0xFFFFA533)),
-    VERY_HARD("ОЧЕНЬ ТЯЖЕЛО", Color(0xFFFF4757))
-}
 
 @Composable
 fun WorkoutCompletionSummaryScreen(
@@ -96,8 +98,12 @@ fun WorkoutCompletionSummaryScreen(
             else profile.note(workout.week, workout.day.number)
         )
     }
-    var selectedEffort by remember { mutableStateOf<AndroidWorkoutEffort?>(null) }
-    val selectedImages = remember { mutableStateListOf<Uri>() }
+    /// Оценка усилия 1–10; пусто — не ставили.
+    var effortScore by remember { mutableStateOf<Int?>(null) }
+    // Фото и файл снимка переживают пересоздание экрана, пока открыта камера.
+    val selectedImages = rememberSaveable(
+        saver = listSaver<SnapshotStateList<Uri>, Uri>(save = { it.toList() }, restore = { it.toMutableStateList() })
+    ) { mutableStateListOf() }
 
     var durationSeconds by remember { mutableIntStateOf(maxOf(WorkoutSessionManager.elapsedSeconds, 60)) }
     var showingDurationPicker by remember { mutableStateOf(false) }
@@ -105,16 +111,31 @@ fun WorkoutCompletionSummaryScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(5)
     ) { uris ->
-        if (uris.isNotEmpty()) {
-            selectedImages.clear()
-            selectedImages.addAll(uris.take(5))
-        }
+        // Добавляем к уже выбранным и снятым, а не заменяем их.
+        uris.forEach { if (selectedImages.size < 5 && it !in selectedImages) selectedImages.add(it) }
     }
+    val context = LocalContext.current
+    // Снимок сразу из экрана итогов: не надо выходить в «Камеру» и искать фото в галерее.
+    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = cameraUri
+        if (ok && uri != null && selectedImages.size < 5) selectedImages.add(uri)
+    }
+    fun openCamera() {
+        val uri = cameraFileUri(context)
+        cameraUri = uri
+        runCatching { cameraLauncher.launch(uri) }
+    }
+    fun openGallery() {
+        photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    /// Публиковать ли тренировку в ленту — по умолчанию да, если есть профиль.
+    var publishToFeed by remember { mutableStateOf(true) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D0D0F))
+            .background(Color(0xFF000000))
     ) {
         Column(
             modifier = Modifier
@@ -159,7 +180,7 @@ fun WorkoutCompletionSummaryScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Увидят подписчики в твоём профиле",
+                        text = "Время, усилие и заметка — в историю",
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
@@ -172,7 +193,7 @@ fun WorkoutCompletionSummaryScreen(
             // ФОТО И ВИДЕО (0/5)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "ФОТО И ВИДЕО (${selectedImages.size}/5)",
+                    text = "ФОТО (${selectedImages.size}/5)",
                     color = Color.White.copy(alpha = 0.45f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -183,48 +204,32 @@ fun WorkoutCompletionSummaryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF141416))
+                        .background(Color(0xFF161616))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
-                        .clickable {
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                            )
-                        }
-                        .padding(vertical = if (selectedImages.isEmpty()) 28.dp else 16.dp, horizontal = 16.dp),
+                        .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (selectedImages.isEmpty()) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.08f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.CameraAlt,
-                                    contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.90f),
-                                    modifier = Modifier.size(26.dp)
-                                )
-                            }
-
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Добавить фото и видео",
+                                    text = "Добавь фото к тренировке",
                                     color = Color.White,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "до 5 штук · видео до 30 секунд",
+                                    text = "до 5 штук · первое ляжет на карточку для сторис",
                                     color = Color.White.copy(alpha = 0.50f),
                                     fontSize = 13.sp
                                 )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                PhotoSourceTile(Icons.Filled.CameraAlt, "Снять", large = true, modifier = Modifier.weight(1f), onClick = ::openCamera)
+                                PhotoSourceTile(Icons.Filled.PhotoLibrary, "Галерея", large = true, modifier = Modifier.weight(1f), onClick = ::openGallery)
                             }
                         }
                     } else {
@@ -235,19 +240,9 @@ fun WorkoutCompletionSummaryScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             selectedImages.forEachIndexed { index, uri ->
-                                val context = LocalContext.current
-                                val bitmap = remember(uri) {
-                                    try {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                                            ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
-                                        } else {
-                                            @Suppress("DEPRECATION")
-                                            android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                                        }
-                                    } catch (_: Exception) {
-                                        null
-                                    }
-                                }
+                                // Миниатюра 80 dp: 12 Мп целиком в память не тянем — на слабых
+                                // телефонах пять таких фото роняли экран итогов.
+                                val bitmap = remember(uri) { decodeThumbnail(context, uri, 240) }
 
                                 Box(
                                     modifier = Modifier
@@ -286,6 +281,10 @@ fun WorkoutCompletionSummaryScreen(
                                     }
                                 }
                             }
+                            if (selectedImages.size < 5) {
+                                PhotoSourceTile(Icons.Filled.CameraAlt, "Снять", large = false, onClick = ::openCamera)
+                                PhotoSourceTile(Icons.Filled.PhotoLibrary, "Галерея", large = false, onClick = ::openGallery)
+                            }
                         }
                     }
                 }
@@ -296,7 +295,7 @@ fun WorkoutCompletionSummaryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF141416))
+                    .background(Color(0xFF161616))
                     .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
             ) {
                 Column {
@@ -378,7 +377,7 @@ fun WorkoutCompletionSummaryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF141416))
+                        .background(Color(0xFF161616))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                         .padding(18.dp)
                 ) {
@@ -428,79 +427,25 @@ fun WorkoutCompletionSummaryScreen(
 
             // УСИЛИЕ
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "УСИЛИЕ",
-                        color = Color.White.copy(alpha = 0.45f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "Можно пропустить",
-                        color = Color.White.copy(alpha = 0.45f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    AndroidWorkoutEffort.entries.forEach { effort ->
-                        val isSelected = selectedEffort == effort
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(
-                                    if (isSelected) effort.color.copy(alpha = 0.18f)
-                                    else Color(0xFF141416)
-                                )
-                                .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
-                                    color = if (isSelected) effort.color else Color.White.copy(alpha = 0.08f),
-                                    shape = RoundedCornerShape(18.dp)
-                                )
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    selectedEffort = if (selectedEffort == effort) null else effort
-                                }
-                                .padding(vertical = 16.dp, horizontal = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) effort.color
-                                            else effort.color.copy(alpha = 0.35f)
-                                        )
-                                )
-                                Text(
-                                    text = effort.title,
-                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.70f),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
+                Text(
+                    text = "УСИЛИЕ",
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+                EffortSlider(score = effortScore, onChange = { effortScore = it })
             }
+
+            // ЛЕНТА STRAIN
+            PublishSection(publishToFeed) { publishToFeed = it }
+
+            // КАРТОЧКА ДЛЯ СТОРИС
+            ShareCardSection(
+                title = workoutTitle.ifBlank { workout.fullTitle },
+                durationSeconds = durationSeconds,
+                photo = selectedImages.firstOrNull()
+            )
         }
 
         // Нижняя фиксированная кнопка «ДАЛЬШЕ»
@@ -512,8 +457,8 @@ fun WorkoutCompletionSummaryScreen(
                     Brush.verticalGradient(
                         listOf(
                             Color.Transparent,
-                            Color(0xFF0D0D0F).copy(alpha = 0.95f),
-                            Color(0xFF0D0D0F)
+                            Color(0xFF000000).copy(alpha = 0.95f),
+                            Color(0xFF000000)
                         )
                     )
                 )
@@ -532,10 +477,24 @@ fun WorkoutCompletionSummaryScreen(
                             profile.setNote(workoutDescription, workout.week, workout.day.number)
                         } else profile
 
+                        // Пост в ленту — до завершения: потом подходы сессии уже сброшены.
+                        if (publishToFeed && SocialService.isSignedIn) {
+                            SocialService.enqueue(
+                                context,
+                                feedDraft(
+                                    title = workoutTitle.ifBlank { workout.fullTitle },
+                                    description = workoutDescription.trim(),
+                                    durationSeconds = durationSeconds,
+                                    effort = effortScore,
+                                    program = profile.programKind.title
+                                ),
+                                selectedImages.toList()
+                            )
+                        }
                         WorkoutSessionManager.finishWorkout(
                             profile = updatedProfile,
                             customDuration = durationSeconds,
-                            effort = selectedEffort?.title,
+                            effort = EffortScale.text(effortScore),
                             onUpdateProfile = onUpdateProfile
                         )
                         WorkoutSessionManager.showingSummary = false
@@ -610,4 +569,103 @@ private fun formatDurationRu(seconds: Int): String {
     val hours = seconds / 3600
     val mins = maxOf(1, (seconds % 3600) / 60)
     return if (hours > 0) "${hours}ч ${mins}м" else "${mins}м"
+}
+
+/// Фото из галереи, уменьшенное при чтении до стороны не меньше `target` пикселей.
+private fun decodeThumbnail(context: android.content.Context, uri: Uri, target: Int): android.graphics.Bitmap? = runCatching {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+    var sample = 1
+    while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= target) sample *= 2
+    context.contentResolver.openInputStream(uri)?.use {
+        android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+}.getOrNull()
+
+@Composable
+private fun PhotoSourceTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    large: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier
+            .then(if (large) Modifier.height(76.dp) else Modifier.size(80.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.07f))
+            .pressable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(if (large) 24.dp else 20.dp))
+        Text(title, color = Color.White.copy(alpha = if (large) 0.9f else 0.6f), fontSize = if (large) 14.sp else 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun PublishSection(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "ЛЕНТА",
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF161616))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (SocialService.isSignedIn) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Опубликовать в ленте STRAIN", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Фото, время, объём и все подходы с весами. Друзья смогут поставить лайк и написать комментарий.",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 12.sp
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = checked,
+                    onCheckedChange = onChange,
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Theme.accent)
+                )
+            } else {
+                Icon(Icons.Filled.PersonAdd, contentDescription = null, tint = Theme.accent)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Создай профиль во вкладке «Профиль» — и тренировки можно будет публиковать в ленту.",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+}
+
+/// Пост собирается до finishWorkout: после него менеджер сбрасывает подходы.
+private fun feedDraft(title: String, description: String, durationSeconds: Int, effort: Int?, program: String): SocialPostDraft {
+    val exercises = WorkoutSessionManager.exercises.mapNotNull { exercise ->
+        val done = exercise.sets.filter { it.isDone }
+        if (done.isEmpty()) null
+        else SocialWorkout.Exercise(exercise.prescription.name, done.map { SocialWorkout.SetLine(it.reps, it.weight, it.isRecord) })
+    }
+    return SocialPostDraft(
+        clientId = SocialService.newClientId(),
+        createdAtMillis = System.currentTimeMillis(),
+        title = title,
+        description = description,
+        durationSeconds = durationSeconds,
+        volumeKg = WorkoutSessionManager.totalTonnage,
+        sets = WorkoutSessionManager.totalCompletedSets,
+        effort = effort,
+        workout = SocialWorkout(program, exercises)
+    )
 }

@@ -166,10 +166,13 @@ sealed class LoadPrescription {
 }
 
 /// «87.5» вместо «87.50», «90» вместо «90.0» — как в iOS-версии.
+/// До двух знаков без хвостовых нулей: 52.5 и 56.25 — оба реальные веса
+/// (шаг 1,25 на тренажёрах); раньше 56.25 показывалось как 56.3.
 fun formatWeight(value: Double): String {
-    val rounded = Math.round(value * 10.0) / 10.0
-    return if (rounded == Math.floor(rounded)) rounded.toInt().toString()
-    else rounded.toString()
+    val hundredths = Math.round(value * 100.0)
+    if (hundredths % 100 == 0L) return (hundredths / 100).toString()
+    val text = String.format(java.util.Locale.US, if (hundredths % 10 == 0L) "%.1f" else "%.2f", hundredths / 100.0)
+    return text
 }
 
 data class ExercisePrescription(

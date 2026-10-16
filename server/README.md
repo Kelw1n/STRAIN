@@ -1,46 +1,50 @@
-# 🚀 STRAIN Backend (Бро-трекер и Чат)
+# Сервер STRAIN: лента тренировок
 
-Лёгкий, быстрый и надёжный бэкенд для приложения STRAIN.
+Профили, подписки, посты с фото и тренировкой, лайки и комментарии. Код —
+`server.js` (старые маршруты бро-трекера) и `social.js` (лента, `/v2/...`).
 
-- **Синхронизация профилей**: сохраняет любую кастомную программу (любое количество недель, все подсобные упражнения, реальные веса).
-- **Прямой чат**: сообщения сохраняются в каналы (`chat_<id1>_<id2>`), не затираются, поддерживают текст, результаты подходов и фотографии.
-- **Heartbeat**: быстрый пинг статуса «В сети».
+Данные ленты хранятся в Postgres. Диск бесплатного Render стирается при каждом
+засыпании сервера, поэтому база нужна отдельная — бесплатный **Neon** подходит.
 
----
+## Настройка за 10 минут
 
-## ⚡ Бесплатный деплой за 2 минуты
+### 1. База Neon (бесплатно)
 
-### Вариант 1: Koyeb (Рекомендуется — 100% бесплатно, НЕ засыпает)
+1. Открой https://neon.tech → **Sign up** → войди через GitHub.
+2. **Create project**: имя `strain`, регион **AWS Europe Central (Frankfurt)**.
+3. На странице проекта нажми **Connect** и скопируй строку подключения —
+   она начинается с `postgresql://` и заканчивается на `?sslmode=require`.
+   Это пароль от базы: никому не пересылай и не клади в репозиторий.
 
-1. Зарегистрируйся на [koyeb.com](https://www.koyeb.com/) (через GitHub).
-2. Нажми **Create App** -> **GitHub**.
-3. Выбери репозиторий `STRAIN` (или свой форк).
-4. Укажи параметры:
-   - **Root directory**: `/server`
-   - **Builder**: `Dockerfile` (или `Node.js`)
-   - **Port**: `3000`
-5. Нажми **Deploy**.
-6. Через 1 минуту ты получишь публичную ссылку вида:
-   `https://strain-backend-yourname.koyeb.app`
+### 2. Render
 
----
+1. Открой https://dashboard.render.com → свой сервис STRAIN.
+2. **Environment** → **Add Environment Variable**:
+   - Key: `DATABASE_URL`
+   - Value: строка из Neon
+3. **Settings → Build & Deploy** проверь:
+   - Root Directory: `server`
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+   - Branch: ветка, где лежит этот код (`main` после слияния).
+4. **Manual Deploy → Deploy latest commit**.
 
-### Вариант 2: Render.com (Бесплатно)
+### 3. Проверка
 
-1. Зарегистрируйся на [render.com](https://render.com/) (через GitHub).
-2. Нажми **New +** -> **Web Service**.
-3. Подключи репозиторий `STRAIN`.
-4. Настройки:
-   - **Root Directory**: `server`
-   - **Environment**: `Node`
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-5. Нажми **Create Web Service**.
-6. Получишь ссылку вида:
-   `https://strain-backend.onrender.com`
+Открой `https://<твой-сервер>.onrender.com/health` — в ответе должно быть
+`"social": true`. Таблицы база создаёт сама при первом запуске.
 
----
+## Бесплатные лимиты
 
-### Проверка работоспособности:
-Открой в браузере: `https://твой-сервер/health`
-Должен вернуть: `{"status":"ok","service":"strain-backend",...}`
+- Neon: 0,5 ГБ. Фото сжимаются на телефоне до ~200 КБ — это тысячи постов.
+- Render: сервер засыпает через 15 минут без запросов. Workflow
+  `.github/workflows/keepalive.yml` пингует его раз в 10 минут (работает из `main`).
+
+## Проверка кода
+
+```
+cd server && npm install
+TEST_DATABASE_URL=postgres://user:pass@localhost:5432/strain_test npm test
+```
+
+В GitHub Actions то же самое делает `.github/workflows/server.yml` на временном Postgres.

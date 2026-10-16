@@ -41,6 +41,10 @@ final class RestTimer {
 
     var isRunning: Bool { endsAt != nil }
 
+    init() {
+        restore()
+    }
+
     var progress: Double {
         guard total > 0 else { return 0 }
         return min(max(1 - remaining / total, 0), 1)
@@ -89,8 +93,10 @@ final class RestTimer {
             exerciseName: exerciseName ?? "",
             setDetails: setDetails ?? "",
             completedSets: completedSets,
-            totalSets: totalSets
+            totalSets: totalSets,
+            imageFile: exerciseName.flatMap { ExerciseArt.shared.publishForLiveActivity(name: $0) }
         )
+        persist()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
@@ -108,6 +114,7 @@ final class RestTimer {
         lastTickSecond = nil
         scheduleNotification(after: max(0, remaining))
         updateActivity(to: updated)
+        persist()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
@@ -125,6 +132,7 @@ final class RestTimer {
         lastTickSecond = nil
         cancelNotification()
         endActivity()
+        persist()
     }
 
     /// Пересчёт после возврата из фона.
@@ -162,6 +170,7 @@ final class RestTimer {
         total = 0
         lastTickSecond = nil
         endActivity()
+        persist()
         if UIApplication.shared.applicationState == .active {
             if isSoundEnabled {
                 AudioServicesPlaySystemSound(1025) // Завершающий приятный аккорд
@@ -178,7 +187,8 @@ final class RestTimer {
         exerciseName: String,
         setDetails: String,
         completedSets: Int,
-        totalSets: Int
+        totalSets: Int,
+        imageFile: String?
     ) {
         endActivity()
         activityIssue = nil
@@ -194,7 +204,8 @@ final class RestTimer {
             exerciseName: exerciseName,
             setDetails: setDetails,
             completedSets: completedSets,
-            totalSets: totalSets
+            totalSets: totalSets,
+            imageFile: imageFile
         )
         do {
             activity = try Activity.request(
@@ -215,7 +226,8 @@ final class RestTimer {
             exerciseName: exerciseName ?? activity.content.state.exerciseName,
             setDetails: setDetails ?? activity.content.state.setDetails,
             completedSets: completedSets,
-            totalSets: totalSets
+            totalSets: totalSets,
+            imageFile: activity.content.state.imageFile
         )
         Task {
             await activity.update(ActivityContent(state: state, staleDate: end))
@@ -228,32 +240,106 @@ final class RestTimer {
         Task { await activity.end(nil, dismissalPolicy: .immediate) }
     }
 
+    // MARK: - Сохранение
+
+    /// Отдых переживает выгрузку приложения: iOS закрывает свёрнутое приложение,
+    /// а Live Activity на экране остаётся. Без этого после перезапуска таймер
+    /// был пуст, а кнопки на острове уже ничего не делали.
+    private struct Saved: Codable {
+        var startedAt: Date
+        var endsAt: Date
+        var total: TimeInterval
+        var exerciseName: String?
+        var setDetails: String?
+        var completedSets: Int
+        var totalSets: Int
+        var notificationID: String?
+    }
+
+    private static let storageKey = "rest_timer_state"
+
+    private func persist() {
+        guard let startedAt, let endsAt else {
+            UserDefaults.standard.removeObject(forKey: Self.storageKey)
+            return
+        }
+        let saved = Saved(
+            startedAt: startedAt, endsAt: endsAt, total: total,
+            exerciseName: exerciseName, setDetails: setDetails,
+            completedSets: completedSets, totalSets: totalSets,
+            notificationID: notificationID
+        )
+        if let data = try? JSONEncoder().encode(saved) {
+            UserDefaults.standard.set(data, forKey: Self.storageKey)
+        }
+    }
+
+    private func restore() {
+        let live = Activity<RestActivityAttributes>.activities
+        guard let data = UserDefaults.standard.data(forKey: Self.storageKey),
+              let saved = try? JSONDecoder().decode(Saved.self, from: data),
+              saved.endsAt > Date()
+        else {
+            // Отдых кончился, пока приложения не было, — гасим осиротевшие активности.
+            UserDefaults.standard.removeObject(forKey: Self.storageKey)
+            for activity in live {
+                Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            }
+            return
+        }
+        startedAt = saved.startedAt
+        endsAt = saved.endsAt
+        total = saved.total
+        remaining = saved.endsAt.timeIntervalSinceNow
+        exerciseName = saved.exerciseName
+        setDetails = saved.setDetails
+        completedSets = saved.completedSets
+        totalSets = saved.totalSets
+        notificationID = saved.notificationID
+        activity = live.first
+        for extra in live.dropFirst() {
+            Task { await extra.end(nil, dismissalPolicy: .immediate) }
+        }
+        scheduleTicker()
+    }
+
     // MARK: - Уведомление
 
     private func scheduleNotification(after duration: TimeInterval) {
-        guard duration > 0 else { return }
+        guard duration > 0, let endsAt else { return }
+        // Идентификатор заводим сразу, а не в ответе на запрос разрешения:
+        // ответ приходит позже, и «Пропустить» в этот промежуток не находил,
+        // что отменять, — «Отдых закончен» приходил уже после пропуска.
+        let id = UUID().uuidString
+        notificationID = id
+        persist()
+
+        let content = UNMutableNotificationContent()
+        content.title = exerciseName.map { "Отдых закончен: \($0)" } ?? "Отдых закончен"
+        content.body = setDetails.map { "Пора к следующему подходу. Прошлый: \($0)." } ?? "Пора к следующему подходу."
+        content.sound = .default
+
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = self.exerciseName != nil ? "Отдых закончен: \(self.exerciseName!)" : "Отдых закончен"
-            content.body = self.setDetails != nil ? "Следующий подход: \(self.setDetails!). Пора!" : "Пора к следующему подходу."
-            content.sound = .default
-
-            let id = UUID().uuidString
-            let request = UNNotificationRequest(
-                identifier: id,
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: duration, repeats: false)
-            )
-            center.add(request)
-            DispatchQueue.main.async { self.notificationID = id }
+            DispatchQueue.main.async {
+                // Пока спрашивали разрешение, отдых могли пропустить или продлить.
+                guard self.notificationID == id else { return }
+                let left = endsAt.timeIntervalSinceNow
+                guard left > 0 else { return }
+                center.add(UNNotificationRequest(
+                    identifier: id,
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: left, repeats: false)
+                ))
+            }
         }
     }
 
     private func cancelNotification() {
         guard let notificationID else { return }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [notificationID])
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [notificationID])
         self.notificationID = nil
     }
 }

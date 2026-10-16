@@ -1,12 +1,20 @@
 import SwiftUI
 import UIKit
 
-/// Обёртка над системным листом «Поделиться» — им отдаём файл резервной копии.
+/// Обёртка над системным листом «Поделиться»: файл резервной копии или картинка тренировки.
 struct ShareSheet: UIViewControllerRepresentable {
-    let url: URL
+    let items: [Any]
+
+    init(url: URL) {
+        items = [url]
+    }
+
+    init(items: [Any]) {
+        self.items = items
+    }
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
@@ -16,4 +24,10 @@ struct ShareSheet: UIViewControllerRepresentable {
 struct ShareItem: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
+}
+
+/// Картинка для листа «Поделиться».
+struct ShareImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }

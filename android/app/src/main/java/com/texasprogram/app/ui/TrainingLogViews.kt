@@ -194,12 +194,14 @@ fun StreakCard(current: Int, best: Int, modifier: Modifier = Modifier) {
     CardView(modifier) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("СЕРИЯ", color = Theme.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                // Не путать с «Серией активностей» на главном: там неделя засчитана
+                // за одну тренировку, а тут — только когда закрыт весь план недели.
+                Text("НЕДЕЛИ ПЛАНА", color = Theme.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text("$current", color = Theme.textPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
                     Text(weekWord(current), color = Theme.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
                 }
-                Text("подряд без пропусков", color = Theme.textSecondary, fontSize = 11.sp)
+                Text("подряд закрыты целиком", color = Theme.textSecondary, fontSize = 11.sp)
             }
             Spacer(Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {

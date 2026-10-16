@@ -1,32 +1,36 @@
 import SwiftUI
-import Combine
 
 // MARK: - Экран активной тренировки
 
 struct ActiveWorkoutSessionView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(RestTimer.self) private var restTimer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var profile: ProgramProfile
     let workout: ScheduledWorkout
 
     @Bindable var sessionManager = WorkoutSessionManager.shared
+    @State private var reorder = ExerciseReorder()
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                // Основной контент тренировки
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        ForEach(Array(sessionManager.exercises.indices), id: \.self) { exIndex in
-                            exerciseCard(at: exIndex)
-                        }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        exerciseList
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, restTimer.isRunning ? 200 : 60)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, restTimer.isRunning ? 200 : 60)
+                    .scrollIndicators(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                    // Пока упражнение тащат, лента не должна уезжать из-под пальца.
+                    .scrollDisabled(reorder.isActive)
+                    .onChange(of: reorder.draggingID) { _, id in
+                        guard let id else { return }
+                        withAnimation(Motion.sheet) { proxy.scrollTo(id, anchor: .center) }
+                    }
                 }
-                .scrollIndicators(.hidden)
-                .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+                .background(Color.black.ignoresSafeArea())
 
                 // Карточка отдыха в стиле REBRN
                 if restTimer.isRunning {
@@ -35,78 +39,24 @@ struct ActiveWorkoutSessionView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                // Всплывающее окно подтверждения при 0 отмеченных подходах или отмене
                 if sessionManager.showingZeroSetsAlert {
                     zeroSetsAlertOverlay
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: restTimer.isRunning)
+            .overlay(alignment: .top) { recordBanner }
+            .animation(Motion.sheet, value: restTimer.isRunning)
+            .animation(Motion.sheet, value: sessionManager.showingZeroSetsAlert)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        sessionManager.minimize()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(8)
-                            .background(Color.white.opacity(0.12), in: Circle())
-                    }
-                    .accessibilityLabel("Свернуть тренировку")
-                }
-
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
-                        Text(formatTimer(sessionManager.elapsedSeconds))
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
-                    }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 10) {
-                        Menu {
-                            Button {
-                                sessionManager.showingNoteSheet = true
-                            } label: {
-                                Label("Заметка к тренировке", systemImage: "note.text")
-                            }
-
-                            Button(role: .destructive) {
-                                sessionManager.showingZeroSetsAlert = true
-                            } label: {
-                                Label("Отменить тренировку", systemImage: "trash")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(8)
-                                .background(Color.white.opacity(0.12), in: Circle())
-                        }
-
-                        Button {
-                            handleFinishTapped()
-                        } label: {
-                            Text("Завершить")
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundStyle(.black)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Color.white, in: Capsule())
-                        }
-                    }
-                }
-            }
+            .toolbar { toolbar }
             .sheet(isPresented: $sessionManager.showingSummary) {
                 WorkoutCompletionSummaryView(profile: profile, workout: workout)
             }
             .sheet(isPresented: $sessionManager.showingNoteSheet) {
                 workoutNoteSheet
+            }
+            .sheet(item: $sessionManager.artTarget) { target in
+                ExerciseArtSheet(name: target.name)
             }
             .confirmationDialog("Время отдыха", isPresented: Binding(
                 get: { sessionManager.customRestTargetExerciseIndex != nil },
@@ -123,229 +73,142 @@ struct ActiveWorkoutSessionView: View {
         .preferredColorScheme(.dark)
     }
 
-    // MARK: - Карточка упражнения
+    // MARK: - Лента упражнений
 
-    @ViewBuilder
-    private func exerciseCard(at exIndex: Int) -> some View {
-        if exIndex < sessionManager.exercises.count {
-            let exerciseState = sessionManager.exercises[exIndex]
-
-            VStack(alignment: .leading, spacing: 14) {
-                // Шапка упражнения
-                HStack(spacing: 12) {
-                    Image(systemName: "circle.grid.2x3.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.25))
-
-                    exerciseThumbnail(for: exerciseState.prescription)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(exerciseState.prescription.name)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    // Кнопка времени отдыха
-                    Button {
-                        sessionManager.customRestTargetExerciseIndex = exIndex
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "timer")
-                                .font(.system(size: 12, weight: .bold))
-                            Text(formatRestTime(exerciseState.restSeconds))
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .monospacedDigit()
-                        }
-                        .foregroundStyle(Color.white.opacity(0.85))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.10), in: Capsule())
-                    }
-
-                    Menu {
-                        Button {
-                            sessionManager.addSet(to: exIndex, profile: profile)
-                        } label: {
-                            Label("Добавить подход", systemImage: "plus")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.5))
-                            .frame(width: 28, height: 28)
-                    }
-                }
-
-                // Таблица подходов
-                VStack(spacing: 8) {
-                    // Заголовки колонок
-                    HStack(spacing: 8) {
-                        Text("#")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.4))
-                            .frame(width: 28, alignment: .center)
-
-                        Text("БЫЛО")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.4))
-                            .frame(width: 66, alignment: .center)
-
-                        Text("КГ")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.4))
-                            .frame(maxWidth: .infinity, alignment: .center)
-
-                        Text("ПОВТ")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.4))
-                            .frame(maxWidth: .infinity, alignment: .center)
-
-                        Text("")
-                            .frame(width: 38)
-                    }
-                    .padding(.horizontal, 4)
-
-                    // Строки подходов
-                    ForEach(Array(exerciseState.sets.indices), id: \.self) { setIndex in
-                        setRow(exerciseIndex: exIndex, setIndex: setIndex)
-                    }
-
-                    // Кнопка «+ Добавить подход»
-                    Button {
-                        sessionManager.addSet(to: exIndex, profile: profile)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Добавить подход")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundStyle(Color.white.opacity(0.85))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .padding(.top, 4)
-                }
+    /// Обычный `VStack`, не ленивый: при перестановке карточкам нужны настоящие
+    /// места, а упражнений в тренировке — единицы.
+    private var exerciseList: some View {
+        VStack(spacing: reorder.isActive ? ExerciseReorder.spacing : 16) {
+            ForEach(Array(sessionManager.exercises.enumerated()), id: \.element.id) { index, exercise in
+                let dragged = reorder.draggingID == exercise.id
+                ExerciseSessionCard(
+                    exercise: exercise,
+                    index: index,
+                    count: sessionManager.exercises.count,
+                    profile: profile,
+                    compact: reorder.isActive,
+                    lifted: dragged,
+                    reorder: reorder
+                )
+                .id(exercise.id)
+                .offset(y: reorder.offset(for: exercise.id, index: index))
+                .scaleEffect(dragged && !reduceMotion ? 1.03 : 1)
+                .shadow(color: .black.opacity(dragged ? 0.6 : 0), radius: 18, y: 10)
+                .zIndex(dragged ? 1 : 0)
             }
-            .padding(16)
-            .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-            )
         }
     }
 
-    // MARK: - Строка подхода
+    // MARK: - Шапка
 
-    @ViewBuilder
-    private func setRow(exerciseIndex exIdx: Int, setIndex sIdx: Int) -> some View {
-        if exIdx < sessionManager.exercises.count && sIdx < sessionManager.exercises[exIdx].sets.count {
-            let currentSet = sessionManager.exercises[exIdx].sets[sIdx]
-            let isCurrent = !currentSet.isDone && sessionManager.exercises[exIdx].sets.prefix(sIdx).allSatisfy(\.isDone)
-
-            HStack(spacing: 8) {
-                // Индикатор активного подхода + Номер
-                HStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(isCurrent ? Theme.accent : Color.clear)
-                        .frame(width: 3, height: 16)
-
-                    Text("\(sIdx + 1)")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(isCurrent ? Theme.accent : Color.white.opacity(0.75))
-                }
-                .frame(width: 28, alignment: .center)
-
-                // «БЫЛО»
-                Text(currentSet.previousText)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.45))
-                    .frame(width: 66, alignment: .center)
-                    .lineLimit(1)
-
-                // «КГ» (Интерактивное поле / Степер)
-                Menu {
-                    Button("+5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 5) }
-                    Button("+2.5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 2.5) }
-                    Button("+1 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: 1) }
-                    Divider()
-                    Button("-1 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -1) }
-                    Button("-2.5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -2.5) }
-                    Button("-5 кг") { sessionManager.adjustWeight(exIdx: exIdx, sIdx: sIdx, delta: -5) }
-                } label: {
-                    Text(WeightFormat.kilogramsPrecise(currentSet.weight))
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-
-                // «ПОВТ»
-                Menu {
-                    Button("+1 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 1) }
-                    Button("+2 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: 2) }
-                    Divider()
-                    Button("-1 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -1) }
-                    Button("-2 повт") { sessionManager.adjustReps(exIdx: exIdx, sIdx: sIdx, delta: -2) }
-                } label: {
-                    Text("\(currentSet.reps)")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-
-                // Чекбокс выполнения подхода (в стиле REBRN)
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        // Как у REBRN: свернуть и крупный секундомер слева, действия справа.
+        ToolbarItem(placement: .topBarLeading) {
+            HStack(spacing: 12) {
                 Button {
-                    sessionManager.toggleSetDone(exIdx: exIdx, sIdx: sIdx, profile: profile, restTimer: restTimer)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    sessionManager.minimize()
                 } label: {
-                    ZStack {
-                        Circle()
-                            .fill(currentSet.isDone ? Color.cyan : Color.clear)
-                            .strokeBorder(currentSet.isDone ? Color.cyan : Color.white.opacity(0.3), lineWidth: 2)
-                            .frame(width: 28, height: 28)
-
-                        if currentSet.isDone {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.black)
-                        }
-                    }
-                    .frame(width: 38, height: 38)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.white.opacity(0.12), in: Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
+                .accessibilityLabel("Свернуть тренировку")
+
+                SessionClock(size: 26)
+            }
+        }
+
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button("Готово") {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+            .font(.body.weight(.bold))
+        }
+
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 10) {
+                Menu {
+                    Button {
+                        sessionManager.showingNoteSheet = true
+                    } label: {
+                        Label("Заметка к тренировке", systemImage: "note.text")
+                    }
+
+                    Button(role: .destructive) {
+                        sessionManager.showingZeroSetsAlert = true
+                    } label: {
+                        Label("Отменить тренировку", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.white.opacity(0.12), in: Circle())
+                }
+
+                Button {
+                    handleFinishTapped()
+                } label: {
+                    Text("Завершить")
+                        .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 18)
+                        .frame(height: 36)
+                        .background(Color.white, in: Capsule())
+                }
+                .buttonStyle(.pressable)
             }
         }
     }
 
-    // MARK: - Иконка/превью движения
+    // MARK: - Плашка рекорда
 
-    private func exerciseThumbnail(for prescription: ExercisePrescription) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color(white: 0.18))
-                .frame(width: 44, height: 44)
-
-            Image(systemName: iconName(for: prescription.name))
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(Theme.accent)
+    @ViewBuilder
+    private var recordBanner: some View {
+        if let record = sessionManager.lastRecord {
+            HStack(spacing: 10) {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.black)
+                    .frame(width: 30, height: 30)
+                    .background(Theme.accent, in: Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Новый рекорд")
+                        .font(.system(size: 14, weight: .heavy, design: Theme.fontDesign))
+                        .foregroundStyle(.white)
+                    Text("\(record.exercise) · \(WeightFormat.kilogramsPrecise(record.weight))")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color(white: 0.12), in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.6), lineWidth: 1))
+            .shadow(color: Theme.accent.opacity(0.35), radius: 16, y: 6)
+            .padding(.horizontal, 24)
+            .padding(.top, 4)
+            .id(record.id)
+            .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9, anchor: .top)))
+            .task(id: record.id) {
+                try? await Task.sleep(for: .seconds(2.6))
+                withAnimation(Motion.sheet) {
+                    if sessionManager.lastRecord?.id == record.id { sessionManager.lastRecord = nil }
+                }
+            }
+            .onTapGesture {
+                withAnimation(Motion.sheet) { sessionManager.lastRecord = nil }
+            }
         }
-    }
-
-    private func iconName(for name: String) -> String {
-        let lower = name.lowercased()
-        if lower.contains("присед") { return "figure.strengthtraining.functional" }
-        if lower.contains("жим") { return "figure.strengthtraining.traditional" }
-        if lower.contains("тяг") { return "figure.stand" }
-        if lower.contains("подтяг") { return "figure.cross.training" }
-        return "dumbbell.fill"
     }
 
     // MARK: - Окно «Ни одного подхода не отмечено» / Отмена тренировки
@@ -418,19 +281,18 @@ struct ActiveWorkoutSessionView: View {
                 Spacer()
             }
             .padding()
-            .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Заметка к тренировке")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Готово") {
-                        if !sessionManager.noteText.isEmpty {
-                            profile.setNote(
-                                sessionManager.noteText,
-                                week: workout.week,
-                                day: workout.day.number
-                            )
-                        }
+                        // Пустой текст — тоже ответ: заметку стёрли, её надо удалить.
+                        profile.setNote(
+                            sessionManager.noteText,
+                            week: workout.week,
+                            day: workout.day.number
+                        )
                         sessionManager.showingNoteSheet = false
                     }
                     .font(.body.weight(.bold))
@@ -448,82 +310,532 @@ struct ActiveWorkoutSessionView: View {
             sessionManager.showingSummary = true
         }
     }
+}
 
-    private func formatTimer(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%02d:%02d", mins, secs)
-    }
+// MARK: - Перестановка упражнений
 
-    private func formatRestTime(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%02d:%02d", mins, secs)
-    }
+/// Перетаскивание упражнения пальцем.
+///
+/// Долгое нажатие на шапку сворачивает все карточки до строк одной высоты:
+/// так место, куда встанет упражнение, считается делением, а не обмером
+/// карточек разной высоты. Пока палец ведёт, массив не трогаем — соседи
+/// расступаются смещением; на отпускании строка доезжает до места,
+/// и только тогда порядок меняется без анимации — картинка при этом
+/// не дёргается, потому что всё уже стоит там, где окажется.
+@Observable
+final class ExerciseReorder {
+    static let rowHeight: CGFloat = 76
+    static let spacing: CGFloat = 10
+    private var step: CGFloat { Self.rowHeight + Self.spacing }
 
-    private func formatDuration(_ seconds: Int) -> String {
-        let hours = seconds / 3600
-        let mins = (seconds % 3600) / 60
-        if hours > 0 {
-            return "\(hours)ч \(mins)м"
-        } else {
-            return "\(mins) мин"
+    private(set) var draggingID: String?
+    private(set) var startIndex = 0
+    private(set) var target = 0
+    private(set) var translation: CGFloat = 0
+    @ObservationIgnored private var ending = false
+
+    var isActive: Bool { draggingID != nil }
+
+    func begin(id: String, index: Int) {
+        guard draggingID == nil, !ending else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        withAnimation(Motion.sheet) {
+            draggingID = id
+            startIndex = index
+            target = index
+            translation = 0
         }
+    }
+
+    func update(translation value: CGFloat, count: Int) {
+        guard draggingID != nil, !ending else { return }
+        translation = value
+        let next = min(max(startIndex + Int((value / step).rounded()), 0), max(count - 1, 0))
+        if next != target {
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(Motion.reorder) { target = next }
+        }
+    }
+
+    func end() {
+        guard draggingID != nil, !ending else { return }
+        ending = true
+        let from = startIndex, to = target
+        withAnimation(Motion.reorder) {
+            translation = CGFloat(to - from) * step
+        } completion: {
+            var still = Transaction()
+            still.disablesAnimations = true
+            withTransaction(still) {
+                WorkoutSessionManager.shared.moveExercise(from: from, to: to)
+                self.startIndex = to
+                self.target = to
+                self.translation = 0
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(Motion.sheet) { self.draggingID = nil }
+            self.ending = false
+        }
+    }
+
+    /// Смещение карточки: схваченная едет за пальцем, соседи уступают место.
+    func offset(for id: String, index: Int) -> CGFloat {
+        guard let draggingID else { return 0 }
+        if id == draggingID { return translation }
+        if startIndex < target, index > startIndex, index <= target { return -step }
+        if target < startIndex, index >= target, index < startIndex { return step }
+        return 0
     }
 }
 
-// MARK: - Свернутая панель активной тренировки (Liquid Glass Mini-Player)
+// MARK: - Карточка упражнения
+
+/// Карточка отдельным вью со значениями на входе: SwiftUI перерисует только ту,
+/// чьё упражнение изменилось, а не все сразу на каждую введённую цифру.
+private struct ExerciseSessionCard: View {
+    let exercise: ActiveExerciseState
+    let index: Int
+    let count: Int
+    let profile: ProgramProfile
+    let compact: Bool
+    let lifted: Bool
+    let reorder: ExerciseReorder
+
+    @GestureState private var holding = false
+
+    private var manager: WorkoutSessionManager { .shared }
+    private var doneCount: Int { exercise.sets.filter(\.isDone).count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            if !compact {
+                setsTable
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .padding(compact ? 12 : 16)
+        .frame(height: compact ? ExerciseReorder.rowHeight : nil, alignment: .top)
+        .background(Color(white: lifted ? 0.12 : 0.086), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Theme.accent.opacity(lifted ? 0.7 : 0), lineWidth: 1.5)
+        }
+        .onChange(of: holding) { _, isHolding in
+            // Жест отменила система (звонок, уведомление) — onEnded не придёт.
+            if !isHolding { reorder.end() }
+        }
+    }
+
+    // MARK: Шапка
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(lifted ? 0.9 : 0.3))
+                    .frame(width: 18)
+
+                ExerciseThumb(name: exercise.prescription.name, size: compact ? 48 : 52)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(exercise.prescription.name)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(compact ? 1 : 2)
+                        .minimumScaleFactor(0.85)
+                    if !compact {
+                        // Отдых — под названием, как в REBRN: справа он отнимал место,
+                        // и «Приседания» рвались посреди слова.
+                        restChip
+                            .transition(.opacity)
+                    }
+                    if compact {
+                        Text("\(doneCount) из \(RuPlural.sets(exercise.sets.count))")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.45))
+                            .transition(.opacity)
+                    }
+                }
+                Spacer(minLength: 4)
+            }
+            .contentShape(Rectangle())
+            .gesture(reorderGesture)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Удерживайте, чтобы переставить")
+            .accessibilityActions {
+                if index > 0 {
+                    Button("Переместить выше") { withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index - 1) } }
+                }
+                if index < count - 1 {
+                    Button("Переместить ниже") { withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index + 1) } }
+                }
+            }
+
+            if !compact {
+                menu
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    /// Удержание 0,3 с, потом ведение. Короткое касание и прокрутка проходят мимо.
+    private var reorderGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.3)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .updating($holding) { value, state, _ in
+                if case .second(true, _) = value { state = true }
+            }
+            .onChanged { value in
+                guard case .second(true, let drag) = value else { return }
+                if !reorder.isActive { reorder.begin(id: exercise.id, index: index) }
+                if let drag { reorder.update(translation: drag.translation.height, count: count) }
+            }
+            .onEnded { _ in reorder.end() }
+    }
+
+    private var restChip: some View {
+        Button {
+            manager.customRestTargetExerciseIndex = index
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "timer")
+                    .font(.system(size: 12, weight: .bold))
+                Text(String(format: "%02d:%02d", exercise.restSeconds / 60, exercise.restSeconds % 60))
+                    .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(Color.white.opacity(0.85))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Color.white.opacity(0.10), in: Capsule())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Отдых \(exercise.restSeconds / 60) минут \(exercise.restSeconds % 60) секунд")
+    }
+
+    private var menu: some View {
+        Menu {
+            Button {
+                withAnimation(Motion.reorder) { manager.addSet(to: index, profile: profile) }
+            } label: {
+                Label("Добавить подход", systemImage: "plus")
+            }
+            Button {
+                manager.artTarget = ExerciseArtTarget(name: exercise.prescription.name)
+            } label: {
+                Label("Картинка упражнения", systemImage: "photo")
+            }
+            // Шаг прибавки этого движения: у кого есть блины 1,25 — 2,5 кг,
+            // у кого нет — 5; на блоке бывает и 1 кг.
+            Menu {
+                Picker("Шаг прибавки", selection: Binding(
+                    get: { profile.weightStep(for: exercise.prescription.name) },
+                    set: { step in
+                        withAnimation(Motion.snappy) { manager.changeWeightStep(step, for: index, profile: profile) }
+                    }
+                )) {
+                    ForEach(ProgramProfile.weightStepOptions, id: \.self) { option in
+                        Text(ProgramProfile.weightStepTitle(option)).tag(option)
+                    }
+                }
+            } label: {
+                Label("Шаг прибавки: \(WeightFormat.kilogramsPrecise(profile.weightStep(for: exercise.prescription.name)))", systemImage: "scalemass")
+            }
+            if index > 0 {
+                Button {
+                    withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index - 1) }
+                } label: {
+                    Label("Переместить выше", systemImage: "arrow.up")
+                }
+            }
+            if index < count - 1 {
+                Button {
+                    withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index + 1) }
+                } label: {
+                    Label("Переместить ниже", systemImage: "arrow.down")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.5))
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+    }
+
+    // MARK: Подходы
+
+    private var setsTable: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                columnTitle("#").frame(width: 38)
+                columnTitle("БЫЛО").frame(width: 62)
+                // Поля ввода — в килограммах, как и вся арифметика программы.
+                columnTitle("КГ").frame(maxWidth: .infinity)
+                columnTitle("ПОВТ").frame(maxWidth: .infinity)
+                Color.clear.frame(width: 40, height: 1)
+            }
+
+            ForEach(Array(exercise.sets.enumerated()), id: \.element.id) { sIdx, set in
+                SetRowView(
+                    set: set,
+                    position: sIdx,
+                    exerciseIndex: index,
+                    isCurrent: !set.isDone && exercise.sets.prefix(sIdx).allSatisfy(\.isDone),
+                    canDelete: exercise.sets.count > 1,
+                    profile: profile
+                )
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity.combined(with: .scale(scale: 0.9))
+                ))
+            }
+
+            Button {
+                withAnimation(Motion.reorder) { manager.addSet(to: index, profile: profile) }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Добавить подход")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(Color.white.opacity(0.85))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.pressable)
+            .padding(.top, 4)
+        }
+    }
+
+    private func columnTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(Color.white.opacity(0.4))
+    }
+}
+
+// MARK: - Строка подхода
+
+private struct SetRowView: View {
+    let set: ActiveSetState
+    let position: Int
+    let exerciseIndex: Int
+    let isCurrent: Bool
+    let canDelete: Bool
+    let profile: ProgramProfile
+
+    @Environment(RestTimer.self) private var restTimer
+    private var manager: WorkoutSessionManager { .shared }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            numberMenu
+
+            // «БЫЛО»: нажал — подставилось то, что было в прошлый раз.
+            Button {
+                withAnimation(Motion.snappy) { manager.applyPrevious(exIdx: exerciseIndex, sIdx: position, profile: profile) }
+            } label: {
+                Text(set.previousText)
+                    .font(.system(size: 12, weight: .medium, design: Theme.fontDesign))
+                    .foregroundStyle(Color.white.opacity(set.previous == nil ? 0.25 : 0.45))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(width: 62, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressable)
+            .disabled(set.previous == nil)
+            .accessibilityLabel(set.previous == nil ? "Прошлого раза нет" : "Подставить прошлый раз: \(set.previousText)")
+
+            SetNumberField(
+                value: set.weight,
+                isDecimal: true,
+                isDone: set.isDone,
+                accessibilityName: "Вес, подход \(position + 1)"
+            ) { value in
+                manager.setWeight(value, exIdx: exerciseIndex, sIdx: position, profile: profile)
+            }
+
+            SetNumberField(
+                value: Double(set.reps),
+                isDecimal: false,
+                isDone: set.isDone,
+                accessibilityName: "Повторы, подход \(position + 1)"
+            ) { value in
+                manager.setReps(Int(value), exIdx: exerciseIndex, sIdx: position, profile: profile)
+            }
+
+            checkButton
+        }
+    }
+
+    /// Номер подхода: оранжевая черта у текущего, кубок у рекорда.
+    /// Нажатие — меню подхода.
+    private var numberMenu: some View {
+        Menu {
+            if set.previous != nil {
+                Button {
+                    withAnimation(Motion.snappy) { manager.applyPrevious(exIdx: exerciseIndex, sIdx: position, profile: profile) }
+                } label: {
+                    Label("Как в прошлый раз", systemImage: "arrow.uturn.backward")
+                }
+            }
+            if canDelete {
+                Button(role: .destructive) {
+                    withAnimation(Motion.reorder) { manager.deleteSet(exIdx: exerciseIndex, sIdx: position, profile: profile) }
+                } label: {
+                    Label("Удалить подход", systemImage: "trash")
+                }
+            }
+        } label: {
+            Text("\(position + 1)")
+                .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
+                .monospacedDigit()
+                .foregroundStyle(set.isRecord ? .black : .white)
+                .frame(width: 34, height: 34)
+                .background(set.isRecord ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color(white: 0.15)), in: Circle())
+                .overlay(alignment: .topTrailing) {
+                    if set.isRecord {
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(3)
+                            .background(Color.black, in: Circle())
+                            .offset(x: 5, y: -5)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .frame(width: 38, height: 44)
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(Theme.accent)
+                        .frame(width: 3, height: 22)
+                        .offset(x: -16)
+                        .opacity(isCurrent ? 1 : 0)
+                }
+                .contentShape(Rectangle())
+        }
+        .animation(Motion.bouncy, value: set.isRecord)
+        .animation(Motion.snappy, value: isCurrent)
+        .accessibilityLabel("Подход \(position + 1)")
+    }
+
+    private var checkButton: some View {
+        Button {
+            withAnimation(Motion.bouncy) {
+                manager.toggleSetDone(exIdx: exerciseIndex, sIdx: position, profile: profile, restTimer: restTimer)
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.35), lineWidth: 2)
+                    .opacity(set.isDone ? 0 : 1)
+                Circle()
+                    .fill(Theme.accent)
+                    .scaleEffect(set.isDone ? 1 : 0.4)
+                    .opacity(set.isDone ? 1 : 0)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .scaleEffect(set.isDone ? 1 : 0.4)
+                    .opacity(set.isDone ? 1 : 0)
+            }
+            .frame(width: 30, height: 30)
+            .frame(width: 40, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(set.isDone ? "Подход \(position + 1) выполнен" : "Отметить подход \(position + 1)")
+    }
+}
+
+// MARK: - Секундомер
+
+/// Секундомер тренировки. Тикает сам по себе через `TimelineView` — остальной
+/// экран раз в секунду не перерисовывается.
+struct SessionClock: View {
+    var size: CGFloat = 26
+    var color: Color = .white
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let seconds = WorkoutSessionManager.shared.elapsed(at: context.date)
+            Text(Self.format(seconds))
+                .font(.system(size: size, weight: .heavy, design: Theme.fontDesign))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .contentTransition(.numericText(countsDown: false))
+                .animation(.snappy(duration: 0.25), value: seconds)
+                .accessibilityLabel("Время тренировки \(Self.format(seconds))")
+        }
+    }
+
+    static func format(_ seconds: Int) -> String {
+        let hours = seconds / 3600, mins = (seconds % 3600) / 60, secs = seconds % 60
+        return hours > 0 ? String(format: "%d:%02d:%02d", hours, mins, secs) : String(format: "%02d:%02d", mins, secs)
+    }
+}
+
+// MARK: - Свернутая панель активной тренировки
 
 struct MinimizedWorkoutBar: View {
     @Bindable var sessionManager = WorkoutSessionManager.shared
     @Bindable var profile: ProgramProfile
+    @State private var pulse = false
 
     var body: some View {
-        guard let workout = sessionManager.activeWorkout else { return AnyView(EmptyView()) }
-
-        return AnyView(
+        if let workout = sessionManager.activeWorkout {
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 sessionManager.expand()
             } label: {
                 HStack(spacing: 12) {
-                    // Пульсирующая зеленая точка
+                    // Пульсирующая точка «идёт»
                     ZStack {
                         Circle()
                             .fill(Color.green.opacity(0.35))
                             .frame(width: 22, height: 22)
+                            .scaleEffect(pulse ? 1.15 : 0.8)
+                            .opacity(pulse ? 0.2 : 0.8)
                         Circle()
                             .fill(Color.green)
                             .frame(width: 8, height: 8)
                     }
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { pulse = true }
+                    }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workout.fullTitle)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
-                        Text("\(sessionManager.totalCompletedSets) из \(sessionManager.totalSetsCount) подходов")
+                        Text("\(sessionManager.totalCompletedSets) из \(sessionManager.totalSetsCount) \(RuPlural.word(sessionManager.totalSetsCount, "подхода", "подходов", "подходов"))")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.white.opacity(0.55))
+                            .contentTransition(.numericText())
                     }
 
                     Spacer(minLength: 8)
 
-                    // Таймер
                     HStack(spacing: 5) {
                         Image(systemName: "timer")
                             .font(.system(size: 11, weight: .semibold))
-                        Text(formatTimer(sessionManager.elapsedSeconds))
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .monospacedDigit()
+                        SessionClock(size: 13, color: Theme.accent)
                     }
                     .foregroundStyle(Theme.accent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(Theme.accent.opacity(0.15), in: Capsule())
 
-                    // Кнопка развернуть
                     Image(systemName: "chevron.up")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Color.white.opacity(0.7))
@@ -553,13 +865,64 @@ struct MinimizedWorkoutBar: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .buttonStyle(.plain)
-        )
+            .buttonStyle(.pressable)
+        }
+    }
+}
+
+// MARK: - Поле веса / повторов
+
+/// Ячейка подхода с вводом с клавиатуры.
+///
+/// Текст живёт в своём состоянии, а не вычисляется из модели: иначе стёртое
+/// поле сразу заполнялось бы старым числом и вписать новое было нельзя.
+/// В модель уходит каждое число, которое удалось разобрать.
+private struct SetNumberField: View {
+    let value: Double
+    let isDecimal: Bool
+    let isDone: Bool
+    let accessibilityName: String
+    let onCommit: (Double) -> Void
+
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 12, style: .continuous) }
+
+    var body: some View {
+        TextField("0", text: $text)
+            .keyboardType(isDecimal ? .decimalPad : .numberPad)
+            .multilineTextAlignment(.center)
+            .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
+            .monospacedDigit()
+            // План — приглушённым, факт — белым, как у REBRN.
+            .foregroundStyle(isDone || focused ? Color.white : Color.white.opacity(0.6))
+            .focused($focused)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(Color(white: focused ? 0.19 : 0.14), in: shape)
+            .overlay(shape.strokeBorder(Theme.accent, lineWidth: 1.5).opacity(focused ? 1 : 0))
+            .animation(.easeOut(duration: 0.15), value: focused)
+            .accessibilityLabel(accessibilityName)
+            .onAppear { text = Self.format(value, decimal: isDecimal) }
+            .onChange(of: value) { _, newValue in
+                if !focused { text = Self.format(newValue, decimal: isDecimal) }
+            }
+            .onChange(of: text) { _, newText in
+                if let parsed = Self.parse(newText, decimal: isDecimal), parsed != value { onCommit(parsed) }
+            }
+            .onChange(of: focused) { _, isFocused in
+                // Ушли из поля пустым — показываем то, что в модели.
+                if !isFocused { text = Self.format(value, decimal: isDecimal) }
+            }
     }
 
-    private func formatTimer(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%02d:%02d", mins, secs)
+    private static func format(_ value: Double, decimal: Bool) -> String {
+        decimal ? WeightFormat.plain(value) : String(Int(value))
+    }
+
+    private static func parse(_ text: String, decimal: Bool) -> Double? {
+        let cleaned = text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
+        guard !cleaned.isEmpty, let number = Double(cleaned), number.isFinite, number >= 0 else { return nil }
+        return decimal ? min(number, 1000) : min(number.rounded(.down), 999)
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -79,7 +80,8 @@ fun ExerciseHistoryScreen(
         item(key = "summary") { SummaryCard(points, Modifier.appearIn(0)) }
         item(key = "chart") { HistoryChart(points, Modifier.appearIn(1)) }
 
-        items(points, key = { "${it.week}-${it.day}" }) { point ->
+        // Одно движение дважды в дне даёт две точки с одной датой — ключ с номером.
+        itemsIndexed(points, key = { index, it -> "${it.week}-${it.day}-$index" }) { _, point ->
             PointRow(point)
         }
     }

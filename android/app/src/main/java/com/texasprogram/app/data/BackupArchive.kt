@@ -60,7 +60,20 @@ data class ProfileSnapshot(
     val euthanasiaInput: EuthanasiaInput? = null,
     val autoregulationEnabled: Boolean = false,
     val liftReports: List<LiftReport> = emptyList(),
-    val workoutNotes: Map<String, String> = emptyMap()
+    val workoutNotes: Map<String, String> = emptyMap(),
+    /// Замеры веса тела. Дата — ISO-строка, как пишет iOS: раньше вес тела
+    /// в копию не попадал вовсе и терялся при восстановлении.
+    val bodyWeightLog: List<BodyWeightSnapshot> = emptyList(),
+    /// Шаг прибавки и отклонённые застои. В старых копиях их нет.
+    val weightSteps: Map<String, Double> = emptyMap(),
+    val defaultWeightStep: Double = 2.5,
+    val stallDismissed: Map<String, Double> = emptyMap()
+)
+
+@Serializable
+data class BodyWeightSnapshot(
+    val date: String,
+    val weight: Double
 )
 
 @Serializable
@@ -71,14 +84,25 @@ data class CompletionSnapshot(
     val day: Int,
     val squat: Double? = null,
     val bench: Double? = null,
-    val deadlift: Double? = null
+    val deadlift: Double? = null,
+    /// Факт, время и усилие тренировки. Необязательные: в копиях, снятых
+    /// раньше, их нет — без них история теряла бы итоги тренировок.
+    val actualSquat: Double? = null,
+    val actualBench: Double? = null,
+    val actualDeadlift: Double? = null,
+    val durationSeconds: Int? = null,
+    val effort: String? = null
 )
 
 @Serializable
 data class BackupArchive(
     val version: Int = 1,
+    /// ISO 8601 без долей секунды: так дату читает и iOS-версия.
     val exportedAt: String = "",
-    val profiles: List<ProfileSnapshot> = emptyList()
+    val profiles: List<ProfileSnapshot> = emptyList(),
+    /// Код входа в профиль ленты: после переустановки профиль возвращается
+    /// вместе с данными. В старых копиях его нет.
+    val socialToken: String? = null
 )
 
 object BackupService {
@@ -90,8 +114,14 @@ object BackupService {
         prettyPrint = true
     }
 
-    fun export(profiles: List<ProgramProfile>): String =
-        json.encodeToString(BackupArchive(profiles = profiles.map(::snapshot)))
+    fun export(profiles: List<ProgramProfile>, socialToken: String? = null): String =
+        json.encodeToString(
+            BackupArchive(
+                exportedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString(),
+                profiles = profiles.map(::snapshot),
+                socialToken = socialToken
+            )
+        )
 
     fun parse(text: String): BackupArchive = json.decodeFromString(text)
 
@@ -120,7 +150,10 @@ object BackupService {
         peakBench5RM = profile.peakBench5RM,
         peakDeadlift5RM = profile.peakDeadlift5RM,
         completionLog = profile.completionLog.map {
-            CompletionSnapshot(it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift)
+            CompletionSnapshot(
+                it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift,
+                it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort
+            )
         },
         planEdits = profile.planEdits,
         setLog = profile.setLog,
@@ -132,7 +165,16 @@ object BackupService {
         euthanasiaInput = profile.euthanasiaInput,
         autoregulationEnabled = profile.autoregulationEnabled,
         liftReports = profile.liftReports,
-        workoutNotes = profile.workoutNotes
+        workoutNotes = profile.workoutNotes,
+        bodyWeightLog = profile.bodyWeightLog.map {
+            BodyWeightSnapshot(
+                java.time.LocalDate.ofEpochDay(it.epochDay).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toString(),
+                it.weight
+            )
+        },
+        weightSteps = profile.weightSteps,
+        defaultWeightStep = profile.defaultWeightStep,
+        stallDismissed = profile.stallDismissed
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(
@@ -155,7 +197,10 @@ object BackupService {
         completedDayKeys = snapshot.completedDayKeys,
         completedBenchSessions = snapshot.completedBenchSessions,
         completionLog = snapshot.completionLog.map {
-            CompletionRecord(it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift)
+            CompletionRecord(
+                it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift,
+                it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort
+            )
         },
         planEdits = snapshot.planEdits,
         setLog = snapshot.setLog,
@@ -170,6 +215,15 @@ object BackupService {
         autoregulationEnabled = snapshot.autoregulationEnabled,
         liftReports = snapshot.liftReports,
         workoutNotes = snapshot.workoutNotes,
+        bodyWeightLog = snapshot.bodyWeightLog.mapNotNull { entry ->
+            // iOS пишет начало дня в своём часовом поясе — переводим обратно в дату.
+            runCatching {
+                java.time.Instant.parse(entry.date).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
+            }.getOrNull()?.let { com.texasprogram.app.model.BodyWeightEntry(it, entry.weight) }
+        },
+        weightSteps = snapshot.weightSteps,
+        defaultWeightStep = snapshot.defaultWeightStep,
+        stallDismissed = snapshot.stallDismissed,
         scheduleWeekdays = snapshot.scheduleWeekdays,
         scheduleMode = if (snapshot.scheduleMode == "QUEUE") ScheduleMode.QUEUE else ScheduleMode.WEEKDAY,
         cycleStartedEpochDay = snapshot.cycleStartedEpochDay,

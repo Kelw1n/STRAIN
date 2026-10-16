@@ -392,7 +392,8 @@ final class ProgramCalculatorTests: XCTestCase {
         profile.peakingActive = true
         XCTAssertTrue(profile.isPeaking)
         // План стал пиковым, а отметки основного цикла в нём не видны.
-        XCTAssertEqual(profile.workoutPlan.weeks.count, 3)
+        // Демо — средний уровень, у него пик в четыре недели (см. testPeakingEndsWithOneRepMaxTest).
+        XCTAssertEqual(profile.workoutPlan.weeks.count, 4)
         XCTAssertEqual(profile.completedDayCount, 0)
         XCTAssertFalse(profile.isCompleted(week: 1, day: 1))
 

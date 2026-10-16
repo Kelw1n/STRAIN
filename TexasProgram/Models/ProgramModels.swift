@@ -249,6 +249,8 @@ struct AccessoryHint: Equatable, Sendable {
     /// Вес вырос по сравнению с прошлым разом.
     let isStepUp: Bool
     let text: String
+    /// Застой: три тренировки на одном весе без роста — предлагаем сбросить.
+    var isDeload: Bool = false
 }
 
 struct WorkoutDayPlan: Identifiable, Equatable, Hashable, Codable, Sendable {
@@ -320,6 +322,16 @@ final class ProgramProfile {
     var bodyWeightLog: [BodyWeightEntry] = []
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
     var accessoryProgressionEnabled: Bool = true
+    /// Шаг прибавки по упражнениям: ключ — нормализованное название.
+    /// Нет записи — обычные 2,5 кг. Нужен там, где мелких блинов нет
+    /// (жим лёжа, тренажёр с плитками по 5 кг) или, наоборот, шаг мельче.
+    var weightSteps: [String: Double] = [:]
+    /// Шаг для всех упражнений без своего: зависит от самых мелких блинов в зале.
+    /// По умолчанию 2,5 кг — пара блинов по 1,25.
+    var defaultWeightStep: Double = AccessoryHint.step
+    /// Застой, который человек решил не сбрасывать: упражнение → вес.
+    /// На другом весе предложение вернётся.
+    var stallDismissed: [String: Double] = [:]
     /// Напоминание о тренировке в дни расписания.
     var reminderEnabled: Bool = false
     var reminderHour: Int = 18
@@ -427,7 +439,7 @@ final class ProgramProfile {
     /// Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
     /// правки подставляют свои упражнения. Наоборот задержка стёрла бы то,
     /// что пользователь вписал руками.
-    var workoutPlan: WorkoutPlan { applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan))) }
+    var workoutPlan: WorkoutPlan { applySteps(to: applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan)))) }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
@@ -550,6 +562,49 @@ final class ProgramProfile {
             index -= 1
         }
         return (current, best)
+    }
+
+    // MARK: - Серия и цель недели по календарю
+
+    struct CalendarStreak: Equatable {
+        let weeks: Int
+        let workouts: Int
+    }
+
+    /// Серия как у REBRN: неделя (пн–вс) засчитана, если в ней была хотя бы одна
+    /// тренировка. Начатая неделя серию не обрывает — до воскресенья есть время,
+    /// поэтому пустую текущую неделю пропускаем и считаем от прошлой.
+    func calendarStreak(now: Date = Date(), calendar base: Calendar = .current) -> CalendarStreak {
+        let calendar = WorkoutScheduler.trainingCalendar(base)
+        var perWeek: [Date: Int] = [:]
+        for record in completionLog {
+            guard let start = calendar.dateInterval(of: .weekOfYear, for: record.date)?.start else { continue }
+            perWeek[start, default: 0] += 1
+        }
+        guard var cursor = calendar.dateInterval(of: .weekOfYear, for: now)?.start else {
+            return CalendarStreak(weeks: 0, workouts: 0)
+        }
+        if perWeek[cursor] == nil, let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) {
+            cursor = previous
+        }
+        var weeks = 0
+        var workouts = 0
+        while let count = perWeek[cursor] {
+            weeks += 1
+            workouts += count
+            guard let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+        return CalendarStreak(weeks: weeks, workouts: workouts)
+    }
+
+    /// Цель недели: сколько тренировок сделано на этой календарной неделе
+    /// и сколько задумано — по числу дней в расписании. С понедельника снова с нуля.
+    func weekGoal(now: Date = Date(), calendar base: Calendar = .current) -> (done: Int, target: Int) {
+        let calendar = WorkoutScheduler.trainingCalendar(base)
+        let target = max(weekdays.count, 1)
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else { return (0, target) }
+        return (completionLog.filter { week.contains($0.date) }.count, target)
     }
 
     // MARK: - Авторегуляция
@@ -767,9 +822,14 @@ final class ProgramProfile {
         refreshCompletion(week: week, day: day, now: now)
     }
 
-    /// Записанные подходы упражнения по порядку номеров.
+    /// Сколько подходов сверх плана ищем в записях. В тренировке можно
+    /// добавить подход кнопкой — без этого запаса он записывался, но в историю,
+    /// графики и выгрузку не попадал.
+    static let extraSetAllowance = 12
+
+    /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана.
     func entries(week: Int, day: Int, exercise: ExercisePrescription) -> [(index: Int, entry: SetEntry)] {
-        (0..<max(exercise.sets, 0)).compactMap { index in
+        (0..<(max(exercise.sets, 0) + Self.extraSetAllowance)).compactMap { index in
             setEntry(week: week, day: day, exercise: exercise, index: index).map { (index, $0) }
         }
     }
@@ -781,6 +841,14 @@ final class ProgramProfile {
         let matched = exercises.filter { exerciseNames.contains($0.name) }
         let weights = matched.flatMap { entries(week: week, day: day, exercise: $0).map(\.entry.weight) }
         return weights.max()
+    }
+
+    /// Тоннаж дня по записанным подходам: ключ дня из истории отметок.
+    func tonnage(forDayKey key: String) -> Double {
+        let prefix = key + "|"
+        return setLog.reduce(0) { sum, item in
+            item.key.hasPrefix(prefix) ? sum + item.value.tonnage : sum
+        }
     }
 
     // MARK: - История упражнения
@@ -886,6 +954,95 @@ final class ProgramProfile {
         }
     }
 
+    // MARK: - Шаг прибавки
+
+    /// Варианты шага: от тренажёров с шагом 1 кг до плиток по 10 кг.
+    static let weightStepOptions: [Double] = [1, 1.25, 2.5, 5, 10]
+
+    /// Ключ упражнения для шага: одно и то же движение во всех днях и неделях.
+    static func weightStepKey(_ name: String) -> String {
+        name.lowercased()
+            .replacingOccurrences(of: "ё", with: "е")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Подпись варианта: что это значит в зале.
+    static func weightStepTitle(_ step: Double) -> String {
+        switch step {
+        case 1: return "1 кг — тренажёр"
+        case 1.25: return "1,25 кг"
+        case 2.5: return "2,5 кг — есть блины 1,25"
+        case 5: return "5 кг — мельче 2,5 нет"
+        case 10: return "10 кг — плитки по 10"
+        default: return WeightFormat.kilogramsPrecise(step)
+        }
+    }
+
+    static func weightStepHint(_ step: Double) -> String {
+        switch step {
+        case 5: return "Самые мелкие блины — 2,5 кг: вес растёт на 5 кг, а веса программы округляются до того, что можно повесить."
+        case 2.5: return "Есть блины по 1,25 кг: вес растёт на 2,5 кг — обычная прибавка."
+        default: return "Вес растёт на \(WeightFormat.kilogramsPrecise(step)), веса программы округляются под этот шаг."
+        }
+    }
+
+    func weightStep(for name: String) -> Double {
+        weightSteps[Self.weightStepKey(name)] ?? defaultWeightStep
+    }
+
+    /// Свой ли шаг у упражнения — меню показывает «как в зале» или выбранный.
+    func hasOwnWeightStep(for name: String) -> Bool {
+        weightSteps[Self.weightStepKey(name)] != nil
+    }
+
+    func setWeightStep(_ step: Double, for name: String) {
+        let key = Self.weightStepKey(name)
+        // Шаг, совпадающий с общим, не храним: поменяешь общий — упражнение пойдёт за ним.
+        if step == defaultWeightStep || step <= 0 {
+            weightSteps.removeValue(forKey: key)
+        } else {
+            weightSteps[key] = step
+        }
+    }
+
+    /// Округляет вес до того, что реально можно повесить при этом шаге.
+    /// Ровно посередине — вниз: лишний вес на штанге хуже недостающего.
+    static func roundWeight(_ value: Double, step: Double) -> Double {
+        guard value.isFinite, step > 0 else { return value }
+        let units = value / step
+        let lower = units.rounded(.down)
+        let rounded = units - lower > 0.5 + 1e-9 ? lower + 1 : lower
+        return (rounded * step * 100).rounded() / 100
+    }
+
+    /// Веса программы для упражнений со своим шагом: 82,5 в жиме при шаге 5 кг
+    /// не повесить, поэтому план показывает 80.
+    private func applySteps(to plan: WorkoutPlan) -> WorkoutPlan {
+        // Обычный зал и ни одного своего шага — план ровно тот, что посчитала программа.
+        guard !weightSteps.isEmpty || defaultWeightStep != AccessoryHint.step else { return plan }
+        return WorkoutPlan(weeks: plan.weeks.map { week in
+            WorkoutWeekPlan(id: week.id, number: week.number, days: week.days.map { day in
+                WorkoutDayPlan(id: day.id, number: day.number, title: day.title, exercises: day.exercises.map { exercise in
+                    guard case .kilograms(let value) = exercise.load else { return exercise }
+                    let step = weightStep(for: exercise.name)
+                    // Программа считает с шагом 2,5 — такие веса и так вешаются.
+                    guard step != AccessoryHint.step else { return exercise }
+                    let rounded = Self.roundWeight(value, step: step)
+                    guard rounded != value else { return exercise }
+                    return ExercisePrescription(
+                        id: exercise.id,
+                        name: exercise.name,
+                        sets: exercise.sets,
+                        reps: exercise.reps,
+                        load: .kilograms(rounded),
+                        isOptional: exercise.isOptional,
+                        benchSession: exercise.benchSession
+                    )
+                })
+            })
+        }, isPeaking: plan.isPeaking)
+    }
+
     // MARK: - Прогрессия подсобки
 
     /// Что делать с весом подсобки на этой тренировке.
@@ -913,11 +1070,23 @@ final class ProgramProfile {
         let allTop = last.entries.allSatisfy { $0.reps >= top }
 
         if allSets && allTop {
-            let next = ProgramCalculator.roundToPlate(working + AccessoryHint.step)
+            // Шаг — свой у упражнения: на блоке 2,5, на жиме без мелких блинов 5.
+            // От рабочего веса, без округления к сетке: он уже реально висел на штанге.
+            let step = weightStep(for: exercise.name)
+            let next = ((working + step) * 100).rounded() / 100
             return AccessoryHint(
                 weight: next,
                 isStepUp: next > working,
                 text: "В прошлый раз \(top) во всех подходах — прибавь до \(WeightFormat.kilogramsPrecise(next))."
+            )
+        }
+
+        if let deload = stallDeload(for: exercise, top: top, previous: previous, working: working) {
+            return AccessoryHint(
+                weight: deload,
+                isStepUp: false,
+                text: "Три тренировки подряд на \(WeightFormat.kilogramsPrecise(working)) без роста. Сбрось до \(WeightFormat.kilogramsPrecise(deload)) и набери \(top) заново — так вес снова пойдёт вверх.",
+                isDeload: true
             )
         }
 
@@ -926,6 +1095,34 @@ final class ProgramProfile {
             isStepUp: false,
             text: "Держи \(WeightFormat.kilogramsPrecise(working)) и добери до \(top) в каждом подходе — тогда вес вырастет."
         )
+    }
+
+    /// Сколько тренировок подряд на одном весе без роста считаем застоем.
+    static let stallSessions = 3
+
+    /// Вес разгрузки, если движение встало: последние три раза один и тот же
+    /// рабочий вес, ни разу не закрыт верх диапазона и повторов не прибавилось. Минус 10% под шаг —
+    /// достаточно, чтобы снова пойти вверх, и не так много, чтобы откатиться.
+    private func stallDeload(for exercise: ExercisePrescription, top: Int, previous: [ExerciseHistoryPoint], working: Double) -> Double? {
+        let key = Self.weightStepKey(exercise.name)
+        if stallDismissed[key] == working { return nil }
+        let recent = previous.filter { !$0.entries.isEmpty }.suffix(Self.stallSessions)
+        guard recent.count == Self.stallSessions else { return nil }
+        let stuck = recent.allSatisfy { point in
+            point.entries.map(\.weight).max() == working
+                && !(point.entries.count >= exercise.sets && point.entries.allSatisfy { $0.reps >= top })
+        }
+        // Повторы растут на том же весе — двойная прогрессия идёт, это не застой.
+        guard stuck, let first = recent.first, let last = recent.last, last.totalReps <= first.totalReps else { return nil }
+        let step = weightStep(for: exercise.name)
+        var deload = Self.roundWeight(working * 0.9, step: step)
+        if deload >= working { deload = working - step }
+        return deload > 0 ? deload : nil
+    }
+
+    /// «Не сбрасывать»: застой на этом весе больше не предлагаем.
+    func dismissStall(for name: String, weight: Double) {
+        stallDismissed[Self.weightStepKey(name)] = weight
     }
 
     // MARK: - История по старым отметкам
@@ -1181,15 +1378,9 @@ final class ProgramProfile {
                     title: "\(self.name) · Неделя \(week), день \(day)"
                 )
             }
-            Task {
-                await BroTrackerService.shared.syncMyProfile(profile: self)
-            }
         } else {
             let key = dayKey(week: week, day: day)
             completionLog.removeAll { $0.key == key }
-            Task {
-                await BroTrackerService.shared.syncMyProfile(profile: self)
-            }
         }
     }
 
@@ -1225,6 +1416,16 @@ final class ProgramProfile {
 
     /// Обновляет запись истории, если день уже отмечен: факт мог появиться позже.
     /// Дату оставляем исходную — тренировка была тогда, а не в момент правки.
+    /// Время и усилие уже отмеченной тренировки. День мог закрыться раньше —
+    /// отметкой на «Сегодня» или последним подходом, — а итог пришёл с экрана
+    /// завершения; без этого он терялся, и в истории не было ни времени, ни усилия.
+    func setWorkoutSummary(week: Int, day: Int, durationSeconds: Int?, effort: String?) {
+        let key = dayKey(week: week, day: day)
+        guard let index = completionLog.firstIndex(where: { $0.key == key }) else { return }
+        if let durationSeconds { completionLog[index].durationSeconds = durationSeconds }
+        if let effort { completionLog[index].effort = effort }
+    }
+
     private func refreshCompletion(week: Int, day: Int, now: Date) {
         guard isCompleted(week: week, day: day) else { return }
         let key = dayKey(week: week, day: day)
@@ -1282,6 +1483,33 @@ final class ProgramProfile {
         } else {
             setProgress[key] = count
         }
+    }
+
+    /// Слепок отметок одного дня: им отмена тренировки возвращает всё как было.
+    struct DaySnapshot: Codable {
+        let progress: [String: Int]
+        let log: [String: SetEntry]
+    }
+
+    func snapshotDay(week: Int, day: Int) -> DaySnapshot {
+        let prefix = dayKey(week: week, day: day) + "|"
+        return DaySnapshot(
+            progress: setProgress.filter { $0.key.hasPrefix(prefix) },
+            log: setLog.filter { $0.key.hasPrefix(prefix) }
+        )
+    }
+
+    /// Возвращает отметки дня к слепку. Выполненность дня и история не трогаются:
+    /// тренировка, закрытая до начала сессии, после отмены сессии остаётся закрытой.
+    func restoreDay(_ snapshot: DaySnapshot, week: Int, day: Int, now: Date = Date()) {
+        let prefix = dayKey(week: week, day: day) + "|"
+        // Собираем словари целиком и присваиваем один раз: каждое присваивание
+        // свойства модели — это запись в хранилище.
+        setProgress = setProgress.filter { !$0.key.hasPrefix(prefix) }
+            .merging(snapshot.progress) { _, restored in restored }
+        setLog = setLog.filter { !$0.key.hasPrefix(prefix) }
+            .merging(snapshot.log) { _, restored in restored }
+        refreshCompletion(week: week, day: day, now: now)
     }
 
     /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
@@ -1476,9 +1704,6 @@ final class ProgramProfile {
         let target = day(forBenchSession: session)
         setDayCompleted(week: target.week, day: target.day, done)
         if done { lastCompletionDate = now }
-        Task {
-            await BroTrackerService.shared.syncMyProfile(profile: self)
-        }
     }
 
     private func setBenchCompleted(_ session: Int, _ done: Bool) {

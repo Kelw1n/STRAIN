@@ -5,6 +5,10 @@ import SwiftUI
 enum Theme {
     static var style: AppThemeStyle { ThemeManager.shared.current }
 
+    /// Гарнитура цифр и заголовков. У REBRN плотный гротеск без скруглений,
+    /// у остальных тем — прежний скруглённый.
+    static var fontDesign: Font.Design { style.isRebrn ? .default : .rounded }
+
     static var accent: Color {
         if style.isRebrn {
             // Фирменный неоново-пламенный оранжевый REBRN (#FF6029)
@@ -81,11 +85,8 @@ enum Theme {
 
     static func hairline(_ scheme: ColorScheme) -> LinearGradient {
         if style.isRebrn {
-            return LinearGradient(
-                colors: [Color.white.opacity(0.12), Color.white.opacity(0.03)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            // У REBRN карточки держатся на контрасте с чёрным фоном, без обводки.
+            return LinearGradient(colors: [.clear], startPoint: .top, endPoint: .bottom)
         } else if style.isClaude {
             return LinearGradient(
                 colors: scheme == .dark
@@ -108,8 +109,8 @@ enum Theme {
     /// Заливка карточки в зависимости от темы и цветовой схемы.
     static func surface(_ scheme: ColorScheme) -> Color {
         if style.isRebrn {
-            // Тёмно-графитовые матовые карточки REBRN
-            return Color(red: 0.11, green: 0.11, blue: 0.12)
+            // Графитовые карточки REBRN (#161617) на чистом чёрном
+            return Color(red: 0.086, green: 0.086, blue: 0.09)
         } else if style.isClaude {
             return scheme == .dark
                 ? Color(red: 0.155, green: 0.147, blue: 0.140)
@@ -127,6 +128,10 @@ enum Motion {
     static let snappy = Animation.spring(response: 0.32, dampingFraction: 0.78)
     static let bouncy = Animation.spring(response: 0.42, dampingFraction: 0.62)
     static let smooth = Animation.easeInOut(duration: 0.28)
+    /// Появление и уход крупных панелей: тренировка, листы, плашки.
+    static let sheet = Animation.spring(response: 0.42, dampingFraction: 0.86)
+    /// Перестановка и отклик на палец: быстро, с лёгким качанием.
+    static let reorder = Animation.spring(response: 0.3, dampingFraction: 0.78)
 
     static func maybe(_ animation: Animation, reduce: Bool) -> Animation? {
         reduce ? nil : animation
@@ -140,8 +145,8 @@ struct AppBackground: View {
 
     private var base: Color {
         if Theme.style.isRebrn {
-            // Глубокий матовый OLED-чёрный фон (#0B0B0D)
-            return Color(red: 0.043, green: 0.043, blue: 0.048)
+            // Чистый OLED-чёрный, как у REBRN
+            return .black
         } else if Theme.style.isClaude {
             // Тёплый молочный пергамент (#FAF7F2) в светлой, и тёплый матовый уголь (#151413) в тёмной
             return scheme == .dark ? Color(red: 0.086, green: 0.082, blue: 0.078) : Color(red: 0.980, green: 0.969, blue: 0.949)
@@ -164,12 +169,8 @@ struct AppBackground: View {
         ZStack {
             base
             if Theme.style.isRebrn {
-                RadialGradient(
-                    colors: [Theme.accent.opacity(glow), .clear],
-                    center: UnitPoint(x: 0.08, y: 0.02),
-                    startRadius: 0,
-                    endRadius: 400
-                )
+                // Без свечения: у REBRN фон пустой, акцент живёт только в элементах.
+                EmptyView()
             } else {
                 RadialGradient(
                     colors: [Theme.accent.opacity(glow), .clear],

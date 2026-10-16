@@ -1,37 +1,6 @@
 import SwiftUI
 import PhotosUI
 
-/// Оценка субъективного усилия тренировки в стиле REBRN
-enum WorkoutEffort: String, CaseIterable, Identifiable {
-    case easy = "ЛЕГКО"
-    case normal = "НОРМАЛЬНО"
-    case veryHard = "ОЧЕНЬ ТЯЖЕЛО"
-
-    var id: String { rawValue }
-
-    var color: Color {
-        switch self {
-        case .easy:
-            return Color(red: 0.18, green: 0.84, blue: 0.45) // #2ED573
-        case .normal:
-            return Color(red: 1.0, green: 0.65, blue: 0.20) // #FFA533
-        case .veryHard:
-            return Color(red: 1.0, green: 0.28, blue: 0.34) // #FF4757
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .easy:
-            return "leaf.fill"
-        case .normal:
-            return "flame.fill"
-        case .veryHard:
-            return "bolt.heart.fill"
-        }
-    }
-}
-
 /// Экран подведения итогов тренировки «Твоя тренировка» в стиле REBRN
 struct WorkoutCompletionSummaryView: View {
     @Environment(\.dismiss) private var dismiss
@@ -42,15 +11,21 @@ struct WorkoutCompletionSummaryView: View {
 
     @State private var workoutTitle: String = ""
     @State private var workoutDescription: String = ""
-    @State private var selectedEffort: WorkoutEffort? = nil
+    /// Оценка усилия 1–10; пусто — не ставили.
+    @State private var effortScore: Int? = nil
 
-    // Выбор фото/видео (до 5 штук)
+    // Выбор фото (до 5 штук): первое ложится на карточку для сторис
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
+    @State private var showingCamera = false
+    /// Публиковать ли тренировку в ленту — по умолчанию да, если есть профиль.
+    @State private var publishToFeed = true
 
     // Редактирование времени тренировки
     @State private var durationSeconds: Int = 0
     @State private var showingDurationPicker: Bool = false
+    /// Готовая картинка для сторис — открывает лист «Поделиться».
+    @State private var shareImage: ShareImage? = nil
     @State private var pickerHours: Int = 1
     @State private var pickerMinutes: Int = 15
 
@@ -59,7 +34,7 @@ struct WorkoutCompletionSummaryView: View {
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(spacing: 20) {
-                        // ФОТО И ВИДЕО (0/5)
+                        // ФОТО (0/5)
                         photoVideoSection
 
                         // НАЗВАНИЕ И ОПИСАНИЕ ТРЕНИРОВКИ
@@ -71,6 +46,12 @@ struct WorkoutCompletionSummaryView: View {
                         // УСИЛИЕ
                         effortSection
 
+                        // ЛЕНТА STRAIN
+                        publishSection
+
+                        // КАРТОЧКА ДЛЯ СТОРИС
+                        shareSection
+
                         // Зазор под нижнюю кнопку
                         Spacer(minLength: 90)
                     }
@@ -78,7 +59,7 @@ struct WorkoutCompletionSummaryView: View {
                     .padding(.top, 16)
                 }
                 .scrollIndicators(.hidden)
-                .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+                .background(Color.black.ignoresSafeArea())
 
                 // Нижняя большая белая кнопка «ДАЛЬШЕ»
                 bottomActionButton
@@ -87,9 +68,9 @@ struct WorkoutCompletionSummaryView: View {
                     .background(
                         LinearGradient(
                             colors: [
-                                Color(red: 0.05, green: 0.05, blue: 0.06).opacity(0),
-                                Color(red: 0.05, green: 0.05, blue: 0.06).opacity(0.95),
-                                Color(red: 0.05, green: 0.05, blue: 0.06)
+                                Color.black.opacity(0),
+                                Color.black.opacity(0.95),
+                                Color.black
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -122,7 +103,7 @@ struct WorkoutCompletionSummaryView: View {
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(.white)
 
-                        Text("Увидят подписчики в твоём профиле")
+                        Text("Время, усилие и заметка — в историю")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.white.opacity(0.55))
                     }
@@ -130,6 +111,10 @@ struct WorkoutCompletionSummaryView: View {
             }
             .sheet(isPresented: $showingDurationPicker) {
                 durationPickerSheet
+            }
+            .sheet(item: $shareImage) { item in
+                ShareSheet(items: [item.image])
+                    .presentationDetents([.medium, .large])
             }
         }
         .preferredColorScheme(.dark)
@@ -144,111 +129,200 @@ struct WorkoutCompletionSummaryView: View {
         }
     }
 
-    // MARK: - Секция Фото и Видео
+    // MARK: - Секция Фото
 
+    /// Фото снимаются прямо отсюда или берутся из галереи. Первое ляжет на
+    /// карточку для сторис, все — в пост ленты.
     private var photoVideoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ФОТО И ВИДЕО (\(selectedImages.count)/5)")
+            Text("ФОТО (\(selectedImages.count)/5)")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Color.white.opacity(0.45))
                 .padding(.leading, 4)
 
-            PhotosPicker(
-                selection: $selectedPhotoItems,
-                maxSelectionCount: 5,
-                matching: .any(of: [.images, .videos])
-            ) {
-                VStack(spacing: 12) {
-                    if selectedImages.isEmpty {
-                        ZStack {
-                            Circle()
-                                .fill(Color.white.opacity(0.08))
-                                .frame(width: 56, height: 56)
-
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 24, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.90))
-                        }
-
-                        VStack(spacing: 4) {
-                            Text("Добавить фото и видео")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
-
-                            Text("до 5 штук · видео до 30 секунд")
-                                .font(.system(size: 13, weight: .regular))
-                                .foregroundStyle(Color.white.opacity(0.50))
-                        }
-                    } else {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, img in
-                                    ZStack(alignment: .topTrailing) {
-                                        Image(uiImage: img)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 80, height: 80)
-                                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                                        Button {
-                                            if index < selectedImages.count {
-                                                selectedImages.remove(at: index)
-                                            }
-                                            if index < selectedPhotoItems.count {
-                                                selectedPhotoItems.remove(at: index)
-                                            }
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 20))
-                                                .foregroundStyle(Color.white, Color.black.opacity(0.7))
-                                                .padding(4)
+            VStack(spacing: 14) {
+                if selectedImages.isEmpty {
+                    VStack(spacing: 4) {
+                        Text("Добавь фото к тренировке")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white)
+                        Text("до 5 штук · первое ляжет на карточку для сторис")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.white.opacity(0.50))
+                    }
+                    .padding(.top, 6)
+                    HStack(spacing: 10) {
+                        cameraButton(large: true)
+                        galleryButton(large: true)
+                    }
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, img in
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    Button {
+                                        if index < selectedImages.count {
+                                            _ = withAnimation(Motion.snappy) { selectedImages.remove(at: index) }
                                         }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundStyle(Color.white, Color.black.opacity(0.7))
+                                            .padding(4)
                                     }
-                                }
-
-                                if selectedImages.count < 5 {
-                                    VStack(spacing: 6) {
-                                        Image(systemName: "plus")
-                                            .font(.system(size: 20, weight: .bold))
-                                            .foregroundStyle(.white.opacity(0.8))
-                                        Text("Ещё")
-                                            .font(.system(size: 11, weight: .medium))
-                                            .foregroundStyle(.white.opacity(0.6))
-                                    }
-                                    .frame(width: 80, height: 80)
-                                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .accessibilityLabel("Убрать фото")
                                 }
                             }
-                            .padding(.vertical, 4)
+                            if selectedImages.count < 5 {
+                                cameraButton(large: false)
+                                galleryButton(large: false)
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, selectedImages.isEmpty ? 28 : 16)
-                .padding(.horizontal, 16)
-                .background(Color(red: 0.10, green: 0.10, blue: 0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-                )
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .padding(16)
+            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
             .onChange(of: selectedPhotoItems) { _, newItems in
+                guard !newItems.isEmpty else { return }
                 Task {
                     var loaded: [UIImage] = []
                     for item in newItems {
                         if let data = try? await item.loadTransferable(type: Data.self),
                            let image = UIImage(data: data) {
-                            loaded.append(image)
+                            loaded.append(image.downscaled())
                         }
                     }
                     await MainActor.run {
-                        selectedImages = loaded
+                        selectedImages = Array((selectedImages + loaded).prefix(5))
+                        // Сбрасываем выбор: следующий заход в галерею добавляет, а не заменяет.
+                        selectedPhotoItems = []
                     }
                 }
             }
+            .cameraSheet(isPresented: $showingCamera) { image in
+                guard selectedImages.count < 5 else { return }
+                selectedImages.append(image.downscaled())
+            }
         }
+    }
+
+    private func cameraButton(large: Bool) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showingCamera = true
+        } label: {
+            tile(icon: "camera.fill", title: "Снять", large: large)
+        }
+        .buttonStyle(.pressable)
+        .disabled(!CameraPicker.isAvailable)
+        .opacity(CameraPicker.isAvailable ? 1 : 0.4)
+    }
+
+    private func galleryButton(large: Bool) -> some View {
+        PhotosPicker(
+            selection: $selectedPhotoItems,
+            maxSelectionCount: max(1, 5 - selectedImages.count),
+            matching: .images
+        ) {
+            tile(icon: "photo.on.rectangle", title: "Галерея", large: large)
+        }
+        .buttonStyle(.pressable)
+    }
+
+    private func tile(icon: String, title: String, large: Bool) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: large ? 22 : 18, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+            Text(title)
+                .font(.system(size: large ? 14 : 11, weight: .bold))
+                .foregroundStyle(.white.opacity(large ? 0.9 : 0.6))
+        }
+        .frame(maxWidth: large ? .infinity : 80)
+        .frame(width: large ? nil : 80, height: large ? 76 : 80)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    // MARK: - Публикация в ленту
+
+    private var publishSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ЛЕНТА")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .padding(.leading, 4)
+            VStack(alignment: .leading, spacing: 6) {
+                if SocialService.shared.isSignedIn {
+                    Toggle(isOn: $publishToFeed) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Опубликовать в ленте STRAIN")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
+                            Text("Фото, время, объём и все подходы с весами. Друзья смогут поставить лайк и написать комментарий.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.white.opacity(0.5))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .tint(Theme.accent)
+                } else {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                        Text("Создай профиль во вкладке «Профиль» — и тренировки можно будет публиковать в ленту.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.white.opacity(0.6))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+
+    /// Пост собирается до `finishWorkout`: после него менеджер сбрасывает подходы.
+    private func feedDraft() -> SocialPostDraft {
+        let exercises: [SocialWorkout.Exercise] = sessionManager.exercises.compactMap { exercise in
+            let done = exercise.sets.filter(\.isDone)
+            guard !done.isEmpty else { return nil }
+            return SocialWorkout.Exercise(
+                name: exercise.prescription.name,
+                sets: done.map { SocialWorkout.SetLine(reps: $0.reps, weight: $0.weight, record: $0.isRecord) }
+            )
+        }
+        return SocialPostDraft(
+            clientId: UUID().uuidString.lowercased(),
+            createdAt: Date(),
+            title: workoutTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? workout.fullTitle : workoutTitle,
+            description: workoutDescription.trimmingCharacters(in: .whitespacesAndNewlines),
+            durationSeconds: durationSeconds,
+            volumeKg: sessionManager.totalTonnage,
+            sets: sessionManager.totalCompletedSets,
+            effort: effortScore,
+            workout: SocialWorkout(program: profile.programKind.rawValue, exercises: exercises),
+            photoCount: 0,
+            uploadedPhotos: []
+        )
     }
 
     // MARK: - Секция Название и Описание
@@ -315,7 +389,7 @@ struct WorkoutCompletionSummaryView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatDuration(durationSeconds))
-                        .font(.system(size: 26, weight: .black, design: .rounded))
+                        .font(.system(size: 26, weight: .black, design: Theme.fontDesign))
                         .foregroundStyle(.white)
 
                     Text("В приложении: \(formatDuration(sessionManager.elapsedSeconds))")
@@ -352,63 +426,75 @@ struct WorkoutCompletionSummaryView: View {
 
     private var effortSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("УСИЛИЕ")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.45))
+            Text("УСИЛИЕ")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .padding(.leading, 4)
+            EffortSlider(score: $effortScore)
+        }
+    }
 
-                Spacer()
+    // MARK: - Карточка для сторис
 
-                Text("Можно пропустить")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.45))
-            }
-            .padding(.horizontal, 4)
+    private var shareSummary: WorkoutShareSummary {
+        WorkoutShareSummary.current(
+            title: workoutTitle.isEmpty ? workout.fullTitle : workoutTitle,
+            durationSeconds: durationSeconds
+        )
+    }
 
-            HStack(spacing: 10) {
-                ForEach(WorkoutEffort.allCases) { effort in
-                    let isSelected = selectedEffort == effort
+    /// Превью карточки и кнопка. Своё фото из раздела выше становится фоном.
+    private var shareSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ПОДЕЛИТЬСЯ")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .padding(.leading, 4)
+
+            HStack(alignment: .center, spacing: 16) {
+                WorkoutShareCard(summary: shareSummary, photo: selectedImages.first)
+                    .scaleEffect(0.3, anchor: .topLeading)
+                    .frame(width: WorkoutShareCard.size.width * 0.3, height: WorkoutShareCard.size.height * 0.3, alignment: .topLeading)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Карточка для сторис")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(selectedImages.isEmpty
+                         ? "Время, тоннаж, рекорды и упражнения. Добавь фото выше — оно станет фоном."
+                         : "Первое фото выше — фоном карточки.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Button {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        if selectedEffort == effort {
-                            selectedEffort = nil
-                        } else {
-                            selectedEffort = effort
+                        if let image = WorkoutShareCard.render(shareSummary, photo: selectedImages.first) {
+                            shareImage = ShareImage(image: image)
                         }
                     } label: {
-                        VStack(spacing: 8) {
-                            Circle()
-                                .fill(isSelected ? effort.color : effort.color.opacity(0.35))
-                                .frame(width: 10, height: 10)
-
-                            Text(effort.rawValue)
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(isSelected ? .white : Color.white.opacity(0.70))
-                                .multilineTextAlignment(.center)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .padding(.horizontal, 6)
-                        .background(
-                            isSelected
-                                ? effort.color.opacity(0.18)
-                                : Color(red: 0.10, green: 0.10, blue: 0.12)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(
-                                    isSelected ? effort.color : Color.white.opacity(0.08),
-                                    lineWidth: isSelected ? 2 : 1
-                                )
-                        )
+                        Label("Поделиться", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .background(Theme.accent, in: Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
+                Spacer(minLength: 0)
             }
+            .padding(16)
+            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
         }
     }
 
@@ -419,7 +505,7 @@ struct WorkoutCompletionSummaryView: View {
             handleComplete()
         } label: {
             Text("ДАЛЬШЕ")
-                .font(.system(size: 16, weight: .heavy, design: .rounded))
+                .font(.system(size: 16, weight: .heavy, design: Theme.fontDesign))
                 .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
@@ -505,11 +591,16 @@ struct WorkoutCompletionSummaryView: View {
             )
         }
 
+        // Пост в ленту — до завершения: потом подходы сессии уже сброшены.
+        if publishToFeed && SocialService.shared.isSignedIn {
+            SocialService.shared.enqueue(feedDraft(), photos: selectedImages)
+        }
+
         // Завершаем тренировку в WorkoutSessionManager
         sessionManager.finishWorkout(
             profile: profile,
             customDuration: durationSeconds,
-            effort: selectedEffort?.rawValue
+            effort: EffortScale.text(effortScore)
         )
 
         // Закрываем окно итогов

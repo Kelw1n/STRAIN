@@ -95,6 +95,15 @@ data class ProgramProfile(
     val bodyWeightLog: List<BodyWeightEntry> = emptyList(),
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
     val accessoryProgressionEnabled: Boolean = true,
+    /// Шаг прибавки по упражнениям: ключ — нормализованное название.
+    /// Нет записи — общий шаг зала. Нужен там, где мелких блинов нет
+    /// (жим лёжа, тренажёр с плитками по 5 кг) или, наоборот, шаг мельче.
+    val weightSteps: Map<String, Double> = emptyMap(),
+    /// Шаг для всех упражнений без своего: зависит от самых мелких блинов в зале.
+    /// По умолчанию 2,5 кг — пара блинов по 1,25.
+    val defaultWeightStep: Double = AccessoryHint.STEP,
+    /// Застой, который человек решил не сбрасывать: упражнение → вес.
+    val stallDismissed: Map<String, Double> = emptyMap(),
     /// Напоминание о тренировке в дни расписания.
     val reminderEnabled: Boolean = false,
     val reminderHour: Int = 18,
@@ -116,14 +125,27 @@ data class ProgramProfile(
     /// План программы с наложенными пользовательскими правками.
     /// Правки входят в ключ кэша: иначе добавленное упражнение не появилось бы,
     /// пока не поменяются максимумы.
-    val workoutPlan: WorkoutPlan
-        get() {
-            val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports)
-            // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
-            // правки подставляют свои упражнения. Наоборот задержка стёрла бы
-            // то, что пользователь вписал руками.
-            return PlanCache.resolve(id, key) { applyEdits(applyAutoregulation(applyHolds(generatedPlan))) }
-        }
+    ///
+    /// Профиль неизменяемый, поэтому план считается один раз на экземпляр:
+    /// раньше ключ кэша из двадцати полей собирался и сравнивался при каждом
+    /// обращении, а экраны обращаются к плану десятки раз за перерисовку.
+    /// Общий кэш остаётся — новый экземпляр с теми же входными данными
+    /// (поменяли, например, время отдыха) берёт готовый план.
+    val workoutPlan: WorkoutPlan by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports, weightSteps, defaultWeightStep)
+        // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
+        // правки подставляют свои упражнения. Наоборот задержка стёрла бы
+        // то, что пользователь вписал руками.
+        PlanCache.resolve(id, key) { applySteps(applyEdits(applyAutoregulation(applyHolds(generatedPlan)))) }
+    }
+
+    /// Расписание на сегодня — тоже один раз на экземпляр и дату.
+    @kotlinx.serialization.Transient
+    private var scheduleMemo: Pair<LocalDate, WorkoutSchedule>? = null
+
+    /// История движений: экран тренировки и истории спрашивают её на каждое упражнение.
+    @kotlinx.serialization.Transient
+    private val historyMemo = java.util.concurrent.ConcurrentHashMap<String, List<ExerciseHistoryPoint>>()
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
@@ -139,6 +161,39 @@ data class ProgramProfile(
                 euthanasiaInput?.let { EuthanasiaCalculator.generate(it) } ?: WorkoutPlan(emptyList(), false)
             TrainingProgramKind.CUSTOM -> customProgram?.plan ?: WorkoutPlan(emptyList(), false)
         }
+
+    // MARK: - Шаг прибавки
+
+    fun weightStep(name: String): Double = weightSteps[weightStepKey(name)] ?: defaultWeightStep
+
+    /// Свой ли шаг у упражнения.
+    fun hasOwnWeightStep(name: String): Boolean = weightSteps.containsKey(weightStepKey(name))
+
+    /// Шаг, совпадающий с общим, не храним: поменяешь общий — упражнение пойдёт за ним.
+    fun setWeightStep(step: Double, name: String): ProgramProfile {
+        val key = weightStepKey(name)
+        val next = if (step == defaultWeightStep || step <= 0) weightSteps - key else weightSteps + (key to step)
+        return copy(weightSteps = next)
+    }
+
+    /// Веса программы для упражнений со своим шагом: 82,5 в жиме при шаге 5 кг
+    /// не повесить, поэтому план показывает 80.
+    private fun applySteps(plan: WorkoutPlan): WorkoutPlan {
+        // Обычный зал и ни одного своего шага — план ровно тот, что посчитала программа.
+        if (weightSteps.isEmpty() && defaultWeightStep == AccessoryHint.STEP) return plan
+        return plan.copy(weeks = plan.weeks.map { week ->
+            week.copy(days = week.days.map { day ->
+                day.copy(exercises = day.exercises.map { exercise ->
+                    val load = exercise.load as? LoadPrescription.Kilograms ?: return@map exercise
+                    val step = weightStep(exercise.name)
+                    // Программа считает с шагом 2,5 — такие веса и так вешаются.
+                    if (step == AccessoryHint.STEP) return@map exercise
+                    val rounded = roundWeight(load.value, step)
+                    if (rounded == load.value) exercise else exercise.copy(load = LoadPrescription.Kilograms(rounded))
+                })
+            })
+        })
+    }
 
     private fun applyEdits(plan: WorkoutPlan): WorkoutPlan {
         // Быстрый выход: у профиля без правок расчёт остаётся прежним.
@@ -174,13 +229,26 @@ data class ProgramProfile(
         })
     }
 
+    /// Время и усилие уже отмеченной тренировки. День мог закрыться раньше —
+    /// отметкой на «Сегодня» или последним подходом, — а итог пришёл с экрана
+    /// завершения; без этого он терялся, и в истории не было ни времени, ни усилия.
+    fun withWorkoutSummary(week: Int, day: Int, durationSeconds: Int?, effort: String?): ProgramProfile {
+        val key = dayKey(week, day)
+        if (completionLog.none { it.key == key }) return this
+        return copy(completionLog = completionLog.map {
+            if (it.key == key) it.copy(durationSeconds = durationSeconds ?: it.durationSeconds, effort = effort ?: it.effort) else it
+        })
+    }
+
     /// Обновляет запись истории, если день уже отмечен: факт мог появиться позже.
     /// Дату оставляем исходную — тренировка была тогда, а не в момент правки.
     private fun refreshCompletion(week: Int, day: Int, today: LocalDate): ProgramProfile {
         if (!isCompleted(week, day)) return this
         val key = dayKey(week, day)
-        val original = completionLog.firstOrNull { it.key == key }?.epochDay ?: today.toEpochDay()
-        return recordCompletion(week, day, LocalDate.ofEpochDay(original))
+        val previous = completionLog.firstOrNull { it.key == key }
+        val original = previous?.epochDay ?: today.toEpochDay()
+        // Время и усилие тоже исходные: правка подхода после тренировки их не стирает.
+        return recordCompletion(week, day, LocalDate.ofEpochDay(original), previous?.durationSeconds, previous?.effort)
     }
 
     // MARK: - Пространство имён отметок
@@ -408,9 +476,10 @@ data class ProgramProfile(
     fun loggedSets(week: Int, day: Int, exercise: ExercisePrescription): Set<Int> =
         (0 until maxOf(exercise.sets, 0)).filter { setEntry(week, day, exercise, it) != null }.toSet()
 
-    /// Записанные подходы упражнения по порядку номеров.
+    /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана:
+    /// без запаса подход, добавленный в тренировке кнопкой, в историю и графики не попадал.
     fun entries(week: Int, day: Int, exercise: ExercisePrescription): List<SetEntry> =
-        (0 until maxOf(exercise.sets, 0)).mapNotNull { setEntry(week, day, exercise, it) }
+        (0 until maxOf(exercise.sets, 0) + EXTRA_SET_ALLOWANCE).mapNotNull { setEntry(week, day, exercise, it) }
 
     // MARK: - История упражнения
 
@@ -433,7 +502,10 @@ data class ProgramProfile(
         }
 
     /// Весь путь одного движения по текущему циклу.
-    fun history(exerciseName: String): List<ExerciseHistoryPoint> {
+    fun history(exerciseName: String): List<ExerciseHistoryPoint> =
+        historyMemo.getOrPut(exerciseName) { buildHistory(exerciseName) }
+
+    private fun buildHistory(exerciseName: String): List<ExerciseHistoryPoint> {
         val points = mutableListOf<ExerciseHistoryPoint>()
         for (week in workoutPlan.weeks) {
             for (day in week.days) {
@@ -464,6 +536,22 @@ data class ProgramProfile(
         val day = today.toEpochDay()
         val rest = bodyWeightLog.filterNot { it.epochDay == day }
         return copy(bodyWeightLog = if (value > 0) rest + BodyWeightEntry(day, value) else rest)
+    }
+
+    /// Удаляет замер за этот день — ошибся цифрой, а второй замер за день уже не нужен.
+    fun removeBodyWeight(epochDay: Long): ProgramProfile =
+        copy(bodyWeightLog = bodyWeightLog.filterNot { it.epochDay == epochDay })
+
+    /// Изменение веса за последние дни: от замера на начало окна (или самого
+    /// раннего внутри него) до последнего. Один замер — сравнивать не с чем.
+    fun bodyWeightChange(days: Int): Double? {
+        val series = bodyWeightSeries
+        val last = series.lastOrNull() ?: return null
+        if (series.size < 2) return null
+        val from = last.epochDay - days
+        val base = series.lastOrNull { it.epochDay <= from } ?: series.firstOrNull { it.epochDay >= from } ?: return null
+        if (base.epochDay == last.epochDay) return null
+        return last.weight - base.weight
     }
 
     /// Отношение максимума к своему весу: на сушке штанга стоит,
@@ -500,11 +588,22 @@ data class ProgramProfile(
 
         // Верх диапазона должен быть закрыт во всех подходах, а не в одном.
         if (last.entries.size >= exercise.sets && last.entries.all { it.reps >= top }) {
-            val next = ProgramCalculator.roundToPlate(working + AccessoryHint.STEP)
+            // Шаг — свой у упражнения: на блоке 2,5, на жиме без мелких блинов 5.
+            // От рабочего веса, без округления к сетке: он уже реально висел на штанге.
+            val next = Math.round((working + weightStep(exercise.name)) * 100) / 100.0
             return AccessoryHint(
                 weight = next,
                 isStepUp = next > working,
                 text = "В прошлый раз $top во всех подходах — прибавь до ${formatWeight(next)} кг."
+            )
+        }
+
+        stallDeload(exercise, top, working, week, day)?.let { deload ->
+            return AccessoryHint(
+                weight = deload,
+                isStepUp = false,
+                text = "Три тренировки подряд на ${formatWeight(working)} кг без роста. Сбрось до ${formatWeight(deload)} кг и набери $top заново — так вес снова пойдёт вверх.",
+                isDeload = true
             )
         }
 
@@ -514,6 +613,32 @@ data class ProgramProfile(
             text = "Держи ${formatWeight(working)} кг и добери до $top в каждом подходе — тогда вес вырастет."
         )
     }
+
+    /// Вес разгрузки, если движение встало: последние три раза один и тот же
+    /// рабочий вес, ни разу не закрыт верх диапазона и повторов не прибавилось.
+    /// Минус 10% под шаг — достаточно, чтобы снова пойти вверх.
+    private fun stallDeload(exercise: ExercisePrescription, top: Int, working: Double, week: Int, day: Int): Double? {
+        if (stallDismissed[weightStepKey(exercise.name)] == working) return null
+        val recent = history(exercise.name)
+            .filter { it.week < week || (it.week == week && it.day < day) }
+            .filter { it.entries.isNotEmpty() }
+            .takeLast(STALL_SESSIONS)
+        if (recent.size < STALL_SESSIONS) return null
+        val stuck = recent.all { point ->
+            point.entries.maxOf { it.weight } == working &&
+                !(point.entries.size >= exercise.sets && point.entries.all { it.reps >= top })
+        }
+        // Повторы растут на том же весе — двойная прогрессия идёт, это не застой.
+        if (!stuck || recent.last().entries.sumOf { it.reps } > recent.first().entries.sumOf { it.reps }) return null
+        val step = weightStep(exercise.name)
+        var deload = roundWeight(working * 0.9, step)
+        if (deload >= working) deload = working - step
+        return deload.takeIf { it > 0 }
+    }
+
+    /// «Не сбрасывать»: застой на этом весе больше не предлагаем.
+    fun dismissStall(name: String, weight: Double): ProgramProfile =
+        copy(stallDismissed = stallDismissed + (weightStepKey(name) to weight))
 
     // MARK: - Закрыть день как по плану
 
@@ -634,6 +759,42 @@ data class ProgramProfile(
         }
 
     // MARK: - Серия без пропусков
+
+    /// Серия как у REBRN: неделя (пн–вс) засчитана, если в ней была хотя бы одна
+    /// тренировка. Начатая неделя серию не обрывает — до воскресенья есть время,
+    /// поэтому пустую текущую неделю пропускаем и считаем от прошлой.
+    fun calendarStreak(today: LocalDate = LocalDate.now()): CalendarStreak {
+        val perWeek = completionLog.groupingBy { RuDate.mondayOf(LocalDate.ofEpochDay(it.epochDay)) }.eachCount()
+        var cursor = RuDate.mondayOf(today)
+        if (perWeek[cursor] == null) cursor = cursor.minusWeeks(1)
+        var weeks = 0
+        var workouts = 0
+        while (true) {
+            val count = perWeek[cursor] ?: break
+            weeks++
+            workouts += count
+            cursor = cursor.minusWeeks(1)
+        }
+        return CalendarStreak(weeks, workouts)
+    }
+
+    /// Цель недели: сколько тренировок сделано на этой календарной неделе
+    /// и сколько задумано — по числу дней в расписании. С понедельника снова с нуля.
+    fun weekGoal(today: LocalDate = LocalDate.now()): Pair<Int, Int> {
+        val monday = RuDate.mondayOf(today)
+        val next = monday.plusWeeks(1)
+        val done = completionLog.count {
+            val date = LocalDate.ofEpochDay(it.epochDay)
+            !date.isBefore(monday) && date.isBefore(next)
+        }
+        return done to maxOf(weekdays.size, 1)
+    }
+
+    /// Тоннаж дня по записанным подходам: ключ дня из истории отметок.
+    fun tonnage(dayKey: String): Double {
+        val prefix = "$dayKey|"
+        return setLog.entries.sumOf { (key, entry) -> if (key.startsWith(prefix)) entry.reps * entry.weight else 0.0 }
+    }
 
     /// Недели подряд, закрытые полностью.
     ///
@@ -932,6 +1093,19 @@ data class ProgramProfile(
         return copy(setProgress = updated)
     }
 
+    /// Возвращает отметки дня к состоянию из `snapshot` (профиль на момент старта
+    /// тренировки). Выполненность дня и история не трогаются: отмена сессии по уже
+    /// закрытому дню раньше выбрасывала его из истории.
+    fun restoreDay(snapshot: ProgramProfile, week: Int, day: Int, today: LocalDate = LocalDate.now()): ProgramProfile {
+        val prefix = dayKey(week, day) + "|"
+        return copy(
+            setProgress = setProgress.filterNot { it.key.startsWith(prefix) } +
+                snapshot.setProgress.filter { it.key.startsWith(prefix) },
+            setLog = setLog.filterNot { it.key.startsWith(prefix) } +
+                snapshot.setLog.filter { it.key.startsWith(prefix) }
+        ).refreshCompletion(week, day, today)
+    }
+
     /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
     fun resetDaySets(week: Int, day: Int): ProgramProfile {
         val prefix = dayKey(week, day) + "|"
@@ -1098,8 +1272,10 @@ data class ProgramProfile(
 
     fun lastCompletionDate(): LocalDate? = lastCompletionEpochDay?.let { LocalDate.ofEpochDay(it) }
 
-    fun schedule(today: LocalDate = LocalDate.now()): WorkoutSchedule =
-        WorkoutScheduler.build(this, workoutPlan, today)
+    fun schedule(today: LocalDate = LocalDate.now()): WorkoutSchedule {
+        scheduleMemo?.let { (date, cached) -> if (date == today) return cached }
+        return WorkoutScheduler.build(this, workoutPlan, today).also { scheduleMemo = today to it }
+    }
 
     /// Ближайшая дата, на которую попадёт тренировочный день с его днём недели.
     fun nextOccurrence(day: Int, today: LocalDate = LocalDate.now()): LocalDate {
@@ -1153,6 +1329,44 @@ data class ProgramProfile(
     }
 
     companion object {
+        /// Сколько подходов сверх плана ищем в записях.
+        const val EXTRA_SET_ALLOWANCE = 12
+
+        /// Сколько тренировок подряд на одном весе без роста считаем застоем.
+        const val STALL_SESSIONS = 3
+
+        /// Варианты шага: от тренажёров с шагом 1 кг до плиток по 10 кг.
+        val weightStepOptions = listOf(1.0, 1.25, 2.5, 5.0, 10.0)
+
+        /// Ключ упражнения для шага: одно и то же движение во всех днях и неделях.
+        fun weightStepKey(name: String): String = name.lowercase().replace('ё', 'е').trim()
+
+        /// Подпись варианта: что это значит в зале.
+        fun weightStepTitle(step: Double): String = when (step) {
+            1.0 -> "1 кг — тренажёр"
+            1.25 -> "1,25 кг"
+            2.5 -> "2,5 кг — есть блины 1,25"
+            5.0 -> "5 кг — мельче 2,5 нет"
+            10.0 -> "10 кг — плитки по 10"
+            else -> "${formatWeight(step)} кг"
+        }
+
+        fun weightStepHint(step: Double): String = when (step) {
+            5.0 -> "Самые мелкие блины — 2,5 кг: вес растёт на 5 кг, а веса программы округляются до того, что можно повесить."
+            2.5 -> "Есть блины по 1,25 кг: вес растёт на 2,5 кг — обычная прибавка."
+            else -> "Вес растёт на ${formatWeight(step)} кг, веса программы округляются под этот шаг."
+        }
+
+        /// Округляет вес до того, что реально можно повесить при этом шаге.
+        /// Ровно посередине — вниз: лишний вес на штанге хуже недостающего.
+        fun roundWeight(value: Double, step: Double): Double {
+            if (!value.isFinite() || step <= 0) return value
+            val units = value / step
+            val lower = kotlin.math.floor(units)
+            val rounded = if (units - lower > 0.5 + 1e-9) lower + 1 else lower
+            return Math.round(rounded * step * 100) / 100.0
+        }
+
         fun texas(input: ProgramInput, name: String = "Профиль") = ProgramProfile(
             name = name,
             programKind = TrainingProgramKind.TEXAS,
@@ -1202,3 +1416,6 @@ data class ProgramProfile(
         )
     }
 }
+
+/// Серия по календарю: недели подряд с тренировкой и сколько тренировок в них.
+data class CalendarStreak(val weeks: Int, val workouts: Int)

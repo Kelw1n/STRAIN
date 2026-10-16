@@ -33,7 +33,7 @@ struct ActivityProgressView: View {
                 .padding(.top, 12)
             }
             .scrollIndicators(.hidden)
-            .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Активность")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -58,18 +58,7 @@ struct ActivityProgressView: View {
                 }
             }
             .sheet(isPresented: $showingWeightSheet) {
-                NavigationStack {
-                    BodyWeightCard(profile: profile)
-                        .padding()
-                        .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
-                        .navigationTitle("Замеры веса")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button("Готово") { showingWeightSheet = false }
-                            }
-                        }
-                }
+                BodyWeightScreen(profile: profile)
             }
             .sheet(isPresented: $showingMuscleSheet) {
                 MuscleGroupsDetailSheet(profile: profile)
@@ -80,51 +69,74 @@ struct ActivityProgressView: View {
 
     // MARK: - Карточка «Время, объём и тренировки»
 
+    /// Тренировки за выбранный период: переключатель сверху раньше ничего не менял.
+    private var periodRecords: [CompletionRecord] {
+        let months: Int? = switch selectedPeriod {
+        case "1 месяц": 1
+        case "3 месяца": 3
+        case "6 месяцев": 6
+        default: nil
+        }
+        let sorted = profile.completionLog.sorted { $0.date < $1.date }
+        guard let months, let from = Calendar.current.date(byAdding: .month, value: -months, to: Date()) else { return sorted }
+        return sorted.filter { $0.date >= from }
+    }
+
     private var volumeAndWorkoutsCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let records = periodRecords
+        // Объём — из записанных подходов дня, а не из максимумов: раньше столбики
+        // считались как «сумма максимумов × 5» и к реальной работе отношения не имели.
+        let tonnages = records.map { profile.tonnage(forDayKey: $0.key) }
+        let totalTonnage = tonnages.reduce(0, +)
+        let totalSeconds = records.compactMap(\.durationSeconds).reduce(0, +)
+        let recent = Array(zip(records, tonnages).suffix(8))
+        return VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Время, объём и тренировки")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.white)
-                Text(profile.completionLog.isEmpty
-                     ? "Появятся после первой тренировки"
-                     : "\(profile.completionLog.count) тренировок за всё время")
+                Text(records.isEmpty
+                     ? (profile.completionLog.isEmpty ? "Появятся после первой тренировки" : "За этот период тренировок нет")
+                     : "\(selectedPeriod == "Всё время" ? "За всё время" : "За \(selectedPeriod)")")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.45))
             }
 
-            // Бар-чарт с объёмом (показываем до 6 последних, чтобы даты не наползали друг на друга)
-            let records = profile.completionLog.suffix(6)
-            if !records.isEmpty {
-                Chart {
-                    ForEach(Array(records.enumerated()), id: \.offset) { idx, record in
-                        let squat = record.actualSquat ?? record.squat ?? 0
-                        let bench = record.actualBench ?? record.bench ?? 0
-                        let dead = record.actualDeadlift ?? record.deadlift ?? 0
-                        let total = (squat + bench + dead) * 5
+            HStack(spacing: 0) {
+                periodStat("\(records.count)", RuPlural.word(records.count, "тренировка", "тренировки", "тренировок"))
+                periodStat(Self.duration(totalSeconds), "время")
+                periodStat(WeightFormat.tonnage(totalTonnage), "объём")
+            }
 
+            if !recent.isEmpty, recent.contains(where: { $0.1 > 0 }) {
+                Chart {
+                    ForEach(Array(recent.enumerated()), id: \.offset) { idx, item in
                         BarMark(
-                            x: .value("Дата", RuDate.shortDayMonth(record.date)),
-                            y: .value("Объём", total)
+                            x: .value("Тренировка", "\(idx)"),
+                            y: .value("Объём", item.1)
                         )
                         .foregroundStyle(Theme.accentGradient)
                         .cornerRadius(6)
                     }
                 }
-                .frame(height: 140)
+                .frame(height: 120)
                 .chartYAxis(.hidden)
                 .chartXAxis {
-                    AxisMarks { _ in
-                        AxisValueLabel()
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Color.white.opacity(0.45))
+                    AxisMarks { value in
+                        AxisValueLabel {
+                            if let raw = value.as(String.self), let idx = Int(raw), idx < recent.count {
+                                Text(RuDate.shortDayMonth(recent[idx].0.date))
+                                    .font(.system(size: 10, weight: .semibold, design: Theme.fontDesign))
+                                    .foregroundStyle(Color.white.opacity(0.45))
+                            }
+                        }
                     }
                 }
                 .padding(.vertical, 4)
             } else {
-                // Заглушка чарта в виде элегантных столбцов
+                // Пока объёма нет — пустые столбики: видно, где появится график.
                 HStack(alignment: .bottom, spacing: 8) {
-                    ForEach([0.4, 0.6, 0.5, 0.8, 0.65, 0.55, 0.75, 0.9, 0.6], id: \.self) { ratio in
+                    ForEach(Array([0.4, 0.6, 0.5, 0.8, 0.65, 0.55, 0.75, 0.9, 0.6].enumerated()), id: \.offset) { _, ratio in
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(Color(white: 0.16))
                             .frame(height: 110 * ratio)
@@ -141,7 +153,7 @@ struct ActivityProgressView: View {
                 onStartWorkout()
             } label: {
                 Text("НАЧАТЬ ТРЕНИРОВКУ")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                     .tracking(1.0)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
@@ -152,7 +164,29 @@ struct ActivityProgressView: View {
             .padding(.top, 4)
         }
         .padding(18)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func periodStat(_ value: String, _ title: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(size: 18, weight: .heavy, design: Theme.fontDesign))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(title)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.white.opacity(0.45))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    static func duration(_ seconds: Int) -> String {
+        guard seconds > 0 else { return "—" }
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        return hours > 0 ? "\(hours) ч \(minutes) м" : "\(minutes) мин"
     }
 
     // MARK: - Карточка «Замеры и фото»
@@ -163,7 +197,7 @@ struct ActivityProgressView: View {
         } label: {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Замеры и фото")
+                    Text("Замеры веса")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                     Spacer()
@@ -172,31 +206,46 @@ struct ActivityProgressView: View {
                         .foregroundStyle(Color.white.opacity(0.3))
                 }
 
-                // Индикатор веса / график
-                ZStack {
-                    Line()
-                        .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                        .foregroundStyle(Color.white.opacity(0.18))
-                        .frame(height: 2)
-
-                    Circle()
-                        .fill(Theme.accent)
-                        .frame(width: 8, height: 8)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                // Мини-график последних замеров; пока замеров мало — пунктир.
+                let points = Array(profile.bodyWeightSeries.suffix(12))
+                Group {
+                    if points.count > 1 {
+                        Chart(points) { item in
+                            LineMark(x: .value("Дата", item.date), y: .value("Вес", item.weight))
+                                .foregroundStyle(Theme.accent)
+                                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                                .interpolationMethod(.catmullRom)
+                        }
+                        .chartYScale(domain: .automatic(includesZero: false))
+                        .chartXAxis(.hidden)
+                        .chartYAxis(.hidden)
+                    } else {
+                        ZStack {
+                            Line()
+                                .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                                .foregroundStyle(Color.white.opacity(0.18))
+                                .frame(height: 2)
+                            Circle()
+                                .fill(Theme.accent)
+                                .frame(width: 8, height: 8)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                                .opacity(points.isEmpty ? 0 : 1)
+                        }
+                    }
                 }
                 .frame(height: 44)
 
                 VStack(alignment: .leading, spacing: 2) {
                     if let weight = profile.latestBodyWeight {
                         Text(WeightFormat.kilogramsPrecise(weight))
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(.white)
                         Text("Текущий вес")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.white.opacity(0.45))
                     } else {
                         Text("— кг")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(.white)
                         Text("Нужен первый замер")
                             .font(.system(size: 11))
@@ -206,7 +255,7 @@ struct ActivityProgressView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -249,7 +298,7 @@ struct ActivityProgressView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -274,43 +323,41 @@ struct ActivityProgressView: View {
             }
 
             VStack(spacing: 10) {
-                recordRow(
-                    name: "Приседания",
-                    weight: profile.squat5RM,
-                    icon: "figure.strengthtraining.functional"
-                )
-                recordRow(
-                    name: "Жим лёжа",
-                    weight: profile.bench5RM,
-                    icon: "figure.strengthtraining.traditional"
-                )
-                recordRow(
-                    name: "Становая тяга",
-                    weight: profile.deadlift5RM,
-                    icon: "figure.stand"
-                )
+                recordRow(name: "Приседания", fallback: profile.squat5RM, icon: "figure.strengthtraining.functional")
+                recordRow(name: "Жим лёжа", fallback: profile.bench5RM, icon: "figure.strengthtraining.traditional")
+                recordRow(name: "Становая тяга", fallback: profile.deadlift5RM, icon: "figure.stand")
             }
         }
         .padding(18)
-        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private func recordRow(name: String, weight: Double, icon: String) -> some View {
-        HStack(spacing: 12) {
+    /// Рекорд — лучший записанный подход движения. Пока подходов нет —
+    /// максимум из настроек, с честной подписью.
+    private func recordRow(name: String, fallback: Double, icon: String) -> some View {
+        let best = profile.history(forExerciseNamed: name)
+            .flatMap(\.entries)
+            .max { ($0.weight, $0.reps) < ($1.weight, $1.reps) }
+        return HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.accent)
                 .frame(width: 32, height: 32)
                 .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-            Text(name)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(best == nil ? "максимум из настроек" : "лучший подход")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.white.opacity(0.4))
+            }
 
             Spacer()
 
-            Text(WeightFormat.kilogramsPrecise(weight))
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+            Text(best.map { "\(WeightFormat.kilogramsPrecise($0.weight)) × \($0.reps)" } ?? WeightFormat.kilogramsPrecise(fallback))
+                .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(Theme.accentGradient)
         }
@@ -382,7 +429,7 @@ struct MuscleGroupsDetailSheet: View {
 
                                     VStack(alignment: .trailing, spacing: 2) {
                                         Text("\(group.percentage)%")
-                                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                                            .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                                             .foregroundStyle(Theme.accent)
                                         Text("\(group.sets) подх.")
                                             .font(.system(size: 11))
@@ -412,7 +459,7 @@ struct MuscleGroupsDetailSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
             }
-            .background(Color(red: 0.05, green: 0.05, blue: 0.06).ignoresSafeArea())
+            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Группы мышц")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

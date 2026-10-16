@@ -24,46 +24,76 @@ struct MainTabView: View {
         guard isUpperLower else { return nil }
         return { session in
             benchFocus = session
-            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { selectedTab = .workout }
+            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.workout) }
+        }
+    }
+
+    /// В какую сторону листаем: новый экран въезжает с той стороны, куда ушла линза.
+    @State private var movingForward = true
+
+    /// Направление выставляется в той же транзакции, что и вкладка, —
+    /// через `onChange` оно опоздало бы на один переход.
+    private func select(_ tab: MainTabItem) {
+        movingForward = tab.index >= selectedTab.index
+        selectedTab = tab
+    }
+
+    private var tabSelection: Binding<MainTabItem> {
+        Binding(get: { selectedTab }, set: { select($0) })
+    }
+
+    /// Уходящий экран просто гаснет и чуть уменьшается, направление важно только
+    /// входящему. Так переход не зависит от того, с каким направлением уходящий
+    /// экран был нарисован в последний раз.
+    private var tabTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        return .asymmetric(
+            insertion: .offset(x: movingForward ? 36 : -36).combined(with: .opacity),
+            removal: .scale(scale: 0.97).combined(with: .opacity)
+        )
+    }
+
+    @ViewBuilder
+    private func screen(for tab: MainTabItem) -> some View {
+        switch tab {
+        case .today:
+            // «Главное» — лента тренировок, как в REBRN. Прежний экран дня
+            // открывается кнопкой в «Тренировке».
+            FeedView(
+                onFindPeople: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.community) } },
+                onCreateProfile: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.profile) } }
+            )
+        case .workout:
+            WorkoutHubView(
+                profile: profile,
+                onStartWorkout: { workout in
+                    sessionManager.requestStart(workout: workout, profile: profile)
+                },
+                onOpenBench: benchHandler
+            )
+        case .progress:
+            ActivityProgressView(
+                profile: profile,
+                onStartWorkout: {
+                    if let focus = profile.schedule.focus {
+                        sessionManager.requestStart(workout: focus, profile: profile)
+                    }
+                }
+            )
+        case .community:
+            CommunityView(onCreateProfile: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.profile) } })
+        case .profile:
+            ProfileTabView(profile: profile, onSettings: { showingSettings = true })
         }
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             // Экраны контента
-            Group {
-                switch selectedTab {
-                case .today:
-                    TodayView(
-                        profile: profile,
-                        onSettings: { showingSettings = true },
-                        onOpenBench: benchHandler,
-                        onStartWorkout: { workout in
-                            sessionManager.startWorkout(workout: workout, profile: profile)
-                        }
-                    )
-                case .workout:
-                    WorkoutHubView(
-                        profile: profile,
-                        onStartWorkout: { workout in
-                            sessionManager.startWorkout(workout: workout, profile: profile)
-                        },
-                        onOpenBench: benchHandler
-                    )
-                case .progress:
-                    ActivityProgressView(
-                        profile: profile,
-                        onStartWorkout: {
-                            if let focus = profile.schedule.focus {
-                                sessionManager.startWorkout(workout: focus, profile: profile)
-                            }
-                        }
-                    )
-                case .community:
-                    BroTrackerView(profile: profile)
-                case .profile:
-                    SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
-                }
+            ZStack {
+                screen(for: selectedTab)
+                    .id(selectedTab)
+                    .transition(tabTransition)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -79,8 +109,23 @@ struct MainTabView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                LiquidGlassTabBar(selectedTab: $selectedTab)
+                LiquidGlassTabBar(selectedTab: tabSelection)
             }
+            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: sessionManager.isRunning && !sessionManager.isPresented)
+            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: restTimer.isRunning)
+        }
+        .confirmationDialog(
+            sessionManager.replaceTitle,
+            isPresented: $sessionManager.showingReplaceConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Вернуться к текущей") { sessionManager.cancelReplace() }
+            Button("Отменить текущую и начать новую", role: .destructive) {
+                sessionManager.confirmReplace(profile: profile)
+            }
+            Button("Закрыть", role: .cancel) { sessionManager.pendingWorkout = nil }
+        } message: {
+            Text("Подходы текущей тренировки, отмеченные в этой сессии, будут сброшены.")
         }
         .fullScreenCover(isPresented: $sessionManager.isPresented) {
             if let workout = sessionManager.activeWorkout {
@@ -94,7 +139,17 @@ struct MainTabView: View {
         .onAppear {
             WidgetBridge.publish(profile)
             ReminderScheduler.reschedule(for: profile)
+            // Тренировка другого профиля в этот не пишет.
+            sessionManager.detachIfOtherProfile(profile)
+            // Приложение выгружали посреди тренировки — поднимаем её свёрнутой.
+            sessionManager.restoreIfNeeded(for: profile)
+            // Лента: неотправленные посты — в путь, программа и медали — в профиль.
+            SocialService.shared.flushOutbox()
+            SocialService.shared.scheduleSync(from: profile)
+            Task { await SocialService.shared.refreshMe() }
         }
+        .onChange(of: profile.completionLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
+        .onChange(of: profile.bodyWeightLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         // Расписание напоминаний собирается заново на каждое изменение
         .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.reminderHour) { _, _ in ReminderScheduler.reschedule(for: profile) }
@@ -120,7 +175,6 @@ struct TodayView: View {
     @State private var entryTarget: SetEntryTarget?
     /// Имя движения, чью историю открыли: `navigationDestination` ждёт Hashable.
     @State private var historyFor: String?
-    @State private var showingBroTracker = false
 
     private var overallProgress: Double {
         guard profile.totalDays > 0 else { return 0 }
@@ -162,7 +216,7 @@ struct TodayView: View {
                                     Image(systemName: "play.fill")
                                         .font(.system(size: 14, weight: .bold))
                                     Text("НАЧАТЬ ТРЕНИРОВКУ")
-                                        .font(.system(size: 15, weight: .black, design: .rounded))
+                                        .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                                         .tracking(1.0)
                                 }
                                 .foregroundStyle(.black)
@@ -171,7 +225,7 @@ struct TodayView: View {
                                 .background(Color.white, in: Capsule())
                                 .shadow(color: Color.white.opacity(0.18), radius: 12, y: 4)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                             .appearIn(2)
                         }
 
@@ -205,9 +259,6 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle("Сегодня")
-            .sheet(isPresented: $showingBroTracker) {
-                BroTrackerView(profile: profile, showsCloseButton: true)
-            }
             .sheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)
             }
@@ -242,11 +293,12 @@ struct TodayView: View {
                 } else {
                     let completedCount = profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise)
                     let details: String = {
+                        // Через kilogramsPrecise: Int() обрезал 52,5 до 52, а kilograms округлял до 53.
                         if let item = profile.entries(week: workout.week, day: workout.day.number, exercise: exercise).first(where: { $0.index == index }) {
-                            return "\(Int(item.entry.weight)) кг × \(item.entry.reps)"
+                            return "\(WeightFormat.kilogramsPrecise(item.entry.weight)) × \(item.entry.reps)"
                         }
                         if case .kilograms(let kg) = exercise.load {
-                            return "\(Int(kg)) кг × \(exercise.reps)"
+                            return "\(WeightFormat.kilogramsPrecise(kg)) × \(exercise.reps)"
                         }
                         return "\(exercise.reps) повт."
                     }()
@@ -334,7 +386,7 @@ struct TodayView: View {
                         .foregroundStyle(Theme.accentGradient)
                     HStack(spacing: 8) {
                         Text("Неделя \(workout.week)")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         if profile.isPeaking {
                             TagBadge(text: "Пик", systemImage: "mountain.2.fill", gradient: Theme.recordGradient)
@@ -349,7 +401,7 @@ struct TodayView: View {
                 RingProgress(value: overallProgress, lineWidth: 9) {
                     VStack(spacing: 0) {
                         Text("\(profile.completedDayCount)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         Text("из \(profile.totalDays)").font(.system(size: 10)).foregroundStyle(.secondary)
                     }
@@ -405,7 +457,7 @@ struct TodayWorkoutPreviewCard: View {
 
                 Spacer()
 
-                Text("\(exercises.count) упражнений")
+                Text(RuPlural.exercises(exercises.count))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
@@ -453,21 +505,21 @@ struct TodayWorkoutPreviewCard: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(exercise.benchSession != nil ? Theme.record.opacity(0.18) : Theme.accent.opacity(0.14))
-                                    .frame(width: 32, height: 32)
-                                Text("\(index + 1)")
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundStyle(exercise.benchSession != nil ? Theme.record : Theme.accent)
-                            }
+                            // Картинка движения; жим волны обведён акцентом —
+                            // на него стоит обратить внимание.
+                            ExerciseThumb(name: exercise.name, size: 42)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 42 * 0.25, style: .continuous)
+                                        .strokeBorder(Theme.accent, lineWidth: 2)
+                                        .opacity(exercise.benchSession != nil ? 1 : 0)
+                                }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(exercise.name)
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)
-                                Text("\(exercise.sets) подходов × \(exercise.reps)")
+                                Text(exercise.sets > 0 ? "\(RuPlural.sets(exercise.sets)) × \(exercise.reps)" : exercise.reps)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -476,15 +528,17 @@ struct TodayWorkoutPreviewCard: View {
 
                             let hint = profile.accessoryHint(for: exercise, week: workout.week, day: workout.day.number)
                             if let weight = hint?.weight {
-                                Text("\(formatWeight(weight)) кг")
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Theme.accent)
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 4)
-                                    .background(Theme.accent.opacity(0.12), in: Capsule())
+                                // Через WeightFormat: подпись «кг» была вшита и не менялась на фунты.
+                                Text(WeightFormat.kilogramsPrecise(weight))
+                                    .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.white.opacity(0.08), in: Capsule())
                             } else {
                                 Text(exercise.load.displayText)
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .font(.system(size: 12, weight: .semibold, design: Theme.fontDesign))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
@@ -497,19 +551,16 @@ struct TodayWorkoutPreviewCard: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle(scale: 0.98))
 
                     if index < exercises.count - 1 {
-                        Divider().opacity(0.12).padding(.leading, 44)
+                        Divider().opacity(0.12).padding(.leading, 54)
                     }
                 }
             }
         }
     }
 
-    private func formatWeight(_ weight: Double) -> String {
-        weight == weight.rounded() ? String(Int(weight)) : String(format: "%.1f", weight)
-    }
 }
 
 // MARK: - Промо-карточка волны жима
@@ -667,7 +718,7 @@ struct PlanView: View {
             withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { selectedWeek = week.number }
         } label: {
             VStack(spacing: 3) {
-                Text("\(week.number)").font(.system(size: 17, weight: .bold, design: .rounded))
+                Text("\(week.number)").font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 if done {
                     Image(systemName: "checkmark").font(.system(size: 8, weight: .black))
                 } else {
@@ -787,13 +838,13 @@ struct DayDetailView: View {
             LazyVStack(alignment: .leading, spacing: 14) {
                 Button {
                     UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                    WorkoutSessionManager.shared.startWorkout(workout: targetWorkout, profile: profile)
+                    WorkoutSessionManager.shared.requestStart(workout: targetWorkout, profile: profile)
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
                             .font(.system(size: 14, weight: .bold))
                         Text("НАЧАТЬ ТРЕНИРОВКУ")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                             .tracking(1.0)
                     }
                     .foregroundStyle(.black)
@@ -817,10 +868,10 @@ struct DayDetailView: View {
                                     let completedCount = profile.completedSets(week: week, day: day.number, exercise: exercise)
                                     let details: String = {
                                         if let item = profile.entries(week: week, day: day.number, exercise: exercise).first(where: { $0.index == dot }) {
-                                            return "\(Int(item.entry.weight)) кг × \(item.entry.reps)"
+                                            return "\(WeightFormat.kilogramsPrecise(item.entry.weight)) × \(item.entry.reps)"
                                         }
                                         if case .kilograms(let kg) = exercise.load {
-                                            return "\(Int(kg)) кг × \(exercise.reps)"
+                                            return "\(WeightFormat.kilogramsPrecise(kg)) × \(exercise.reps)"
                                         }
                                         return "\(exercise.reps) повт."
                                     }()
@@ -839,7 +890,15 @@ struct DayDetailView: View {
                             logged: Set(profile.entries(week: week, day: day.number, exercise: exercise).map(\.index))
                         ),
                         onOpenHistory: { historyFor = exercise.name },
-                        hint: profile.accessoryHint(for: exercise, week: week, day: day.number)
+                        hint: profile.accessoryHint(for: exercise, week: week, day: day.number),
+                        step: profile.weightStep(for: exercise.name),
+                        onSelectStep: { profile.setWeightStep($0, for: exercise.name) },
+                        onKeepWeight: {
+                            if let working = profile.history(forExerciseNamed: exercise.name)
+                                .last(where: { !$0.entries.isEmpty })?.best {
+                                profile.dismissStall(for: exercise.name, weight: working)
+                            }
+                        }
                     )
                     .appearIn(index)
                     .softScroll()
@@ -971,6 +1030,11 @@ struct ExerciseCard: View {
     var onOpenHistory: (() -> Void)?
     /// Подсказка по весу подсобки. Нет — упражнение со своим весом в плане.
     var hint: AccessoryHint?
+    /// Шаг прибавки упражнения и выбор другого. Нет обработчика — выбора нет.
+    var step: Double?
+    var onSelectStep: ((Double) -> Void)?
+    /// «Не сбрасывать» в подсказке о застое.
+    var onKeepWeight: (() -> Void)?
 
     private var isBenchLink: Bool { exercise.benchSession != nil && onOpenBench != nil }
 
@@ -998,11 +1062,18 @@ struct ExerciseCard: View {
     private var card: some View {
         CardView(padding: 16, spacing: 10) {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: symbol)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
-                    .background(iconGradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                ExerciseThumb(name: exercise.name, size: 44)
+                    .overlay(alignment: .bottomTrailing) {
+                        // Значок поверх картинки: волна жима или необязательное упражнение.
+                        if exercise.benchSession != nil || exercise.isOptional {
+                            Image(systemName: symbol)
+                                .font(.system(size: 8, weight: .black))
+                                .foregroundStyle(.white)
+                                .frame(width: 16, height: 16)
+                                .background(iconGradient, in: Circle())
+                                .offset(x: 4, y: 4)
+                        }
+                    }
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(exercise.name)
@@ -1052,14 +1123,34 @@ struct ExerciseCard: View {
 
             if let hint {
                 HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: hint.isStepUp ? "arrow.up.circle.fill" : "target")
+                    Image(systemName: hint.isDeload ? "arrow.down.circle.fill" : hint.isStepUp ? "arrow.up.circle.fill" : "target")
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(hint.isStepUp ? Theme.success : Theme.accent)
+                        .foregroundStyle(hint.isDeload ? Theme.warning : hint.isStepUp ? Theme.success : Theme.accent)
                     Text(hint.text)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
+                }
+
+                if hint.weight != nil, (onSelectStep != nil || (hint.isDeload && onKeepWeight != nil)) {
+                    HStack(spacing: 8) {
+                        if let step, let onSelectStep {
+                            WeightStepMenu(step: step, onSelect: onSelectStep)
+                        }
+                        if hint.isDeload, let onKeepWeight {
+                            Button(action: onKeepWeight) {
+                                Text("Не сбрасывать")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.primary.opacity(0.06), in: Capsule())
+                            }
+                            .buttonStyle(.pressable)
+                        }
+                        Spacer(minLength: 0)
+                    }
                 }
             }
 
@@ -1071,7 +1162,7 @@ struct ExerciseCard: View {
     }
 
     private var setsText: String {
-        exercise.sets > 0 ? "\(exercise.sets) подходов × \(exercise.reps)" : exercise.reps
+        exercise.sets > 0 ? "\(RuPlural.sets(exercise.sets)) × \(exercise.reps)" : exercise.reps
     }
 
     /// Вес подсобки. Прибавку подсвечиваем зелёным — это маленькая победа,
@@ -1079,7 +1170,7 @@ struct ExerciseCard: View {
     private func weightChip(_ weight: Double, stepUp: Bool) -> some View {
         VStack(alignment: .trailing, spacing: 1) {
             Text(WeightFormat.kilogramsPrecise(weight))
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(stepUp ? AnyShapeStyle(Theme.success) : AnyShapeStyle(Theme.accentGradient))
             Text(exercise.load.displayText)
@@ -1093,7 +1184,7 @@ struct ExerciseCard: View {
         switch exercise.load {
         case .kilograms:
             Text(exercise.load.displayText)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(Theme.accentGradient)
         case .testOneRepMax:
@@ -1101,6 +1192,38 @@ struct ExerciseCard: View {
         default:
             OutlineBadge(text: exercise.load.displayText, tint: Theme.warning)
         }
+    }
+}
+
+// MARK: - Шаг прибавки
+
+/// Чип «Шаг 2,5 кг ▾» с выбором: у каждого зала свои блины и тренажёры.
+struct WeightStepMenu: View {
+    let step: Double
+    let onSelect: (Double) -> Void
+
+    var body: some View {
+        Menu {
+            Picker("Шаг прибавки", selection: Binding(get: { step }, set: onSelect)) {
+                ForEach(ProgramProfile.weightStepOptions, id: \.self) { option in
+                    Text(ProgramProfile.weightStepTitle(option)).tag(option)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "scalemass")
+                    .font(.system(size: 10, weight: .bold))
+                Text("Шаг \(WeightFormat.kilogramsPrecise(step))")
+                    .font(.caption2.weight(.semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Theme.accent.opacity(0.12), in: Capsule())
+        }
+        .accessibilityLabel("Шаг прибавки \(WeightFormat.kilogramsPrecise(step))")
     }
 }
 

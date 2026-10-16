@@ -24,13 +24,47 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      - name: Unit tests
+        working-directory: android
+        run: gradle testDebugUnitTest --stacktrace
+
+      # Постоянный ключ подписи из секретов репозитория: с ним новая версия
+      # ставится поверх старой и профили остаются. Секрета нет — отладочный ключ.
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/strain.jks"
+            echo "STRAIN_KEYSTORE_PATH=$RUNNER_TEMP/strain.jks" >> "$GITHUB_ENV"
+            echo "Ключ подписи найден"
+          else
+            echo "::warning::Секрет ANDROID_KEYSTORE_BASE64 не задан — APK подписан случайным отладочным ключом и не встанет поверх прошлой версии"
+          fi
+
+      # Release с R8: debug-сборка Compose на телефоне заметно лагает.
       - name: Build Android APK
         working-directory: android
-        run: gradle assembleDebug --stacktrace
+        env:
+          STRAIN_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: gradle assembleRelease --stacktrace
+
+      - name: Check signature
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs android/app/build/outputs/apk/release/app-release.apk | grep -E "certificate SHA-256|DN" || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: strain-android-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: strain-android-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-report
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore

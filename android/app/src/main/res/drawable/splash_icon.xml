@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Знак на системном экране запуска: 120dp по центру, как в iOS-версии.
+     Первый кадр заставки в приложении рисует его там же, поэтому стыка не видно. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="120dp"
+        android:height="52dp"
+        android:gravity="center"
+        android:drawable="@drawable/launch_mark" />
+</layer-list>

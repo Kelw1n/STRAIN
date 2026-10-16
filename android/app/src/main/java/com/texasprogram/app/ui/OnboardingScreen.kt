@@ -58,7 +58,10 @@ fun OnboardingScreen(
     canCancel: Boolean,
     onCancel: () -> Unit,
     onSave: (ProgramProfile) -> Unit,
-    contentPadding: PaddingValues
+    contentPadding: PaddingValues,
+    /// Восстановить из файла копии — сразу, без пустого профиля.
+    onRestore: (() -> Unit)? = null,
+    restoreMessage: String? = null
 ) {
     var selected by remember { mutableStateOf<TrainingProgramKind?>(null) }
 
@@ -76,7 +79,7 @@ fun OnboardingScreen(
         label = "onboarding"
     ) { kind ->
         when (kind) {
-            null -> ProgramSelection(canCancel, onCancel, contentPadding) { selected = it }
+            null -> ProgramSelection(canCancel, onCancel, contentPadding, onRestore, restoreMessage) { selected = it }
             TrainingProgramKind.TEXAS -> TexasSetup(contentPadding, onBack = { selected = null }) {
                 onSave(ProgramProfile.texas(it))
             }
@@ -104,6 +107,8 @@ private fun ProgramSelection(
     canCancel: Boolean,
     onCancel: () -> Unit,
     contentPadding: PaddingValues,
+    onRestore: (() -> Unit)?,
+    restoreMessage: String?,
     onPick: (TrainingProgramKind) -> Unit
 ) {
     LazyColumn(
@@ -138,6 +143,25 @@ private fun ProgramSelection(
         TrainingProgramKind.ready.forEachIndexed { index, kind ->
             item(key = kind.name) {
                 ProgramOptionCard(kind, Modifier.appearIn(index + 1)) { onPick(kind) }
+            }
+        }
+
+        if (onRestore != null) {
+            item(key = "restore") {
+                CardView(Modifier.appearIn(TrainingProgramKind.ready.size + 1).pressable(onClick = onRestore), padding = 20.dp) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Есть резервная копия?", color = Theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                restoreMessage ?: "Восстанови профили из файла копии — с отметками, весами и историей.",
+                                color = if (restoreMessage != null) Theme.accent else Theme.textSecondary,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.textSecondary, modifier = Modifier.size(20.dp))
+                    }
+                }
             }
         }
     }

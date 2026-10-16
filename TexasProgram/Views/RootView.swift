@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
@@ -23,7 +24,11 @@ struct RootView: View {
                 .id(profile.profileID)
                 .transition(.opacity.combined(with: .scale(scale: 1.02)))
             } else {
-                ProgramOnboardingView(canCancel: !profiles.isEmpty, onCancel: { isAddingProfile = false }) { profile in
+                ProgramOnboardingView(
+                    canCancel: !profiles.isEmpty,
+                    onCancel: { isAddingProfile = false },
+                    onRestore: restore
+                ) { profile in
                     profile.name = suggestedName()
                     modelContext.insert(profile)
                     activeProfileID = profile.profileID.uuidString
@@ -36,6 +41,15 @@ struct RootView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: isAddingProfile)
         .tint(Theme.accent)
         .preferredColorScheme(ThemeManager.shared.current.preferredColorScheme)
+    }
+
+    /// Восстановление с первого экрана: после переустановки профилей нет,
+    /// и до настроек без новой программы не добраться.
+    private func restore(_ archive: BackupArchive) {
+        BackupService.restore(archive, into: modelContext, existing: profiles)
+        SocialService.shared.adoptBackupToken(archive.socialToken)
+        if let first = archive.profiles.first { activeProfileID = first.id }
+        isAddingProfile = false
     }
 
     private func suggestedName() -> String {
@@ -53,6 +67,7 @@ struct RootView: View {
 struct ProgramOnboardingView: View {
     var canCancel: Bool = false
     var onCancel: () -> Void = {}
+    var onRestore: ((BackupArchive) -> Void)? = nil
     let onSave: (ProgramProfile) -> Void
     @State private var selectedProgram: TrainingProgramKind?
 
@@ -89,7 +104,7 @@ struct ProgramOnboardingView: View {
                 CustomProgramBuilderView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(customProgram: $0)) }
                     .transition(forward)
             case nil:
-                ProgramSelectionView(selection: $selectedProgram, canCancel: canCancel, onCancel: onCancel)
+                ProgramSelectionView(selection: $selectedProgram, canCancel: canCancel, onCancel: onCancel, onRestore: onRestore)
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
                         removal: .move(edge: .leading).combined(with: .opacity)
@@ -105,7 +120,10 @@ struct ProgramSelectionView: View {
     @Binding var selection: TrainingProgramKind?
     var canCancel: Bool = false
     var onCancel: () -> Void = {}
+    var onRestore: ((BackupArchive) -> Void)? = nil
     @State private var breathe = false
+    @State private var showImporter = false
+    @State private var restoreError: String?
 
     var body: some View {
         NavigationStack {
@@ -121,7 +139,7 @@ struct ProgramSelectionView: View {
                             .scaleEffect(breathe ? 1.05 : 1)
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Выбери программу")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
                             Text("После выбора введи свои максимумы. Вернуться сюда можно полным сбросом в настройках.")
                                 .foregroundStyle(.secondary)
                         }
@@ -148,6 +166,12 @@ struct ProgramSelectionView: View {
                     }
                     .buttonStyle(.pressable)
                     .appearIn(TrainingProgramKind.ready.count + 1)
+
+                    if onRestore != nil {
+                        Button { showImporter = true } label: { restoreCard }
+                            .buttonStyle(.pressable)
+                            .appearIn(TrainingProgramKind.ready.count + 2)
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)
@@ -161,10 +185,57 @@ struct ProgramSelectionView: View {
                     }
                 }
             }
+            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
+                importBackup(result)
+            }
             .onAppear {
                 guard !reduceMotion, !breathe else { return }
                 withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { breathe = true }
             }
+        }
+    }
+
+    private var restoreCard: some View {
+        CardView(padding: 18) {
+            HStack(spacing: 14) {
+                Image(systemName: "arrow.down.doc.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Есть резервная копия?")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(restoreError ?? "Восстанови профили, отметки и замеры из файла STRAIN — с iPhone или Android.")
+                        .font(.footnote)
+                        .foregroundStyle(restoreError == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.warning))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func importBackup(_ result: Result<URL, Error>) {
+        guard case .success(let url) = result, let onRestore else { return }
+        // Файл лежит вне песочницы приложения, доступ надо запросить явно.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let archive = try BackupService.archive(from: try Data(contentsOf: url))
+            guard !archive.profiles.isEmpty else {
+                restoreError = "В файле нет профилей"
+                return
+            }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            onRestore(archive)
+        } catch {
+            restoreError = "Файл не читается как копия STRAIN"
         }
     }
 }
@@ -443,7 +514,7 @@ struct NumberField: View {
                 TextField("0", text: $text)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.system(size: 18, weight: .bold, design: Theme.fontDesign))
                     .frame(width: 62)
                 Text("кг").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }

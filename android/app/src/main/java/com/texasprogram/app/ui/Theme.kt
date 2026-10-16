@@ -8,6 +8,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -141,7 +142,8 @@ object Theme {
 
     val base: Color
         get() = when {
-            isRebrn -> Color(0xFF0B0B0D)
+            // Как у REBRN и в iOS-версии: чистый чёрный, а не почти чёрный.
+            isRebrn -> Color(0xFF000000)
             !isClaude -> Color(0xFF0B0E13)
             isDark -> Color(0xFF1B1917)
             else -> Color(0xFFFBF8F3)
@@ -173,7 +175,7 @@ object Theme {
 
     val surface: Color
         get() = when {
-            isRebrn -> Color(0xFF141416)
+            isRebrn -> Color(0xFF161617)
             !isClaude -> Color.White.copy(alpha = 0.055f)
             isDark -> Color(0xFF262422)
             else -> Color(0xFFFFFFFF)
@@ -260,6 +262,8 @@ object Motion {
     fun <T> snappy(): SpringSpec<T> = spring(dampingRatio = 0.78f, stiffness = stiffnessFor(0.32))
     fun <T> bouncy(): SpringSpec<T> = spring(dampingRatio = 0.62f, stiffness = stiffnessFor(0.42))
     fun <T> appear(): SpringSpec<T> = spring(dampingRatio = 0.85f, stiffness = stiffnessFor(0.55))
+    fun <T> sheet(): SpringSpec<T> = spring(dampingRatio = 0.86f, stiffness = stiffnessFor(0.42))
+    fun <T> reorder(): SpringSpec<T> = spring(dampingRatio = 0.78f, stiffness = stiffnessFor(0.30))
 
     val smooth: Easing = FastOutSlowInEasing
     fun <T> fade(duration: Int = 280) = tween<T>(durationMillis = duration, easing = smooth)
@@ -277,6 +281,13 @@ fun AppBackground(content: @Composable () -> Unit) {
     val accent = Theme.accent
     val accentDeep = Theme.accentDeep
     val record = Theme.record
+
+    // REBRN — ровный чёрный без пятен: три радиальных градиента на весь
+    // экран перерисовывались под каждым кадром прокрутки, а видно их не было.
+    if (Theme.isRebrn) {
+        Box(Modifier.fillMaxSize().background(base)) { content() }
+        return
+    }
 
     Box(
         Modifier
