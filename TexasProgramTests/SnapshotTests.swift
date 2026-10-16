@@ -164,6 +164,42 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Переписка: пузыри своих и чужих сообщений, список переписок и экран чата.
+    @MainActor func testChat() throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let messages: [SocialMessage] = [
+            SocialMessage(id: "1", text: "Го сегодня в зал?", fromMe: false, createdAt: now - 3_600_000),
+            SocialMessage(id: "2", text: "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", fromMe: true, createdAt: now - 3_500_000, read: true),
+            SocialMessage(id: "3", text: "Конечно 💪", fromMe: false, createdAt: now - 3_400_000),
+            SocialMessage(id: "4", text: "Возьми пояс", fromMe: true, createdAt: now - 60_000)
+        ]
+        let chats: [SocialChat] = try Fixtures.decode("""
+        [{"user":{"id":"u2","username":"bro.lifts"},"last":{"id":"m1","text":"Возьми пояс","fromMe":false,"createdAt":\(now - 60_000)},"unread":2},
+         {"user":{"id":"u3","username":"heavy.anna"},"last":{"id":"m2","text":"Скинь программу","fromMe":true,"createdAt":\(now - 86_400_000)},"unread":0}]
+        """)
+        try snap("15-chat-bubbles") {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(messages) { MessageBubble(message: $0) {} }
+                    }
+                    .padding(12)
+                    VStack(spacing: 0) {
+                        ForEach(chats) { ChatRow(chat: $0) }
+                    }
+                    .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .padding(16)
+                }
+                .background(Color.black.ignoresSafeArea())
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .preferredColorScheme(.dark)
+        }
+        try snap("16-chat-screen") {
+            NavigationStack { ChatView(username: "bro.lifts", path: .constant(NavigationPath())) }
+        }
+    }
+
     // MARK: Съёмка
 
     /// Экран рисуется в настоящем окне — так работают прокрутка, навигация и

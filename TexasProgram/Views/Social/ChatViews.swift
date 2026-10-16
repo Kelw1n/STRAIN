@@ -74,7 +74,7 @@ struct ChatListView: View {
     }
 }
 
-private struct ChatRow: View {
+struct ChatRow: View {
     let chat: SocialChat
 
     var body: some View {
@@ -335,7 +335,7 @@ struct ChatView: View {
     }
 }
 
-private struct MessageBubble: View {
+struct MessageBubble: View {
     let message: SocialMessage
     var onDelete: () -> Void
 

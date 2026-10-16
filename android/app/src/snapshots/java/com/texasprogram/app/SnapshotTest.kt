@@ -178,6 +178,33 @@ class SnapshotTest {
         Screen { ProgramDayScreen(SocialProgramBuilder.days(profile).first(), padding, SocialNavigator()) }
     }
 
+    /// Переписка: пузыри своих и чужих сообщений и список переписок.
+    @Test
+    fun chat() {
+        val now = System.currentTimeMillis().toDouble()
+        val messages = listOf(
+            com.texasprogram.app.model.SocialMessage("1", "Го сегодня в зал?", false, now - 3_600_000),
+            com.texasprogram.app.model.SocialMessage("2", "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", true, now - 3_500_000, read = true),
+            com.texasprogram.app.model.SocialMessage("3", "Конечно 💪", false, now - 3_400_000),
+            com.texasprogram.app.model.SocialMessage("4", "Возьми пояс", true, now - 60_000)
+        )
+        val chats = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialChat>>(
+            """[{"user":{"id":"u2","username":"bro.lifts"},"last":{"id":"m1","text":"Возьми пояс","fromMe":false,"createdAt":${now - 60_000}},"unread":2},
+               {"user":{"id":"u3","username":"heavy.anna"},"last":{"id":"m2","text":"Скинь программу","fromMe":true,"createdAt":${now - 86_400_000}},"unread":0}]"""
+        )
+        paparazzi.snapshot("15-chat") {
+            Screen {
+                Column(Modifier.padding(padding), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+                    messages.forEach { com.texasprogram.app.ui.MessageBubble(it, onCopy = {}, onDelete = {}) }
+                    chats.forEach { com.texasprogram.app.ui.ChatRow(it) {} }
+                }
+            }
+        }
+        paparazzi.snapshot("16-chat-screen") {
+            Screen { com.texasprogram.app.ui.ChatScreen("bro.lifts", padding, SocialNavigator()) }
+        }
+    }
+
     @Test
     fun summary() {
         tall()

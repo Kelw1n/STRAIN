@@ -143,7 +143,7 @@ fun ChatList(onOpen: (String) -> Unit) {
 }
 
 @Composable
-private fun ChatRow(chat: SocialChat, onOpen: () -> Unit) {
+internal fun ChatRow(chat: SocialChat, onOpen: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().pressable(onClick = onOpen).padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -405,7 +405,7 @@ private fun dayTitle(day: LocalDate): String {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MessageBubble(message: SocialMessage, onCopy: () -> Unit, onDelete: () -> Unit) {
+internal fun MessageBubble(message: SocialMessage, onCopy: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val time = message.instant.atZone(ZoneId.systemDefault()).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (message.fromMe) Arrangement.End else Arrangement.Start) {
