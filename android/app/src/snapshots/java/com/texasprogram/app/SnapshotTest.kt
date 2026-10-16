@@ -219,7 +219,7 @@ class SnapshotTest {
     /// Тренируются сейчас, колокольчик активности и рейтинг недели.
     @Test
     fun socialExtras() {
-        tall(2600)
+        tall(4400)
         val now = System.currentTimeMillis().toDouble()
         val week = com.texasprogram.app.model.WeeklyStatsBuilder.weekKey(LocalDate.now())
         val json = SocialService.json
