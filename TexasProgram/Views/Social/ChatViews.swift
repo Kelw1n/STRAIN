@@ -512,7 +512,7 @@ struct ImageViewer: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.opacity(1 - min(abs(offset) / 400, 0.6)).ignoresSafeArea()
+            Color.black.opacity(1 - min(Double(abs(offset)) / 400.0, 0.6)).ignoresSafeArea()
             RemoteImage(id: id, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .offset(y: offset)
