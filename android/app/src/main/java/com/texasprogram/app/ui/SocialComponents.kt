@@ -305,6 +305,9 @@ sealed interface SocialRoute {
     data object Achievements : SocialRoute
     data object EditProfile : SocialRoute
     data class Chat(val username: String) : SocialRoute
+    data object Activity : SocialRoute
+    /// Пост, который ещё надо загрузить, — из активности.
+    data class PostId(val id: String) : SocialRoute
     /// Копия чужой тренировки в конструкторе «Своей программы».
     data class CopyProgram(val program: CustomProgram, val author: String) : SocialRoute
 }

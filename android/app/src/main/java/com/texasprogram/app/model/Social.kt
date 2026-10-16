@@ -66,7 +66,11 @@ data class SocialUser(
     val followers: Int = 0,
     val following: Int = 0,
     val isFollowing: Boolean = false,
-    val isMe: Boolean = false
+    val isMe: Boolean = false,
+    /// Идёт тренировка — что делает прямо сейчас.
+    val live: SocialLive? = null,
+    /// Когда последний раз заходил — для «был(а) N минут назад».
+    val lastSeen: Double? = null
 ) {
     /// «178 см · 75 кг» — то, что видно под юзернеймом.
     val bodyLine: String?
@@ -165,23 +169,146 @@ data class SocialMessage(
     val createdAt: Double = 0.0,
     val read: Boolean = false,
     /// Фото в сообщении — id картинки на сервере.
-    val image: String? = null
+    val image: String? = null,
+    /// Удалено отправителем — приходит при обновлении переписки, чтобы пропасть и здесь.
+    val deleted: Boolean = false,
+    val reactions: List<SocialReaction> = emptyList(),
+    /// На какое сообщение это ответ.
+    val replyTo: SocialMessageQuote? = null
 ) {
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
     val isLocal: Boolean get() = id.startsWith("local-")
     /// Подпись в списке переписок: фото без текста — «Фото».
     val preview: String get() = if (text.isEmpty() && image != null) "📷 Фото" else text
+
+    val quote: SocialMessageQuote get() = SocialMessageQuote(id, text, image, fromMe)
+
+    companion object {
+        /// Переписка после обновления с сервера: новое добавлено, изменённое
+        /// (реакции, прочтение) заменено, удалённое убрано. Старые — сверху.
+        fun merged(current: List<SocialMessage>, incoming: List<SocialMessage>): List<SocialMessage> {
+            val byId = LinkedHashMap<String, SocialMessage>()
+            for (message in current) byId[message.id] = message
+            for (message in incoming) if (message.deleted) byId.remove(message.id) else byId[message.id] = message
+            return byId.values.sortedWith(compareBy({ it.createdAt }, { it.id }))
+        }
+    }
+}
+
+@Serializable
+data class SocialReaction(val emoji: String, val count: Int = 1, val mine: Boolean = false) {
+    companion object {
+        /// Реакции, которые можно поставить, — те же, что принимает сервер.
+        val choices = listOf("🔥", "💪", "👍", "❤️", "😂", "😮")
+
+        /// Своя реакция поставлена или снята — сразу, не дожидаясь сервера.
+        fun toggled(reactions: List<SocialReaction>, emoji: String): List<SocialReaction> {
+            val had = reactions.firstOrNull { it.mine }?.emoji
+            val result = reactions.mapNotNull {
+                if (!it.mine) it else it.copy(count = it.count - 1, mine = false).takeIf { copy -> copy.count > 0 }
+            }.toMutableList()
+            if (had == emoji) return result
+            val index = result.indexOfFirst { it.emoji == emoji }
+            if (index >= 0) result[index] = result[index].copy(count = result[index].count + 1, mine = true)
+            else result.add(SocialReaction(emoji, 1, true))
+            return result
+        }
+    }
+}
+
+/// Цитата сообщения, на которое ответили.
+@Serializable
+data class SocialMessageQuote(val id: String, val text: String = "", val image: String? = null, val fromMe: Boolean = false) {
+    val preview: String get() = text.ifEmpty { if (image != null) "📷 Фото" else "Сообщение удалено" }
 }
 
 /// Переписка в списке: с кем, последнее сообщение и сколько не прочитано.
 @Serializable
-data class SocialChat(val user: SocialUserShort, val last: SocialMessage, val unread: Int = 0)
+data class SocialChat(val user: SocialUserShort, val last: SocialMessage, val unread: Int = 0, val live: SocialLive? = null)
 
 @Serializable
 data class SocialChatList(val chats: List<SocialChat> = emptyList(), val unread: Int = 0)
 
 @Serializable
-data class SocialChatPage(val user: SocialUserShort, val messages: List<SocialMessage> = emptyList(), val next: Double? = null)
+data class SocialChatPage(
+    val user: SocialUserShort,
+    val messages: List<SocialMessage> = emptyList(),
+    val next: Double? = null,
+    /// Время сервера на момент ответа: с него начинается следующее обновление.
+    val serverTime: Double? = null,
+    val typing: Boolean = false,
+    val lastSeen: Double? = null,
+    val live: SocialLive? = null
+)
+
+// MARK: - Тренируется сейчас
+
+/// Идущая тренировка друга: что за день, какое упражнение и сколько подходов.
+@Serializable
+data class SocialLive(
+    val title: String = "",
+    val exercise: String = "",
+    val done: Int = 0,
+    val total: Int = 0,
+    val setsDone: Int = 0,
+    val setsTotal: Int = 0,
+    val startedAt: Double = 0.0,
+    val updatedAt: Double? = null
+) {
+    /// «Присед · 3/5».
+    val line: String get() = when {
+        exercise.isEmpty() -> title
+        total > 0 -> "$exercise · $done/$total"
+        else -> exercise
+    }
+}
+
+@Serializable
+data class SocialLiveFriend(val user: SocialUserShort, val live: SocialLive)
+
+// MARK: - Рейтинг недели
+
+/// Сводка недели: её присылает само приложение — в ней все тренировки,
+/// а не только выложенные в ленту.
+@Serializable
+data class SocialWeekStats(
+    val week: String = "",
+    val workouts: Int = 0,
+    val volumeKg: Double = 0.0,
+    val records: Int = 0,
+    val streakWeeks: Int = 0
+)
+
+@Serializable
+data class SocialLeaderboardEntry(val user: SocialUserShort, val stats: SocialWeekStats = SocialWeekStats())
+
+// MARK: - Активность
+
+/// Кто что сделал: лайк, комментарий, ответ или подписка.
+@Serializable
+data class SocialActivityItem(
+    val kind: String = "like",
+    val actor: SocialUserShort,
+    val postId: String? = null,
+    val postTitle: String? = null,
+    val text: String? = null,
+    val createdAt: Double = 0.0,
+    val unseen: Boolean = false
+) {
+    val key: String get() = "$kind-${actor.id}-${postId.orEmpty()}-${createdAt.toLong()}"
+    val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
+
+    /// «поставил(а) лайк тренировке «День 1»».
+    val action: String get() = when (kind) {
+        "comment" -> "прокомментировал(а) «${postTitle.orEmpty()}»: ${text.orEmpty()}"
+        "reply" -> "ответил(а) тебе: ${text.orEmpty()}"
+        "follow" -> "подписался(-ась) на тебя"
+        else -> "поставил(а) лайк тренировке «${postTitle.orEmpty()}»"
+    }
+}
+
+@Serializable
+data class SocialActivityPage(val items: List<SocialActivityItem> = emptyList(), val unseen: Int = 0)
 
 /// Пост, который ещё не ушёл на сервер: лежит на телефоне вместе с фото
 /// и отправляется, как только появится связь.
@@ -219,6 +346,10 @@ object SocialFormat {
         if (days < 7) return "$days ${RuPlural.word(days, "день", "дня", "дней")} назад"
         return RuDate.shortDayMonth(date)
     }
+
+    /// «в сети» или «был(а) 5 минут назад».
+    fun lastSeen(instant: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String =
+        if (ChronoUnit.SECONDS.between(instant, now) < 120) "в сети" else "был(а) " + ago(instant, now, zone)
 
     /// «1ч 48м», «45м».
     fun duration(seconds: Int): String {
@@ -413,5 +544,98 @@ object SocialProgramBuilder {
                 exercises = day.exercises.map { SocialProgramDay.Exercise(it.name, it.sets, it.reps, it.load.displayText) }
             )
         }
+    }
+}
+
+// MARK: - Сводка недели для рейтинга
+
+/// Неделя — с понедельника, номер — как в ISO и на iOS: «2026-W42».
+object WeeklyStatsBuilder {
+    fun weekKey(date: LocalDate): String =
+        String.format(java.util.Locale.ROOT, "%04d-W%02d", date.get(java.time.temporal.IsoFields.WEEK_BASED_YEAR), date.get(java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR))
+
+    fun stats(profile: ProgramProfile, today: LocalDate = LocalDate.now()): SocialWeekStats {
+        val monday = RuDate.mondayOf(today)
+        val inWeek = { epochDay: Long -> epochDay >= monday.toEpochDay() && epochDay < monday.plusDays(7).toEpochDay() }
+        val log = profile.completionLog
+        val thisWeek = log.filter { inWeek(it.epochDay) }
+        val volume = thisWeek.sumOf { profile.tonnage(it.key) }
+
+        // Рекорд недели — тренировка этой недели, где лучший вес движения выше всех прошлых.
+        val days = log.groupBy { it.key }.mapValues { (_, records) -> records.maxOf { it.epochDay } }
+        var records = 0
+        for (name in profile.loggedExerciseNames) {
+            var top: Double? = null
+            for (point in profile.history(name)) {
+                if (point.best <= 0) continue
+                val current = top
+                if (current == null) top = point.best
+                else if (point.best > current + 1e-9) {
+                    top = point.best
+                    val day = days[profile.dayKey(point.week, point.day)]
+                    if (day != null && inWeek(day)) records++
+                }
+            }
+        }
+        return SocialWeekStats(
+            week = weekKey(today),
+            workouts = thisWeek.size,
+            volumeKg = Math.round(volume * 10) / 10.0,
+            records = records,
+            streakWeeks = currentStreak(log.map { LocalDate.ofEpochDay(it.epochDay) }, today)
+        )
+    }
+
+    /// Недели подряд с тренировкой, считая эту. Эта ещё пустая — серия
+    /// не прервана, пока не кончилась: считаем с прошлой.
+    fun currentStreak(dates: List<LocalDate>, today: LocalDate = LocalDate.now()): Int {
+        val weeks = dates.map { RuDate.mondayOf(it) }.toSet()
+        var cursor = RuDate.mondayOf(today)
+        if (cursor !in weeks) cursor = cursor.minusWeeks(1)
+        var count = 0
+        while (cursor in weeks) {
+            count++
+            cursor = cursor.minusWeeks(1)
+        }
+        return count
+    }
+
+    /// Сводка из рейтинга на эту неделю: прошлонедельная — нули, а серия
+    /// живёт, только если прошлая неделя была последней с тренировкой.
+    fun current(stats: SocialWeekStats, today: LocalDate = LocalDate.now()): SocialWeekStats {
+        val key = weekKey(today)
+        if (stats.week == key) return stats
+        val streak = if (stats.week == weekKey(today.minusWeeks(1)) && stats.workouts > 0) stats.streakWeeks else 0
+        return SocialWeekStats(week = key, streakWeeks = streak)
+    }
+}
+
+/// Чем меряемся в рейтинге.
+enum class LeaderboardMetric(val title: String) {
+    VOLUME("Тоннаж"), WORKOUTS("Тренировки"), STREAK("Серия"), RECORDS("Рекорды");
+
+    fun value(stats: SocialWeekStats): Double = when (this) {
+        VOLUME -> stats.volumeKg
+        WORKOUTS -> stats.workouts.toDouble()
+        STREAK -> stats.streakWeeks.toDouble()
+        RECORDS -> stats.records.toDouble()
+    }
+
+    fun format(stats: SocialWeekStats): String = when (this) {
+        VOLUME -> AchievementKind.IRON.format(stats.volumeKg)
+        WORKOUTS -> "${stats.workouts} ${RuPlural.word(stats.workouts, "тренировка", "тренировки", "тренировок")}"
+        STREAK -> "${stats.streakWeeks} ${RuPlural.word(stats.streakWeeks, "неделя", "недели", "недель")}"
+        RECORDS -> "${stats.records} ${RuPlural.word(stats.records, "рекорд", "рекорда", "рекордов")}"
+    }
+
+    companion object {
+        /// Места: больше — выше; поровну — по тоннажу, потом по имени.
+        fun ranked(entries: List<SocialLeaderboardEntry>, metric: LeaderboardMetric, today: LocalDate = LocalDate.now()) =
+            entries.map { it.copy(stats = WeeklyStatsBuilder.current(it.stats, today)) }
+                .sortedWith(
+                    compareByDescending<SocialLeaderboardEntry> { metric.value(it.stats) }
+                        .thenByDescending { it.stats.volumeKg }
+                        .thenBy { it.user.username }
+                )
     }
 }

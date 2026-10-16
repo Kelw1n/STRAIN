@@ -471,6 +471,7 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
             )
         }
         Text("@${user.username}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+        user.live?.let { LiveBadge(it) }
         user.bodyLine?.let { Text(it, color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         if (user.bio.isNotBlank()) {
             Text(user.bio, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp, textAlign = TextAlign.Center)
@@ -896,6 +897,18 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                         Text("В шапке профиля. Сила к весу в достижениях видна всегда.", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
                     }
                     Switch(checked = showBody, onCheckedChange = { showBody = it }, colors = SwitchDefaults.colors(checkedTrackColor = Theme.accent))
+                }
+                EditDivider()
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Показывать, что я тренируюсь", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Подписчики увидят упражнение и подходы, пока идёт тренировка.", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = SocialService.sharesLive,
+                        onCheckedChange = { SocialService.updateSharesLive(it) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = Theme.accent)
+                    )
                 }
             }
         }

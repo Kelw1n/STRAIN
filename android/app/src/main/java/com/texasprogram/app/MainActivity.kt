@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.texasprogram.app.ui.LaunchReveal
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -348,11 +349,17 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     LaunchedEffect(Unit) {
         SocialService.flushOutbox()
         SocialService.refreshMe()
-        // Непрочитанные сообщения — сразу и потом раз в минуту.
+        // Непрочитанные сообщения и активность — сразу и потом раз в минуту.
+        // Идущая тренировка заодно напоминает о себе, чтобы статус у друзей не протух.
         while (true) {
             SocialService.refreshUnread()
+            SocialService.reportLive(WorkoutSessionManager.liveStatus)
             delay(60_000)
         }
+    }
+    // Друзья видят, что идёт тренировка и какой подход.
+    LaunchedEffect(Unit) {
+        snapshotFlow { WorkoutSessionManager.liveStatus }.collect { SocialService.reportLive(it) }
     }
     LaunchedEffect(profile.completionLog, profile.bodyWeightLog, SocialService.isSignedIn) {
         SocialService.scheduleSync(profile)
@@ -466,7 +473,11 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                 LiquidGlassTabBar(
                     selectedTab = tab,
                     onTabSelected = { tab = it },
-                    badges = if (SocialService.unreadMessages > 0) setOf(MainTabItem.COMMUNITY) else emptySet()
+                    // Новые сообщения — на «Друзьях», новая активность — на «Главном».
+                    badges = buildSet {
+                        if (SocialService.unreadMessages > 0) add(MainTabItem.COMMUNITY)
+                        if (SocialService.unseenActivity > 0) add(MainTabItem.TODAY)
+                    }
                 )
             }
         }

@@ -84,6 +84,8 @@ fun SocialRouteScreen(
         is SocialRoute.Following -> PeopleListScreen("Подписки", contentPadding, navigator) { SocialService.following(route.username) }
         is SocialRoute.Program -> ProgramDayScreen(route.day, contentPadding, navigator, route.all, route.author)
         is SocialRoute.Chat -> ChatScreen(route.username, contentPadding, navigator)
+        SocialRoute.Activity -> ActivityScreen(contentPadding, navigator)
+        is SocialRoute.PostId -> PostLoaderScreen(route.id, contentPadding, navigator)
         is SocialRoute.CopyProgram -> CopyProgramScreen(route.program, route.author, contentPadding, navigator)
         is SocialRoute.Badges -> BadgeListScreen(route.badges, contentPadding, navigator)
         SocialRoute.Achievements -> AchievementsScreen(remember(profile) { com.texasprogram.app.model.AchievementCalculator.progress(profile) }, contentPadding, navigator)
@@ -151,7 +153,17 @@ fun FeedScreen(
         }
     }
 
-    LaunchedEffect(feedScope, SocialService.feedVersion) { reload() }
+    LaunchedEffect(feedScope, SocialService.feedVersion) {
+        launch { SocialService.refreshLive() }
+        reload()
+    }
+    // Кто в зале — раз в минуту, пока лента на экране.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            SocialService.refreshLive()
+        }
+    }
 
     // Подгружаем следующую страницу, когда до конца списка остаётся пара постов.
     val nearEnd by remember {
@@ -220,6 +232,7 @@ fun FeedScreen(
                         }
                     }
                     Spacer(Modifier.weight(1f))
+                    if (SocialService.isSignedIn) ActivityBell { navigator.push(SocialRoute.Activity) }
                     Box(
                         Modifier.size(42.dp).clip(CircleShape).pressable(onClick = onFindPeople),
                         contentAlignment = Alignment.Center
@@ -229,6 +242,13 @@ fun FeedScreen(
                 }
             }
             if (!SocialService.isSignedIn) item(key = "teaser") { SignUpTeaser(onCreateProfile) }
+            if (SocialService.isSignedIn && SocialService.liveFriends.isNotEmpty()) {
+                item(key = "live") {
+                    Box(Modifier.padding(top = 8.dp, bottom = 6.dp)) {
+                        LiveFriendsStrip(SocialService.liveFriends) { navigator.push(SocialRoute.User(it)) }
+                    }
+                }
+            }
             if (SocialService.outbox.isNotEmpty()) item(key = "outbox") { OutboxCard() }
             val currentError = error
             if (currentError != null && posts.isEmpty()) {
@@ -385,13 +405,14 @@ private fun FeedEmpty(scope: SocialService.FeedScope, onFindPeople: () -> Unit) 
 
 // MARK: - Друзья
 
-/// Вкладка «Друзья»: поиск по юзернейму и люди, которые недавно тренировались.
+/// Вкладка «Друзья»: поиск по юзернейму, люди, которые недавно тренировались,
+/// рейтинг недели и личные сообщения.
 @Composable
 fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCreateProfile: () -> Unit) {
     val navigator = rememberSocialNavigator()
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
-    /// 0 — люди, 1 — личные сообщения.
+    /// 0 — люди, 1 — рейтинг недели, 2 — личные сообщения.
     var section by rememberSaveable { mutableIntStateOf(0) }
     val people = remember { mutableStateListOf<SocialUserShort>() }
     var loading by remember { mutableStateOf(false) }
@@ -427,12 +448,16 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                 item {
                     val unread = SocialService.unreadMessages
                     SegmentedControl(
-                        options = listOf("Люди", if (unread > 0) "Сообщения · $unread" else "Сообщения"),
+                        options = listOf("Люди", "Рейтинг", if (unread > 0) "Чаты · $unread" else "Чаты"),
                         selectedIndex = section
                     ) { section = it }
                 }
             }
             if (section == 1 && SocialService.isSignedIn) {
+                item { LeaderboardSection { navigator.push(SocialRoute.User(it)) } }
+                return@LazyColumn
+            }
+            if (section == 2 && SocialService.isSignedIn) {
                 item { ChatList { navigator.push(SocialRoute.Chat(it)) } }
                 return@LazyColumn
             }
