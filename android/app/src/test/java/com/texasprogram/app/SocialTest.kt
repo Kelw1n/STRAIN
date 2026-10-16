@@ -163,4 +163,53 @@ class SocialTest {
         assertEquals(0, date.nano)
         assertNull(BackupService.parse(BackupService.export(listOf(texas()))).socialToken)
     }
+
+    // MARK: Копирование и ответы
+
+    @Test
+    fun copyWorkoutTakesWorkingWeight() {
+        val workout = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialWorkout>(
+            """{"exercises":[{"name":"Присед","sets":[{"reps":5,"weight":100},{"reps":3,"weight":140},{"reps":3,"weight":140}]},
+               {"name":"Подтягивания","sets":[{"reps":10,"weight":0},{"reps":8,"weight":0}]}]}"""
+        )
+        val program = com.texasprogram.app.model.ProgramCopy.program(workout, "Тяжёлая пятница", "Пятница")
+        assertEquals(1, program.days.size)
+        val squat = program.days[0].exercises[0]
+        assertEquals(3, squat.sets)
+        assertEquals("3", squat.reps)
+        assertEquals(140.0, squat.kilograms!!, 0.0)
+        val pullups = program.days[0].exercises[1]
+        assertNull(pullups.kilograms)
+        assertEquals("свой вес", pullups.loadText)
+        assertTrue(program.isRunnable)
+    }
+
+    @Test
+    fun copyProgramDaysParsesLoads() {
+        val copy = com.texasprogram.app.model.ProgramCopy
+        assertEquals(100.0, copy.kilograms("100 кг")!!, 0.0)
+        assertEquals(82.5, copy.kilograms("82,5 кг")!!, 0.0)
+        assertEquals(100.0, copy.kilograms("220 lbs")!!, 0.0)
+        assertNull(copy.kilograms("RPE 8"))
+        val days = SocialProgramBuilder.days(texas())
+        val program = copy.program(days, "Программа @tim")
+        assertEquals(days.size, program.days.size)
+        assertEquals((1..days.size).toList(), program.days.map { it.number })
+        assertTrue(program.isRunnable)
+        assertTrue(ProgramProfile.custom(program).workoutPlan.weeks.isNotEmpty())
+    }
+
+    @Test
+    fun commentThreadsGroupReplies() {
+        val comments = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialComment>>(
+            """[{"id":"a","author":{"id":"1","username":"a"},"text":"вопрос","createdAt":1},
+               {"id":"b","author":{"id":"2","username":"b"},"text":"ответ","createdAt":2,"replyTo":"a","replyToUsername":"a"},
+               {"id":"c","author":{"id":"3","username":"c"},"text":"просто","createdAt":3},
+               {"id":"d","author":{"id":"1","username":"a"},"text":"спасибо","createdAt":4,"replyTo":"a","replyToUsername":"b"},
+               {"id":"e","author":{"id":"1","username":"a"},"text":"сирота","createdAt":5,"replyTo":"x"}]"""
+        )
+        val threads = com.texasprogram.app.model.SocialComment.threads(comments)
+        assertEquals(listOf("a", "c", "e"), threads.map { it.root.id })
+        assertEquals(listOf("b", "d"), threads[0].replies.map { it.id })
+    }
 }

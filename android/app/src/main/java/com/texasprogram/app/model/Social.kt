@@ -127,10 +127,57 @@ data class SocialComment(
     val postId: String = "",
     val author: SocialAuthor,
     val text: String = "",
-    val createdAt: Double = 0.0
+    val createdAt: Double = 0.0,
+    /// Корневой комментарий ветки, если это ответ.
+    val replyTo: String? = null,
+    /// Кому отвечают — «@имя» перед текстом ответа.
+    val replyToUsername: String? = null
 ) {
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
+    val isReply: Boolean get() = replyTo != null
+
+    companion object {
+        /// Корневые комментарии по порядку, под каждым — его ответы.
+        fun threads(comments: List<SocialComment>): List<SocialCommentThread> {
+            val ids = comments.map { it.id }.toSet()
+            val replies = mutableMapOf<String, MutableList<SocialComment>>()
+            val roots = mutableListOf<SocialComment>()
+            for (comment in comments) {
+                // Ответ на удалённый корень показываем как обычный комментарий.
+                val root = comment.replyTo
+                if (root != null && root in ids) replies.getOrPut(root) { mutableListOf() }.add(comment) else roots.add(comment)
+            }
+            return roots.map { SocialCommentThread(it, replies[it.id].orEmpty()) }
+        }
+    }
 }
+
+/// Комментарий и ответы под ним.
+data class SocialCommentThread(val root: SocialComment, val replies: List<SocialComment>)
+
+// MARK: - Личные сообщения
+
+@Serializable
+data class SocialMessage(
+    val id: String,
+    val text: String = "",
+    val fromMe: Boolean = false,
+    val createdAt: Double = 0.0,
+    val read: Boolean = false
+) {
+    val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
+    val isLocal: Boolean get() = id.startsWith("local-")
+}
+
+/// Переписка в списке: с кем, последнее сообщение и сколько не прочитано.
+@Serializable
+data class SocialChat(val user: SocialUserShort, val last: SocialMessage, val unread: Int = 0)
+
+@Serializable
+data class SocialChatList(val chats: List<SocialChat> = emptyList(), val unread: Int = 0)
+
+@Serializable
+data class SocialChatPage(val user: SocialUserShort, val messages: List<SocialMessage> = emptyList(), val next: Double? = null)
 
 /// Пост, который ещё не ушёл на сервер: лежит на телефоне вместе с фото
 /// и отправляется, как только появится связь.

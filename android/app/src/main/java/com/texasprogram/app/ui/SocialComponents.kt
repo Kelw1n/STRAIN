@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.texasprogram.app.model.AchievementKind
+import com.texasprogram.app.model.CustomProgram
 import com.texasprogram.app.model.SocialBadge
 import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialProgramDay
@@ -298,10 +299,14 @@ sealed interface SocialRoute {
     data class User(val username: String) : SocialRoute
     data class Followers(val username: String) : SocialRoute
     data class Following(val username: String) : SocialRoute
-    data class Program(val day: SocialProgramDay) : SocialRoute
+    /// День программы; `all` и `author` — чтобы скопировать к себе день или всю программу.
+    data class Program(val day: SocialProgramDay, val all: List<SocialProgramDay> = emptyList(), val author: String? = null) : SocialRoute
     data class Badges(val badges: List<SocialBadge>) : SocialRoute
     data object Achievements : SocialRoute
     data object EditProfile : SocialRoute
+    data class Chat(val username: String) : SocialRoute
+    /// Копия чужой тренировки в конструкторе «Своей программы».
+    data class CopyProgram(val program: CustomProgram, val author: String) : SocialRoute
 }
 
 /// Стек экранов одной вкладки: «Назад» снимает верхний.

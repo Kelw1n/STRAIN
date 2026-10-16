@@ -109,7 +109,9 @@ private val followSpring = spring<Float>(dampingRatio = 0.86f, stiffness = stiff
 fun LiquidGlassTabBar(
     selectedTab: MainTabItem,
     onTabSelected: (MainTabItem) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /// Вкладки с красной точкой: например, «Друзья» с непрочитанными сообщениями.
+    badges: Set<MainTabItem> = emptySet()
 ) {
     val haptics = rememberHapticEngine()
     val scope = rememberCoroutineScope()
@@ -283,6 +285,22 @@ fun LiquidGlassTabBar(
                         }
                     }
             )
+
+            // Красные точки поверх иконок.
+            if (badges.isNotEmpty()) {
+                Spacer(
+                    Modifier
+                        .matchParentSize()
+                        .drawBehind {
+                            tabs.forEachIndexed { index, tab ->
+                                if (tab !in badges) return@forEachIndexed
+                                val dot = Offset(center(index) + 14 * px, size.height / 2 - 12 * px)
+                                drawCircle(Color.Black, radius = 7 * px, center = dot)
+                                drawCircle(Theme.record, radius = 5 * px, center = dot)
+                            }
+                        }
+                )
+            }
         }
     }
 }

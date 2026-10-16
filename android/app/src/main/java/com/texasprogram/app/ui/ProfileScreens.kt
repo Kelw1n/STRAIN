@@ -298,7 +298,8 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                 },
                 primaryAction = {
                     if (!current.isMe && SocialService.isSignedIn) {
-                        FollowButton(current.isFollowing) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FollowButton(current.isFollowing, modifier = Modifier.weight(1f)) {
                             if (busy) return@FollowButton
                             busy = true
                             val optimistic = current.copy(
@@ -315,6 +316,18 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                                     busy = false
                                 }
                             }
+                        }
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color(0xFF292929))
+                                .pressable { navigator.push(SocialRoute.Chat(username)) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Написать", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                         }
                     }
                 }
@@ -391,7 +404,8 @@ fun ProfileContent(
                         post = post,
                         onOpen = { navigator.push(SocialRoute.Post(post)) },
                         onOpenAuthor = {},
-                        onChange = { onPostChange(post.id, it) }
+                        onChange = { onPostChange(post.id, it) },
+                        showsWorkout = true
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
                 }
@@ -415,7 +429,7 @@ fun ProfileContent(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
                         .background(Color(0xFF161617))
-                        .pressable { navigator.push(SocialRoute.Program(day)) }
+                        .pressable { navigator.push(SocialRoute.Program(day, programs, if (user.isMe) null else user.username)) }
                         .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1122,7 +1136,14 @@ fun BadgeListScreen(badges: List<SocialBadge>, contentPadding: PaddingValues, na
 // MARK: - День программы
 
 @Composable
-fun ProgramDayScreen(day: SocialProgramDay, contentPadding: PaddingValues, navigator: SocialNavigator) {
+fun ProgramDayScreen(
+    day: SocialProgramDay,
+    contentPadding: PaddingValues,
+    navigator: SocialNavigator,
+    allDays: List<SocialProgramDay> = emptyList(),
+    /// Чья программа; `null` — своя, копировать нечего.
+    author: String? = null
+) {
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SocialTopBar(day.title, onBack = { navigator.pop() }) }
         if (day.groups.isNotEmpty()) item { Text(day.groups.joinToString(" · "), color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
@@ -1141,6 +1162,9 @@ fun ProgramDayScreen(day: SocialProgramDay, contentPadding: PaddingValues, navig
                     if (index < day.exercises.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 70.dp))
                 }
             }
+        }
+        if (author != null) {
+            item { CopyProgramButton(allDays.ifEmpty { listOf(day) }, author, navigator) }
         }
     }
 }

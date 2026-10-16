@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
@@ -109,6 +110,7 @@ import com.texasprogram.app.ui.LiquidGlassTabBar
 import com.texasprogram.app.ui.MainTabItem
 import com.texasprogram.app.ui.MinimizedWorkoutBar
 import com.texasprogram.app.ui.WorkoutHubScreen
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -180,6 +182,7 @@ class MainActivity : ComponentActivity() {
         RestTimer.get(applicationContext).tick()
         // Неотправленные посты — в путь, как только приложение снова на экране.
         SocialService.flushOutbox()
+        lifecycleScope.launch { SocialService.refreshUnread() }
     }
 
     override fun onStop() {
@@ -345,6 +348,11 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     LaunchedEffect(Unit) {
         SocialService.flushOutbox()
         SocialService.refreshMe()
+        // Непрочитанные сообщения — сразу и потом раз в минуту.
+        while (true) {
+            SocialService.refreshUnread()
+            delay(60_000)
+        }
     }
     LaunchedEffect(profile.completionLog, profile.bodyWeightLog, SocialService.isSignedIn) {
         SocialService.scheduleSync(profile)
@@ -449,10 +457,18 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             }
             // Карточка сама прячется и показывается с анимацией.
             RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
-            LiquidGlassTabBar(
-                selectedTab = tab,
-                onTabSelected = { tab = it }
-            )
+            // В переписке поле ввода внизу — панель вкладок там лишняя.
+            AnimatedVisibility(
+                visible = !SocialService.hidesTabBar,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut()
+            ) {
+                LiquidGlassTabBar(
+                    selectedTab = tab,
+                    onTabSelected = { tab = it },
+                    badges = if (SocialService.unreadMessages > 0) setOf(MainTabItem.COMMUNITY) else emptySet()
+                )
+            }
         }
 
         // Экран «Сегодня» с точками подходов и настройки — поверх вкладок.

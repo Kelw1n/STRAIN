@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
@@ -61,9 +62,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,7 +89,9 @@ fun PostCard(
     post: SocialPost,
     onOpen: () -> Unit,
     onOpenAuthor: () -> Unit,
-    onChange: (SocialPost?) -> Unit
+    onChange: (SocialPost?) -> Unit,
+    /// Упражнения с весами и под фото — в списке тренировок профиля.
+    showsWorkout: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
@@ -104,6 +110,9 @@ fun PostCard(
                 post.photos,
                 Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)
             )
+            if (showsWorkout) {
+                Box(Modifier.pressable(onClick = onOpen)) { WorkoutSummary(post.workout, limit = 4) }
+            }
         }
         PostActions(post, onComments = onOpen, onChange = { onChange(it) })
         error?.let { Text(it, color = Theme.warning, fontSize = 12.sp) }
@@ -384,6 +393,8 @@ fun PostDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var composing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    /// На какой комментарий отвечаем; `null` — обычный комментарий к посту.
+    var replyingTo by remember { mutableStateOf<SocialComment?>(null) }
     val me = SocialService.me
 
     fun update(value: SocialPost) {
@@ -417,7 +428,14 @@ fun PostDetailScreen(
         item { PostTitleBlock(post) }
         item { PostStatsRow(post) }
         if (post.photos.isNotEmpty()) item { PhotoPager(post.photos) }
-        item { PostActions(post, onComments = { if (SocialService.isSignedIn) composing = true }, onChange = ::update) }
+        item {
+            PostActions(post, onComments = {
+                if (SocialService.isSignedIn) {
+                    replyingTo = null
+                    composing = true
+                }
+            }, onChange = ::update)
+        }
         if (post.workout.exercises.isNotEmpty()) {
             item {
                 SectionCaption(post.workout.program?.let { "ТРЕНИРОВКА · ${it.uppercase()}" } ?: "ТРЕНИРОВКА")
@@ -447,6 +465,18 @@ fun PostDetailScreen(
                 }
             }
         }
+        // Чужую тренировку можно взять себе: её саму или программу автора.
+        if (me?.id != post.author.id && post.workout.exercises.isNotEmpty()) {
+            item(key = "copy") {
+                CopyProgramButton(
+                    days = emptyList(),
+                    author = post.author.username,
+                    navigator = navigator,
+                    workout = post.title to post.workout,
+                    loadsAuthorProgram = true
+                )
+            }
+        }
         item {
             SectionCaption(if (comments.isEmpty()) "КОММЕНТАРИИ" else "КОММЕНТАРИИ · ${comments.size}", Modifier.padding(top = 6.dp))
         }
@@ -455,17 +485,25 @@ fun PostDetailScreen(
         } else if (comments.isEmpty()) {
             item { Text("Пока тихо. Напиши первым — поддержи или спроси про технику.", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp) }
         }
-        items(comments, key = { it.id }) { comment ->
+        val ordered = SocialComment.threads(comments).flatMap { listOf(it.root) + it.replies }
+        items(ordered, key = { it.id }) { comment ->
             CommentRow(
                 comment,
                 canDelete = me != null && (comment.author.id == me.id || post.author.id == me.id),
+                canReply = SocialService.isSignedIn,
                 onOpenAuthor = { navigator.push(SocialRoute.User(comment.author.username)) },
+                onReply = {
+                    replyingTo = comment
+                    composing = true
+                },
                 onDelete = {
                     scope.launch {
                         try {
                             SocialService.deleteComment(comment.id)
-                            comments.remove(comment)
-                            update(post.copy(comments = maxOf(0, post.comments - 1)))
+                            // С корнем ветки на сервере уходят и ответы на него.
+                            val removed = comments.count { it.id == comment.id || it.replyTo == comment.id }
+                            comments.removeAll { it.id == comment.id || it.replyTo == comment.id }
+                            update(post.copy(comments = maxOf(0, post.comments - removed)))
                         } catch (e: SocialException) {
                             error = e.message
                         }
@@ -482,7 +520,10 @@ fun PostDetailScreen(
                         .height(50.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF1C1C1C))
-                        .pressable { composing = true }
+                        .pressable {
+                            replyingTo = null
+                            composing = true
+                        }
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -521,9 +562,14 @@ fun PostDetailScreen(
 
     if (composing) {
         CommentSheet(
-            onDismiss = { composing = false },
+            replyingTo = replyingTo,
+            onCancelReply = { replyingTo = null },
+            onDismiss = {
+                composing = false
+                replyingTo = null
+            },
             onSend = { text ->
-                val comment = SocialService.addComment(post.id, text)
+                val comment = SocialService.addComment(post.id, text, replyingTo?.id)
                 comments.add(comment)
                 update(post.copy(comments = post.comments + 1))
             }
@@ -532,17 +578,41 @@ fun PostDetailScreen(
 }
 
 @Composable
-private fun CommentRow(comment: SocialComment, canDelete: Boolean, onOpenAuthor: () -> Unit, onDelete: () -> Unit) {
+private fun CommentRow(
+    comment: SocialComment,
+    canDelete: Boolean,
+    canReply: Boolean,
+    onOpenAuthor: () -> Unit,
+    onReply: () -> Unit,
+    onDelete: () -> Unit
+) {
     var menu by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.Top) {
-        Box(Modifier.pressable(onClick = onOpenAuthor)) { Avatar(comment.author.avatar, comment.author.username, 34.dp) }
+    // Ответы — со сдвигом под своим комментарием, как в Instagram.
+    Row(Modifier.padding(start = if (comment.isReply) 44.dp else 0.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.pressable(onClick = onOpenAuthor)) { Avatar(comment.author.avatar, comment.author.username, if (comment.isReply) 28.dp else 34.dp) }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("@${comment.author.username}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Text(SocialFormat.ago(comment.instant), color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
             }
-            Text(comment.text, color = Color.White.copy(alpha = 0.88f), fontSize = 15.sp)
+            Text(
+                buildAnnotatedString {
+                    comment.replyToUsername?.let { withStyle(SpanStyle(color = Theme.accent)) { append("@$it ") } }
+                    append(comment.text)
+                },
+                color = Color.White.copy(alpha = 0.88f),
+                fontSize = 15.sp
+            )
+            if (canReply) {
+                Text(
+                    "Ответить",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 2.dp).pressable(onClick = onReply)
+                )
+            }
         }
         if (canDelete) {
             Box {
@@ -567,7 +637,12 @@ private fun CommentRow(comment: SocialComment, canDelete: Boolean, onOpenAuthor:
 /// поднимает его целиком.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CommentSheet(onDismiss: () -> Unit, onSend: suspend (String) -> Unit) {
+private fun CommentSheet(
+    replyingTo: SocialComment?,
+    onCancelReply: () -> Unit,
+    onDismiss: () -> Unit,
+    onSend: suspend (String) -> Unit
+) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
@@ -586,7 +661,28 @@ private fun CommentSheet(onDismiss: () -> Unit, onSend: suspend (String) -> Unit
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Комментарий", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    replyingTo?.let { "Ответ @${it.author.username}" } ?: "Комментарий",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (replyingTo != null) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Не отвечать, а написать к посту",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(22.dp).pressable(onClick = onCancelReply)
+                    )
+                }
+            }
+            replyingTo?.let {
+                Text(it.text, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
                     Modifier
@@ -595,7 +691,7 @@ private fun CommentSheet(onDismiss: () -> Unit, onSend: suspend (String) -> Unit
                         .background(Color(0xFF222222))
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    if (text.isEmpty()) Text("Поддержи или спроси про технику", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
+                    if (text.isEmpty()) Text(if (replyingTo == null) "Поддержи или спроси про технику" else "Твой ответ", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
                     BasicTextField(
                         value = text,
                         onValueChange = { text = it.take(500) },

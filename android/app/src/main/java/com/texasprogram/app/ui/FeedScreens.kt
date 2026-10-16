@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -81,7 +82,9 @@ fun SocialRouteScreen(
         is SocialRoute.User -> UserProfileScreen(route.username, navigator, contentPadding)
         is SocialRoute.Followers -> PeopleListScreen("Подписчики", contentPadding, navigator) { SocialService.followers(route.username) }
         is SocialRoute.Following -> PeopleListScreen("Подписки", contentPadding, navigator) { SocialService.following(route.username) }
-        is SocialRoute.Program -> ProgramDayScreen(route.day, contentPadding, navigator)
+        is SocialRoute.Program -> ProgramDayScreen(route.day, contentPadding, navigator, route.all, route.author)
+        is SocialRoute.Chat -> ChatScreen(route.username, contentPadding, navigator)
+        is SocialRoute.CopyProgram -> CopyProgramScreen(route.program, route.author, contentPadding, navigator)
         is SocialRoute.Badges -> BadgeListScreen(route.badges, contentPadding, navigator)
         SocialRoute.Achievements -> AchievementsScreen(remember(profile) { com.texasprogram.app.model.AchievementCalculator.progress(profile) }, contentPadding, navigator)
         SocialRoute.EditProfile -> EditProfileScreen(profile, contentPadding, navigator)
@@ -388,6 +391,8 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
     val navigator = rememberSocialNavigator()
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
+    /// 0 — люди, 1 — личные сообщения.
+    var section by rememberSaveable { mutableIntStateOf(0) }
     val people = remember { mutableStateListOf<SocialUserShort>() }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -418,6 +423,19 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item { ScreenTitle("Друзья") }
+            if (SocialService.isSignedIn) {
+                item {
+                    val unread = SocialService.unreadMessages
+                    SegmentedControl(
+                        options = listOf("Люди", if (unread > 0) "Сообщения · $unread" else "Сообщения"),
+                        selectedIndex = section
+                    ) { section = it }
+                }
+            }
+            if (section == 1 && SocialService.isSignedIn) {
+                item { ChatList { navigator.push(SocialRoute.Chat(it)) } }
+                return@LazyColumn
+            }
             item {
                 Row(
                     Modifier

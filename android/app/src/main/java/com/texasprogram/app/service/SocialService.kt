@@ -13,9 +13,12 @@ import androidx.exifinterface.media.ExifInterface
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.SocialBadge
+import com.texasprogram.app.model.SocialChatList
+import com.texasprogram.app.model.SocialChatPage
 import com.texasprogram.app.model.SocialComment
 import com.texasprogram.app.model.SocialFeedPage
 import com.texasprogram.app.model.SocialFormat
+import com.texasprogram.app.model.SocialMessage
 import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialPostDraft
 import com.texasprogram.app.model.SocialProgramBuilder
@@ -86,6 +89,11 @@ object SocialService {
     /// Меняется после каждой публикации или удаления: ленты по нему перезагружаются.
     var feedVersion by mutableIntStateOf(0)
         private set
+    /// Непрочитанные личные сообщения — точка на вкладке «Друзья».
+    var unreadMessages by mutableIntStateOf(0)
+        private set
+    /// Переписка прячет панель вкладок: внизу экрана живёт поле ввода.
+    var hidesTabBar by mutableStateOf(false)
 
     /// Последняя загруженная лента: при переходе между вкладками она видна сразу,
     /// а свежая подгружается без пустого экрана со спиннером.
@@ -206,6 +214,7 @@ object SocialService {
     fun signOut() {
         storeToken(null)
         me = null
+        unreadMessages = 0
     }
 
     suspend fun deleteAccount() {
@@ -334,9 +343,50 @@ object SocialService {
 
     suspend fun comments(postId: String): List<SocialComment> = decode(call("GET", "/posts/$postId/comments"))
 
-    suspend fun addComment(postId: String, text: String): SocialComment {
-        val body = buildJsonObject { put("text", text) }.toString()
+    /// `replyTo` — комментарий, на который отвечаем: ответ встанет в его ветку.
+    suspend fun addComment(postId: String, text: String, replyTo: String? = null): SocialComment {
+        val body = buildJsonObject {
+            put("text", text)
+            if (replyTo != null) put("replyTo", replyTo)
+        }.toString()
         return decode(call("POST", "/posts/$postId/comments", body = body, requiresAuth = true))
+    }
+
+    // MARK: Личные сообщения
+
+    suspend fun chats(): SocialChatList {
+        val list = decode<SocialChatList>(call("GET", "/chats", requiresAuth = true))
+        unreadMessages = list.unread
+        return list
+    }
+
+    /// Сколько непрочитанных — для точки на вкладке «Друзья».
+    suspend fun refreshUnread() {
+        if (token == null) {
+            unreadMessages = 0
+            return
+        }
+        runCatching { decode<JsonObject>(call("GET", "/chats/unread")) }
+            .onSuccess { unreadMessages = it["unread"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0 }
+    }
+
+    /// Сообщения переписки, новые первыми. `after` — только пришедшие позже.
+    suspend fun messages(username: String, before: Double? = null, after: Double? = null): SocialChatPage {
+        val query = listOfNotNull(before?.let { "before=${it.toLong()}" }, after?.let { "after=${it.toLong()}" })
+        val tail = if (query.isEmpty()) "" else "?" + query.joinToString("&")
+        return decode(call("GET", "/chats/${q(username)}/messages$tail", requiresAuth = true))
+    }
+
+    suspend fun sendMessage(username: String, text: String, clientId: String = newClientId()): SocialMessage {
+        val body = buildJsonObject {
+            put("text", text)
+            put("clientId", clientId)
+        }.toString()
+        return decode(call("POST", "/chats/${q(username)}/messages", body = body, requiresAuth = true))
+    }
+
+    suspend fun deleteMessage(id: String) {
+        call("DELETE", "/messages/$id", requiresAuth = true)
     }
 
     suspend fun deleteComment(id: String) {
