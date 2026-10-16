@@ -23,6 +23,11 @@ struct FeedView: View {
                     if !social.isSignedIn {
                         signUpTeaser.padding(.bottom, 8)
                     }
+                    if social.isSignedIn && !social.liveFriends.isEmpty {
+                        LiveFriendsStrip(friends: social.liveFriends) { path.append(FeedRoute.user($0)) }
+                            .padding(.top, 8)
+                            .padding(.bottom, 6)
+                    }
                     outbox
                     if let error, posts.isEmpty {
                         SocialErrorCard(message: error) { Task { await reload() } }
@@ -53,12 +58,30 @@ struct FeedView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { scopeMenu }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: onFindPeople) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
+                    HStack(spacing: 18) {
+                        if social.isSignedIn {
+                            Button { path.append(FeedRoute.activity) } label: {
+                                Image(systemName: "bell")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .overlay(alignment: .topTrailing) {
+                                        if social.unseenActivity > 0 {
+                                            Circle()
+                                                .fill(Theme.record)
+                                                .frame(width: 9, height: 9)
+                                                .offset(x: 3, y: -2)
+                                        }
+                                    }
+                            }
+                            .accessibilityLabel(social.unseenActivity > 0 ? "Активность, есть новое" : "Активность")
+                        }
+                        Button(action: onFindPeople) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                        .accessibilityLabel("Найти людей")
                     }
-                    .accessibilityLabel("Найти людей")
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -68,6 +91,13 @@ struct FeedView: View {
         }
         .preferredColorScheme(.dark)
         .task(id: "\(scope.rawValue)-\(social.feedVersion)") { await reload() }
+        // Кто в зале — раз в минуту, пока лента на экране.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await social.refreshLive()
+            }
+        }
         .onChange(of: scope) { _, value in
             // Другая лента — сразу показываем её прошлую версию, если она была.
             posts = social.feedCache[value]?.posts ?? []
@@ -219,6 +249,7 @@ struct FeedView: View {
         loading = true
         defer { loading = false }
         social.flushOutbox()
+        Task { await social.refreshLive() }
         do {
             let page = try await social.feed(scope)
             next = page.next
@@ -251,6 +282,9 @@ enum FeedRoute: Hashable {
     case program(SocialProgramDay, all: [SocialProgramDay], author: String?)
     case badges([SocialBadge])
     case chat(String)
+    case activity
+    /// Пост, который ещё надо загрузить, — из активности.
+    case postId(String)
 
     @MainActor @ViewBuilder
     func destination(path: Binding<NavigationPath>, onPostChange: @escaping (String, SocialPost?) -> Void) -> some View {
@@ -273,6 +307,10 @@ enum FeedRoute: Hashable {
             BadgeListView(badges: badges)
         case .chat(let username):
             ChatView(username: username, path: path)
+        case .activity:
+            ActivityView(path: path)
+        case .postId(let id):
+            PostLoaderView(id: id, path: path)
         }
     }
 }

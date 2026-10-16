@@ -1,11 +1,11 @@
 import SwiftUI
 
 /// Вкладка «Друзья»: поиск по юзернейму, люди, которые недавно тренировались,
-/// и личные сообщения.
+/// рейтинг недели и личные сообщения.
 struct CommunityView: View {
     var onCreateProfile: () -> Void
 
-    private enum Part: Hashable { case people, messages }
+    private enum Part: Hashable { case people, rating, messages }
 
     @State private var section: Part = .people
     @State private var query = ""
@@ -13,6 +13,7 @@ struct CommunityView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var path = NavigationPath()
+    @State private var ratingVersion = 0
 
     private var social: SocialService { .shared }
 
@@ -23,12 +24,16 @@ struct CommunityView: View {
                     if social.isSignedIn {
                         Picker("Раздел", selection: $section) {
                             Text("Люди").tag(Part.people)
-                            Text(social.unreadMessages > 0 ? "Сообщения · \(social.unreadMessages)" : "Сообщения").tag(Part.messages)
+                            Text("Рейтинг").tag(Part.rating)
+                            Text(social.unreadMessages > 0 ? "Чаты · \(social.unreadMessages)" : "Чаты").tag(Part.messages)
                         }
                         .pickerStyle(.segmented)
                     }
                     if section == .messages && social.isSignedIn {
                         ChatListView { path.append(FeedRoute.chat($0)) }
+                    } else if section == .rating && social.isSignedIn {
+                        LeaderboardView { path.append(FeedRoute.user($0)) }
+                            .id(ratingVersion)
                     } else {
                         peopleSection
                     }
@@ -40,6 +45,7 @@ struct CommunityView: View {
             .scrollDismissesKeyboard(.interactively)
             .refreshable {
                 if section == .people { await search() } else { await social.refreshUnread() }
+                if section == .rating { ratingVersion += 1 }
             }
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Друзья")

@@ -82,6 +82,19 @@ final class SocialService {
 
     /// Непрочитанные личные сообщения — точка на вкладке «Друзья».
     private(set) var unreadMessages = 0
+    /// Новые лайки, комментарии и подписчики — точка на колокольчике и вкладке «Главное».
+    private(set) var unseenActivity = 0
+    /// Подписки, которые тренируются прямо сейчас.
+    private(set) var liveFriends: [SocialLiveFriend] = []
+
+    /// Видно ли друзьям, что идёт тренировка.
+    var sharesLive: Bool {
+        get { access(keyPath: \.sharesLive); return UserDefaults.standard.object(forKey: "social_share_live") as? Bool ?? true }
+        set {
+            withMutation(keyPath: \.sharesLive) { UserDefaults.standard.set(newValue, forKey: "social_share_live") }
+            if !newValue { Task { await clearLive() } }
+        }
+    }
 
     /// Последняя загруженная лента: при переходе между вкладками она видна сразу,
     /// а свежая подгружается без пустого экрана со спиннером.
@@ -209,6 +222,9 @@ final class SocialService {
         setToken(nil)
         me = nil
         unreadMessages = 0
+        unseenActivity = 0
+        liveFriends = []
+        lastLive = nil
         feedVersion += 1
     }
 
@@ -245,9 +261,10 @@ final class SocialService {
         var cover: String?
         var programs: [SocialProgramDay]?
         var achievements: [SocialBadge]?
+        var stats: SocialWeekStats?
 
         enum CodingKeys: String, CodingKey {
-            case username, bio, heightCm, weightKg, showBody, avatar, cover, programs, achievements
+            case username, bio, heightCm, weightKg, showBody, avatar, cover, programs, achievements, stats
         }
 
         func encode(to encoder: Encoder) throws {
@@ -261,6 +278,7 @@ final class SocialService {
             try c.encodeIfPresent(cover, forKey: .cover)
             try c.encodeIfPresent(programs, forKey: .programs)
             try c.encodeIfPresent(achievements, forKey: .achievements)
+            try c.encodeIfPresent(stats, forKey: .stats)
         }
     }
 
@@ -271,14 +289,15 @@ final class SocialService {
         return user
     }
 
-    /// Программа, медали и вес из приложения — в профиль. Шлём, только если
+    /// Программа, медали, вес и сводка недели из приложения — в профиль. Шлём, только если
     /// что-то поменялось, и не чаще раза в несколько секунд.
     func scheduleSync(from profile: ProgramProfile) {
         guard token != nil else { return }
         let patch = ProfilePatch(
             weightKg: profile.latestBodyWeight,
             programs: SocialProgramBuilder.days(for: profile),
-            achievements: AchievementCalculator.badges(from: AchievementCalculator.progress(for: profile))
+            achievements: AchievementCalculator.badges(from: AchievementCalculator.progress(for: profile)),
+            stats: WeeklyStatsBuilder.stats(for: profile)
         )
         guard let data = try? JSONEncoder().encode(patch) else { return }
         let fingerprint = data.base64EncodedString()
@@ -377,33 +396,122 @@ final class SocialService {
     }
 
     /// Сколько непрочитанных — для точки на вкладке «Друзья».
+    /// Сколько непрочитанных сообщений и новой активности — для точек на вкладках.
     func refreshUnread() async {
-        guard token != nil else { unreadMessages = 0; return }
-        struct Unread: Decodable { let unread: Int }
-        if let value: Unread = try? await request("GET", "/chats/unread") { unreadMessages = value.unread }
+        guard token != nil else { unreadMessages = 0; unseenActivity = 0; return }
+        struct Badges: Decodable { let messages: Int; let activity: Int }
+        if let value: Badges = try? await request("GET", "/badges") {
+            unreadMessages = value.messages
+            unseenActivity = value.activity
+        }
     }
 
-    /// Сообщения переписки, новые первыми. `after` — только пришедшие позже.
-    func messages(with username: String, before: Double? = nil, after: Double? = nil) async throws -> SocialChatPage {
+    /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,
+    /// `since` — всё, что появилось или поменялось с `serverTime` прошлого ответа.
+    func messages(with username: String, before: Double? = nil, after: Double? = nil, since: Double? = nil) async throws -> SocialChatPage {
         var query: [URLQueryItem] = []
         if let before { query.append(URLQueryItem(name: "before", value: String(Int(before)))) }
         if let after { query.append(URLQueryItem(name: "after", value: String(Int(after)))) }
+        if let since { query.append(URLQueryItem(name: "since", value: String(Int(since)))) }
         return try await request("GET", "/chats/\(username)/messages", query: query, requiresAuth: true)
     }
 
     private struct MessageBody: Encodable {
         let text: String
         let image: String?
+        let replyTo: String?
         let clientId: String
     }
 
-    /// `image` — id фото, уже загруженного через `uploadImage`.
-    func sendMessage(to username: String, text: String, image: String? = nil, clientId: String = UUID().uuidString.lowercased()) async throws -> SocialMessage {
-        try await request("POST", "/chats/\(username)/messages", json: MessageBody(text: text, image: image, clientId: clientId), requiresAuth: true)
+    /// `image` — id фото, уже загруженного через `uploadImage`; `replyTo` — сообщение, на которое отвечаем.
+    func sendMessage(to username: String, text: String, image: String? = nil, replyTo: String? = nil,
+                     clientId: String = UUID().uuidString.lowercased()) async throws -> SocialMessage {
+        try await request(
+            "POST", "/chats/\(username)/messages",
+            json: MessageBody(text: text, image: image, replyTo: replyTo, clientId: clientId),
+            requiresAuth: true
+        )
+    }
+
+    private struct ReactBody: Encodable { let emoji: String }
+
+    /// Реакция на сообщение; та же ещё раз — снимает её.
+    func react(_ messageId: String, emoji: String) async throws -> SocialMessage {
+        try await request("POST", "/messages/\(messageId)/react", json: ReactBody(emoji: emoji), requiresAuth: true)
+    }
+
+    @ObservationIgnored private var typingSentAt: [String: Date] = [:]
+
+    /// «Печатает…» у собеседника: не чаще раза в три секунды.
+    func sendTyping(to username: String) {
+        guard token != nil else { return }
+        let now = Date()
+        if let last = typingSentAt[username], now.timeIntervalSince(last) < 3 { return }
+        typingSentAt[username] = now
+        Task { let _: Empty? = try? await request("POST", "/chats/\(username)/typing", requiresAuth: true) }
     }
 
     func deleteMessage(_ id: String) async throws {
         let _: Empty = try await request("DELETE", "/messages/\(id)", requiresAuth: true)
+    }
+
+    // MARK: Активность
+
+    func activity() async throws -> SocialActivityPage {
+        let page: SocialActivityPage = try await request("GET", "/activity", requiresAuth: true)
+        unseenActivity = page.unseen
+        return page
+    }
+
+    /// Всё в списке активности просмотрено — точка гаснет.
+    func markActivitySeen() async {
+        guard token != nil else { return }
+        unseenActivity = 0
+        let _: Empty? = try? await request("POST", "/activity/seen", requiresAuth: true)
+    }
+
+    // MARK: Тренируется сейчас
+
+    @discardableResult
+    func refreshLive() async -> [SocialLiveFriend] {
+        guard token != nil else { liveFriends = []; return [] }
+        if let friends: [SocialLiveFriend] = try? await request("GET", "/live", requiresAuth: true) { liveFriends = friends }
+        return liveFriends
+    }
+
+    @ObservationIgnored private var lastLive: (live: SocialLive, sentAt: Date)?
+    @ObservationIgnored private var liveTask: Task<Void, Never>?
+
+    /// Идущая тренировка — друзьям. Одинаковое не шлём чаще раза в пять минут:
+    /// этого хватает, чтобы статус на сервере не протух.
+    func reportLive(_ live: SocialLive?) {
+        guard token != nil else { return }
+        guard let live, sharesLive else {
+            if lastLive != nil { Task { await clearLive() } }
+            return
+        }
+        if let last = lastLive, last.live == live, Date().timeIntervalSince(last.sentAt) < 300 { return }
+        lastLive = (live, Date())
+        liveTask?.cancel()
+        liveTask = Task { [weak self] in
+            // Несколько отметок подряд — один запрос.
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard let self, !Task.isCancelled else { return }
+            let _: Empty? = try? await self.request("PUT", "/me/live", json: live, requiresAuth: true)
+        }
+    }
+
+    func clearLive() async {
+        liveTask?.cancel()
+        lastLive = nil
+        guard token != nil else { return }
+        let _: Empty? = try? await request("DELETE", "/me/live", requiresAuth: true)
+    }
+
+    // MARK: Рейтинг недели
+
+    func leaderboard() async throws -> [SocialLeaderboardEntry] {
+        try await request("GET", "/leaderboard", requiresAuth: true)
     }
 
     // MARK: Фото

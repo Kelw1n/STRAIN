@@ -259,3 +259,84 @@ enum SocialProgramBuilder {
         }
     }
 }
+
+// MARK: - Сводка недели для рейтинга
+
+/// Неделя — с понедельника. Сводку считает телефон: в ней все тренировки,
+/// а не только выложенные в ленту.
+enum WeeklyStatsBuilder {
+    static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        calendar.minimumDaysInFirstWeek = 4
+        return calendar
+    }
+
+    /// «2026-W42» — по нему видно, что сводка этой недели, а не прошлой.
+    static func weekKey(for date: Date, calendar: Calendar = WeeklyStatsBuilder.calendar) -> String {
+        let parts = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return String(format: "%04d-W%02d", parts.yearForWeekOfYear ?? 0, parts.weekOfYear ?? 0)
+    }
+
+    static func stats(for profile: ProgramProfile, now: Date = Date(), calendar: Calendar = WeeklyStatsBuilder.calendar) -> SocialWeekStats {
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else {
+            return SocialWeekStats(week: weekKey(for: now, calendar: calendar), workouts: 0, volumeKg: 0, records: 0, streakWeeks: 0)
+        }
+        let log = profile.completionLog
+        let thisWeek = log.filter { week.contains($0.date) }
+        let volume = thisWeek.reduce(0.0) { $0 + profile.tonnage(forDayKey: $1.key) }
+
+        // Рекорд недели — тренировка этой недели, где лучший вес движения выше всех прошлых.
+        let dates = Dictionary(log.map { ($0.key, $0.date) }, uniquingKeysWith: { max($0, $1) })
+        var records = 0
+        for name in profile.loggedExerciseNames {
+            var top: Double?
+            for point in profile.history(forExerciseNamed: name) where point.best > 0 {
+                if let current = top {
+                    if point.best > current + 1e-9 {
+                        top = point.best
+                        if let date = dates[profile.dayKey(week: point.week, day: point.day)], week.contains(date) { records += 1 }
+                    }
+                } else {
+                    top = point.best
+                }
+            }
+        }
+
+        return SocialWeekStats(
+            week: weekKey(for: now, calendar: calendar),
+            workouts: thisWeek.count,
+            volumeKg: (volume * 10).rounded() / 10,
+            records: records,
+            streakWeeks: currentStreak(log.map(\.date), now: now, calendar: calendar)
+        )
+    }
+
+    /// Недели подряд с тренировкой, считая эту. Эта ещё пустая — серия
+    /// не прервана, пока не кончилась: считаем с прошлой.
+    static func currentStreak(_ dates: [Date], now: Date = Date(), calendar: Calendar = WeeklyStatsBuilder.calendar) -> Int {
+        let weeks = Set(dates.compactMap { calendar.dateInterval(of: .weekOfYear, for: $0)?.start })
+        guard var cursor = calendar.dateInterval(of: .weekOfYear, for: now)?.start else { return 0 }
+        if !weeks.contains(cursor) {
+            guard let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) else { return 0 }
+            cursor = previous
+        }
+        var count = 0
+        while weeks.contains(cursor) {
+            count += 1
+            guard let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+        return count
+    }
+
+    /// Сводка из рейтинга на эту неделю: прошлонедельная — нули, а серия
+    /// живёт, только если прошлая неделя была последней с тренировкой.
+    static func current(_ stats: SocialWeekStats, now: Date = Date(), calendar: Calendar = WeeklyStatsBuilder.calendar) -> SocialWeekStats {
+        let key = weekKey(for: now, calendar: calendar)
+        if stats.week == key { return stats }
+        let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: now).map { weekKey(for: $0, calendar: calendar) }
+        let streak = stats.week == previous && stats.workouts > 0 ? stats.streakWeeks : 0
+        return SocialWeekStats(week: key, workouts: 0, volumeKg: 0, records: 0, streakWeeks: streak)
+    }
+}

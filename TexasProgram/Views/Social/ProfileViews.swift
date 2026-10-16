@@ -305,6 +305,9 @@ struct ProfileContent<Action: View>: View {
             Text("@\(user.username)")
                 .font(.system(size: 28, weight: .heavy, design: Theme.fontDesign))
                 .foregroundStyle(.white)
+            if let live = user.live {
+                LiveBadge(live: live)
+            }
             if let body = user.bodyLine {
                 Text(body)
                     .font(.system(size: 15, weight: .semibold))
@@ -780,6 +783,19 @@ struct EditProfileView: View {
                     Text("Показывать рост и вес")
                         .font(.system(size: 16, weight: .semibold))
                     Text("В шапке профиля. Сила к весу в достижениях видна всегда.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.45))
+                }
+            }
+            .tint(Theme.accent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            divider
+            Toggle(isOn: Binding(get: { social.sharesLive }, set: { social.sharesLive = $0 })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Показывать, что я тренируюсь")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Подписчики увидят упражнение и подходы, пока идёт тренировка.")
                         .font(.system(size: 12))
                         .foregroundStyle(Color.white.opacity(0.45))
                 }

@@ -53,6 +53,14 @@ struct MainTabView: View {
         )
     }
 
+    /// Точки: новые сообщения — на «Друзьях», новая активность — на «Главном».
+    private var tabBadges: Set<MainTabItem> {
+        var badges: Set<MainTabItem> = []
+        if SocialService.shared.unreadMessages > 0 { badges.insert(.community) }
+        if SocialService.shared.unseenActivity > 0 { badges.insert(.today) }
+        return badges
+    }
+
     @ViewBuilder
     private func screen(for tab: MainTabItem) -> some View {
         switch tab {
@@ -111,10 +119,7 @@ struct MainTabView: View {
 
                 // В переписке поле ввода внизу — панель вкладок там лишняя.
                 if !AppChrome.shared.hidesTabBar {
-                    LiquidGlassTabBar(
-                        selectedTab: tabSelection,
-                        badges: SocialService.shared.unreadMessages > 0 ? [.community] : []
-                    )
+                    LiquidGlassTabBar(selectedTab: tabSelection, badges: tabBadges)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -159,13 +164,17 @@ struct MainTabView: View {
                 await SocialService.shared.refreshUnread()
             }
         }
-        // Непрочитанные сообщения — раз в минуту, пока приложение открыто.
+        // Непрочитанные сообщения и активность — раз в минуту, пока приложение открыто.
+        // Идущая тренировка заодно напоминает о себе, чтобы статус у друзей не протух.
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
                 await SocialService.shared.refreshUnread()
+                SocialService.shared.reportLive(sessionManager.liveStatus)
             }
         }
+        // Друзья видят, что идёт тренировка и какой подход.
+        .onChange(of: sessionManager.liveStatus) { _, live in SocialService.shared.reportLive(live) }
         .onChange(of: profile.completionLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         .onChange(of: profile.bodyWeightLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         // Расписание напоминаний собирается заново на каждое изменение

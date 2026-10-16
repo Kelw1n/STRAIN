@@ -170,19 +170,24 @@ final class SnapshotTests: XCTestCase {
         let messages: [SocialMessage] = [
             SocialMessage(id: "1", text: "Го сегодня в зал?", fromMe: false, createdAt: now - 3_600_000),
             SocialMessage(id: "2", text: "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", fromMe: true, createdAt: now - 3_500_000, read: true),
-            SocialMessage(id: "3", text: "Конечно 💪", fromMe: false, createdAt: now - 3_400_000),
-            SocialMessage(id: "4", text: "Возьми пояс", fromMe: true, createdAt: now - 60_000),
+            SocialMessage(id: "3", text: "Конечно 💪", fromMe: false, createdAt: now - 3_400_000,
+                          reactions: [SocialReaction(emoji: "🔥", count: 1, mine: true)],
+                          replyTo: SocialMessageQuote(id: "2", text: "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", image: nil, fromMe: true)),
+            SocialMessage(id: "4", text: "Возьми пояс", fromMe: true, createdAt: now - 60_000,
+                          reactions: [SocialReaction(emoji: "👍", count: 1, mine: false), SocialReaction(emoji: "💪", count: 2, mine: true)]),
             SocialMessage(id: "5", text: "Вот так стоял", image: "0123456789abcdef01234567", fromMe: false, createdAt: now - 30_000)
         ]
         let chats: [SocialChat] = try Fixtures.decode("""
         [{"user":{"id":"u2","username":"bro.lifts"},"last":{"id":"m1","text":"Возьми пояс","fromMe":false,"createdAt":\(now - 60_000)},"unread":2},
-         {"user":{"id":"u3","username":"heavy.anna"},"last":{"id":"m2","text":"Скинь программу","fromMe":true,"createdAt":\(now - 86_400_000)},"unread":0}]
+         {"user":{"id":"u3","username":"heavy.anna"},"last":{"id":"m2","text":"Скинь программу","fromMe":true,"createdAt":\(now - 86_400_000)},"unread":0,
+          "live":{"title":"День 2","exercise":"Становая тяга","done":2,"total":5,"startedAt":\(now - 1_800_000)}}]
         """)
         try snap("15-chat-bubbles") {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: 4) {
-                        ForEach(messages) { MessageBubble(message: $0, onDelete: {}) }
+                        ForEach(messages) { MessageBubble(message: $0, username: "bro.lifts", onDelete: {}) }
+                        TypingBubble()
                     }
                     .padding(12)
                     VStack(spacing: 0) {
@@ -198,6 +203,54 @@ final class SnapshotTests: XCTestCase {
         }
         try snap("16-chat-screen") {
             NavigationStack { ChatView(username: "bro.lifts", path: .constant(NavigationPath())) }
+        }
+    }
+
+    /// Тренируются сейчас, колокольчик активности и рейтинг недели.
+    @MainActor func testSocialExtras() throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let week = WeeklyStatsBuilder.weekKey(for: Date())
+        let live: [SocialLiveFriend] = try Fixtures.decode("""
+        [{"user":{"id":"u2","username":"bro.lifts"},"live":{"title":"День 1 · Объём","exercise":"Приседания","done":3,"total":5,"setsDone":3,"setsTotal":18,"startedAt":\(now - 1_560_000)}},
+         {"user":{"id":"u3","username":"heavy.anna"},"live":{"title":"День 2","exercise":"Жим лёжа с очень длинным названием","done":1,"total":8,"startedAt":\(now - 300_000)}}]
+        """)
+        let activity: SocialActivityPage = try Fixtures.decode("""
+        {"items":[
+          {"kind":"like","actor":{"id":"u2","username":"bro.lifts"},"postId":"p1","postTitle":"День 1 · Объём","createdAt":\(now - 120_000),"unseen":true},
+          {"kind":"reply","actor":{"id":"u3","username":"heavy.anna"},"postId":"p1","postTitle":"День 1","text":"Спасибо, попробую с поясом!","createdAt":\(now - 3_600_000),"unseen":true},
+          {"kind":"comment","actor":{"id":"u4","username":"semobsessed"},"postId":"p2","postTitle":"День 3 · Сила","text":"Мощно 🔥 сколько отдыхал между подходами?","createdAt":\(now - 7_200_000)},
+          {"kind":"follow","actor":{"id":"u5","username":"tim"},"createdAt":\(now - 90_000_000)}],"unseen":2}
+        """)
+        let board: [SocialLeaderboardEntry] = try Fixtures.decode("""
+        [{"user":{"id":"u1","username":"kelw1n","isMe":true},"stats":{"week":"\(week)","workouts":3,"volumeKg":14250,"records":2,"streakWeeks":6}},
+         {"user":{"id":"u2","username":"bro.lifts"},"stats":{"week":"\(week)","workouts":4,"volumeKg":18900,"records":1,"streakWeeks":3}},
+         {"user":{"id":"u3","username":"heavy.anna"},"stats":{"week":"\(week)","workouts":2,"volumeKg":7300,"records":3,"streakWeeks":12}},
+         {"user":{"id":"u4","username":"semobsessed"},"stats":{}}]
+        """)
+        try snap("17-social-extras", height: 2200) {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        LiveFriendsStrip(friends: live) { _ in }
+                        LiveBadge(live: live[0].live)
+                        VStack(spacing: 0) {
+                            ForEach(activity.items) { ActivityRow(item: $0, onOpenActor: {}, onOpen: {}) }
+                        }
+                        .padding(.horizontal, -16)
+                        VStack(spacing: 0) {
+                            let ranked = LeaderboardMetric.ranked(board, by: .volume)
+                            ForEach(Array(ranked.enumerated()), id: \.element.id) { index, entry in
+                                LeaderboardRow(place: index + 1, entry: entry, metric: .volume) {}
+                            }
+                        }
+                        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    }
+                    .padding(16)
+                }
+                .background(Color.black.ignoresSafeArea())
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .preferredColorScheme(.dark)
         }
     }
 

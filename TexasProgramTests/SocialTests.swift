@@ -202,6 +202,108 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(threads[0].replies[1].replyToUsername, "b")
     }
 
+    // MARK: Переписка
+
+    func testReactionToggleKeepsOnePerPerson() {
+        let fire = SocialReaction.toggled([], "🔥")
+        XCTAssertEqual(fire, [SocialReaction(emoji: "🔥", count: 1, mine: true)])
+        XCTAssertEqual(SocialReaction.toggled(fire, "🔥"), [], "та же ещё раз — снимается")
+
+        let shared = [SocialReaction(emoji: "🔥", count: 2, mine: true), SocialReaction(emoji: "💪", count: 1, mine: false)]
+        XCTAssertEqual(
+            SocialReaction.toggled(shared, "💪"),
+            [SocialReaction(emoji: "🔥", count: 1, mine: false), SocialReaction(emoji: "💪", count: 2, mine: true)],
+            "другая реакция заменяет свою"
+        )
+    }
+
+    func testMergedMessagesReplaceAndRemove() throws {
+        let current = [
+            SocialMessage(id: "a", text: "раз", fromMe: true, createdAt: 1),
+            SocialMessage(id: "b", text: "два", fromMe: false, createdAt: 2)
+        ]
+        let incoming = try JSONDecoder().decode([SocialMessage].self, from: Data(#"""
+        [{"id":"c","text":"три","fromMe":false,"createdAt":3,"replyTo":{"id":"a","text":"раз","fromMe":true}},
+         {"id":"b","deleted":true,"fromMe":false,"createdAt":2,"text":""},
+         {"id":"a","text":"раз","fromMe":true,"createdAt":1,"read":true,"reactions":[{"emoji":"🔥","count":1,"mine":false}]}]
+        """#.utf8))
+        let merged = SocialMessage.merged(current, with: incoming)
+        XCTAssertEqual(merged.map(\.id), ["a", "c"])
+        XCTAssertTrue(merged[0].read)
+        XCTAssertEqual(merged[0].reactions.first?.emoji, "🔥")
+        XCTAssertEqual(merged[1].replyTo?.id, "a")
+        XCTAssertEqual(merged[1].replyTo?.preview, "раз")
+    }
+
+    func testChatPageDecodesPresence() throws {
+        let page = try JSONDecoder().decode(SocialChatPage.self, from: Data(#"""
+        {"user":{"id":"u","username":"bro"},"messages":[],"next":null,"serverTime":1000,"typing":true,"lastSeen":900,
+         "live":{"title":"День 1","exercise":"Присед","done":3,"total":5,"setsDone":3,"setsTotal":15,"startedAt":100}}
+        """#.utf8))
+        XCTAssertEqual(page.serverTime, 1000)
+        XCTAssertEqual(page.typing, true)
+        XCTAssertEqual(page.live?.line, "Присед · 3/5")
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertEqual(SocialFormat.lastSeen(now.addingTimeInterval(-30), now: now), "в сети")
+        XCTAssertEqual(SocialFormat.lastSeen(now.addingTimeInterval(-600), now: now), "был(а) 10 минут назад")
+    }
+
+    // MARK: Активность и рейтинг
+
+    func testActivityDecodes() throws {
+        let page = try JSONDecoder().decode(SocialActivityPage.self, from: Data(#"""
+        {"items":[{"kind":"like","actor":{"id":"1","username":"tim"},"postId":"p","postTitle":"День 1","createdAt":5,"unseen":true},
+                  {"kind":"follow","actor":{"id":"2","username":"sem"},"createdAt":4}],"unseen":1}
+        """#.utf8))
+        XCTAssertEqual(page.unseen, 1)
+        XCTAssertEqual(page.items.map(\.kind), [.like, .follow])
+        XCTAssertEqual(page.items[0].action, "поставил(а) лайк тренировке «День 1»")
+        XCTAssertFalse(page.items[1].unseen)
+    }
+
+    func testWeeklyStatsCountThisWeekOnly() throws {
+        let profile = texas()
+        let squat = try XCTUnwrap(profile.workoutPlan.weeks[0].days[0].exercises.first)
+        profile.recordSet(week: 1, day: 1, exercise: squat, index: 0, reps: 5, weight: 100)
+        let later = try XCTUnwrap(profile.workoutPlan.weeks[1].days[0].exercises.first { $0.name == squat.name })
+        profile.recordSet(week: 2, day: 1, exercise: later, index: 0, reps: 5, weight: 105)
+        // Отметки напрямую: «выполнено» дописало бы плановые подходы всего дня.
+        profile.completionLog = [
+            CompletionRecord(key: profile.dayKey(week: 1, day: 1), date: day(-7), week: 1, day: 1),
+            CompletionRecord(key: profile.dayKey(week: 2, day: 1), date: day(0), week: 2, day: 1)
+        ]
+
+        let stats = WeeklyStatsBuilder.stats(for: profile, now: day(2), calendar: calendar)
+        XCTAssertEqual(stats.week, "2026-W42")
+        XCTAssertEqual(stats.workouts, 1)
+        XCTAssertEqual(stats.volumeKg, 525, accuracy: 0.01)
+        XCTAssertEqual(stats.records, 1, "105 после 100 — рекорд этой недели")
+        XCTAssertEqual(stats.streakWeeks, 2)
+    }
+
+    func testCurrentStreakWaitsForWeekToEnd() {
+        XCTAssertEqual(WeeklyStatsBuilder.currentStreak([day(-14), day(-7)], now: day(2), calendar: calendar), 2,
+                       "на этой неделе ещё не было — серия не прервана")
+        XCTAssertEqual(WeeklyStatsBuilder.currentStreak([day(0), day(-7)], now: day(2), calendar: calendar), 2)
+        XCTAssertEqual(WeeklyStatsBuilder.currentStreak([day(-14)], now: day(2), calendar: calendar), 0)
+    }
+
+    func testLeaderboardIgnoresStaleWeeks() throws {
+        let entries = try JSONDecoder().decode([SocialLeaderboardEntry].self, from: Data(#"""
+        [{"user":{"id":"1","username":"old"},"stats":{"week":"2026-W40","workouts":5,"volumeKg":20000,"records":3,"streakWeeks":9}},
+         {"user":{"id":"2","username":"last"},"stats":{"week":"2026-W41","workouts":2,"volumeKg":9000,"records":1,"streakWeeks":4}},
+         {"user":{"id":"3","username":"now","isMe":true},"stats":{"week":"2026-W42","workouts":2,"volumeKg":6000,"records":2,"streakWeeks":3}},
+         {"user":{"id":"4","username":"empty"},"stats":{}}]
+        """#.utf8))
+        let byVolume = LeaderboardMetric.ranked(entries, by: .volume, now: day(2))
+        XCTAssertEqual(byVolume.first?.user.username, "now", "прошлые недели — нули")
+        XCTAssertTrue(byVolume.first?.user.isMe ?? false)
+        let byStreak = LeaderboardMetric.ranked(entries, by: .streak, now: day(2))
+        XCTAssertEqual(byStreak.map(\.user.username), ["last", "now", "empty", "old"],
+                       "серия прошлой недели ещё жива, позапрошлой — нет")
+        XCTAssertEqual(LeaderboardMetric.volume.format(byVolume[0].stats), "6 т")
+    }
+
     // MARK: Копия
 
     /// Старые копии с Android писали пустую дату выгрузки — копия всё равно читается.
