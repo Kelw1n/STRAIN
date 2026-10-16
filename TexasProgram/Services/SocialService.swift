@@ -393,11 +393,13 @@ final class SocialService {
 
     private struct MessageBody: Encodable {
         let text: String
+        let image: String?
         let clientId: String
     }
 
-    func sendMessage(to username: String, text: String, clientId: String = UUID().uuidString.lowercased()) async throws -> SocialMessage {
-        try await request("POST", "/chats/\(username)/messages", json: MessageBody(text: text, clientId: clientId), requiresAuth: true)
+    /// `image` — id фото, уже загруженного через `uploadImage`.
+    func sendMessage(to username: String, text: String, image: String? = nil, clientId: String = UUID().uuidString.lowercased()) async throws -> SocialMessage {
+        try await request("POST", "/chats/\(username)/messages", json: MessageBody(text: text, image: image, clientId: clientId), requiresAuth: true)
     }
 
     func deleteMessage(_ id: String) async throws {

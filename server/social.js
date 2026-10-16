@@ -89,6 +89,8 @@ CREATE TABLE IF NOT EXISTS messages (
     read_at TIMESTAMPTZ,
     UNIQUE (sender, client_id)
 );
+-- Фото в сообщении: id из images, хозяин фото — отправитель.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS image TEXT;
 CREATE INDEX IF NOT EXISTS messages_pair ON messages (LEAST(sender, recipient), GREATEST(sender, recipient), created_at DESC);
 CREATE INDEX IF NOT EXISTS messages_unread ON messages (recipient) WHERE read_at IS NULL;
 `;
@@ -576,6 +578,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     const messageView = (row, me) => ({
         id: row.id,
         text: row.text,
+        image: row.image || null,
         fromMe: row.sender === me.id,
         createdAt: new Date(row.created_at).getTime(),
         read: row.read_at !== null
@@ -659,12 +662,17 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const other = await userByName(req.params.username);
         if (other.id === me.id) throw new HttpError(400, 'Нельзя написать самому себе');
         const body = text(req.body && req.body.text, 2000);
-        if (!body) throw new HttpError(400, 'Пустое сообщение');
+        // Фото — только своё, загруженное через /images.
+        const image = imageIds([req.body && req.body.image])[0] || null;
+        if (!body && !image) throw new HttpError(400, 'Пустое сообщение');
+        if (image && !(await q('SELECT 1 FROM images WHERE id = $1 AND owner = $2', [image, me.id]))[0]) {
+            throw new HttpError(400, 'Фото не найдено');
+        }
         const clientId = text(req.body && req.body.clientId, 64) || null;
         const inserted = await q(
-            `INSERT INTO messages (id, sender, recipient, client_id, text) VALUES ($1, $2, $3, $4, $5)
+            `INSERT INTO messages (id, sender, recipient, client_id, text, image) VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (sender, client_id) DO NOTHING RETURNING *`,
-            [newId(), me.id, other.id, clientId, body]
+            [newId(), me.id, other.id, clientId, body, image]
         );
         // Повтор отправки после обрыва связи возвращает уже созданное сообщение.
         const row = inserted[0] || (await q('SELECT * FROM messages WHERE sender = $1 AND client_id = $2', [me.id, clientId]))[0];
@@ -673,8 +681,9 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     router.delete('/messages/:id', wrap(async (req, res) => {
         const me = await requireViewer(req);
-        const rows = await q('DELETE FROM messages WHERE id = $1 AND sender = $2 RETURNING id', [req.params.id, me.id]);
+        const rows = await q('DELETE FROM messages WHERE id = $1 AND sender = $2 RETURNING id, image', [req.params.id, me.id]);
         if (!rows[0]) throw new HttpError(404, 'Сообщение не найдено');
+        if (rows[0].image) await q('DELETE FROM images WHERE id = $1 AND owner = $2', [rows[0].image, me.id]);
         res.json({ success: true });
     }));
 

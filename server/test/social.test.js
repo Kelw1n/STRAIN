@@ -209,6 +209,18 @@ test('лента, профили, подписки, фото и коммента
         // Свои сообщения не помечаются прочитанными, пока их не открыл собеседник.
         assert.equal((await call('GET', '/chats/unread', { token: friend.token })).data.unread, 1);
 
+        // Фото в сообщении: только своё.
+        const photo = (await call('POST', '/images', { token: me.token, raw: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) })).data.id;
+        const foreign = (await call('POST', '/images', { token: friend.token, raw: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) })).data.id;
+        assert.equal((await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { image: foreign } })).status, 400);
+        const withPhoto = await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { image: photo } });
+        assert.equal(withPhoto.status, 201);
+        assert.equal(withPhoto.data.image, photo);
+        assert.equal(withPhoto.data.text, '');
+        assert.equal((await call('GET', '/chats', { token: friend.token })).data.chats[0].last.image, photo);
+        assert.equal((await call('DELETE', `/messages/${withPhoto.data.id}`, { token: me.token })).status, 200);
+        assert.equal((await call('GET', `/images/${photo}`)).status, 404, 'с сообщением удаляется и фото');
+
         assert.equal((await call('DELETE', `/messages/${thread.messages[0].id}`, { token: me.token })).status, 404, 'чужое не удалить');
         assert.equal((await call('DELETE', `/messages/${first.data.id}`, { token: me.token })).status, 200);
         assert.equal((await call('GET', '/chats/tim/messages', { token: friend.token })).data.messages.length, 2);

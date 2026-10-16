@@ -171,7 +171,8 @@ final class SnapshotTests: XCTestCase {
             SocialMessage(id: "1", text: "Го сегодня в зал?", fromMe: false, createdAt: now - 3_600_000),
             SocialMessage(id: "2", text: "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", fromMe: true, createdAt: now - 3_500_000, read: true),
             SocialMessage(id: "3", text: "Конечно 💪", fromMe: false, createdAt: now - 3_400_000),
-            SocialMessage(id: "4", text: "Возьми пояс", fromMe: true, createdAt: now - 60_000)
+            SocialMessage(id: "4", text: "Возьми пояс", fromMe: true, createdAt: now - 60_000),
+            SocialMessage(id: "5", text: "Вот так стоял", image: "0123456789abcdef01234567", fromMe: false, createdAt: now - 30_000)
         ]
         let chats: [SocialChat] = try Fixtures.decode("""
         [{"user":{"id":"u2","username":"bro.lifts"},"last":{"id":"m1","text":"Возьми пояс","fromMe":false,"createdAt":\(now - 60_000)},"unread":2},
@@ -181,7 +182,7 @@ final class SnapshotTests: XCTestCase {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: 4) {
-                        ForEach(messages) { MessageBubble(message: $0) {} }
+                        ForEach(messages) { MessageBubble(message: $0, onDelete: {}) }
                     }
                     .padding(12)
                     VStack(spacing: 0) {

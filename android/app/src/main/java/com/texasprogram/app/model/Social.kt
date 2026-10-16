@@ -163,10 +163,14 @@ data class SocialMessage(
     val text: String = "",
     val fromMe: Boolean = false,
     val createdAt: Double = 0.0,
-    val read: Boolean = false
+    val read: Boolean = false,
+    /// Фото в сообщении — id картинки на сервере.
+    val image: String? = null
 ) {
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
     val isLocal: Boolean get() = id.startsWith("local-")
+    /// Подпись в списке переписок: фото без текста — «Фото».
+    val preview: String get() = if (text.isEmpty() && image != null) "📷 Фото" else text
 }
 
 /// Переписка в списке: с кем, последнее сообщение и сколько не прочитано.

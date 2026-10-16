@@ -377,10 +377,12 @@ object SocialService {
         return decode(call("GET", "/chats/${q(username)}/messages$tail", requiresAuth = true))
     }
 
-    suspend fun sendMessage(username: String, text: String, clientId: String = newClientId()): SocialMessage {
+    /// `image` — id фото, уже загруженного через `uploadImage`.
+    suspend fun sendMessage(username: String, text: String, clientId: String = newClientId(), image: String? = null): SocialMessage {
         val body = buildJsonObject {
             put("text", text)
             put("clientId", clientId)
+            if (image != null) put("image", image)
         }.toString()
         return decode(call("POST", "/chats/${q(username)}/messages", body = body, requiresAuth = true))
     }

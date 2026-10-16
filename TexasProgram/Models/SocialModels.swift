@@ -269,15 +269,21 @@ struct SocialCommentThread: Identifiable, Hashable, Sendable {
 struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let text: String
+    /// Фото в сообщении — id картинки на сервере.
+    var image: String?
     let fromMe: Bool
     let createdAt: Double
     var read: Bool
 
     var date: Date { Date(timeIntervalSince1970: createdAt / 1000) }
+    var isLocal: Bool { id.hasPrefix("local-") }
+    /// Подпись в списке переписок: фото без текста — «Фото».
+    var preview: String { text.isEmpty && image != nil ? "📷 Фото" : text }
 
-    init(id: String, text: String, fromMe: Bool, createdAt: Double, read: Bool = false) {
+    init(id: String, text: String, image: String? = nil, fromMe: Bool, createdAt: Double, read: Bool = false) {
         self.id = id
         self.text = text
+        self.image = image
         self.fromMe = fromMe
         self.createdAt = createdAt
         self.read = read
@@ -287,6 +293,7 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        image = try c.decodeIfPresent(String.self, forKey: .image)
         fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? false
         createdAt = try c.decodeIfPresent(Double.self, forKey: .createdAt) ?? 0
         read = try c.decodeIfPresent(Bool.self, forKey: .read) ?? false
