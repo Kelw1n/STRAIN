@@ -243,7 +243,7 @@ fun ActivityBell(onClick: () -> Unit) {
 @Composable
 fun ActivityScreen(contentPadding: PaddingValues, navigator: SocialNavigator) {
     val scope = rememberCoroutineScope()
-    val items = remember { mutableStateListOf<SocialActivityItem>() }
+    val activity = remember { mutableStateListOf<SocialActivityItem>() }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -251,8 +251,8 @@ fun ActivityScreen(contentPadding: PaddingValues, navigator: SocialNavigator) {
         loading = true
         try {
             val page = SocialService.activity()
-            items.clear()
-            items.addAll(page.items)
+            activity.clear()
+            activity.addAll(page.items)
             error = null
             // Новые подсвечены в этом списке, а точка на колокольчике гаснет.
             SocialService.markActivitySeen()
@@ -266,9 +266,9 @@ fun ActivityScreen(contentPadding: PaddingValues, navigator: SocialNavigator) {
     LazyColumn(Modifier.fillMaxSize().background(Color.Black), contentPadding = contentPadding) {
         item { SocialTopBar("Активность", onBack = { navigator.pop() }) }
         val currentError = error
-        if (currentError != null && items.isEmpty()) {
+        if (currentError != null && activity.isEmpty()) {
             item { Box(Modifier.padding(top = 12.dp)) { SocialErrorCard(currentError) { scope.launch { reload() } } } }
-        } else if (items.isEmpty() && !loading) {
+        } else if (activity.isEmpty() && !loading) {
             item {
                 Column(
                     Modifier.fillMaxWidth().padding(30.dp),
@@ -286,7 +286,8 @@ fun ActivityScreen(contentPadding: PaddingValues, navigator: SocialNavigator) {
                 }
             }
         }
-        items(items, key = { it.key }) { item ->
+        // Без ключей: два события с одинаковыми полями не уронят список.
+        items(activity) { item ->
             Column {
                 ActivityRow(
                     item,
@@ -300,7 +301,7 @@ fun ActivityScreen(contentPadding: PaddingValues, navigator: SocialNavigator) {
                 HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 58.dp))
             }
         }
-        if (loading && items.isEmpty()) {
+        if (loading && activity.isEmpty()) {
             item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp)) } }
         }
     }

@@ -300,7 +300,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
 
     /// Новое добавляется, изменённое заменяется, удалённое пропадает.
     /// Сервер отдаёт новые первыми, на экране — старые сверху.
-    fun apply(incoming: List<SocialMessage>) {
+    fun applyChanges(incoming: List<SocialMessage>) {
         val updated = SocialMessage.merged(messages, incoming)
         if (updated == messages.toList()) return
         messages.clear()
@@ -321,7 +321,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
             val page = SocialService.messages(username)
             absorb(page)
             older = page.next
-            apply(page.messages)
+            applyChanges(page.messages)
             error = null
         } catch (e: SocialException) {
             error = e.message
@@ -345,7 +345,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 absorb(page)
                 val known = messages.map { it.id }.toSet()
                 val incoming = page.messages.any { !it.fromMe && !it.deleted && it.id !in known }
-                apply(page.messages)
+                applyChanges(page.messages)
                 if (incoming) SocialService.refreshUnread()
             }
         }
@@ -375,9 +375,9 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         messages[index] = before.copy(reactions = SocialReaction.toggled(before.reactions, emoji))
         scope.launch {
             try {
-                apply(listOf(SocialService.react(message.id, emoji)))
+                applyChanges(listOf(SocialService.react(message.id, emoji)))
             } catch (e: SocialException) {
-                apply(listOf(before))
+                applyChanges(listOf(before))
                 error = e.message
             }
         }
@@ -423,7 +423,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 val sent = SocialService.sendMessage(username, text, clientId, image = imageId, replyTo = quoted?.id)
                 messages.remove(local)
                 localImages.remove(local.id)
-                apply(listOf(sent))
+                applyChanges(listOf(sent))
                 error = null
             } catch (e: SocialException) {
                 messages.remove(local)
@@ -469,7 +469,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                                 scope.launch {
                                     runCatching { SocialService.messages(username, before = cursor) }.onSuccess { page ->
                                         older = page.next
-                                        apply(page.messages)
+                                        applyChanges(page.messages)
                                     }
                                 }
                             }
