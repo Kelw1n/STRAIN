@@ -162,6 +162,9 @@ jobs:
           curl -fsS -X POST "$URL/v2/chats/$friend/messages" -H "$auth" -H 'Content-Type: application/json' -d '{"text":"hi","clientId":"smoke"}' > /dev/null
           curl -fsS "$URL/v2/chats/unread" -H "Authorization: Bearer $token2" | jq -e '.unread == 1' > /dev/null
           curl -fsS "$URL/v2/chats/$name/messages" -H "Authorization: Bearer $token2" | jq -e '.messages[0].text == "hi"' > /dev/null
+          # Фото в личном сообщении.
+          dm=$(curl -fsS -X POST "$URL/v2/images" -H "$auth" -H 'Content-Type: image/jpeg' --data-binary @photo.jpg | jq -r .id)
+          curl -fsS -X POST "$URL/v2/chats/$friend/messages" -H "$auth" -H 'Content-Type: application/json' -d "{\"text\":\"\",\"image\":\"$dm\"}" | jq -e --arg i "$dm" '.image == $i' > /dev/null
           curl -fsS -X DELETE "$URL/v2/me" -H "Authorization: Bearer $token2" > /dev/null
           start=$(date +%s%N); curl -fsS "$URL/v2/feed" > /dev/null; end=$(date +%s%N)
           echo "Лента ответила за $(( (end - start) / 1000000 )) мс"
@@ -169,4 +172,4 @@ jobs:
           echo "Живая проверка прошла: регистрация, фото, пост, лайк, комментарий, ответ, сообщения, лента"
           echo "Живая проверка прошла" >> "$GITHUB_STEP_SUMMARY"
 
-# Повторный запуск — любая правка этого файла в ветке. Попытка 4.
+# Повторный запуск — любая правка этого файла в ветке. Попытка 5.
