@@ -121,7 +121,8 @@ jobs:
         run: |
           for i in $(seq 1 60); do
             body=$(curl -fsS --max-time 30 "$URL/health" || true)
-            if echo "$body" | grep -q '"social":true'; then
+            # Старая версия отвечает, пока новая собирается, — ждём свежую.
+            if echo "$body" | grep -q '"social":true' && echo "$body" | grep -q '"api":3'; then
               echo "Сервер отвечает и база подключена: $URL"
               echo "### Лента готова: $URL" >> "$GITHUB_STEP_SUMMARY"
               exit 0
@@ -165,11 +166,30 @@ jobs:
           # Фото в личном сообщении.
           dm=$(curl -fsS -X POST "$URL/v2/images" -H "$auth" -H 'Content-Type: image/jpeg' --data-binary @photo.jpg | jq -r .id)
           curl -fsS -X POST "$URL/v2/chats/$friend/messages" -H "$auth" -H 'Content-Type: application/json' -d "{\"text\":\"\",\"image\":\"$dm\"}" | jq -e --arg i "$dm" '.image == $i' > /dev/null
+          # Ответ на сообщение, реакция, «печатает» и изменения с прошлого раза.
+          first=$(curl -fsS "$URL/v2/chats/$name/messages" -H "Authorization: Bearer $token2" | jq -r '.messages[-1].id')
+          since=$(curl -fsS "$URL/v2/chats/$friend/messages" -H "$auth" | jq -r .serverTime)
+          curl -fsS -X POST "$URL/v2/chats/$name/typing" -H "Authorization: Bearer $token2" > /dev/null
+          curl -fsS -X POST "$URL/v2/chats/$name/messages" -H "Authorization: Bearer $token2" -H 'Content-Type: application/json' \
+            -d "{\"text\":\"yo\",\"replyTo\":\"$first\"}" | jq -e --arg f "$first" '.replyTo.id == $f' > /dev/null
+          curl -fsS -X POST "$URL/v2/messages/$first/react" -H "Authorization: Bearer $token2" -H 'Content-Type: application/json' \
+            -d '{"emoji":"🔥"}' | jq -e '.reactions[0].emoji == "🔥"' > /dev/null
+          curl -fsS "$URL/v2/chats/$friend/messages?since=$since" -H "$auth" | jq -e '(.messages | length) >= 2' > /dev/null
+          # Тренируется сейчас, рейтинг недели и активность.
+          curl -fsS -X POST "$URL/v2/users/$name/follow" -H "Authorization: Bearer $token2" > /dev/null
+          curl -fsS -X PUT "$URL/v2/me/live" -H "$auth" -H 'Content-Type: application/json' -d '{"title":"День 1","exercise":"Присед","done":3,"total":5}' > /dev/null
+          curl -fsS "$URL/v2/live" -H "Authorization: Bearer $token2" | jq -e '.[0].live.exercise == "Присед"' > /dev/null
+          curl -fsS "$URL/v2/chats/$name/messages" -H "Authorization: Bearer $token2" | jq -e '.live.done == 3' > /dev/null
+          curl -fsS -X DELETE "$URL/v2/me/live" -H "$auth" > /dev/null
+          curl -fsS -X PATCH "$URL/v2/me" -H "$auth" -H 'Content-Type: application/json' -d '{"stats":{"week":"smoke","workouts":2,"volumeKg":1000}}' > /dev/null
+          curl -fsS "$URL/v2/leaderboard" -H "Authorization: Bearer $token2" | jq -e '[.[].stats.workouts] | index(2) != null' > /dev/null
+          curl -fsS "$URL/v2/activity" -H "$auth" | jq -e '[.items[].kind] | index("follow") != null' > /dev/null
+          curl -fsS "$URL/v2/badges" -H "$auth" | jq -e '.activity >= 1' > /dev/null
           curl -fsS -X DELETE "$URL/v2/me" -H "Authorization: Bearer $token2" > /dev/null
           start=$(date +%s%N); curl -fsS "$URL/v2/feed" > /dev/null; end=$(date +%s%N)
           echo "Лента ответила за $(( (end - start) / 1000000 )) мс"
           curl -fsS -X DELETE "$URL/v2/me" -H "$auth" > /dev/null
-          echo "Живая проверка прошла: регистрация, фото, пост, лайк, комментарий, ответ, сообщения, лента"
+          echo "Живая проверка прошла: регистрация, фото, пост, лайк, комментарий, ответ, сообщения, реакции, «печатает», тренируется сейчас, рейтинг, активность, лента"
           echo "Живая проверка прошла" >> "$GITHUB_STEP_SUMMARY"
 
-# Повторный запуск — любая правка этого файла в ветке. Попытка 5.
+# Повторный запуск — любая правка этого файла в ветке. Попытка 6.
