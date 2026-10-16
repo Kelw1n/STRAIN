@@ -74,6 +74,23 @@ CREATE TABLE IF NOT EXISTS comments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS comments_post ON comments(post_id, created_at);
+-- Ответ под комментарием: reply_to — корневой комментарий ветки, reply_to_user —
+-- кому отвечают (в ветке можно отвечать и на ответы).
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS reply_to TEXT REFERENCES comments(id) ON DELETE CASCADE;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS reply_to_user TEXT REFERENCES users(id) ON DELETE SET NULL;
+-- Личные сообщения: переписка двух людей — все сообщения между ними.
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    sender TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_id TEXT,
+    text TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    read_at TIMESTAMPTZ,
+    UNIQUE (sender, client_id)
+);
+CREATE INDEX IF NOT EXISTS messages_pair ON messages (LEAST(sender, recipient), GREATEST(sender, recipient), created_at DESC);
+CREATE INDEX IF NOT EXISTS messages_unread ON messages (recipient) WHERE read_at IS NULL;
 `;
 
 const newId = () => crypto.randomBytes(12).toString('hex');
@@ -153,6 +170,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     const registerLimit = limiter(10, 60 * 60 * 1000);
     const postLimit = limiter(40, 60 * 60 * 1000);
     const commentLimit = limiter(150, 60 * 60 * 1000);
+    const messageLimit = limiter(400, 60 * 60 * 1000);
     const imageLimit = limiter(80, 60 * 60 * 1000);
 
     // Все маршруты раздела ждут готовую базу.
@@ -501,30 +519,44 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         postId: row.post_id,
         author: { id: row.user_id, username: row.username, avatar: row.avatar_id },
         text: row.text,
+        replyTo: row.reply_to || null,
+        replyToUsername: row.reply_to_username || null,
         createdAt: new Date(row.created_at).getTime()
     });
 
+    const COMMENT_SELECT = `
+        SELECT c.*, u.username, u.avatar_id, r.username AS reply_to_username
+        FROM comments c JOIN users u ON u.id = c.user_id LEFT JOIN users r ON r.id = c.reply_to_user`;
+
     router.get('/posts/:id/comments', wrap(async (req, res) => {
-        const rows = await q(
-            `SELECT c.*, u.username, u.avatar_id FROM comments c JOIN users u ON u.id = c.user_id
-             WHERE c.post_id = $1 ORDER BY c.created_at ASC LIMIT 500`,
-            [req.params.id]
-        );
+        const rows = await q(`${COMMENT_SELECT} WHERE c.post_id = $1 ORDER BY c.created_at ASC LIMIT 500`, [req.params.id]);
         res.json(rows.map(commentView));
     }));
 
+    // replyTo — комментарий, на который отвечают. Ответ встаёт в ветку его
+    // корневого комментария: ветки в одну глубину, как в Instagram.
     router.post('/posts/:id/comments', wrap(async (req, res) => {
         const me = await requireViewer(req);
         commentLimit(me.id);
         const body = text(req.body && req.body.text, 500);
         if (!body) throw new HttpError(400, 'Пустой комментарий');
+        let root = null;
+        let replyUser = null;
+        const replyTo = req.body && req.body.replyTo;
+        if (replyTo) {
+            const target = (await q('SELECT id, reply_to, user_id FROM comments WHERE id = $1 AND post_id = $2', [String(replyTo), req.params.id]))[0];
+            if (!target) throw new HttpError(404, 'Комментарий удалён');
+            root = target.reply_to || target.id;
+            replyUser = target.user_id;
+        }
         const rows = await q(
-            `INSERT INTO comments (id, post_id, user_id, text) SELECT $1, id, $3, $4 FROM posts WHERE id = $2
-             RETURNING *`,
-            [newId(), req.params.id, me.id, body]
+            `INSERT INTO comments (id, post_id, user_id, text, reply_to, reply_to_user)
+             SELECT $1, id, $3, $4, $5, $6 FROM posts WHERE id = $2 RETURNING id`,
+            [newId(), req.params.id, me.id, body, root, replyUser]
         );
         if (!rows[0]) throw new HttpError(404, 'Пост удалён');
-        res.status(201).json(commentView({ ...rows[0], username: me.username, avatar_id: me.avatar_id }));
+        const created = await q(`${COMMENT_SELECT} WHERE c.id = $1`, [rows[0].id]);
+        res.status(201).json(commentView(created[0]));
     }));
 
     // Комментарий удаляет его автор или хозяин поста.
@@ -536,6 +568,113 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             [req.params.id, me.id]
         );
         if (!rows[0]) throw new HttpError(404, 'Комментарий не найден');
+        res.json({ success: true });
+    }));
+
+    // MARK: Личные сообщения
+
+    const messageView = (row, me) => ({
+        id: row.id,
+        text: row.text,
+        fromMe: row.sender === me.id,
+        createdAt: new Date(row.created_at).getTime(),
+        read: row.read_at !== null
+    });
+
+    async function unreadCount(me) {
+        const [row] = await q('SELECT count(*)::int AS count FROM messages WHERE recipient = $1 AND read_at IS NULL', [me.id]);
+        return row.count;
+    }
+
+    // Переписки: с кем, последнее сообщение и сколько не прочитано.
+    router.get('/chats', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT DISTINCT ON (other) other, m.*
+             FROM (SELECT *, CASE WHEN sender = $1 THEN recipient ELSE sender END AS other
+                   FROM messages WHERE sender = $1 OR recipient = $1) m
+             ORDER BY other, created_at DESC`,
+            [me.id]
+        );
+        if (rows.length === 0) return res.json({ chats: [], unread: 0 });
+        const others = rows.map((row) => row.other);
+        const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [others])).map((u) => [u.id, u]));
+        const unread = new Map((await q(
+            `SELECT sender, count(*)::int AS count FROM messages
+             WHERE recipient = $1 AND read_at IS NULL GROUP BY sender`,
+            [me.id]
+        )).map((row) => [row.sender, row.count]));
+        const chats = rows
+            .filter((row) => users.has(row.other))
+            .sort((a, b) => b.created_at - a.created_at)
+            .map((row) => ({
+                user: shortUser(users.get(row.other)),
+                last: messageView(row, me),
+                unread: unread.get(row.other) || 0
+            }));
+        res.json({ chats, unread: chats.reduce((sum, chat) => sum + chat.unread, 0) });
+    }));
+
+    router.get('/chats/unread', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        res.json({ unread: await unreadCount(me) });
+    }));
+
+    // Сообщения переписки, новые первыми; открытая переписка помечается прочитанной.
+    router.get('/chats/:username/messages', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const other = await userByName(req.params.username);
+        const before = Number(req.query.before);
+        const after = Number(req.query.after);
+        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+        const params = [me.id, other.id, limit];
+        // Время в ответе — в миллисекундах, а в базе — в микросекундах: сравниваем
+        // по миллисекундам, иначе «новее, чем последнее» вернуло бы его же.
+        let range = '';
+        if (Number.isFinite(after) && after > 0) {
+            params.push(new Date(after));
+            range = `AND date_trunc('milliseconds', created_at) > $${params.length}`;
+        } else if (Number.isFinite(before) && before > 0) {
+            params.push(new Date(before));
+            range = `AND date_trunc('milliseconds', created_at) < $${params.length}`;
+        }
+        const rows = await q(
+            `SELECT * FROM messages
+             WHERE ((sender = $1 AND recipient = $2) OR (sender = $2 AND recipient = $1)) ${range}
+             ORDER BY created_at DESC LIMIT $3`,
+            params
+        );
+        await q('UPDATE messages SET read_at = now() WHERE sender = $1 AND recipient = $2 AND read_at IS NULL', [other.id, me.id]);
+        const messages = rows.map((row) => messageView(row, me));
+        res.json({
+            user: shortUser(other),
+            messages,
+            next: rows.length === limit ? messages[messages.length - 1].createdAt : null
+        });
+    }));
+
+    router.post('/chats/:username/messages', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        messageLimit(me.id);
+        const other = await userByName(req.params.username);
+        if (other.id === me.id) throw new HttpError(400, 'Нельзя написать самому себе');
+        const body = text(req.body && req.body.text, 2000);
+        if (!body) throw new HttpError(400, 'Пустое сообщение');
+        const clientId = text(req.body && req.body.clientId, 64) || null;
+        const inserted = await q(
+            `INSERT INTO messages (id, sender, recipient, client_id, text) VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (sender, client_id) DO NOTHING RETURNING *`,
+            [newId(), me.id, other.id, clientId, body]
+        );
+        // Повтор отправки после обрыва связи возвращает уже созданное сообщение.
+        const row = inserted[0] || (await q('SELECT * FROM messages WHERE sender = $1 AND client_id = $2', [me.id, clientId]))[0];
+        res.status(inserted[0] ? 201 : 200).json(messageView(row, me));
+    }));
+
+    router.delete('/messages/:id', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q('DELETE FROM messages WHERE id = $1 AND sender = $2 RETURNING id', [req.params.id, me.id]);
+        if (!rows[0]) throw new HttpError(404, 'Сообщение не найдено');
         res.json({ success: true });
     }));
 
