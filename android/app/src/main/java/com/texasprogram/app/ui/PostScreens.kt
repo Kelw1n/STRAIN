@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -83,7 +85,7 @@ import kotlinx.coroutines.launch
 // MARK: - Пост в ленте
 
 /// Пост как в REBRN: кто и когда, название, заметка, время, объём и плотность,
-/// фото и под ними лайк с комментариями. Без фото вместо них — упражнения.
+/// карусель «фото → тренировка» и под ней лайк с комментариями.
 @Composable
 fun PostCard(
     post: SocialPost,
@@ -102,14 +104,10 @@ fun PostCard(
         Column(Modifier.fillMaxWidth().pressable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PostTitleBlock(post)
             PostStatsRow(post)
-            if (post.photos.isEmpty()) WorkoutSummary(post.workout, limit = 4)
         }
+        // Фото — без сжатия при нажатии: оно дёргало карточку на каждом свайпе.
+        PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen))
         if (post.photos.isNotEmpty()) {
-            // Фото — без сжатия при нажатии: оно дёргало карточку на каждом свайпе.
-            PhotoPager(
-                post.photos,
-                Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)
-            )
             if (showsWorkout) {
                 Box(Modifier.pressable(onClick = onOpen)) { WorkoutSummary(post.workout, limit = 4) }
             }
@@ -393,6 +391,7 @@ fun PostDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var composing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var showingSets by remember { mutableStateOf(false) }
     /// На какой комментарий отвечаем; `null` — обычный комментарий к посту.
     var replyingTo by remember { mutableStateOf<SocialComment?>(null) }
     val me = SocialService.me
@@ -427,7 +426,10 @@ fun PostDetailScreen(
         }
         item { PostTitleBlock(post) }
         item { PostStatsRow(post) }
-        if (post.photos.isNotEmpty()) item { PhotoPager(post.photos) }
+        // Тренировка — последним слайдом, как в REBRN; все подходы — по нажатию.
+        item {
+            PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showingSets = true })
+        }
         item {
             PostActions(post, onComments = {
                 if (SocialService.isSignedIn) {
@@ -435,35 +437,6 @@ fun PostDetailScreen(
                     composing = true
                 }
             }, onChange = ::update)
-        }
-        if (post.workout.exercises.isNotEmpty()) {
-            item {
-                SectionCaption(post.workout.program?.let { "ТРЕНИРОВКА · ${it.uppercase()}" } ?: "ТРЕНИРОВКА")
-            }
-            items(post.workout.exercises.size) { index ->
-                val exercise = post.workout.exercises[index]
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFF171717))
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(exercise.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    exercise.sets.forEachIndexed { setIndex, set ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${setIndex + 1}", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
-                            Text(set.text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            if (set.record) {
-                                Spacer(Modifier.width(8.dp))
-                                Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.warning, modifier = Modifier.size(13.dp))
-                                Text(" рекорд", color = Theme.warning, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
         }
         // Чужую тренировку можно взять себе: её саму или программу автора.
         if (me?.id != post.author.id && post.workout.exercises.isNotEmpty()) {
@@ -560,6 +533,24 @@ fun PostDetailScreen(
         )
     }
 
+    if (showingSets) {
+        ModalBottomSheet(
+            onDismissRequest = { showingSets = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = Color(0xFF121212)
+        ) {
+            LazyColumn(
+                Modifier.fillMaxWidth().navigationBarsPadding(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item { Text(post.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black) }
+                item { SectionCaption(post.workout.program?.let { "ТРЕНИРОВКА · ${it.uppercase()}" } ?: "ТРЕНИРОВКА") }
+                items(post.workout.exercises.size) { index -> WorkoutSetsCard(post.workout.exercises[index]) }
+            }
+        }
+    }
+
     if (composing) {
         CommentSheet(
             replyingTo = replyingTo,
@@ -636,6 +627,135 @@ private fun CommentRow(
 /// Лист с полем комментария: перекрывает панель вкладок, а клавиатура
 /// поднимает его целиком.
 @OptIn(ExperimentalMaterial3Api::class)
+// MARK: - Фото и тренировка
+
+/// Карусель поста: сначала фото, последним слайдом — сама тренировка.
+/// Без фото — только тренировка.
+@Composable
+fun PostMedia(post: SocialPost, modifier: Modifier = Modifier) {
+    val hasWorkout = post.workout.exercises.isNotEmpty()
+    if (post.photos.isEmpty()) {
+        Box(modifier.fillMaxWidth().padding(vertical = 6.dp)) { PostWorkoutSlide(post.workout) }
+        return
+    }
+    val count = post.photos.size + if (hasWorkout) 1 else 0
+    val pager = androidx.compose.foundation.pager.rememberPagerState { count }
+    Box(
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(4f / 5f)
+            .clip(RoundedCornerShape(22.dp))
+    ) {
+        androidx.compose.foundation.pager.HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+            if (page < post.photos.size) {
+                RemoteImage(post.photos[page], Modifier.fillMaxSize())
+            } else {
+                Box(Modifier.fillMaxSize().background(Color.Black).padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 34.dp)) {
+                    PostWorkoutSlide(post.workout)
+                }
+            }
+        }
+        if (count > 1) {
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                repeat(count) { index ->
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else 0.45f))
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// Слайд тренировки как в REBRN: картинка упражнения, название и подходы.
+@Composable
+fun PostWorkoutSlide(workout: SocialWorkout, limit: Int = 4) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (workout.exercises.isEmpty()) {
+            Text("Без записанных подходов", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
+        }
+        workout.exercises.take(limit).forEach { exercise ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ExerciseThumb(exercise.name, 54.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            exercise.name,
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (exercise.hasRecord) {
+                            Spacer(Modifier.width(6.dp))
+                            Icon(Icons.Filled.EmojiEvents, contentDescription = "Рекорд", tint = Theme.warning, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    // «4 подхода · 80 кг × 5» — лучший подход виден сразу.
+                    val sets = "${exercise.sets.size} ${RuPlural.word(exercise.sets.size, "подход", "подхода", "подходов")}"
+                    Text(
+                        exercise.best?.let { "$sets · ${it.text}" } ?: sets,
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        if (workout.exercises.size > limit) {
+            val rest = workout.exercises.size - limit
+            Text(
+                "ещё $rest ${RuPlural.word(rest, "упражнение", "упражнения", "упражнений")}",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            )
+        }
+    }
+}
+
+/// Все подходы упражнения — в листе, который открывается по нажатию на слайд.
+@Composable
+private fun WorkoutSetsCard(exercise: SocialWorkout.Exercise) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF171717))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ExerciseThumb(exercise.name, 40.dp)
+            Spacer(Modifier.width(12.dp))
+            Text(exercise.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+        exercise.sets.forEachIndexed { setIndex, set ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${setIndex + 1}", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
+                Text(set.text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                if (set.record) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.warning, modifier = Modifier.size(13.dp))
+                    Text(" рекорд", color = Theme.warning, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun CommentSheet(
     replyingTo: SocialComment?,

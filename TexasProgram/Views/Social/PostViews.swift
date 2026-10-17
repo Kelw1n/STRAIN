@@ -4,7 +4,7 @@ import UIKit
 // MARK: - Пост в ленте
 
 /// Пост как в REBRN: кто и когда, название, заметка, время, объём и плотность,
-/// фото и под ними лайк с комментариями. Без фото вместо них — упражнения.
+/// карусель «фото → тренировка» и под ней лайк с комментариями.
 struct PostCardView: View {
     let post: SocialPost
     var onOpen: () -> Void
@@ -35,19 +35,16 @@ struct PostCardView: View {
             VStack(alignment: .leading, spacing: 14) {
                 PostTitleBlock(post: post)
                 PostStatsRow(post: post)
-                if post.photos.isEmpty {
-                    PostWorkoutSummary(workout: post.workout, limit: 4)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
             .accessibilityAddTraits(.isButton)
 
+            // Карусель не внутри кнопки: кнопка перехватывала свайп между фото.
+            PostMedia(post: post, onTap: onOpen)
+
             if !post.photos.isEmpty {
-                // Карусель не внутри кнопки: кнопка перехватывала свайп между фото.
-                PhotoCarousel(ids: post.photos)
-                    .onTapGesture(perform: onOpen)
                 if showsWorkout {
                     PostWorkoutSummary(workout: post.workout, limit: 4)
                         .contentShape(Rectangle())
@@ -311,6 +308,151 @@ struct PostActions: View {
     }
 }
 
+// MARK: - Фото и тренировка
+
+/// Карусель поста: сначала фото, последним слайдом — сама тренировка.
+/// Без фото — только тренировка.
+struct PostMedia: View {
+    let post: SocialPost
+    var onTap: () -> Void = {}
+
+    @State private var page = 0
+
+    private var hasWorkout: Bool { !post.workout.exercises.isEmpty }
+
+    var body: some View {
+        if post.photos.isEmpty {
+            PostWorkoutSlide(workout: post.workout)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTap)
+        } else {
+            let count = post.photos.count + (hasWorkout ? 1 : 0)
+            TabView(selection: $page) {
+                ForEach(Array(post.photos.enumerated()), id: \.offset) { index, id in
+                    RemoteImage(id: id)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .tag(index)
+                }
+                if hasWorkout {
+                    PostWorkoutSlide(workout: post.workout)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 8)
+                        .padding(.bottom, 34)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .background(Color.black)
+                        .tag(post.photos.count)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: count > 1 ? .always : .never))
+            .aspectRatio(4.0 / 5.0, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
+        }
+    }
+}
+
+/// Слайд тренировки как в REBRN: картинка упражнения, название и подходы.
+struct PostWorkoutSlide: View {
+    let workout: SocialWorkout
+    var limit = 4
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if workout.exercises.isEmpty {
+                Text("Без записанных подходов")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.white.opacity(0.5))
+            }
+            ForEach(Array(workout.exercises.prefix(limit).enumerated()), id: \.offset) { _, exercise in
+                HStack(spacing: 14) {
+                    ExerciseThumb(name: exercise.name, size: 54)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(exercise.name)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+                            if exercise.hasRecord {
+                                Image(systemName: "trophy.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(Theme.warning)
+                            }
+                        }
+                        Text(subtitle(exercise))
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.white.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            if workout.exercises.count > limit {
+                let rest = workout.exercises.count - limit
+                Text("ещё \(rest) \(RuPlural.word(rest, "упражнение", "упражнения", "упражнений"))")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+            }
+        }
+    }
+
+    /// «4 подхода · 80 кг × 5» — лучший подход виден сразу.
+    private func subtitle(_ exercise: SocialWorkout.Exercise) -> String {
+        let sets = "\(exercise.sets.count) \(RuPlural.word(exercise.sets.count, "подход", "подхода", "подходов"))"
+        guard let best = exercise.best else { return sets }
+        return "\(sets) · \(best.text)"
+    }
+}
+
+/// Все подходы тренировки — открываются по нажатию на слайд в посте.
+struct PostWorkoutSets: View {
+    let workout: SocialWorkout
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(workout.program.map { "ТРЕНИРОВКА · \($0.uppercased())" } ?? "ТРЕНИРОВКА")
+                .font(.system(size: 12, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(Color.white.opacity(0.45))
+            ForEach(Array(workout.exercises.enumerated()), id: \.offset) { _, exercise in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        ExerciseThumb(name: exercise.name, size: 40)
+                        Text(exercise.name)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
+                        HStack {
+                            Text("\(index + 1)")
+                                .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
+                                .foregroundStyle(Color.white.opacity(0.4))
+                                .frame(width: 22, alignment: .leading)
+                            Text(set.text)
+                                .font(.system(size: 15, weight: .semibold, design: Theme.fontDesign))
+                                .foregroundStyle(.white)
+                                .monospacedDigit()
+                            if set.record {
+                                Label("рекорд", systemImage: "trophy.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(Theme.warning)
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+        }
+    }
+}
+
 // MARK: - Пост целиком с комментариями
 
 struct PostDetailView: View {
@@ -326,6 +468,7 @@ struct PostDetailView: View {
     @State private var error: String?
     @State private var composing = false
     @State private var confirmDelete = false
+    @State private var showingSets = false
     /// На какой комментарий отвечаем; `nil` — обычный комментарий к посту.
     @State private var replyingTo: SocialComment?
     @FocusState private var typing: Bool
@@ -344,10 +487,9 @@ struct PostDetailView: View {
                 }
                 PostTitleBlock(post: post)
                 PostStatsRow(post: post)
-                if !post.photos.isEmpty { PhotoCarousel(ids: post.photos) }
+                // Тренировка — последним слайдом, как в REBRN; все подходы — по нажатию.
+                PostMedia(post: post, onTap: { showingSets = true })
                 PostActions(post: post, onComments: { compose(replyTo: nil) }, onChange: update)
-
-                exercises
 
                 // Чужую тренировку можно взять себе: её саму или программу автора.
                 if social.me?.id != post.author.id && !post.workout.exercises.isEmpty {
@@ -368,6 +510,19 @@ struct PostDetailView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $composing) { composer }
+        .sheet(isPresented: $showingSets) {
+            NavigationStack {
+                ScrollView { PostWorkoutSets(workout: post.workout).padding(16) }
+                    .background(Color.black.ignoresSafeArea())
+                    .navigationTitle(post.title)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) { Button("Готово") { showingSets = false } }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .preferredColorScheme(.dark)
+        }
         .confirmationDialog("Удалить тренировку из ленты?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Удалить", role: .destructive) {
                 Task {
@@ -395,48 +550,6 @@ struct PostDetailView: View {
     private func update(_ value: SocialPost) {
         post = value
         onChange(value)
-    }
-
-    @ViewBuilder
-    private var exercises: some View {
-        if !post.workout.exercises.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(post.workout.program.map { "ТРЕНИРОВКА · \($0.uppercased())" } ?? "ТРЕНИРОВКА")
-                    .font(.system(size: 12, weight: .bold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.white.opacity(0.45))
-                VStack(spacing: 10) {
-                    ForEach(Array(post.workout.exercises.enumerated()), id: \.offset) { _, exercise in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(exercise.name)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
-                            ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
-                                HStack {
-                                    Text("\(index + 1)")
-                                        .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
-                                        .foregroundStyle(Color.white.opacity(0.4))
-                                        .frame(width: 22, alignment: .leading)
-                                    Text(set.text)
-                                        .font(.system(size: 15, weight: .semibold, design: Theme.fontDesign))
-                                        .foregroundStyle(.white)
-                                        .monospacedDigit()
-                                    if set.record {
-                                        Label("рекорд", systemImage: "trophy.fill")
-                                            .font(.system(size: 11, weight: .bold))
-                                            .foregroundStyle(Theme.warning)
-                                    }
-                                    Spacer()
-                                }
-                            }
-                        }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    }
-                }
-            }
-        }
     }
 
     private var commentsSection: some View {
