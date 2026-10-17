@@ -12,17 +12,28 @@ import androidx.compose.runtime.setValue
 import androidx.exifinterface.media.ExifInterface
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.SocialActivityPage
 import com.texasprogram.app.model.SocialBadge
+import com.texasprogram.app.model.SocialChatList
+import com.texasprogram.app.model.SocialChatPage
 import com.texasprogram.app.model.SocialComment
 import com.texasprogram.app.model.SocialFeedPage
 import com.texasprogram.app.model.SocialFormat
+import com.texasprogram.app.model.SocialLeaderboardEntry
+import com.texasprogram.app.model.SocialLive
+import com.texasprogram.app.model.SocialLiveFriend
+import com.texasprogram.app.model.SocialMessage
 import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialPostDraft
 import com.texasprogram.app.model.SocialProgramBuilder
 import com.texasprogram.app.model.SocialProgramDay
+import com.texasprogram.app.model.SocialTogether
+import com.texasprogram.app.model.SocialTogetherState
 import com.texasprogram.app.model.SocialUser
 import com.texasprogram.app.model.SocialUserShort
+import com.texasprogram.app.model.SocialWeekStats
 import com.texasprogram.app.model.SocialWorkout
+import com.texasprogram.app.model.WeeklyStatsBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +97,23 @@ object SocialService {
     /// Меняется после каждой публикации или удаления: ленты по нему перезагружаются.
     var feedVersion by mutableIntStateOf(0)
         private set
+    /// Непрочитанные личные сообщения — точка на вкладке «Друзья».
+    var unreadMessages by mutableIntStateOf(0)
+        private set
+    /// Новые лайки, комментарии и подписчики — точка на колокольчике и вкладке «Главное».
+    var unseenActivity by mutableIntStateOf(0)
+        private set
+    /// Подписки, которые тренируются прямо сейчас.
+    var liveFriends by mutableStateOf<List<SocialLiveFriend>>(emptyList())
+        private set
+    /// Приглашения на совместную тренировку и идущая совместная тренировка.
+    var together by mutableStateOf(SocialTogetherState())
+        private set
+    /// Переписка прячет панель вкладок: внизу экрана живёт поле ввода.
+    var hidesTabBar by mutableStateOf(false)
+    /// Видно ли друзьям, что идёт тренировка.
+    var sharesLive by mutableStateOf(true)
+        private set
 
     /// Последняя загруженная лента: при переходе между вкладками она видна сразу,
     /// а свежая подгружается без пустого экрана со спиннером.
@@ -103,6 +131,7 @@ object SocialService {
         if (::appContext.isInitialized) return
         appContext = context.applicationContext
         token = prefs().getString("token", null)
+        sharesLive = prefs().getBoolean("share_live", true)
         outbox = OutboxStore.loadAll()
     }
 
@@ -206,6 +235,11 @@ object SocialService {
     fun signOut() {
         storeToken(null)
         me = null
+        unreadMessages = 0
+        unseenActivity = 0
+        liveFriends = emptyList()
+        together = SocialTogetherState()
+        lastLive = null
     }
 
     suspend fun deleteAccount() {
@@ -247,7 +281,8 @@ object SocialService {
         val avatar: String? = null,
         val cover: String? = null,
         val programs: List<SocialProgramDay>? = null,
-        val achievements: List<SocialBadge>? = null
+        val achievements: List<SocialBadge>? = null,
+        val stats: SocialWeekStats? = null
     ) {
         fun toJson(): String {
             val map = mutableMapOf<String, JsonElement>()
@@ -260,6 +295,7 @@ object SocialService {
             cover?.let { map["cover"] = JsonPrimitive(it) }
             programs?.let { map["programs"] = json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(SocialProgramDay.serializer()), it) }
             achievements?.let { map["achievements"] = json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(SocialBadge.serializer()), it) }
+            stats?.let { map["stats"] = json.encodeToJsonElement(SocialWeekStats.serializer(), it) }
             return JsonObject(map).toString()
         }
     }
@@ -270,7 +306,7 @@ object SocialService {
         return user
     }
 
-    /// Программа, медали и вес — в профиль. Шлём, только если что-то поменялось.
+    /// Программа, медали, вес и сводка недели — в профиль. Шлём, только если что-то поменялось.
     fun scheduleSync(profile: ProgramProfile) {
         if (token == null || !::appContext.isInitialized) return
         syncJob?.cancel()
@@ -280,7 +316,8 @@ object SocialService {
                 ProfilePatch(
                     weightKg = profile.latestBodyWeight,
                     programs = SocialProgramBuilder.days(profile),
-                    achievements = AchievementCalculator.badges(AchievementCalculator.progress(profile))
+                    achievements = AchievementCalculator.badges(AchievementCalculator.progress(profile)),
+                    stats = WeeklyStatsBuilder.stats(profile)
                 )
             }
             val fingerprint = patch.toJson()
@@ -334,9 +371,186 @@ object SocialService {
 
     suspend fun comments(postId: String): List<SocialComment> = decode(call("GET", "/posts/$postId/comments"))
 
-    suspend fun addComment(postId: String, text: String): SocialComment {
-        val body = buildJsonObject { put("text", text) }.toString()
+    /// `replyTo` — комментарий, на который отвечаем: ответ встанет в его ветку.
+    suspend fun addComment(postId: String, text: String, replyTo: String? = null): SocialComment {
+        val body = buildJsonObject {
+            put("text", text)
+            if (replyTo != null) put("replyTo", replyTo)
+        }.toString()
         return decode(call("POST", "/posts/$postId/comments", body = body, requiresAuth = true))
+    }
+
+    // MARK: Личные сообщения
+
+    suspend fun chats(): SocialChatList {
+        val list = decode<SocialChatList>(call("GET", "/chats", requiresAuth = true))
+        unreadMessages = list.unread
+        return list
+    }
+
+    /// Сколько непрочитанных сообщений и новой активности — для точек на вкладках.
+    suspend fun refreshUnread() {
+        if (token == null) {
+            unreadMessages = 0
+            unseenActivity = 0
+            return
+        }
+        runCatching { decode<JsonObject>(call("GET", "/badges")) }
+            .onSuccess {
+                unreadMessages = it["messages"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                unseenActivity = it["activity"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                // Приглашения и совместную тренировку спрашиваем, только когда они есть.
+                val invites = it["invites"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                if (invites > 0 || together.active != null || together.outgoing.isNotEmpty() || together.incoming.isNotEmpty()) refreshTogether()
+            }
+    }
+
+    // MARK: Совместная тренировка
+
+    suspend fun refreshTogether() {
+        if (token == null) {
+            together = SocialTogetherState()
+            return
+        }
+        runCatching { decode<SocialTogetherState>(call("GET", "/together", requiresAuth = true)) }.onSuccess { together = it }
+    }
+
+    /// Позвать друга: приглашение придёт ему и появится карточкой в переписке.
+    suspend fun invite(username: String): SocialTogether {
+        val invite = decode<SocialTogether>(call("POST", "/users/${q(username)}/together", requiresAuth = true))
+        refreshTogether()
+        return invite
+    }
+
+    suspend fun acceptTogether(id: String) {
+        call("POST", "/together/$id/accept", requiresAuth = true)
+        refreshTogether()
+    }
+
+    /// `decline`, `cancel` или `leave`.
+    suspend fun respondTogether(id: String, action: String) {
+        call("POST", "/together/$id/$action", requiresAuth = true)
+        refreshTogether()
+    }
+
+    /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,
+    /// `since` — всё, что появилось или поменялось с `serverTime` прошлого ответа.
+    suspend fun messages(username: String, before: Double? = null, after: Double? = null, since: Double? = null): SocialChatPage {
+        val query = listOfNotNull(
+            before?.let { "before=${it.toLong()}" },
+            after?.let { "after=${it.toLong()}" },
+            since?.let { "since=${it.toLong()}" }
+        )
+        val tail = if (query.isEmpty()) "" else "?" + query.joinToString("&")
+        return decode(call("GET", "/chats/${q(username)}/messages$tail", requiresAuth = true))
+    }
+
+    /// `image` — id фото, уже загруженного через `uploadImage`; `replyTo` — сообщение, на которое отвечаем.
+    suspend fun sendMessage(
+        username: String,
+        text: String,
+        clientId: String = newClientId(),
+        image: String? = null,
+        replyTo: String? = null
+    ): SocialMessage {
+        val body = buildJsonObject {
+            put("text", text)
+            put("clientId", clientId)
+            if (image != null) put("image", image)
+            if (replyTo != null) put("replyTo", replyTo)
+        }.toString()
+        return decode(call("POST", "/chats/${q(username)}/messages", body = body, requiresAuth = true))
+    }
+
+    /// Реакция на сообщение; та же ещё раз — снимает её.
+    suspend fun react(messageId: String, emoji: String): SocialMessage {
+        val body = buildJsonObject { put("emoji", emoji) }.toString()
+        return decode(call("POST", "/messages/$messageId/react", body = body, requiresAuth = true))
+    }
+
+    private val typingSentAt = mutableMapOf<String, Long>()
+
+    /// «Печатает…» у собеседника: не чаще раза в три секунды.
+    fun sendTyping(username: String) {
+        if (token == null) return
+        val now = System.currentTimeMillis()
+        if (now - (typingSentAt[username] ?: 0L) < 3_000) return
+        typingSentAt[username] = now
+        scope.launch { runCatching { call("POST", "/chats/${q(username)}/typing", requiresAuth = true) } }
+    }
+
+    // MARK: Активность
+
+    suspend fun activity(): SocialActivityPage {
+        val page = decode<SocialActivityPage>(call("GET", "/activity", requiresAuth = true))
+        unseenActivity = page.unseen
+        return page
+    }
+
+    /// Всё в списке активности просмотрено — точка гаснет.
+    suspend fun markActivitySeen() {
+        if (token == null) return
+        unseenActivity = 0
+        runCatching { call("POST", "/activity/seen", requiresAuth = true) }
+    }
+
+    // MARK: Тренируется сейчас
+
+    suspend fun refreshLive(): List<SocialLiveFriend> {
+        if (token == null) {
+            liveFriends = emptyList()
+            return liveFriends
+        }
+        runCatching { decode<List<SocialLiveFriend>>(call("GET", "/live", requiresAuth = true)) }
+            .onSuccess { liveFriends = it }
+        return liveFriends
+    }
+
+    private var lastLive: Pair<SocialLive, Long>? = null
+    private var liveJob: Job? = null
+
+    /// Идущая тренировка — друзьям. Одинаковое не шлём чаще раза в пять минут:
+    /// этого хватает, чтобы статус на сервере не протух.
+    fun reportLive(live: SocialLive?) {
+        if (token == null) return
+        // Скрытая тренировка всё равно видна напарнику по совместной.
+        val partnerOnly = !sharesLive && together.active != null
+        if (live == null || !(sharesLive || partnerOnly)) {
+            if (lastLive != null) scope.launch { clearLive() }
+            return
+        }
+        val sent = if (partnerOnly) live.copy(partnerOnly = true) else live
+        val last = lastLive
+        val now = System.currentTimeMillis()
+        if (last != null && last.first == sent && now - last.second < 300_000) return
+        lastLive = sent to now
+        liveJob?.cancel()
+        liveJob = scope.launch {
+            // Несколько отметок подряд — один запрос.
+            delay(1_500)
+            runCatching { call("PUT", "/me/live", body = json.encodeToString(SocialLive.serializer(), sent), requiresAuth = true) }
+        }
+    }
+
+    suspend fun clearLive() {
+        liveJob?.cancel()
+        lastLive = null
+        if (token == null) return
+        runCatching { call("DELETE", "/me/live", requiresAuth = true) }
+    }
+
+    fun updateSharesLive(value: Boolean) {
+        sharesLive = value
+        if (::appContext.isInitialized) prefs().edit().putBoolean("share_live", value).apply()
+        if (!value) scope.launch { clearLive() }
+    }
+
+    // MARK: Рейтинг недели
+
+    suspend fun leaderboard(): List<SocialLeaderboardEntry> = decode(call("GET", "/leaderboard", requiresAuth = true))
+
+    suspend fun deleteMessage(id: String) {
+        call("DELETE", "/messages/$id", requiresAuth = true)
     }
 
     suspend fun deleteComment(id: String) {
@@ -424,7 +638,8 @@ object SocialService {
         val sets: Int,
         val effort: Int? = null,
         val photos: List<String>,
-        val workout: SocialWorkout
+        val workout: SocialWorkout,
+        val together: String? = null
     )
 
     fun flushOutbox() {
@@ -455,7 +670,8 @@ object SocialService {
                             sets = draft.sets,
                             effort = draft.effort,
                             photos = draft.uploadedPhotos.filterNotNull(),
-                            workout = draft.workout
+                            workout = draft.workout,
+                            together = draft.together
                         )
                         call("POST", "/posts", body = json.encodeToString(body), requiresAuth = true)
                         withContext(Dispatchers.IO) { OutboxStore.remove(draft.clientId) }
@@ -471,6 +687,8 @@ object SocialService {
                     }
                 }
                 refreshMe()
+                // Пост совместной тренировки отмечает её законченной.
+                if (together.active != null) refreshTogether()
             } finally {
                 isFlushing = false
             }

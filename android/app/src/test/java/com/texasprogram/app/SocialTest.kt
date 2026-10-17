@@ -163,4 +163,184 @@ class SocialTest {
         assertEquals(0, date.nano)
         assertNull(BackupService.parse(BackupService.export(listOf(texas()))).socialToken)
     }
+
+    // MARK: Копирование и ответы
+
+    @Test
+    fun copyWorkoutTakesWorkingWeight() {
+        val workout = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialWorkout>(
+            """{"exercises":[{"name":"Присед","sets":[{"reps":5,"weight":100},{"reps":3,"weight":140},{"reps":3,"weight":140}]},
+               {"name":"Подтягивания","sets":[{"reps":10,"weight":0},{"reps":8,"weight":0}]}]}"""
+        )
+        val program = com.texasprogram.app.model.ProgramCopy.program(workout, "Тяжёлая пятница", "Пятница")
+        assertEquals(1, program.days.size)
+        val squat = program.days[0].exercises[0]
+        assertEquals(3, squat.sets)
+        assertEquals("3", squat.reps)
+        assertEquals(140.0, squat.kilograms!!, 0.0)
+        val pullups = program.days[0].exercises[1]
+        assertNull(pullups.kilograms)
+        assertEquals("свой вес", pullups.loadText)
+        assertTrue(program.isRunnable)
+    }
+
+    @Test
+    fun copyProgramDaysParsesLoads() {
+        val copy = com.texasprogram.app.model.ProgramCopy
+        assertEquals(100.0, copy.kilograms("100 кг")!!, 0.0)
+        assertEquals(82.5, copy.kilograms("82,5 кг")!!, 0.0)
+        assertEquals(100.0, copy.kilograms("220 lbs")!!, 0.0)
+        assertNull(copy.kilograms("RPE 8"))
+        val days = SocialProgramBuilder.days(texas())
+        val program = copy.program(days, "Программа @tim")
+        assertEquals(days.size, program.days.size)
+        assertEquals((1..days.size).toList(), program.days.map { it.number })
+        assertTrue(program.isRunnable)
+        assertTrue(ProgramProfile.custom(program).workoutPlan.weeks.isNotEmpty())
+    }
+
+    @Test
+    fun commentThreadsGroupReplies() {
+        val comments = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialComment>>(
+            """[{"id":"a","author":{"id":"1","username":"a"},"text":"вопрос","createdAt":1},
+               {"id":"b","author":{"id":"2","username":"b"},"text":"ответ","createdAt":2,"replyTo":"a","replyToUsername":"a"},
+               {"id":"c","author":{"id":"3","username":"c"},"text":"просто","createdAt":3},
+               {"id":"d","author":{"id":"1","username":"a"},"text":"спасибо","createdAt":4,"replyTo":"a","replyToUsername":"b"},
+               {"id":"e","author":{"id":"1","username":"a"},"text":"сирота","createdAt":5,"replyTo":"x"}]"""
+        )
+        val threads = com.texasprogram.app.model.SocialComment.threads(comments)
+        assertEquals(listOf("a", "c", "e"), threads.map { it.root.id })
+        assertEquals(listOf("b", "d"), threads[0].replies.map { it.id })
+    }
+
+    // MARK: Переписка
+
+    @Test
+    fun reactionToggleKeepsOnePerPerson() {
+        val reaction = com.texasprogram.app.model.SocialReaction
+        val fire = reaction.toggled(emptyList(), "🔥")
+        assertEquals(listOf(com.texasprogram.app.model.SocialReaction("🔥", 1, true)), fire)
+        assertEquals(emptyList<com.texasprogram.app.model.SocialReaction>(), reaction.toggled(fire, "🔥"))
+        val shared = listOf(com.texasprogram.app.model.SocialReaction("🔥", 2, true), com.texasprogram.app.model.SocialReaction("💪", 1, false))
+        assertEquals(
+            listOf(com.texasprogram.app.model.SocialReaction("🔥", 1, false), com.texasprogram.app.model.SocialReaction("💪", 2, true)),
+            reaction.toggled(shared, "💪")
+        )
+    }
+
+    @Test
+    fun mergedMessagesReplaceAndRemove() {
+        val message = com.texasprogram.app.model.SocialMessage
+        val current = listOf(
+            com.texasprogram.app.model.SocialMessage("a", "раз", fromMe = true, createdAt = 1.0),
+            com.texasprogram.app.model.SocialMessage("b", "два", createdAt = 2.0)
+        )
+        val incoming = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialMessage>>(
+            """[{"id":"c","text":"три","createdAt":3,"replyTo":{"id":"a","text":"раз","fromMe":true}},
+               {"id":"b","deleted":true,"createdAt":2,"text":""},
+               {"id":"a","text":"раз","fromMe":true,"createdAt":1,"read":true,"reactions":[{"emoji":"🔥","count":1,"mine":false}]}]"""
+        )
+        val merged = message.merged(current, incoming)
+        assertEquals(listOf("a", "c"), merged.map { it.id })
+        assertTrue(merged[0].read)
+        assertEquals("🔥", merged[0].reactions.first().emoji)
+        assertEquals("раз", merged[1].replyTo?.preview)
+    }
+
+    @Test
+    fun chatPageDecodesPresence() {
+        val page = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialChatPage>(
+            """{"user":{"id":"u","username":"bro"},"messages":[],"next":null,"serverTime":1000,"typing":true,"lastSeen":900,
+               "live":{"title":"День 1","exercise":"Присед","done":3,"total":5,"setsDone":3,"setsTotal":15,"startedAt":100}}"""
+        )
+        assertEquals(1000.0, page.serverTime!!, 0.0)
+        assertTrue(page.typing)
+        assertEquals("Присед · 3/5", page.live?.line)
+        val now = Instant.ofEpochSecond(1_000_000)
+        assertEquals("в сети", SocialFormat.lastSeen(now.minusSeconds(30), now, ZoneOffset.UTC))
+        assertEquals("был(а) 10 минут назад", SocialFormat.lastSeen(now.minusSeconds(600), now, ZoneOffset.UTC))
+    }
+
+    // MARK: Совместная тренировка
+
+    @Test
+    fun togetherDecodes() {
+        val state = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialTogetherState>(
+            """{"incoming":[{"id":"t1","status":"pending","fromMe":false,"partner":{"id":"2","username":"sem"},"createdAt":5}],
+               "outgoing":[],
+               "active":{"id":"t2","status":"accepted","fromMe":true,"partner":{"id":"3","username":"tim"},
+                         "partnerLive":{"title":"День 1","exercise":"Жим","done":2,"total":4,"setsDone":6,"setsTotal":16}}}"""
+        )
+        assertEquals("sem", state.incoming.first().partner.username)
+        assertEquals("Жим · 2/4", state.active?.partnerLive?.line)
+        val message = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"m","text":"Го","createdAt":1,"invite":{"id":"t1","status":"pending","fromMe":false}}"""
+        )
+        assertTrue(message.invite!!.isPending)
+        assertEquals("Зовёт тренироваться вместе", message.invite!!.statusText)
+        val post = SocialService.json.decodeFromString<SocialPost>(
+            """{"id":"p","author":{"id":"1","username":"a"},"partner":{"id":"2","username":"b"}}"""
+        )
+        assertEquals("b", post.partner?.username)
+    }
+
+    // MARK: Активность и рейтинг
+
+    @Test
+    fun activityDecodes() {
+        val page = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialActivityPage>(
+            """{"items":[{"kind":"like","actor":{"id":"1","username":"tim"},"postId":"p","postTitle":"День 1","createdAt":5,"unseen":true},
+                         {"kind":"follow","actor":{"id":"2","username":"sem"},"createdAt":4}],"unseen":1}"""
+        )
+        assertEquals(1, page.unseen)
+        assertEquals(listOf("like", "follow"), page.items.map { it.kind })
+        assertEquals("поставил(а) лайк тренировке «День 1»", page.items[0].action)
+        assertFalse(page.items[1].unseen)
+    }
+
+    @Test
+    fun weeklyStatsCountThisWeekOnly() {
+        val base = texas()
+        val squat = base.workoutPlan.weeks[0].days[0].exercises.first()
+        val later = base.workoutPlan.weeks[1].days[0].exercises.first { it.name == squat.name }
+        val logged = base.recordSet(1, 1, squat, 0, reps = 5, weight = 100.0).recordSet(2, 1, later, 0, reps = 5, weight = 105.0)
+        // Отметки напрямую: «выполнено» дописало бы плановые подходы всего дня.
+        val profile = logged.copy(
+            completionLog = listOf(
+                com.texasprogram.app.model.CompletionRecord(logged.dayKey(1, 1), day(-7).toEpochDay(), 1, 1),
+                com.texasprogram.app.model.CompletionRecord(logged.dayKey(2, 1), day(0).toEpochDay(), 2, 1)
+            )
+        )
+        val stats = com.texasprogram.app.model.WeeklyStatsBuilder.stats(profile, day(2))
+        assertEquals("2026-W42", stats.week)
+        assertEquals(1, stats.workouts)
+        assertEquals(525.0, stats.volumeKg, 0.01)
+        assertEquals(1, stats.records)
+        assertEquals(2, stats.streakWeeks)
+    }
+
+    @Test
+    fun currentStreakWaitsForWeekToEnd() {
+        val builder = com.texasprogram.app.model.WeeklyStatsBuilder
+        assertEquals(2, builder.currentStreak(listOf(day(-14), day(-7)), day(2)))
+        assertEquals(2, builder.currentStreak(listOf(day(0), day(-7)), day(2)))
+        assertEquals(0, builder.currentStreak(listOf(day(-14)), day(2)))
+    }
+
+    @Test
+    fun leaderboardIgnoresStaleWeeks() {
+        val entries = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialLeaderboardEntry>>(
+            """[{"user":{"id":"1","username":"old"},"stats":{"week":"2026-W40","workouts":5,"volumeKg":20000,"records":3,"streakWeeks":9}},
+               {"user":{"id":"2","username":"last"},"stats":{"week":"2026-W41","workouts":2,"volumeKg":9000,"records":1,"streakWeeks":4}},
+               {"user":{"id":"3","username":"now","isMe":true},"stats":{"week":"2026-W42","workouts":2,"volumeKg":6000,"records":2,"streakWeeks":3}},
+               {"user":{"id":"4","username":"empty"},"stats":{}}]"""
+        )
+        val metric = com.texasprogram.app.model.LeaderboardMetric
+        val byVolume = metric.ranked(entries, com.texasprogram.app.model.LeaderboardMetric.VOLUME, day(2))
+        assertEquals("now", byVolume.first().user.username)
+        assertTrue(byVolume.first().user.isMe)
+        val byStreak = metric.ranked(entries, com.texasprogram.app.model.LeaderboardMetric.STREAK, day(2))
+        assertEquals(listOf("last", "now", "empty", "old"), byStreak.map { it.user.username })
+        assertEquals("6 т", com.texasprogram.app.model.LeaderboardMetric.VOLUME.format(byVolume[0].stats))
+    }
 }

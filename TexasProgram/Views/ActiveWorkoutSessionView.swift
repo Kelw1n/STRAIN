@@ -16,7 +16,11 @@ struct ActiveWorkoutSessionView: View {
             ZStack(alignment: .bottom) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        exerciseList
+                        VStack(spacing: 16) {
+                            // Совместная тренировка: что сейчас делает напарник.
+                            PartnerStrip()
+                            exerciseList
+                        }
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
                             .padding(.bottom, restTimer.isRunning ? 200 : 60)

@@ -9,7 +9,7 @@ const url = process.env.TEST_DATABASE_URL;
 
 test('лента, профили, подписки, фото и комментарии', { skip: !url && 'нет TEST_DATABASE_URL' }, async (t) => {
     const social = createSocial({ databaseUrl: url });
-    await social.pool().query('DROP TABLE IF EXISTS comments, likes, posts, images, follows, users CASCADE');
+    await social.pool().query('DROP TABLE IF EXISTS messages, together, comments, likes, posts, images, follows, users CASCADE');
     await social.init();
 
     const app = express();
@@ -158,6 +158,199 @@ test('лента, профили, подписки, фото и коммента
         // Хозяин поста удаляет чужой комментарий под своим постом.
         assert.equal((await call('DELETE', `/comments/${comment.data.id}`, { token: me.token })).status, 200);
         assert.equal((await call('GET', `/posts/${postId}/comments`)).data.length, 0);
+    });
+
+    await t.test('ответы под комментарием собираются в одну ветку', async () => {
+        const root = (await call('POST', `/posts/${postId}/comments`, { token: friend.token, body: { text: 'Какой вес на присед?' } })).data;
+        assert.equal(root.replyTo, null);
+        const answer = await call('POST', `/posts/${postId}/comments`, { token: me.token, body: { text: '140 на 5', replyTo: root.id } });
+        assert.equal(answer.status, 201);
+        assert.equal(answer.data.replyTo, root.id);
+        assert.equal(answer.data.replyToUsername, 'semobsessed');
+        // Ответ на ответ встаёт в ту же ветку, но адресован автору ответа.
+        const again = (await call('POST', `/posts/${postId}/comments`, { token: friend.token, body: { text: 'Красава', replyTo: answer.data.id } })).data;
+        assert.equal(again.replyTo, root.id);
+        assert.equal(again.replyToUsername, 'tim');
+        assert.equal((await call('POST', `/posts/${postId}/comments`, { token: me.token, body: { text: 'x', replyTo: 'f'.repeat(24) } })).status, 404);
+        const list = (await call('GET', `/posts/${postId}/comments`)).data;
+        assert.deepEqual(list.map((c) => c.text), ['Какой вес на присед?', '140 на 5', 'Красава']);
+        assert.equal((await call('GET', `/posts/${postId}`)).data.comments, 3);
+        // Удалили корень — уходит вся ветка.
+        assert.equal((await call('DELETE', `/comments/${root.id}`, { token: friend.token })).status, 200);
+        assert.equal((await call('GET', `/posts/${postId}/comments`)).data.length, 0);
+    });
+
+    await t.test('личные сообщения', async () => {
+        assert.equal((await call('GET', '/chats')).status, 401);
+        assert.equal((await call('POST', '/chats/tim/messages', { token: me.token, body: { text: 'я' } })).status, 400, 'себе нельзя');
+        assert.equal((await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { text: '   ' } })).status, 400);
+        const first = await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { text: 'Го в зал?', clientId: 'm1' } });
+        assert.equal(first.status, 201);
+        assert.equal(first.data.fromMe, true);
+        const repeat = await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { text: 'Го в зал?', clientId: 'm1' } });
+        assert.equal(repeat.status, 200, 'повтор отправки не дублирует');
+        assert.equal(repeat.data.id, first.data.id);
+        await call('POST', '/chats/tim/messages', { token: friend.token, body: { text: 'Давай в 7' } });
+        await call('POST', '/chats/tim/messages', { token: friend.token, body: { text: 'Возьми пояс' } });
+
+        assert.equal((await call('GET', '/chats/unread', { token: me.token })).data.unread, 2);
+        const chats = (await call('GET', '/chats', { token: me.token })).data;
+        assert.equal(chats.unread, 2);
+        assert.equal(chats.chats.length, 1);
+        assert.equal(chats.chats[0].user.username, 'semobsessed');
+        assert.equal(chats.chats[0].last.text, 'Возьми пояс');
+        assert.equal(chats.chats[0].last.fromMe, false);
+
+        const thread = (await call('GET', '/chats/semobsessed/messages', { token: me.token })).data;
+        assert.deepEqual(thread.messages.map((m) => m.text), ['Возьми пояс', 'Давай в 7', 'Го в зал?'], 'новые первыми');
+        assert.equal((await call('GET', '/chats/unread', { token: me.token })).data.unread, 0, 'открыли — прочитано');
+        const newer = (await call('GET', `/chats/semobsessed/messages?after=${thread.messages[1].createdAt}`, { token: me.token })).data;
+        assert.deepEqual(newer.messages.map((m) => m.text), ['Возьми пояс']);
+        // Свои сообщения не помечаются прочитанными, пока их не открыл собеседник.
+        assert.equal((await call('GET', '/chats/unread', { token: friend.token })).data.unread, 1);
+
+        // Фото в сообщении: только своё.
+        const photo = (await call('POST', '/images', { token: me.token, raw: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) })).data.id;
+        const foreign = (await call('POST', '/images', { token: friend.token, raw: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) })).data.id;
+        assert.equal((await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { image: foreign } })).status, 400);
+        const withPhoto = await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { image: photo } });
+        assert.equal(withPhoto.status, 201);
+        assert.equal(withPhoto.data.image, photo);
+        assert.equal(withPhoto.data.text, '');
+        assert.equal((await call('GET', '/chats', { token: friend.token })).data.chats[0].last.image, photo);
+        assert.equal((await call('DELETE', `/messages/${withPhoto.data.id}`, { token: me.token })).status, 200);
+        assert.equal((await call('GET', `/images/${photo}`)).status, 404, 'с сообщением удаляется и фото');
+
+        assert.equal((await call('DELETE', `/messages/${thread.messages[0].id}`, { token: me.token })).status, 404, 'чужое не удалить');
+        assert.equal((await call('DELETE', `/messages/${first.data.id}`, { token: me.token })).status, 200);
+        assert.equal((await call('GET', '/chats/tim/messages', { token: friend.token })).data.messages.length, 2);
+    });
+
+    await t.test('ответ на сообщение, реакции, «печатает» и обновления переписки', async () => {
+        const question = (await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { text: 'Сколько жмёшь?' } })).data;
+        const start = (await call('GET', '/chats/tim/messages', { token: friend.token })).data.serverTime;
+        assert.ok(start > 0);
+        const answer = await call('POST', '/chats/tim/messages', { token: friend.token, body: { text: '120', replyTo: question.id } });
+        assert.equal(answer.status, 201);
+        assert.equal(answer.data.replyTo.id, question.id);
+        assert.equal(answer.data.replyTo.text, 'Сколько жмёшь?');
+        assert.equal(answer.data.replyTo.fromMe, false);
+        assert.equal((await call('POST', '/chats/tim/messages', { token: friend.token, body: { text: 'x', replyTo: 'f'.repeat(24) } })).status, 404);
+
+        assert.equal((await call('POST', `/messages/${answer.data.id}/react`, { token: me.token, body: { emoji: '🍕' } })).status, 400);
+        const reacted = await call('POST', `/messages/${answer.data.id}/react`, { token: me.token, body: { emoji: '🔥' } });
+        assert.deepEqual(reacted.data.reactions, [{ emoji: '🔥', count: 1, mine: true }]);
+        const again = await call('POST', `/messages/${answer.data.id}/react`, { token: me.token, body: { emoji: '🔥' } });
+        assert.deepEqual(again.data.reactions, [], 'повтор снимает реакцию');
+        await call('POST', `/messages/${answer.data.id}/react`, { token: me.token, body: { emoji: '💪' } });
+
+        // Собеседник видит и новое сообщение, и реакцию на своё.
+        const changes = (await call('GET', `/chats/tim/messages?since=${start}`, { token: friend.token })).data;
+        const mine = changes.messages.find((m) => m.id === answer.data.id);
+        assert.deepEqual(mine.reactions, [{ emoji: '💪', count: 1, mine: false }]);
+
+        assert.equal((await call('POST', '/chats/tim/typing', { token: friend.token })).status, 200);
+        const view = (await call('GET', '/chats/semobsessed/messages', { token: me.token })).data;
+        assert.equal(view.typing, true);
+        assert.ok(view.lastSeen > 0);
+
+        // Удалённое приходит собеседнику как удалённое.
+        const before = view.serverTime;
+        await call('DELETE', `/messages/${question.id}`, { token: me.token });
+        const gone = (await call('GET', `/chats/tim/messages?since=${before}`, { token: friend.token })).data;
+        assert.equal(gone.messages.find((m) => m.id === question.id).deleted, true);
+        assert.equal((await call('GET', '/chats/tim/messages', { token: friend.token })).data.messages.some((m) => m.id === question.id), false);
+    });
+
+    await t.test('тренируется сейчас и рейтинг недели', async () => {
+        assert.equal((await call('PUT', '/me/live', { token: me.token, body: { title: 'День 1', exercise: 'Присед', done: 3, total: 5 } })).status, 200);
+        const live = (await call('GET', '/live', { token: friend.token })).data;
+        assert.equal(live.length, 1, 'semobsessed подписан на tim');
+        assert.equal(live[0].user.username, 'tim');
+        assert.equal(live[0].live.exercise, 'Присед');
+        assert.equal(live[0].live.done, 3);
+        assert.equal((await call('GET', '/users/tim', { token: friend.token })).data.live.total, 5);
+        assert.equal((await call('GET', '/live', { token: me.token })).data.length, 0, 'на кого не подписан — не видно');
+        await call('DELETE', '/me/live', { token: me.token });
+        assert.equal((await call('GET', '/live', { token: friend.token })).data.length, 0);
+
+        await call('PATCH', '/me', { token: friend.token, body: { stats: { week: '2026-W42', workouts: 3, volumeKg: 12000 } } });
+        await call('PATCH', '/me', { token: me.token, body: { stats: { week: '2026-W42', workouts: 2, volumeKg: 9000 } } });
+        const board = (await call('GET', '/leaderboard', { token: friend.token })).data;
+        assert.deepEqual(board.map((r) => r.user.username).sort(), ['semobsessed', 'tim']);
+        assert.equal(board.find((r) => r.user.isMe).stats.workouts, 3);
+    });
+
+    await t.test('активность: лайки, комментарии, ответы и подписчики', async () => {
+        const post = (await call('POST', '/posts', { token: me.token, body: { clientId: 'act', title: 'Для активности' } })).data;
+        await call('POST', `/posts/${post.id}/like`, { token: friend.token });
+        const comment = (await call('POST', `/posts/${post.id}/comments`, { token: friend.token, body: { text: 'Огонь' } })).data;
+        await call('POST', `/posts/${post.id}/like`, { token: me.token });
+        const badges = (await call('GET', '/badges', { token: me.token })).data;
+        assert.ok(badges.activity >= 3, 'лайк, комментарий и подписка');
+        const activity = (await call('GET', '/activity', { token: me.token })).data;
+        const kinds = activity.items.map((i) => i.kind);
+        assert.ok(kinds.includes('like') && kinds.includes('comment') && kinds.includes('follow'));
+        assert.ok(activity.items.every((i) => i.actor.username === 'semobsessed'), 'свои лайки в активность не попадают');
+        assert.equal(activity.items.find((i) => i.kind === 'comment').text, 'Огонь');
+
+        // Ответ мне на чужом посте — тоже активность.
+        const theirs = (await call('POST', '/posts', { token: friend.token, body: { clientId: 'act2', title: 'Чужой' } })).data;
+        const mineComment = (await call('POST', `/posts/${theirs.id}/comments`, { token: me.token, body: { text: 'Сколько?' } })).data;
+        await call('POST', `/posts/${theirs.id}/comments`, { token: friend.token, body: { text: '150', replyTo: mineComment.id } });
+        const withReply = (await call('GET', '/activity', { token: me.token })).data;
+        assert.equal(withReply.items[0].kind, 'reply');
+        assert.equal(withReply.items[0].postId, theirs.id);
+
+        assert.equal((await call('POST', '/activity/seen', { token: me.token })).status, 200);
+        assert.equal((await call('GET', '/badges', { token: me.token })).data.activity, 0);
+        assert.ok(comment.id);
+    });
+
+    await t.test('совместная тренировка по приглашению', async () => {
+        const invite = await call('POST', '/users/semobsessed/together', { token: me.token });
+        assert.equal(invite.status, 201);
+        assert.equal(invite.data.status, 'pending');
+        assert.equal((await call('POST', '/users/semobsessed/together', { token: me.token })).data.id, invite.data.id, 'второе приглашение не плодится');
+        assert.equal((await call('GET', '/badges', { token: friend.token })).data.invites, 1);
+
+        // Приглашение — карточкой в переписке.
+        const chat = (await call('GET', '/chats/tim/messages', { token: friend.token })).data;
+        const card = chat.messages.find((m) => m.invite);
+        assert.equal(card.invite.id, invite.data.id);
+        assert.equal(card.invite.status, 'pending');
+
+        const incoming = (await call('GET', '/together', { token: friend.token })).data;
+        assert.equal(incoming.incoming[0].partner.username, 'tim');
+        assert.equal((await call('POST', `/together/${invite.data.id}/accept`, { token: me.token })).status, 403, 'принимает только приглашённый');
+        const accepted = await call('POST', `/together/${invite.data.id}/accept`, { token: friend.token });
+        assert.equal(accepted.data.status, 'accepted');
+
+        // Напарник видит тренировку, даже если она скрыта от подписчиков.
+        await call('PUT', '/me/live', { token: me.token, body: { title: 'День 1', exercise: 'Жим', done: 2, total: 4, partnerOnly: true } });
+        const active = (await call('GET', '/together', { token: friend.token })).data.active;
+        assert.equal(active.partner.username, 'tim');
+        assert.equal(active.partnerLive.exercise, 'Жим');
+        assert.equal(active.partnerLive.partnerOnly, undefined);
+        assert.equal((await call('GET', '/users/tim', { token: friend.token })).data.live, null, 'в профиле скрытая тренировка не видна');
+
+        // Пост «вместе с»: у автора — напарник, сам он отмечен закончившим.
+        const post = (await call('POST', '/posts', { token: me.token, body: { clientId: 'together1', title: 'Вдвоём', together: invite.data.id } })).data;
+        assert.equal(post.partner.username, 'semobsessed');
+        assert.equal((await call('GET', '/together', { token: me.token })).data.active, null, 'для закончившего совместная тренировка кончилась');
+        assert.ok((await call('GET', '/together', { token: friend.token })).data.active, 'у напарника ещё идёт');
+        await call('POST', `/together/${invite.data.id}/done`, { token: friend.token });
+        const updated = (await call('GET', `/chats/tim/messages?since=${chat.serverTime}`, { token: friend.token })).data;
+        assert.equal(updated.messages.find((m) => m.invite).invite.status, 'ended');
+
+        // Отказ и отмена.
+        const second = (await call('POST', '/users/tim/together', { token: friend.token })).data;
+        assert.equal((await call('POST', `/together/${second.id}/decline`, { token: me.token })).status, 200);
+        assert.equal((await call('GET', '/together', { token: me.token })).data.incoming.length, 0);
+        const third = (await call('POST', '/users/tim/together', { token: friend.token })).data;
+        assert.equal((await call('POST', `/together/${third.id}/cancel`, { token: friend.token })).status, 200);
+        assert.equal((await call('POST', `/together/${third.id}/accept`, { token: me.token })).status, 409);
+        await call('DELETE', '/me/live', { token: me.token });
     });
 
     await t.test('удаление поста убирает и его фото', async () => {

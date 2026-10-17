@@ -666,6 +666,8 @@ private fun feedDraft(title: String, description: String, durationSeconds: Int, 
         volumeKg = WorkoutSessionManager.totalTonnage,
         sets = WorkoutSessionManager.totalCompletedSets,
         effort = effort,
-        workout = SocialWorkout(program, exercises)
+        workout = SocialWorkout(program, exercises),
+        // Тренировались вместе — пост выйдет «вместе с» напарником.
+        together = SocialService.together.active?.id
     )
 }

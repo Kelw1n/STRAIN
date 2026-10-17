@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
@@ -49,6 +50,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import com.texasprogram.app.ui.ThemeManager
 import androidx.compose.runtime.Composable
+import com.texasprogram.app.ui.TogetherInviteBanner
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +63,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.texasprogram.app.ui.LaunchReveal
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -109,6 +113,7 @@ import com.texasprogram.app.ui.LiquidGlassTabBar
 import com.texasprogram.app.ui.MainTabItem
 import com.texasprogram.app.ui.MinimizedWorkoutBar
 import com.texasprogram.app.ui.WorkoutHubScreen
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -180,6 +185,7 @@ class MainActivity : ComponentActivity() {
         RestTimer.get(applicationContext).tick()
         // Неотправленные посты — в путь, как только приложение снова на экране.
         SocialService.flushOutbox()
+        lifecycleScope.launch { SocialService.refreshUnread() }
     }
 
     override fun onStop() {
@@ -345,6 +351,17 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     LaunchedEffect(Unit) {
         SocialService.flushOutbox()
         SocialService.refreshMe()
+        // Непрочитанные сообщения и активность — сразу и потом раз в минуту.
+        // Идущая тренировка заодно напоминает о себе, чтобы статус у друзей не протух.
+        while (true) {
+            SocialService.refreshUnread()
+            SocialService.reportLive(WorkoutSessionManager.liveStatus)
+            delay(60_000)
+        }
+    }
+    // Друзья видят, что идёт тренировка и какой подход.
+    LaunchedEffect(Unit) {
+        snapshotFlow { WorkoutSessionManager.liveStatus }.collect { SocialService.reportLive(it) }
     }
     LaunchedEffect(profile.completionLog, profile.bodyWeightLog, SocialService.isSignedIn) {
         SocialService.scheduleSync(profile)
@@ -377,14 +394,15 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     ) {
         when {
             WorkoutSessionManager.isPresented -> WorkoutSessionManager.minimize()
-            showPlan -> showPlan = false
-            benchFocus != null -> benchFocus = null
+            // Правка и день открываются поверх плана — «Назад» сначала закрывает их.
             customizing != null -> customizing = null
+            benchFocus != null -> benchFocus = null
+            dayDetail != null -> dayDetail = null
+            showPlan -> showPlan = false
             historyFor != null -> historyFor = null
             showHistoryList -> showHistoryList = false
             showNotes -> showNotes = false
             showBodyWeight -> showBodyWeight = false
-            dayDetail != null -> dayDetail = null
             showSettings -> showSettings = false
             showToday -> showToday = false
         }
@@ -443,16 +461,39 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             }
         }
 
+        // Друг зовёт тренироваться вместе — плашка сверху поверх любой вкладки.
+        val invite = SocialService.together.incoming.firstOrNull()
+        AnimatedVisibility(
+            visible = invite != null,
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp)
+        ) {
+            invite?.let { TogetherInviteBanner(it) }
+        }
+
         Column(Modifier.align(Alignment.BottomCenter)) {
             if (WorkoutSessionManager.isRunning && !WorkoutSessionManager.isPresented) {
                 MinimizedWorkoutBar()
             }
             // Карточка сама прячется и показывается с анимацией.
             RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
-            LiquidGlassTabBar(
-                selectedTab = tab,
-                onTabSelected = { tab = it }
-            )
+            // В переписке поле ввода внизу — панель вкладок там лишняя.
+            AnimatedVisibility(
+                visible = !SocialService.hidesTabBar,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut()
+            ) {
+                LiquidGlassTabBar(
+                    selectedTab = tab,
+                    onTabSelected = { tab = it },
+                    // Новые сообщения — на «Друзьях», новая активность — на «Главном».
+                    badges = buildSet {
+                        if (SocialService.unreadMessages > 0) add(MainTabItem.COMMUNITY)
+                        if (SocialService.unseenActivity > 0) add(MainTabItem.TODAY)
+                    }
+                )
+            }
         }
 
         // Экран «Сегодня» с точками подходов и настройки — поверх вкладок.
@@ -536,6 +577,28 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
                     CloseButton(Modifier.align(Alignment.TopEnd)) { showSettings = false }
+                }
+            }
+        }
+
+        // Модальный экран плана тренировок. Ниже дня и его правки: день,
+        // открытый из плана, должен лечь поверх плана, а не под него.
+        AnimatedContent(
+            targetState = showPlan,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            label = "plan"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    PlanScreen(
+                        profile = profile,
+                        onOpenDay = { week, day -> dayDetail = week to day },
+                        onSetCurrent = { week, day ->
+                            store.updateActive { it.setCurrentWorkout(week, day) }
+                        },
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
                 }
             }
         }
@@ -630,27 +693,6 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
                     CloseButton(Modifier.align(Alignment.TopEnd)) { customizing = null }
-                }
-            }
-        }
-
-        // Модальный экран плана тренировок
-        AnimatedContent(
-            targetState = showPlan,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
-            label = "plan"
-        ) { visible ->
-            if (visible) {
-                Box(Modifier.fillMaxSize().background(Theme.base)) {
-                    PlanScreen(
-                        profile = profile,
-                        onOpenDay = { week, day -> dayDetail = week to day },
-                        onSetCurrent = { week, day ->
-                            store.updateActive { it.setCurrentWorkout(week, day) }
-                        },
-                        contentPadding = screenPadding(bottomExtra = 32.dp)
-                    )
-                    CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
                 }
             }
         }

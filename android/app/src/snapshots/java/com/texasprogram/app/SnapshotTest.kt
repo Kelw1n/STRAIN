@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.HorizontalDivider
@@ -178,6 +179,91 @@ class SnapshotTest {
         Screen { ProgramDayScreen(SocialProgramBuilder.days(profile).first(), padding, SocialNavigator()) }
     }
 
+    /// Переписка: пузыри своих и чужих сообщений и список переписок.
+    @Test
+    fun chat() {
+        val now = System.currentTimeMillis().toDouble()
+        val messages = listOf(
+            com.texasprogram.app.model.SocialMessage("1", "Го сегодня в зал?", false, now - 3_600_000),
+            com.texasprogram.app.model.SocialMessage("2", "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", true, now - 3_500_000, read = true),
+            com.texasprogram.app.model.SocialMessage(
+                "3", "Конечно 💪", false, now - 3_400_000,
+                reactions = listOf(com.texasprogram.app.model.SocialReaction("🔥", 1, true)),
+                replyTo = com.texasprogram.app.model.SocialMessageQuote("2", "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", fromMe = true)
+            ),
+            com.texasprogram.app.model.SocialMessage(
+                "4", "Возьми пояс", true, now - 60_000,
+                reactions = listOf(com.texasprogram.app.model.SocialReaction("👍", 1, false), com.texasprogram.app.model.SocialReaction("💪", 2, true))
+            )
+        )
+        val chats = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialChat>>(
+            """[{"user":{"id":"u2","username":"bro.lifts"},"last":{"id":"m1","text":"Возьми пояс","fromMe":false,"createdAt":${now - 60_000}},"unread":2},
+               {"user":{"id":"u3","username":"heavy.anna"},"last":{"id":"m2","text":"Скинь программу","fromMe":true,"createdAt":${now - 86_400_000}},"unread":0,
+                "live":{"title":"День 2","exercise":"Становая тяга","done":2,"total":5,"startedAt":${now - 1_800_000}}}]"""
+        )
+        paparazzi.snapshot("15-chat") {
+            Screen {
+                Column(Modifier.padding(padding), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+                    com.texasprogram.app.ui.ChatTopBar("bro.lifts", null, "печатает…" to com.texasprogram.app.ui.Theme.accent, online = true, onBack = {}, onOpenProfile = {})
+                    messages.forEach { com.texasprogram.app.ui.MessageBubble(it, username = "bro.lifts", onCopy = {}, onDelete = {}) }
+                    com.texasprogram.app.ui.TypingBubble()
+                    chats.forEach { com.texasprogram.app.ui.ChatRow(it) {} }
+                }
+            }
+        }
+        paparazzi.snapshot("16-chat-screen") {
+            Screen { com.texasprogram.app.ui.ChatScreen("bro.lifts", padding, SocialNavigator()) }
+        }
+    }
+
+    /// Тренируются сейчас, колокольчик активности и рейтинг недели.
+    @Test
+    fun socialExtras() {
+        tall(4400)
+        val now = System.currentTimeMillis().toDouble()
+        val week = com.texasprogram.app.model.WeeklyStatsBuilder.weekKey(LocalDate.now())
+        val json = SocialService.json
+        val live = json.decodeFromString<List<com.texasprogram.app.model.SocialLiveFriend>>(
+            """[{"user":{"id":"u2","username":"bro.lifts"},"live":{"title":"День 1 · Объём","exercise":"Приседания","done":3,"total":5,"setsDone":3,"setsTotal":18,"startedAt":${now - 1_560_000}}},
+               {"user":{"id":"u3","username":"heavy.anna"},"live":{"title":"День 2","exercise":"Жим лёжа с очень длинным названием","done":1,"total":8,"startedAt":${now - 300_000}}}]"""
+        )
+        val activity = json.decodeFromString<com.texasprogram.app.model.SocialActivityPage>(
+            """{"items":[
+                 {"kind":"like","actor":{"id":"u2","username":"bro.lifts"},"postId":"p1","postTitle":"День 1 · Объём","createdAt":${now - 120_000},"unseen":true},
+                 {"kind":"reply","actor":{"id":"u3","username":"heavy.anna"},"postId":"p1","postTitle":"День 1","text":"Спасибо, попробую с поясом!","createdAt":${now - 3_600_000},"unseen":true},
+                 {"kind":"comment","actor":{"id":"u4","username":"semobsessed"},"postId":"p2","postTitle":"День 3 · Сила","text":"Мощно 🔥 сколько отдыхал между подходами?","createdAt":${now - 7_200_000}},
+                 {"kind":"follow","actor":{"id":"u5","username":"tim"},"createdAt":${now - 90_000_000}}],"unseen":2}"""
+        )
+        val board = json.decodeFromString<List<com.texasprogram.app.model.SocialLeaderboardEntry>>(
+            """[{"user":{"id":"u1","username":"kelw1n","isMe":true},"stats":{"week":"$week","workouts":3,"volumeKg":14250,"records":2,"streakWeeks":6}},
+               {"user":{"id":"u2","username":"bro.lifts"},"stats":{"week":"$week","workouts":4,"volumeKg":18900,"records":1,"streakWeeks":3}},
+               {"user":{"id":"u3","username":"heavy.anna"},"stats":{"week":"$week","workouts":2,"volumeKg":7300,"records":3,"streakWeeks":12}},
+               {"user":{"id":"u4","username":"semobsessed"},"stats":{}}]"""
+        )
+        val metric = com.texasprogram.app.model.LeaderboardMetric.VOLUME
+        val together = json.decodeFromString<com.texasprogram.app.model.SocialTogetherState>(
+            """{"incoming":[{"id":"t1","status":"pending","fromMe":false,"partner":{"id":"u3","username":"heavy.anna"}}],
+               "active":{"id":"t2","status":"accepted","fromMe":true,"partner":{"id":"u2","username":"bro.lifts"},
+                         "partnerLive":{"title":"День 1","exercise":"Приседания","done":3,"total":5,"setsDone":8,"setsTotal":18,"startedAt":${now - 1_500_000}}}}"""
+        )
+        val invite = json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"m9","text":"Го тренироваться вместе 💪","fromMe":false,"createdAt":$now,"invite":{"id":"t1","status":"pending","fromMe":false}}"""
+        )
+        paparazzi.snapshot("17-social-extras") {
+            Screen {
+                Column(Modifier.padding(padding), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)) {
+                    com.texasprogram.app.ui.TogetherInviteBanner(together.incoming.first())
+                    com.texasprogram.app.ui.TogetherCard(together.active!!)
+                    com.texasprogram.app.ui.InviteBubble(invite, invite.invite!!, "heavy.anna") {}
+                    com.texasprogram.app.ui.LiveFriendsStrip(live) {}
+                    com.texasprogram.app.ui.LiveBadge(live[0].live)
+                    Column { activity.items.forEach { com.texasprogram.app.ui.ActivityRow(it, onOpenActor = {}, onOpen = {}) } }
+                    com.texasprogram.app.ui.LeaderboardCard(com.texasprogram.app.model.LeaderboardMetric.ranked(board, metric), metric) {}
+                }
+            }
+        }
+    }
+
     @Test
     fun summary() {
         tall()
@@ -254,7 +340,7 @@ private object Fixtures {
               "photos":[],
               "workout":{"exercises":[{"name":"Приседания со штангой","sets":[{"reps":8,"weight":120}]}]},
               "likes":12,"comments":4,"liked":false},
-             {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"createdAt":${now - 25 * 60_000},
+             {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"partner":{"id":"u4","username":"semobsessed"},"createdAt":${now - 25 * 60_000},
               "title":"Неделя 3 · День 1 — объём","description":"Присед зашёл легко, жим тяжело. Завтра отдых.",
               "durationSeconds":4980,"volumeKg":12450,"sets":18,"effort":8,
               "photos":["0123456789abcdef01234567","0123456789abcdef01234568"],

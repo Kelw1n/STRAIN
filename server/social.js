@@ -12,6 +12,17 @@ const USERNAME = /^[a-z0-9_.]{3,24}$/;
 const RESERVED = new Set(['admin', 'strain', 'support', 'root', 'api', 'me', 'help', 'official']);
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const PAGE = 20;
+// «Тренируется сейчас» гаснет само, если телефон давно не присылал статус.
+const LIVE_TTL_MS = 20 * 60 * 1000;
+// «Печатает…» держится несколько секунд после последнего сигнала.
+const TYPING_TTL_MS = 6000;
+// Насколько раньше начинать следующее «что изменилось».
+const SINCE_OVERLAP_MS = 2000;
+const REACTIONS = new Set(['🔥', '💪', '👍', '❤️', '😂', '😮']);
+// Приглашение на совместную тренировку ждёт ответа два часа, а сама
+// совместная тренировка длится не дольше шести.
+const INVITE_TTL_MS = 2 * 60 * 60 * 1000;
+const TOGETHER_TTL_MS = 6 * 60 * 60 * 1000;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -74,6 +85,55 @@ CREATE TABLE IF NOT EXISTS comments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS comments_post ON comments(post_id, created_at);
+-- Ответ под комментарием: reply_to — корневой комментарий ветки, reply_to_user —
+-- кому отвечают (в ветке можно отвечать и на ответы).
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS reply_to TEXT REFERENCES comments(id) ON DELETE CASCADE;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS reply_to_user TEXT REFERENCES users(id) ON DELETE SET NULL;
+-- Личные сообщения: переписка двух людей — все сообщения между ними.
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    sender TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_id TEXT,
+    text TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    read_at TIMESTAMPTZ,
+    UNIQUE (sender, client_id)
+);
+-- Фото в сообщении: id из images, хозяин фото — отправитель.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS image TEXT;
+-- Ответ на сообщение, реакции {userId: emoji} и время последней правки:
+-- открытая переписка подтягивает всё, что поменялось после прошлого запроса.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to TEXT REFERENCES messages(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS messages_updated ON messages (updated_at);
+-- «Тренируется сейчас», недельная сводка для рейтинга и когда последний раз
+-- открывали «Активность».
+ALTER TABLE users ADD COLUMN IF NOT EXISTS live JSONB;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS live_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stats JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS activity_seen_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS comments_reply_user ON comments (reply_to_user);
+CREATE INDEX IF NOT EXISTS messages_pair ON messages (LEAST(sender, recipient), GREATEST(sender, recipient), created_at DESC);
+CREATE INDEX IF NOT EXISTS messages_unread ON messages (recipient) WHERE read_at IS NULL;
+-- Совместная тренировка: приглашение, ответ и кто уже закончил.
+CREATE TABLE IF NOT EXISTS together (
+    id TEXT PRIMARY KEY,
+    inviter TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    invitee TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    inviter_done BOOLEAN NOT NULL DEFAULT FALSE,
+    invitee_done BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    responded_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS together_inviter ON together (inviter, created_at DESC);
+CREATE INDEX IF NOT EXISTS together_invitee ON together (invitee, created_at DESC);
+-- Приглашение видно в переписке карточкой, а пост — «вместе с @другом».
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS together TEXT REFERENCES together(id) ON DELETE SET NULL;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS partner TEXT REFERENCES users(id) ON DELETE SET NULL;
 `;
 
 const newId = () => crypto.randomBytes(12).toString('hex');
@@ -153,6 +213,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     const registerLimit = limiter(10, 60 * 60 * 1000);
     const postLimit = limiter(40, 60 * 60 * 1000);
     const commentLimit = limiter(150, 60 * 60 * 1000);
+    const messageLimit = limiter(400, 60 * 60 * 1000);
     const imageLimit = limiter(80, 60 * 60 * 1000);
 
     // Все маршруты раздела ждут готовую базу.
@@ -218,9 +279,23 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             following: counts.following,
             isFollowing: counts.is_following,
             isMe,
+            live: liveView(row),
+            lastSeen: new Date(row.last_seen).getTime(),
             createdAt: new Date(row.created_at).getTime()
         };
     }
+
+    // Статус тренировки — только свежий: приложение могли закрыть, не завершив её.
+    const freshLive = (row) => (row.live && row.live_at && Date.now() - new Date(row.live_at).getTime() < LIVE_TTL_MS
+        ? { ...row.live, updatedAt: new Date(row.live_at).getTime() }
+        : null);
+    // «Только напарнику» — когда человек скрыл тренировку, но тренируется вместе с другом.
+    const liveView = (row) => {
+        const live = freshLive(row);
+        if (!live || live.partnerOnly) return null;
+        delete live.partnerOnly;
+        return live;
+    };
 
     const shortUser = (row) => ({ id: row.id, username: row.username, avatar: row.avatar_id, bio: row.bio });
 
@@ -237,7 +312,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             (SELECT count(*) FROM likes l WHERE l.post_id = p.id)::int AS like_count,
             (SELECT count(*) FROM comments c WHERE c.post_id = p.id)::int AS comment_count,
             EXISTS (SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $1) AS liked
-        FROM posts p JOIN users u ON u.id = p.user_id`;
+        , pu.username AS partner_username, pu.avatar_id AS partner_avatar
+        FROM posts p JOIN users u ON u.id = p.user_id LEFT JOIN users pu ON pu.id = p.partner`;
 
     const postView = (row) => ({
         id: row.id,
@@ -251,6 +327,9 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         effort: row.effort,
         photos: row.photos,
         workout: row.workout,
+        partner: row.partner && row.partner_username
+            ? { id: row.partner, username: row.partner_username, avatar: row.partner_avatar }
+            : null,
         likes: row.like_count,
         comments: row.comment_count,
         liked: row.liked
@@ -312,6 +391,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (body.cover !== undefined) set('cover_id', imageIds([body.cover])[0] || null);
         if (body.programs !== undefined) set('programs', JSON.stringify(jsonLimited(body.programs, 64_000, [])));
         if (body.achievements !== undefined) set('achievements', JSON.stringify(jsonLimited(body.achievements, 16_000, [])));
+        if (body.stats !== undefined) set('stats', JSON.stringify(jsonLimited(body.stats, 4_000, {})));
         if (sets.length === 0) return res.json(await userView(me, me));
         params.push(me.id);
         const rows = await q(`UPDATE users SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params);
@@ -423,9 +503,22 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             if (owned.length !== photos.length) throw new HttpError(400, 'Фото не найдено');
         }
         const effort = number(body.effort, 1, 10);
+        // Совместная тренировка — пост «вместе с»; напарник отмечается закончившим.
+        let partner = null;
+        if (body.together) {
+            const session = (await q(
+                `SELECT * FROM together WHERE id = $1 AND (inviter = $2 OR invitee = $2)
+                 AND status IN ('accepted', 'ended') AND responded_at > $3`,
+                [String(body.together), me.id, new Date(Date.now() - 2 * TOGETHER_TTL_MS)]
+            ))[0];
+            if (session) {
+                partner = session.inviter === me.id ? session.invitee : session.inviter;
+                await markDone(session, me);
+            }
+        }
         const inserted = await q(
-            `INSERT INTO posts (id, user_id, client_id, title, description, duration_seconds, volume_kg, sets, effort, photos, workout)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `INSERT INTO posts (id, user_id, client_id, title, description, duration_seconds, volume_kg, sets, effort, photos, workout, partner)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
              ON CONFLICT (user_id, client_id) DO NOTHING RETURNING id`,
             [
                 newId(), me.id, clientId,
@@ -436,7 +529,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
                 Math.round(number(body.sets, 0, 1000) || 0),
                 effort === null ? null : Math.round(effort),
                 JSON.stringify(photos),
-                JSON.stringify(jsonLimited(body.workout, 64_000, {}))
+                JSON.stringify(jsonLimited(body.workout, 64_000, {})),
+                partner
             ]
         );
         // Повтор той же публикации (обрыв связи после отправки) возвращает уже созданный пост.
@@ -501,30 +595,44 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         postId: row.post_id,
         author: { id: row.user_id, username: row.username, avatar: row.avatar_id },
         text: row.text,
+        replyTo: row.reply_to || null,
+        replyToUsername: row.reply_to_username || null,
         createdAt: new Date(row.created_at).getTime()
     });
 
+    const COMMENT_SELECT = `
+        SELECT c.*, u.username, u.avatar_id, r.username AS reply_to_username
+        FROM comments c JOIN users u ON u.id = c.user_id LEFT JOIN users r ON r.id = c.reply_to_user`;
+
     router.get('/posts/:id/comments', wrap(async (req, res) => {
-        const rows = await q(
-            `SELECT c.*, u.username, u.avatar_id FROM comments c JOIN users u ON u.id = c.user_id
-             WHERE c.post_id = $1 ORDER BY c.created_at ASC LIMIT 500`,
-            [req.params.id]
-        );
+        const rows = await q(`${COMMENT_SELECT} WHERE c.post_id = $1 ORDER BY c.created_at ASC LIMIT 500`, [req.params.id]);
         res.json(rows.map(commentView));
     }));
 
+    // replyTo — комментарий, на который отвечают. Ответ встаёт в ветку его
+    // корневого комментария: ветки в одну глубину, как в Instagram.
     router.post('/posts/:id/comments', wrap(async (req, res) => {
         const me = await requireViewer(req);
         commentLimit(me.id);
         const body = text(req.body && req.body.text, 500);
         if (!body) throw new HttpError(400, 'Пустой комментарий');
+        let root = null;
+        let replyUser = null;
+        const replyTo = req.body && req.body.replyTo;
+        if (replyTo) {
+            const target = (await q('SELECT id, reply_to, user_id FROM comments WHERE id = $1 AND post_id = $2', [String(replyTo), req.params.id]))[0];
+            if (!target) throw new HttpError(404, 'Комментарий удалён');
+            root = target.reply_to || target.id;
+            replyUser = target.user_id;
+        }
         const rows = await q(
-            `INSERT INTO comments (id, post_id, user_id, text) SELECT $1, id, $3, $4 FROM posts WHERE id = $2
-             RETURNING *`,
-            [newId(), req.params.id, me.id, body]
+            `INSERT INTO comments (id, post_id, user_id, text, reply_to, reply_to_user)
+             SELECT $1, id, $3, $4, $5, $6 FROM posts WHERE id = $2 RETURNING id`,
+            [newId(), req.params.id, me.id, body, root, replyUser]
         );
         if (!rows[0]) throw new HttpError(404, 'Пост удалён');
-        res.status(201).json(commentView({ ...rows[0], username: me.username, avatar_id: me.avatar_id }));
+        const created = await q(`${COMMENT_SELECT} WHERE c.id = $1`, [rows[0].id]);
+        res.status(201).json(commentView(created[0]));
     }));
 
     // Комментарий удаляет его автор или хозяин поста.
@@ -536,6 +644,464 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             [req.params.id, me.id]
         );
         if (!rows[0]) throw new HttpError(404, 'Комментарий не найден');
+        res.json({ success: true });
+    }));
+
+    // MARK: Личные сообщения
+
+    // Реакции в ответе: какие, сколько и стоит ли среди них своя.
+    function reactionsView(reactions, me) {
+        const counts = new Map();
+        for (const [user, emoji] of Object.entries(reactions || {})) {
+            const entry = counts.get(emoji) || { emoji, count: 0, mine: false };
+            entry.count += 1;
+            if (user === me.id) entry.mine = true;
+            counts.set(emoji, entry);
+        }
+        return [...counts.values()];
+    }
+
+    const messageView = (row, me) => (row.deleted_at
+        ? { id: row.id, deleted: true, fromMe: row.sender === me.id, createdAt: new Date(row.created_at).getTime(), text: '' }
+        : {
+            id: row.id,
+            text: row.text,
+            image: row.image || null,
+            fromMe: row.sender === me.id,
+            createdAt: new Date(row.created_at).getTime(),
+            read: row.read_at !== null,
+            reactions: reactionsView(row.reactions, me),
+            invite: row.together && row.t_status
+                ? {
+                    id: row.together,
+                    status: togetherStatus({
+                        status: row.t_status, created_at: row.t_created, responded_at: row.t_responded,
+                        inviter_done: row.t_inviter_done, invitee_done: row.t_invitee_done
+                    }),
+                    fromMe: row.sender === me.id
+                }
+                : null,
+            replyTo: row.reply_id
+                ? { id: row.reply_id, text: row.reply_deleted ? '' : row.reply_text, image: row.reply_deleted ? null : row.reply_image, fromMe: row.reply_sender === me.id }
+                : null
+        });
+
+    const MESSAGE_SELECT = `
+        SELECT m.*, r.id AS reply_id, r.text AS reply_text, r.image AS reply_image, r.sender AS reply_sender,
+               r.deleted_at IS NOT NULL AS reply_deleted,
+               t.status AS t_status, t.created_at AS t_created, t.responded_at AS t_responded,
+               t.inviter_done AS t_inviter_done, t.invitee_done AS t_invitee_done
+        FROM messages m LEFT JOIN messages r ON r.id = m.reply_to LEFT JOIN together t ON t.id = m.together`;
+
+    async function unreadCount(me) {
+        const [row] = await q('SELECT count(*)::int AS count FROM messages WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL', [me.id]);
+        return row.count;
+    }
+
+    // Переписки: с кем, последнее сообщение и сколько не прочитано.
+    router.get('/chats', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT DISTINCT ON (other) other, m.*
+             FROM (SELECT *, CASE WHEN sender = $1 THEN recipient ELSE sender END AS other
+                   FROM messages WHERE (sender = $1 OR recipient = $1) AND deleted_at IS NULL) m
+             ORDER BY other, created_at DESC`,
+            [me.id]
+        );
+        if (rows.length === 0) return res.json({ chats: [], unread: 0 });
+        const others = rows.map((row) => row.other);
+        const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [others])).map((u) => [u.id, u]));
+        const unread = new Map((await q(
+            `SELECT sender, count(*)::int AS count FROM messages
+             WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL GROUP BY sender`,
+            [me.id]
+        )).map((row) => [row.sender, row.count]));
+        const chats = rows
+            .filter((row) => users.has(row.other))
+            .sort((a, b) => b.created_at - a.created_at)
+            .map((row) => ({
+                user: shortUser(users.get(row.other)),
+                last: messageView(row, me),
+                unread: unread.get(row.other) || 0,
+                live: liveView(users.get(row.other))
+            }));
+        res.json({ chats, unread: chats.reduce((sum, chat) => sum + chat.unread, 0) });
+    }));
+
+    router.get('/chats/unread', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        res.json({ unread: await unreadCount(me) });
+    }));
+
+    // Кто сейчас печатает кому: в памяти сервера, этого хватает на несколько секунд.
+    const typing = new Map();
+
+    router.post('/chats/:username/typing', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const other = await userByName(req.params.username);
+        typing.set(`${me.id}:${other.id}`, Date.now());
+        if (typing.size > 5000) {
+            const now = Date.now();
+            for (const [key, at] of typing) if (now - at > TYPING_TTL_MS) typing.delete(key);
+        }
+        res.json({ success: true });
+    }));
+
+    // Сообщения переписки, новые первыми; открытая переписка помечается прочитанной.
+    // `since` — всё, что появилось или поменялось (реакции, прочтение, удаление)
+    // начиная с `serverTime` прошлого ответа.
+    router.get('/chats/:username/messages', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const other = await userByName(req.params.username);
+        const serverTime = Date.now();
+        const before = Number(req.query.before);
+        const after = Number(req.query.after);
+        const since = Number(req.query.since);
+        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+        const params = [me.id, other.id, limit];
+        // Время в ответе — в миллисекундах, а в базе — в микросекундах: сравниваем
+        // по миллисекундам, иначе «новее, чем последнее» вернуло бы его же.
+        let range = 'AND m.deleted_at IS NULL';
+        if (Number.isFinite(since) && since > 0) {
+            params.push(new Date(since));
+            range = `AND date_trunc('milliseconds', m.updated_at) >= $${params.length}`;
+        } else if (Number.isFinite(after) && after > 0) {
+            params.push(new Date(after));
+            range = `AND m.deleted_at IS NULL AND date_trunc('milliseconds', m.created_at) > $${params.length}`;
+        } else if (Number.isFinite(before) && before > 0) {
+            params.push(new Date(before));
+            range = `AND m.deleted_at IS NULL AND date_trunc('milliseconds', m.created_at) < $${params.length}`;
+        }
+        const rows = await q(
+            `${MESSAGE_SELECT}
+             WHERE ((m.sender = $1 AND m.recipient = $2) OR (m.sender = $2 AND m.recipient = $1)) ${range}
+             ORDER BY m.created_at DESC LIMIT $3`,
+            params
+        );
+        await q(
+            `UPDATE messages SET read_at = now(), updated_at = now()
+             WHERE sender = $1 AND recipient = $2 AND read_at IS NULL AND deleted_at IS NULL`,
+            [other.id, me.id]
+        );
+        const messages = rows.map((row) => messageView(row, me));
+        const typedAt = typing.get(`${other.id}:${me.id}`) || 0;
+        res.json({
+            user: shortUser(other),
+            messages,
+            next: !since && rows.length === limit ? messages[messages.length - 1].createdAt : null,
+            // С запасом: часы базы и сервера могут чуть расходиться, а повтор
+            // уже полученного приложение просто заменит тем же.
+            serverTime: serverTime - SINCE_OVERLAP_MS,
+            typing: serverTime - typedAt < TYPING_TTL_MS,
+            lastSeen: new Date(other.last_seen).getTime(),
+            live: liveView(other)
+        });
+    }));
+
+    router.post('/chats/:username/messages', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        messageLimit(me.id);
+        const other = await userByName(req.params.username);
+        if (other.id === me.id) throw new HttpError(400, 'Нельзя написать самому себе');
+        const body = text(req.body && req.body.text, 2000);
+        // Фото — только своё, загруженное через /images.
+        const image = imageIds([req.body && req.body.image])[0] || null;
+        if (!body && !image) throw new HttpError(400, 'Пустое сообщение');
+        if (image && !(await q('SELECT 1 FROM images WHERE id = $1 AND owner = $2', [image, me.id]))[0]) {
+            throw new HttpError(400, 'Фото не найдено');
+        }
+        // Ответить можно только на сообщение из этой же переписки.
+        let replyTo = null;
+        if (req.body && req.body.replyTo) {
+            const target = (await q(
+                `SELECT id FROM messages WHERE id = $1 AND deleted_at IS NULL
+                 AND ((sender = $2 AND recipient = $3) OR (sender = $3 AND recipient = $2))`,
+                [String(req.body.replyTo), me.id, other.id]
+            ))[0];
+            if (!target) throw new HttpError(404, 'Сообщение удалено');
+            replyTo = target.id;
+        }
+        const clientId = text(req.body && req.body.clientId, 64) || null;
+        const inserted = await q(
+            `INSERT INTO messages (id, sender, recipient, client_id, text, image, reply_to) VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (sender, client_id) DO NOTHING RETURNING id`,
+            [newId(), me.id, other.id, clientId, body, image, replyTo]
+        );
+        typing.delete(`${me.id}:${other.id}`);
+        // Повтор отправки после обрыва связи возвращает уже созданное сообщение.
+        const id = inserted[0] ? inserted[0].id : (await q('SELECT id FROM messages WHERE sender = $1 AND client_id = $2', [me.id, clientId]))[0].id;
+        const row = (await q(`${MESSAGE_SELECT} WHERE m.id = $1`, [id]))[0];
+        res.status(inserted[0] ? 201 : 200).json(messageView(row, me));
+    }));
+
+    // Реакция на сообщение: одна от человека, повтор той же — снимает её.
+    router.post('/messages/:id/react', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const emoji = req.body && req.body.emoji ? String(req.body.emoji) : null;
+        if (emoji && !REACTIONS.has(emoji)) throw new HttpError(400, 'Такой реакции нет');
+        const row = (await q(
+            'SELECT * FROM messages WHERE id = $1 AND (sender = $2 OR recipient = $2) AND deleted_at IS NULL',
+            [req.params.id, me.id]
+        ))[0];
+        if (!row) throw new HttpError(404, 'Сообщение не найдено');
+        const reactions = { ...(row.reactions || {}) };
+        if (!emoji || reactions[me.id] === emoji) delete reactions[me.id];
+        else reactions[me.id] = emoji;
+        await q('UPDATE messages SET reactions = $2, updated_at = now() WHERE id = $1', [row.id, JSON.stringify(reactions)]);
+        const updated = (await q(`${MESSAGE_SELECT} WHERE m.id = $1`, [row.id]))[0];
+        res.json(messageView(updated, me));
+    }));
+
+    // Удаление своего сообщения: у собеседника оно тоже пропадёт при следующем обновлении.
+    router.delete('/messages/:id', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const own = (await q('SELECT id, image FROM messages WHERE id = $1 AND sender = $2 AND deleted_at IS NULL', [req.params.id, me.id]))[0];
+        if (!own) throw new HttpError(404, 'Сообщение не найдено');
+        await q(
+            `UPDATE messages SET deleted_at = now(), updated_at = now(), text = '', image = NULL, reactions = '{}' WHERE id = $1`,
+            [own.id]
+        );
+        if (own.image) await q('DELETE FROM images WHERE id = $1 AND owner = $2', [own.image, me.id]);
+        res.json({ success: true });
+    }));
+
+    // MARK: Тренируется сейчас
+
+    // Статус идущей тренировки: что за тренировка, какое упражнение и сколько подходов.
+    router.put('/me/live', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const body = req.body || {};
+        const live = {
+            title: text(body.title, 80),
+            exercise: text(body.exercise, 80),
+            done: Math.round(number(body.done, 0, 100) || 0),
+            total: Math.round(number(body.total, 0, 100) || 0),
+            setsDone: Math.round(number(body.setsDone, 0, 500) || 0),
+            setsTotal: Math.round(number(body.setsTotal, 0, 500) || 0),
+            startedAt: number(body.startedAt, 0, 9e15) || Date.now(),
+            partnerOnly: !!body.partnerOnly
+        };
+        await q('UPDATE users SET live = $2, live_at = now() WHERE id = $1', [me.id, JSON.stringify(live)]);
+        res.json({ success: true });
+    }));
+
+    router.delete('/me/live', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        await q('UPDATE users SET live = NULL, live_at = NULL WHERE id = $1', [me.id]);
+        res.json({ success: true });
+    }));
+
+    // Кто из подписок тренируется прямо сейчас.
+    router.get('/live', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT u.* FROM follows f JOIN users u ON u.id = f.followee
+             WHERE f.follower = $1 AND u.live IS NOT NULL AND u.live_at > $2
+             ORDER BY u.live_at DESC LIMIT 50`,
+            [me.id, new Date(Date.now() - LIVE_TTL_MS)]
+        );
+        res.json(rows.map((row) => ({ user: shortUser(row), live: liveView(row) })).filter((item) => item.live));
+    }));
+
+    // MARK: Рейтинг недели
+
+    // Свой профиль и подписки со сводкой недели, которую присылают сами приложения:
+    // в ней все тренировки, а не только выложенные в ленту.
+    router.get('/leaderboard', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT u.* FROM users u
+             WHERE u.id = $1 OR u.id IN (SELECT followee FROM follows WHERE follower = $1)`,
+            [me.id]
+        );
+        res.json(rows.map((row) => ({ user: { ...shortUser(row), isMe: row.id === me.id }, stats: row.stats || {} })));
+    }));
+
+    // MARK: Активность
+
+    const ACTIVITY_SQL = `
+        SELECT 'like' AS kind, l.created_at, l.user_id AS actor, p.id AS post_id, p.title AS post_title, NULL AS text
+        FROM likes l JOIN posts p ON p.id = l.post_id WHERE p.user_id = $1 AND l.user_id <> $1
+        UNION ALL
+        SELECT 'comment', c.created_at, c.user_id, p.id, p.title, c.text
+        FROM comments c JOIN posts p ON p.id = c.post_id
+        WHERE p.user_id = $1 AND c.user_id <> $1 AND (c.reply_to_user IS NULL OR c.reply_to_user <> $1)
+        UNION ALL
+        SELECT 'reply', c.created_at, c.user_id, p.id, p.title, c.text
+        FROM comments c JOIN posts p ON p.id = c.post_id WHERE c.reply_to_user = $1 AND c.user_id <> $1
+        UNION ALL
+        SELECT 'follow', f.created_at, f.follower, NULL, NULL, NULL FROM follows f WHERE f.followee = $1`;
+
+    async function unseenActivity(me) {
+        const [row] = await q(`SELECT count(*)::int AS count FROM (${ACTIVITY_SQL}) a WHERE a.created_at > $2`, [me.id, me.activity_seen_at]);
+        return row.count;
+    }
+
+    // Лайки, комментарии, ответы и новые подписчики — новые первыми.
+    router.get('/activity', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(`SELECT * FROM (${ACTIVITY_SQL}) a ORDER BY a.created_at DESC LIMIT 80`, [me.id]);
+        const actors = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [[...new Set(rows.map((r) => r.actor))]])).map((u) => [u.id, u]));
+        const seen = new Date(me.activity_seen_at).getTime();
+        res.json({
+            items: rows.filter((row) => actors.has(row.actor)).map((row) => ({
+                kind: row.kind,
+                actor: shortUser(actors.get(row.actor)),
+                postId: row.post_id,
+                postTitle: row.post_title,
+                text: row.text,
+                createdAt: new Date(row.created_at).getTime(),
+                unseen: new Date(row.created_at).getTime() > seen
+            })),
+            unseen: await unseenActivity(me)
+        });
+    }));
+
+    router.post('/activity/seen', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        await q('UPDATE users SET activity_seen_at = now() WHERE id = $1', [me.id]);
+        res.json({ success: true });
+    }));
+
+    // Точки на вкладках: непрочитанные сообщения и новая активность одним запросом.
+    router.get('/badges', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        res.json({ messages: await unreadCount(me), activity: await unseenActivity(me), invites: await pendingInvites(me) });
+    }));
+
+    // MARK: Совместная тренировка
+
+    // Статус с учётом времени: неотвеченное приглашение протухает, совместная
+    // тренировка заканчивается, когда оба закончили или прошло шесть часов.
+    function togetherStatus(row) {
+        const now = Date.now();
+        if (row.status === 'pending' && now - new Date(row.created_at).getTime() > INVITE_TTL_MS) return 'expired';
+        if (row.status === 'accepted'
+            && ((row.inviter_done && row.invitee_done) || now - new Date(row.responded_at).getTime() > TOGETHER_TTL_MS)) return 'ended';
+        return row.status;
+    }
+
+    const togetherView = (row, me, partner) => ({
+        id: row.id,
+        status: togetherStatus(row),
+        fromMe: row.inviter === me.id,
+        partner: shortUser(partner),
+        createdAt: new Date(row.created_at).getTime(),
+        meDone: row.inviter === me.id ? row.inviter_done : row.invitee_done,
+        partnerDone: row.inviter === me.id ? row.invitee_done : row.inviter_done
+    });
+
+    async function pendingInvites(me) {
+        const [row] = await q(
+            "SELECT count(*)::int AS count FROM together WHERE invitee = $1 AND status = 'pending' AND created_at > $2",
+            [me.id, new Date(Date.now() - INVITE_TTL_MS)]
+        );
+        return row.count;
+    }
+
+    // Карточка приглашения в переписке подтянет новый статус при обновлении.
+    const touchInvite = (id) => q('UPDATE messages SET updated_at = now() WHERE together = $1', [id]);
+
+    async function markDone(session, me) {
+        const column = session.inviter === me.id ? 'inviter_done' : 'invitee_done';
+        await q(`UPDATE together SET ${column} = TRUE WHERE id = $1`, [session.id]);
+        await touchInvite(session.id);
+    }
+
+    async function sessionFor(req, me) {
+        const row = (await q('SELECT * FROM together WHERE id = $1 AND (inviter = $2 OR invitee = $2)', [req.params.id, me.id]))[0];
+        if (!row) throw new HttpError(404, 'Приглашение не найдено');
+        return row;
+    }
+
+    // Позвать друга: приглашение уходит и карточкой в переписку.
+    router.post('/users/:username/together', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        messageLimit(me.id);
+        const other = await userByName(req.params.username);
+        if (other.id === me.id) throw new HttpError(400, 'Нельзя позвать самого себя');
+        // Уже звали друг друга и ответа ещё нет — второе приглашение не нужно.
+        const existing = (await q(
+            `SELECT * FROM together WHERE status = 'pending' AND created_at > $3
+             AND ((inviter = $1 AND invitee = $2) OR (inviter = $2 AND invitee = $1))
+             ORDER BY created_at DESC LIMIT 1`,
+            [me.id, other.id, new Date(Date.now() - INVITE_TTL_MS)]
+        ))[0];
+        if (existing) return res.json(togetherView(existing, me, other));
+        const id = newId();
+        const [row] = await q('INSERT INTO together (id, inviter, invitee) VALUES ($1, $2, $3) RETURNING *', [id, me.id, other.id]);
+        await q(
+            'INSERT INTO messages (id, sender, recipient, text, together) VALUES ($1, $2, $3, $4, $5)',
+            [newId(), me.id, other.id, 'Го тренироваться вместе 💪', id]
+        );
+        res.status(201).json(togetherView(row, me, other));
+    }));
+
+    // Входящие приглашения, свои ждущие ответа и идущая совместная тренировка
+    // с тем, что сейчас делает напарник.
+    router.get('/together', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT * FROM together WHERE (inviter = $1 OR invitee = $1)
+             AND ((status = 'pending' AND created_at > $2) OR (status = 'accepted' AND responded_at > $3))
+             ORDER BY created_at DESC LIMIT 20`,
+            [me.id, new Date(Date.now() - INVITE_TTL_MS), new Date(Date.now() - TOGETHER_TTL_MS)]
+        );
+        const ids = [...new Set(rows.map((row) => (row.inviter === me.id ? row.invitee : row.inviter)))];
+        const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [ids])).map((u) => [u.id, u]));
+        const views = rows
+            .filter((row) => users.has(row.inviter === me.id ? row.invitee : row.inviter))
+            .map((row) => ({ row, view: togetherView(row, me, users.get(row.inviter === me.id ? row.invitee : row.inviter)) }));
+        const activeEntry = views.find(({ view }) => view.status === 'accepted' && !view.meDone);
+        let active = null;
+        if (activeEntry) {
+            const partner = users.get(activeEntry.row.inviter === me.id ? activeEntry.row.invitee : activeEntry.row.inviter);
+            const live = freshLive(partner);
+            if (live) delete live.partnerOnly;
+            active = { ...activeEntry.view, partnerLive: live };
+        }
+        res.json({
+            incoming: views.filter(({ view }) => view.status === 'pending' && !view.fromMe).map(({ view }) => view),
+            outgoing: views.filter(({ view }) => view.status === 'pending' && view.fromMe).map(({ view }) => view),
+            active
+        });
+    }));
+
+    router.post('/together/:id/accept', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const row = await sessionFor(req, me);
+        if (row.invitee !== me.id) throw new HttpError(403, 'Принять может только приглашённый');
+        if (togetherStatus(row) !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
+        // Одна совместная тренировка за раз: прошлые у обоих заканчиваются.
+        await q(
+            `UPDATE together SET status = 'ended' WHERE status = 'accepted' AND id <> $2
+             AND (inviter = ANY($1) OR invitee = ANY($1))`,
+            [[row.inviter, row.invitee], row.id]
+        );
+        const [updated] = await q("UPDATE together SET status = 'accepted', responded_at = now() WHERE id = $1 RETURNING *", [row.id]);
+        await touchInvite(row.id);
+        const inviter = (await q('SELECT * FROM users WHERE id = $1', [row.inviter]))[0];
+        res.json(togetherView(updated, me, inviter));
+    }));
+
+    // Отказ, отмена своего приглашения или выход из совместной тренировки.
+    router.post('/together/:id/:action(decline|cancel|leave|done)', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const row = await sessionFor(req, me);
+        const status = togetherStatus(row);
+        const action = req.params.action;
+        if (action === 'decline') {
+            if (row.invitee !== me.id || status !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
+            await q("UPDATE together SET status = 'declined', responded_at = now() WHERE id = $1", [row.id]);
+        } else if (action === 'cancel') {
+            if (row.inviter !== me.id || status !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
+            await q("UPDATE together SET status = 'cancelled', responded_at = now() WHERE id = $1", [row.id]);
+        } else if (action === 'leave') {
+            if (status === 'accepted') await q("UPDATE together SET status = 'ended' WHERE id = $1", [row.id]);
+        } else if (status === 'accepted') {
+            await markDone(row, me);
+        }
+        await touchInvite(row.id);
         res.json({ success: true });
     }));
 

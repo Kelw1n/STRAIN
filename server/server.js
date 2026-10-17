@@ -84,7 +84,10 @@ app.get('/health', (req, res) => {
         timestamp: Date.now(),
         profilesCount: profilesCache.size,
         channelsCount: channelsCache.size,
-        social: !!process.env.DATABASE_URL
+        social: !!process.env.DATABASE_URL,
+        // Номер набора функций: проверка после выкладки ждёт именно его,
+        // а не ответа ещё работающей старой версии.
+        api: 4
     });
 });
 

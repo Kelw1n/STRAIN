@@ -38,6 +38,8 @@ enum MainTabItem: String, CaseIterable, Identifiable {
 /// как у системной панели iOS 26.
 struct LiquidGlassTabBar: View {
     @Binding var selectedTab: MainTabItem
+    /// Вкладки с красной точкой: например, «Друзья» с непрочитанными сообщениями.
+    var badges: Set<MainTabItem> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Где палец и с какой скоростью едет. `GestureState` сбрасывается сам,
@@ -67,7 +69,19 @@ struct LiquidGlassTabBar: View {
 
     var body: some View {
         GeometryReader { proxy in
-            bar(Layout(width: proxy.size.width, count: tabs.count))
+            let layout = Layout(width: proxy.size.width, count: tabs.count)
+            bar(layout)
+                .overlay(alignment: .topLeading) {
+                    ForEach(tabs.filter { badges.contains($0) }) { tab in
+                        Circle()
+                            .fill(Theme.record)
+                            .overlay(Circle().strokeBorder(Color.black, lineWidth: 2))
+                            .frame(width: 11, height: 11)
+                            .position(x: layout.center(of: tab.index) + 14, y: barHeight / 2 - 12)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                    .allowsHitTesting(false)
+                }
         }
         .frame(height: barHeight)
         .padding(.horizontal, 20)

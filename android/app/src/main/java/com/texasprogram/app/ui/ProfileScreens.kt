@@ -297,8 +297,9 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                     if (index >= 0) { if (value != null) posts[index] = value else posts.removeAt(index) }
                 },
                 primaryAction = {
-                    if (!current.isMe && SocialService.isSignedIn) {
-                        FollowButton(current.isFollowing) {
+                    if (!current.isMe && SocialService.isSignedIn) Column {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FollowButton(current.isFollowing, modifier = Modifier.weight(1f)) {
                             if (busy) return@FollowButton
                             busy = true
                             val optimistic = current.copy(
@@ -316,6 +317,21 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                                 }
                             }
                         }
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color(0xFF292929))
+                                .pressable { navigator.push(SocialRoute.Chat(username)) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Написать", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        // Приглашение уходит карточкой в переписку — туда и переходим.
+                        InviteButton(username) { navigator.push(SocialRoute.Chat(username)) }
                     }
                 }
             )
@@ -391,7 +407,8 @@ fun ProfileContent(
                         post = post,
                         onOpen = { navigator.push(SocialRoute.Post(post)) },
                         onOpenAuthor = {},
-                        onChange = { onPostChange(post.id, it) }
+                        onChange = { onPostChange(post.id, it) },
+                        showsWorkout = true
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
                 }
@@ -415,7 +432,7 @@ fun ProfileContent(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
                         .background(Color(0xFF161617))
-                        .pressable { navigator.push(SocialRoute.Program(day)) }
+                        .pressable { navigator.push(SocialRoute.Program(day, programs, if (user.isMe) null else user.username)) }
                         .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -457,6 +474,7 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
             )
         }
         Text("@${user.username}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+        user.live?.let { LiveBadge(it) }
         user.bodyLine?.let { Text(it, color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         if (user.bio.isNotBlank()) {
             Text(user.bio, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp, textAlign = TextAlign.Center)
@@ -883,6 +901,18 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                     }
                     Switch(checked = showBody, onCheckedChange = { showBody = it }, colors = SwitchDefaults.colors(checkedTrackColor = Theme.accent))
                 }
+                EditDivider()
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Показывать, что я тренируюсь", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Подписчики увидят упражнение и подходы, пока идёт тренировка.", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = SocialService.sharesLive,
+                        onCheckedChange = { SocialService.updateSharesLive(it) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = Theme.accent)
+                    )
+                }
             }
         }
         item {
@@ -1122,7 +1152,14 @@ fun BadgeListScreen(badges: List<SocialBadge>, contentPadding: PaddingValues, na
 // MARK: - День программы
 
 @Composable
-fun ProgramDayScreen(day: SocialProgramDay, contentPadding: PaddingValues, navigator: SocialNavigator) {
+fun ProgramDayScreen(
+    day: SocialProgramDay,
+    contentPadding: PaddingValues,
+    navigator: SocialNavigator,
+    allDays: List<SocialProgramDay> = emptyList(),
+    /// Чья программа; `null` — своя, копировать нечего.
+    author: String? = null
+) {
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SocialTopBar(day.title, onBack = { navigator.pop() }) }
         if (day.groups.isNotEmpty()) item { Text(day.groups.joinToString(" · "), color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
@@ -1141,6 +1178,9 @@ fun ProgramDayScreen(day: SocialProgramDay, contentPadding: PaddingValues, navig
                     if (index < day.exercises.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 70.dp))
                 }
             }
+        }
+        if (author != null) {
+            item { CopyProgramButton(allDays.ifEmpty { listOf(day) }, author, navigator) }
         }
     }
 }

@@ -84,9 +84,11 @@ class AppStore private constructor(val context: Context) {
         runCatching { writer.submit {}.get(2, java.util.concurrent.TimeUnit.SECONDS) }
     }
 
-    fun add(profile: ProgramProfile) {
+    /// `activate = false` — профиль добавится, но открытым останется текущий
+    /// (копия чужой программы из ленты).
+    fun add(profile: ProgramProfile, activate: Boolean = true) {
         profiles = profiles + profile
-        activeId = profile.id
+        if (activate) activeId = profile.id
         persist()
     }
 
