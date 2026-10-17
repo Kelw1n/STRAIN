@@ -114,7 +114,9 @@ data class SocialPost(
     val workout: SocialWorkout = SocialWorkout(),
     val likes: Int = 0,
     val comments: Int = 0,
-    val liked: Boolean = false
+    val liked: Boolean = false,
+    /// С кем тренировались вместе.
+    val partner: SocialAuthor? = null
 ) {
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
 
@@ -174,7 +176,9 @@ data class SocialMessage(
     val deleted: Boolean = false,
     val reactions: List<SocialReaction> = emptyList(),
     /// На какое сообщение это ответ.
-    val replyTo: SocialMessageQuote? = null
+    val replyTo: SocialMessageQuote? = null,
+    /// Приглашение на совместную тренировку — карточкой в переписке.
+    val invite: SocialInvite? = null
 ) {
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
     val isLocal: Boolean get() = id.startsWith("local-")
@@ -253,7 +257,9 @@ data class SocialLive(
     val setsDone: Int = 0,
     val setsTotal: Int = 0,
     val startedAt: Double = 0.0,
-    val updatedAt: Double? = null
+    val updatedAt: Double? = null,
+    /// Тренировка скрыта от подписчиков, но видна напарнику по совместной.
+    val partnerOnly: Boolean? = null
 ) {
     /// «Присед · 3/5».
     val line: String get() = when {
@@ -262,6 +268,44 @@ data class SocialLive(
         else -> exercise
     }
 }
+
+// MARK: - Совместная тренировка
+
+/// Приглашение в переписке: статус меняется у обоих.
+@Serializable
+data class SocialInvite(val id: String, val status: String = "pending", val fromMe: Boolean = false) {
+    val isPending: Boolean get() = status == "pending"
+
+    /// Что написать на карточке, когда ответ уже есть.
+    val statusText: String get() = when (status) {
+        "pending" -> if (fromMe) "Ждём ответа" else "Зовёт тренироваться вместе"
+        "accepted" -> "Тренируетесь вместе"
+        "declined" -> if (fromMe) "Отказался(-ась)" else "Ты отказался(-ась)"
+        "cancelled" -> "Приглашение отменено"
+        "expired" -> "Приглашение истекло"
+        else -> "Совместная тренировка закончилась"
+    }
+}
+
+@Serializable
+data class SocialTogether(
+    val id: String,
+    val status: String = "pending",
+    val fromMe: Boolean = false,
+    val partner: SocialUserShort,
+    val createdAt: Double = 0.0,
+    val meDone: Boolean = false,
+    val partnerDone: Boolean = false,
+    /// Что сейчас делает напарник — только у идущей совместной тренировки.
+    val partnerLive: SocialLive? = null
+)
+
+@Serializable
+data class SocialTogetherState(
+    val incoming: List<SocialTogether> = emptyList(),
+    val outgoing: List<SocialTogether> = emptyList(),
+    val active: SocialTogether? = null
+)
 
 @Serializable
 data class SocialLiveFriend(val user: SocialUserShort, val live: SocialLive)
@@ -325,7 +369,9 @@ data class SocialPostDraft(
     val workout: SocialWorkout,
     val photoCount: Int = 0,
     /// Уже загруженные фото: после обрыва связи их не грузим второй раз.
-    val uploadedPhotos: List<String?> = emptyList()
+    val uploadedPhotos: List<String?> = emptyList(),
+    /// Совместная тренировка — пост выйдет «вместе с» напарником.
+    val together: String? = null
 )
 
 // MARK: - Подписи

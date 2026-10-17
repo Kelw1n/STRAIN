@@ -154,7 +154,10 @@ fun FeedScreen(
     }
 
     LaunchedEffect(feedScope, SocialService.feedVersion) {
-        launch { SocialService.refreshLive() }
+        launch {
+            SocialService.refreshLive()
+            SocialService.refreshTogether()
+        }
         reload()
     }
     // Кто в зале — раз в минуту, пока лента на экране.
@@ -242,6 +245,9 @@ fun FeedScreen(
                 }
             }
             if (!SocialService.isSignedIn) item(key = "teaser") { SignUpTeaser(onCreateProfile) }
+            SocialService.together.active?.let { active ->
+                item(key = "together") { Box(Modifier.padding(top = 8.dp)) { TogetherCard(active) } }
+            }
             if (SocialService.isSignedIn && SocialService.liveFriends.isNotEmpty()) {
                 item(key = "live") {
                     Box(Modifier.padding(top = 8.dp, bottom = 6.dp)) {

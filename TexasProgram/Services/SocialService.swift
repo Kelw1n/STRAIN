@@ -86,6 +86,8 @@ final class SocialService {
     private(set) var unseenActivity = 0
     /// Подписки, которые тренируются прямо сейчас.
     private(set) var liveFriends: [SocialLiveFriend] = []
+    /// Приглашения на совместную тренировку и идущая совместная тренировка.
+    private(set) var together = SocialTogetherState()
 
     /// Видно ли друзьям, что идёт тренировка.
     var sharesLive: Bool {
@@ -224,6 +226,7 @@ final class SocialService {
         unreadMessages = 0
         unseenActivity = 0
         liveFriends = []
+        together = SocialTogetherState()
         lastLive = nil
         feedVersion += 1
     }
@@ -399,11 +402,41 @@ final class SocialService {
     /// Сколько непрочитанных сообщений и новой активности — для точек на вкладках.
     func refreshUnread() async {
         guard token != nil else { unreadMessages = 0; unseenActivity = 0; return }
-        struct Badges: Decodable { let messages: Int; let activity: Int }
+        struct Badges: Decodable { let messages: Int; let activity: Int; let invites: Int? }
         if let value: Badges = try? await request("GET", "/badges") {
             unreadMessages = value.messages
             unseenActivity = value.activity
+            // Приглашения и совместную тренировку спрашиваем, только когда они есть.
+            if (value.invites ?? 0) > 0 || together.active != nil || !together.outgoing.isEmpty || !together.incoming.isEmpty {
+                await refreshTogether()
+            }
         }
+    }
+
+    // MARK: Совместная тренировка
+
+    func refreshTogether() async {
+        guard token != nil else { together = SocialTogetherState(); return }
+        if let value: SocialTogetherState = try? await request("GET", "/together", requiresAuth: true) { together = value }
+    }
+
+    /// Позвать друга: приглашение придёт ему и появится карточкой в переписке.
+    @discardableResult
+    func invite(_ username: String) async throws -> SocialTogether {
+        let invite: SocialTogether = try await request("POST", "/users/\(username)/together", requiresAuth: true)
+        await refreshTogether()
+        return invite
+    }
+
+    func acceptTogether(_ id: String) async throws {
+        let _: SocialTogether = try await request("POST", "/together/\(id)/accept", requiresAuth: true)
+        await refreshTogether()
+    }
+
+    /// `decline`, `cancel` или `leave`.
+    func respondTogether(_ id: String, _ action: String) async throws {
+        let _: Empty = try await request("POST", "/together/\(id)/\(action)", requiresAuth: true)
+        await refreshTogether()
     }
 
     /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,
@@ -486,10 +519,13 @@ final class SocialService {
     /// этого хватает, чтобы статус на сервере не протух.
     func reportLive(_ live: SocialLive?) {
         guard token != nil else { return }
-        guard let live, sharesLive else {
+        // Скрытая тренировка всё равно видна напарнику по совместной.
+        let partnerOnly = !sharesLive && together.active != nil
+        guard var live, sharesLive || partnerOnly else {
             if lastLive != nil { Task { await clearLive() } }
             return
         }
+        if partnerOnly { live.partnerOnly = true }
         if let last = lastLive, last.live == live, Date().timeIntervalSince(last.sentAt) < 300 { return }
         lastLive = (live, Date())
         liveTask?.cancel()
@@ -571,6 +607,7 @@ final class SocialService {
         let effort: Int?
         let photos: [String]
         let workout: SocialWorkout
+        let together: String?
     }
 
     func flushOutbox() {
@@ -598,7 +635,8 @@ final class SocialService {
                         sets: draft.sets,
                         effort: draft.effort,
                         photos: draft.uploadedPhotos.compactMap { $0 },
-                        workout: draft.workout
+                        workout: draft.workout,
+                        together: draft.together
                     )
                     let _: SocialPost = try await request("POST", "/posts", json: body, requiresAuth: true)
                     SocialOutboxStore.remove(draft.clientId)
@@ -610,6 +648,8 @@ final class SocialService {
                 }
             }
             await refreshMe()
+            // Пост совместной тренировки отмечает её законченной.
+            if together.active != nil { await refreshTogether() }
         }
     }
 }

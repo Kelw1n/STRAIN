@@ -50,6 +50,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import com.texasprogram.app.ui.ThemeManager
 import androidx.compose.runtime.Composable
+import com.texasprogram.app.ui.TogetherInviteBanner
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -456,6 +458,17 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onSettings = { showSettings = true }
                 )
             }
+        }
+
+        // Друг зовёт тренироваться вместе — плашка сверху поверх любой вкладки.
+        val invite = SocialService.together.incoming.firstOrNull()
+        AnimatedVisibility(
+            visible = invite != null,
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp)
+        ) {
+            invite?.let { TogetherInviteBanner(it) }
         }
 
         Column(Modifier.align(Alignment.BottomCenter)) {

@@ -199,11 +199,14 @@ struct SocialPost: Codable, Hashable, Identifiable, Sendable {
     var likes: Int
     var comments: Int
     var liked: Bool
+    /// С кем тренировались вместе.
+    var partner: SocialAuthor?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         author = try c.decode(SocialAuthor.self, forKey: .author)
+        partner = try? c.decodeIfPresent(SocialAuthor.self, forKey: .partner)
         createdAt = try c.decodeIfPresent(Double.self, forKey: .createdAt) ?? 0
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Тренировка"
         description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
@@ -285,6 +288,8 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
     var reactions: [SocialReaction] = []
     /// На какое сообщение это ответ.
     var replyTo: SocialMessageQuote?
+    /// Приглашение на совместную тренировку — карточкой в переписке.
+    var invite: SocialInvite?
 
     var date: Date { Date(timeIntervalSince1970: createdAt / 1000) }
     var isLocal: Bool { id.hasPrefix("local-") }
@@ -311,6 +316,7 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
         deleted = try c.decodeIfPresent(Bool.self, forKey: .deleted) ?? false
         reactions = (try? c.decodeIfPresent([SocialReaction].self, forKey: .reactions)) ?? []
         replyTo = try? c.decodeIfPresent(SocialMessageQuote.self, forKey: .replyTo)
+        invite = try? c.decodeIfPresent(SocialInvite.self, forKey: .invite)
         fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? false
         createdAt = try c.decodeIfPresent(Double.self, forKey: .createdAt) ?? 0
         read = try c.decodeIfPresent(Bool.self, forKey: .read) ?? false
@@ -394,6 +400,8 @@ struct SocialLive: Codable, Hashable, Sendable {
     var setsTotal: Int = 0
     var startedAt: Double = 0
     var updatedAt: Double?
+    /// Тренировка скрыта от подписчиков, но видна напарнику по совместной.
+    var partnerOnly: Bool?
 
     init(title: String, exercise: String, done: Int, total: Int, setsDone: Int, setsTotal: Int, startedAt: Double) {
         self.title = title
@@ -424,6 +432,68 @@ struct SocialLive: Codable, Hashable, Sendable {
     }
 
     var startDate: Date { Date(timeIntervalSince1970: startedAt / 1000) }
+}
+
+// MARK: - Совместная тренировка
+
+/// Приглашение в переписке: статус меняется у обоих.
+struct SocialInvite: Codable, Hashable, Sendable {
+    let id: String
+    var status: String
+    let fromMe: Bool
+
+    var isPending: Bool { status == "pending" }
+
+    /// Что написать на карточке, когда ответ уже есть.
+    var statusText: String {
+        switch status {
+        case "pending": return fromMe ? "Ждём ответа" : "Зовёт тренироваться вместе"
+        case "accepted": return "Тренируетесь вместе"
+        case "declined": return fromMe ? "Отказался(-ась)" : "Ты отказался(-ась)"
+        case "cancelled": return "Приглашение отменено"
+        case "expired": return "Приглашение истекло"
+        default: return "Совместная тренировка закончилась"
+        }
+    }
+}
+
+struct SocialTogether: Codable, Hashable, Identifiable, Sendable {
+    let id: String
+    var status: String
+    let fromMe: Bool
+    let partner: SocialUserShort
+    var createdAt: Double = 0
+    var meDone: Bool = false
+    var partnerDone: Bool = false
+    /// Что сейчас делает напарник — только у идущей совместной тренировки.
+    var partnerLive: SocialLive?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "pending"
+        fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? false
+        partner = try c.decode(SocialUserShort.self, forKey: .partner)
+        createdAt = try c.decodeIfPresent(Double.self, forKey: .createdAt) ?? 0
+        meDone = try c.decodeIfPresent(Bool.self, forKey: .meDone) ?? false
+        partnerDone = try c.decodeIfPresent(Bool.self, forKey: .partnerDone) ?? false
+        partnerLive = try? c.decodeIfPresent(SocialLive.self, forKey: .partnerLive)
+    }
+}
+
+struct SocialTogetherState: Codable, Hashable, Sendable {
+    var incoming: [SocialTogether] = []
+    var outgoing: [SocialTogether] = []
+    var active: SocialTogether?
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        incoming = (try? c.decodeIfPresent([SocialTogether].self, forKey: .incoming)) ?? []
+        outgoing = (try? c.decodeIfPresent([SocialTogether].self, forKey: .outgoing)) ?? []
+        active = try? c.decodeIfPresent(SocialTogether.self, forKey: .active)
+    }
 }
 
 struct SocialLiveFriend: Codable, Hashable, Identifiable, Sendable {
@@ -551,6 +621,8 @@ struct SocialPostDraft: Codable, Hashable, Identifiable, Sendable {
     var photoCount: Int
     /// Уже загруженные фото: после обрыва связи их не грузим второй раз.
     var uploadedPhotos: [String?]
+    /// Совместная тренировка — пост выйдет «вместе с» напарником.
+    var together: String?
 }
 
 // MARK: - Подписи

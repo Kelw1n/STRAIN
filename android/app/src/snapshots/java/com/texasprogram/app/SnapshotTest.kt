@@ -241,9 +241,20 @@ class SnapshotTest {
                {"user":{"id":"u4","username":"semobsessed"},"stats":{}}]"""
         )
         val metric = com.texasprogram.app.model.LeaderboardMetric.VOLUME
+        val together = json.decodeFromString<com.texasprogram.app.model.SocialTogetherState>(
+            """{"incoming":[{"id":"t1","status":"pending","fromMe":false,"partner":{"id":"u3","username":"heavy.anna"}}],
+               "active":{"id":"t2","status":"accepted","fromMe":true,"partner":{"id":"u2","username":"bro.lifts"},
+                         "partnerLive":{"title":"День 1","exercise":"Приседания","done":3,"total":5,"setsDone":8,"setsTotal":18,"startedAt":${now - 1_500_000}}}}"""
+        )
+        val invite = json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"m9","text":"Го тренироваться вместе 💪","fromMe":false,"createdAt":$now,"invite":{"id":"t1","status":"pending","fromMe":false}}"""
+        )
         paparazzi.snapshot("17-social-extras") {
             Screen {
                 Column(Modifier.padding(padding), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)) {
+                    com.texasprogram.app.ui.TogetherInviteBanner(together.incoming.first())
+                    com.texasprogram.app.ui.TogetherCard(together.active!!)
+                    com.texasprogram.app.ui.InviteBubble(invite, invite.invite!!, "heavy.anna") {}
                     com.texasprogram.app.ui.LiveFriendsStrip(live) {}
                     com.texasprogram.app.ui.LiveBadge(live[0].live)
                     Column { activity.items.forEach { com.texasprogram.app.ui.ActivityRow(it, onOpenActor = {}, onOpen = {}) } }
@@ -329,7 +340,7 @@ private object Fixtures {
               "photos":[],
               "workout":{"exercises":[{"name":"Приседания со штангой","sets":[{"reps":8,"weight":120}]}]},
               "likes":12,"comments":4,"liked":false},
-             {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"createdAt":${now - 25 * 60_000},
+             {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"partner":{"id":"u4","username":"semobsessed"},"createdAt":${now - 25 * 60_000},
               "title":"Неделя 3 · День 1 — объём","description":"Присед зашёл легко, жим тяжело. Завтра отдых.",
               "durationSeconds":4980,"volumeKg":12450,"sets":18,"effort":8,
               "photos":["0123456789abcdef01234567","0123456789abcdef01234568"],

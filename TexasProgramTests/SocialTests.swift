@@ -248,6 +248,38 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(SocialFormat.lastSeen(now.addingTimeInterval(-600), now: now), "был(а) 10 минут назад")
     }
 
+    // MARK: Совместная тренировка
+
+    func testTogetherDecodes() throws {
+        let state = try JSONDecoder().decode(SocialTogetherState.self, from: Data(#"""
+        {"incoming":[{"id":"t1","status":"pending","fromMe":false,"partner":{"id":"2","username":"sem"},"createdAt":5}],
+         "outgoing":[],
+         "active":{"id":"t2","status":"accepted","fromMe":true,"partner":{"id":"3","username":"tim"},"meDone":false,"partnerDone":false,
+                   "partnerLive":{"title":"День 1","exercise":"Жим","done":2,"total":4,"setsDone":6,"setsTotal":16}}}
+        """#.utf8))
+        XCTAssertEqual(state.incoming.first?.partner.username, "sem")
+        XCTAssertEqual(state.active?.partnerLive?.line, "Жим · 2/4")
+
+        let message = try JSONDecoder().decode(SocialMessage.self, from: Data(#"""
+        {"id":"m","text":"Го тренироваться вместе 💪","fromMe":false,"createdAt":1,"invite":{"id":"t1","status":"pending","fromMe":false}}
+        """#.utf8))
+        XCTAssertEqual(message.invite?.isPending, true)
+        XCTAssertEqual(message.invite?.statusText, "Зовёт тренироваться вместе")
+
+        let post = try JSONDecoder().decode(SocialPost.self, from: Data(#"""
+        {"id":"p","author":{"id":"1","username":"a"},"partner":{"id":"2","username":"b"}}
+        """#.utf8))
+        XCTAssertEqual(post.partner?.username, "b")
+    }
+
+    /// Скрытая тренировка уходит только напарнику.
+    func testPartnerOnlyLiveIsEncoded() throws {
+        var live = SocialLive(title: "День 1", exercise: "Жим", done: 1, total: 4, setsDone: 1, setsTotal: 12, startedAt: 0)
+        live.partnerOnly = true
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: JSONEncoder().encode(live)) as? [String: Any])
+        XCTAssertEqual(json["partnerOnly"] as? Bool, true)
+    }
+
     // MARK: Активность и рейтинг
 
     func testActivityDecodes() throws {

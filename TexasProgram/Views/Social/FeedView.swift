@@ -23,6 +23,10 @@ struct FeedView: View {
                     if !social.isSignedIn {
                         signUpTeaser.padding(.bottom, 8)
                     }
+                    if let active = social.together.active {
+                        TogetherCard(together: active)
+                            .padding(.top, 8)
+                    }
                     if social.isSignedIn && !social.liveFriends.isEmpty {
                         LiveFriendsStrip(friends: social.liveFriends) { path.append(FeedRoute.user($0)) }
                             .padding(.top, 8)
@@ -249,7 +253,10 @@ struct FeedView: View {
         loading = true
         defer { loading = false }
         social.flushOutbox()
-        Task { await social.refreshLive() }
+        Task {
+            await social.refreshLive()
+            await social.refreshTogether()
+        }
         do {
             let page = try await social.feed(scope)
             next = page.next

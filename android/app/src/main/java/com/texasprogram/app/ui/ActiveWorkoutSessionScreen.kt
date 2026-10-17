@@ -579,6 +579,10 @@ fun ActiveWorkoutSessionScreen(
                 }
             )
 
+            // Совместная тренировка: что сейчас делает напарник. Над списком,
+            // чтобы не сбивать перетаскивание упражнений.
+            PartnerStrip(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+
             LazyColumn(
                 state = listState,
                 userScrollEnabled = !compact,

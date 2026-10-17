@@ -203,6 +203,12 @@ struct ChatView: View {
                                 .padding(.top, 12)
                                 .padding(.bottom, 4)
                         }
+                        if let invite = message.invite {
+                            InviteBubble(message: message, invite: invite, username: username) { updated in
+                                if let index = messages.firstIndex(where: { $0.id == message.id }) { messages[index].invite = updated }
+                            }
+                            .id(message.id)
+                        } else {
                         MessageBubble(
                             message: message,
                             username: username,
@@ -219,6 +225,7 @@ struct ChatView: View {
                             onDelete: { delete(message) }
                         )
                         .id(message.id)
+                        }
                     }
                     if otherTyping {
                         TypingBubble()

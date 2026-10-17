@@ -227,10 +227,23 @@ final class SnapshotTests: XCTestCase {
          {"user":{"id":"u3","username":"heavy.anna"},"stats":{"week":"\(week)","workouts":2,"volumeKg":7300,"records":3,"streakWeeks":12}},
          {"user":{"id":"u4","username":"semobsessed"},"stats":{}}]
         """)
-        try snap("17-social-extras", height: 2200) {
+        let together: SocialTogetherState = try Fixtures.decode("""
+        {"incoming":[{"id":"t1","status":"pending","fromMe":false,"partner":{"id":"u3","username":"heavy.anna"}}],
+         "active":{"id":"t2","status":"accepted","fromMe":true,"partner":{"id":"u2","username":"bro.lifts"},
+                   "partnerLive":{"title":"День 1","exercise":"Приседания","done":3,"total":5,"setsDone":8,"setsTotal":18,"startedAt":\(now - 1_500_000)}}}
+        """)
+        let invite: SocialMessage = try Fixtures.decode("""
+        {"id":"m9","text":"Го тренироваться вместе 💪","fromMe":false,"createdAt":\(now),"invite":{"id":"t1","status":"pending","fromMe":false}}
+        """)
+        try snap("17-social-extras", height: 3000) {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        if let first = together.incoming.first { TogetherInviteBanner(invite: first).padding(.horizontal, -12) }
+                        if let active = together.active { TogetherCard(together: active) }
+                        if let inviteCard = invite.invite {
+                            InviteBubble(message: invite, invite: inviteCard, username: "heavy.anna") { _ in }
+                        }
                         LiveFriendsStrip(friends: live) { _ in }
                         LiveBadge(live: live[0].live)
                         VStack(spacing: 0) {
@@ -319,7 +332,7 @@ private enum Fixtures {
           "photos":[],
           "workout":{"exercises":[{"name":"Приседания со штангой","sets":[{"reps":8,"weight":120}]}]},
           "likes":12,"comments":4,"liked":false},
-         {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"createdAt":\(now - 25 * 60_000),
+         {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"partner":{"id":"u4","username":"semobsessed"},"createdAt":\(now - 25 * 60_000),
           "title":"Неделя 3 · День 1 — объём","description":"Присед зашёл легко, жим тяжело. Завтра отдых.",
           "durationSeconds":4980,"volumeKg":12450,"sets":18,"effort":8,
           "photos":["0123456789abcdef01234567","0123456789abcdef01234568"],

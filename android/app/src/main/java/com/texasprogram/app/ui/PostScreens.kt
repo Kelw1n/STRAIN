@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -149,10 +150,25 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
             Modifier.weight(1f).pressable(onClick = onOpenAuthor),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Avatar(post.author.avatar, post.author.username, 46.dp)
+            Box {
+                Avatar(post.author.avatar, post.author.username, 46.dp)
+                // Тренировались вместе — аватар напарника рядом.
+                post.partner?.let { partner ->
+                    Box(Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 4.dp).size(26.dp).clip(CircleShape).background(Color.Black).padding(2.dp)) {
+                        Avatar(partner.avatar, partner.username, 22.dp)
+                    }
+                }
+            }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("@${post.author.username}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    post.partner?.let { "@${post.author.username} и @${it.username}" } ?: "@${post.author.username}",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Text(SocialFormat.ago(post.instant), color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
             }
         }
@@ -626,7 +642,6 @@ private fun CommentRow(
 
 /// Лист с полем комментария: перекрывает панель вкладок, а клавиатура
 /// поднимает его целиком.
-@OptIn(ExperimentalMaterial3Api::class)
 // MARK: - Фото и тренировка
 
 /// Карусель поста: сначала фото, последним слайдом — сама тренировка.
@@ -756,6 +771,7 @@ private fun WorkoutSetsCard(exercise: SocialWorkout.Exercise) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CommentSheet(
     replyingTo: SocialComment?,

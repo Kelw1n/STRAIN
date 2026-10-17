@@ -297,7 +297,7 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                     if (index >= 0) { if (value != null) posts[index] = value else posts.removeAt(index) }
                 },
                 primaryAction = {
-                    if (!current.isMe && SocialService.isSignedIn) {
+                    if (!current.isMe && SocialService.isSignedIn) Column {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         FollowButton(current.isFollowing, modifier = Modifier.weight(1f)) {
                             if (busy) return@FollowButton
@@ -329,6 +329,9 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                             Text("Написать", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                         }
+                        Spacer(Modifier.height(10.dp))
+                        // Приглашение уходит карточкой в переписку — туда и переходим.
+                        InviteButton(username) { navigator.push(SocialRoute.Chat(username)) }
                     }
                 }
             )

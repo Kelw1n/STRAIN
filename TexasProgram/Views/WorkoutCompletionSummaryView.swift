@@ -321,7 +321,9 @@ struct WorkoutCompletionSummaryView: View {
             effort: effortScore,
             workout: SocialWorkout(program: profile.programKind.rawValue, exercises: exercises),
             photoCount: 0,
-            uploadedPhotos: []
+            uploadedPhotos: [],
+            // Тренировались вместе — пост выйдет «вместе с» напарником.
+            together: SocialService.shared.together.active?.id
         )
     }
 

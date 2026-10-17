@@ -127,6 +127,15 @@ struct MainTabView: View {
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: sessionManager.isRunning && !sessionManager.isPresented)
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: restTimer.isRunning)
         }
+        // Друг зовёт тренироваться вместе — плашка сверху поверх любой вкладки.
+        .overlay(alignment: .top) {
+            if let invite = SocialService.shared.together.incoming.first {
+                TogetherInviteBanner(invite: invite)
+                    .padding(.top, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: SocialService.shared.together.incoming.first?.id)
         .confirmationDialog(
             sessionManager.replaceTitle,
             isPresented: $sessionManager.showingReplaceConfirm,

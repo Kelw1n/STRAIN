@@ -163,18 +163,22 @@ struct UserProfileView: View {
                     path: $path,
                     primaryAction: {
                         if !user.isMe && SocialService.shared.isSignedIn {
-                            HStack(spacing: 10) {
-                                FollowButton(isFollowing: user.isFollowing) { toggleFollow(user) }
-                                    .disabled(busy)
-                                Button { path.append(FeedRoute.chat(user.username)) } label: {
-                                    Text("Написать")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 50)
-                                        .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            VStack(spacing: 10) {
+                                HStack(spacing: 10) {
+                                    FollowButton(isFollowing: user.isFollowing) { toggleFollow(user) }
+                                        .disabled(busy)
+                                    Button { path.append(FeedRoute.chat(user.username)) } label: {
+                                        Text("Написать")
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundStyle(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 50)
+                                            .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    }
+                                    .buttonStyle(.pressable)
                                 }
-                                .buttonStyle(.pressable)
+                                // Приглашение уходит карточкой в переписку — туда и переходим.
+                                InviteButton(username: user.username) { path.append(FeedRoute.chat(user.username)) }
                             }
                         }
                     },

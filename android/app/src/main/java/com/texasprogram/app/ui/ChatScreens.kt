@@ -498,7 +498,13 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp)
                             )
                         }
-                        MessageBubble(
+                        val invite = message.invite
+                        if (invite != null) {
+                            InviteBubble(message, invite, username) { updated ->
+                                val at = messages.indexOfFirst { it.id == message.id }
+                                if (at >= 0) messages[at] = messages[at].copy(invite = updated)
+                            }
+                        } else MessageBubble(
                             message,
                             username = username,
                             localImage = localImages[message.id],

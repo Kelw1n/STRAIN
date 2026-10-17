@@ -27,6 +27,8 @@ import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialPostDraft
 import com.texasprogram.app.model.SocialProgramBuilder
 import com.texasprogram.app.model.SocialProgramDay
+import com.texasprogram.app.model.SocialTogether
+import com.texasprogram.app.model.SocialTogetherState
 import com.texasprogram.app.model.SocialUser
 import com.texasprogram.app.model.SocialUserShort
 import com.texasprogram.app.model.SocialWeekStats
@@ -103,6 +105,9 @@ object SocialService {
         private set
     /// Подписки, которые тренируются прямо сейчас.
     var liveFriends by mutableStateOf<List<SocialLiveFriend>>(emptyList())
+        private set
+    /// Приглашения на совместную тренировку и идущая совместная тренировка.
+    var together by mutableStateOf(SocialTogetherState())
         private set
     /// Переписка прячет панель вкладок: внизу экрана живёт поле ввода.
     var hidesTabBar by mutableStateOf(false)
@@ -233,6 +238,7 @@ object SocialService {
         unreadMessages = 0
         unseenActivity = 0
         liveFriends = emptyList()
+        together = SocialTogetherState()
         lastLive = null
     }
 
@@ -393,7 +399,38 @@ object SocialService {
             .onSuccess {
                 unreadMessages = it["messages"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
                 unseenActivity = it["activity"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                // Приглашения и совместную тренировку спрашиваем, только когда они есть.
+                val invites = it["invites"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                if (invites > 0 || together.active != null || together.outgoing.isNotEmpty() || together.incoming.isNotEmpty()) refreshTogether()
             }
+    }
+
+    // MARK: Совместная тренировка
+
+    suspend fun refreshTogether() {
+        if (token == null) {
+            together = SocialTogetherState()
+            return
+        }
+        runCatching { decode<SocialTogetherState>(call("GET", "/together", requiresAuth = true)) }.onSuccess { together = it }
+    }
+
+    /// Позвать друга: приглашение придёт ему и появится карточкой в переписке.
+    suspend fun invite(username: String): SocialTogether {
+        val invite = decode<SocialTogether>(call("POST", "/users/${q(username)}/together", requiresAuth = true))
+        refreshTogether()
+        return invite
+    }
+
+    suspend fun acceptTogether(id: String) {
+        call("POST", "/together/$id/accept", requiresAuth = true)
+        refreshTogether()
+    }
+
+    /// `decline`, `cancel` или `leave`.
+    suspend fun respondTogether(id: String, action: String) {
+        call("POST", "/together/$id/$action", requiresAuth = true)
+        refreshTogether()
     }
 
     /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,
@@ -476,19 +513,22 @@ object SocialService {
     /// этого хватает, чтобы статус на сервере не протух.
     fun reportLive(live: SocialLive?) {
         if (token == null) return
-        if (live == null || !sharesLive) {
+        // Скрытая тренировка всё равно видна напарнику по совместной.
+        val partnerOnly = !sharesLive && together.active != null
+        if (live == null || !(sharesLive || partnerOnly)) {
             if (lastLive != null) scope.launch { clearLive() }
             return
         }
+        val sent = if (partnerOnly) live.copy(partnerOnly = true) else live
         val last = lastLive
         val now = System.currentTimeMillis()
-        if (last != null && last.first == live && now - last.second < 300_000) return
-        lastLive = live to now
+        if (last != null && last.first == sent && now - last.second < 300_000) return
+        lastLive = sent to now
         liveJob?.cancel()
         liveJob = scope.launch {
             // Несколько отметок подряд — один запрос.
             delay(1_500)
-            runCatching { call("PUT", "/me/live", body = json.encodeToString(SocialLive.serializer(), live), requiresAuth = true) }
+            runCatching { call("PUT", "/me/live", body = json.encodeToString(SocialLive.serializer(), sent), requiresAuth = true) }
         }
     }
 
@@ -598,7 +638,8 @@ object SocialService {
         val sets: Int,
         val effort: Int? = null,
         val photos: List<String>,
-        val workout: SocialWorkout
+        val workout: SocialWorkout,
+        val together: String? = null
     )
 
     fun flushOutbox() {
@@ -629,7 +670,8 @@ object SocialService {
                             sets = draft.sets,
                             effort = draft.effort,
                             photos = draft.uploadedPhotos.filterNotNull(),
-                            workout = draft.workout
+                            workout = draft.workout,
+                            together = draft.together
                         )
                         call("POST", "/posts", body = json.encodeToString(body), requiresAuth = true)
                         withContext(Dispatchers.IO) { OutboxStore.remove(draft.clientId) }
@@ -645,6 +687,8 @@ object SocialService {
                     }
                 }
                 refreshMe()
+                // Пост совместной тренировки отмечает её законченной.
+                if (together.active != null) refreshTogether()
             } finally {
                 isFlushing = false
             }

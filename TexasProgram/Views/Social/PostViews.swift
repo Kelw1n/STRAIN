@@ -97,10 +97,19 @@ struct PostHeader<MenuContent: View>: View {
             Button(action: onOpenAuthor) {
                 HStack(spacing: 12) {
                     AvatarView(imageId: post.author.avatar, username: post.author.username, size: 46)
+                        .overlay(alignment: .bottomTrailing) {
+                            // Тренировались вместе — аватар напарника рядом.
+                            if let partner = post.partner {
+                                AvatarView(imageId: partner.avatar, username: partner.username, size: 24)
+                                    .overlay(Circle().strokeBorder(Color.black, lineWidth: 2))
+                                    .offset(x: 6, y: 4)
+                            }
+                        }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("@\(post.author.username)")
+                        Text(post.partner.map { "@\(post.author.username) и @\($0.username)" } ?? "@\(post.author.username)")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                         Text(SocialFormat.ago(post.date))
                             .font(.system(size: 13))
                             .foregroundStyle(Color.white.opacity(0.5))

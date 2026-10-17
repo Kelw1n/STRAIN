@@ -261,6 +261,29 @@ class SocialTest {
         assertEquals("был(а) 10 минут назад", SocialFormat.lastSeen(now.minusSeconds(600), now, ZoneOffset.UTC))
     }
 
+    // MARK: Совместная тренировка
+
+    @Test
+    fun togetherDecodes() {
+        val state = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialTogetherState>(
+            """{"incoming":[{"id":"t1","status":"pending","fromMe":false,"partner":{"id":"2","username":"sem"},"createdAt":5}],
+               "outgoing":[],
+               "active":{"id":"t2","status":"accepted","fromMe":true,"partner":{"id":"3","username":"tim"},
+                         "partnerLive":{"title":"День 1","exercise":"Жим","done":2,"total":4,"setsDone":6,"setsTotal":16}}}"""
+        )
+        assertEquals("sem", state.incoming.first().partner.username)
+        assertEquals("Жим · 2/4", state.active?.partnerLive?.line)
+        val message = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"m","text":"Го","createdAt":1,"invite":{"id":"t1","status":"pending","fromMe":false}}"""
+        )
+        assertTrue(message.invite!!.isPending)
+        assertEquals("Зовёт тренироваться вместе", message.invite!!.statusText)
+        val post = SocialService.json.decodeFromString<SocialPost>(
+            """{"id":"p","author":{"id":"1","username":"a"},"partner":{"id":"2","username":"b"}}"""
+        )
+        assertEquals("b", post.partner?.username)
+    }
+
     // MARK: Активность и рейтинг
 
     @Test
