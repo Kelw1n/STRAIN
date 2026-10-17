@@ -394,14 +394,15 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     ) {
         when {
             WorkoutSessionManager.isPresented -> WorkoutSessionManager.minimize()
-            showPlan -> showPlan = false
-            benchFocus != null -> benchFocus = null
+            // Правка и день открываются поверх плана — «Назад» сначала закрывает их.
             customizing != null -> customizing = null
+            benchFocus != null -> benchFocus = null
+            dayDetail != null -> dayDetail = null
+            showPlan -> showPlan = false
             historyFor != null -> historyFor = null
             showHistoryList -> showHistoryList = false
             showNotes -> showNotes = false
             showBodyWeight -> showBodyWeight = false
-            dayDetail != null -> dayDetail = null
             showSettings -> showSettings = false
             showToday -> showToday = false
         }
@@ -580,6 +581,28 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             }
         }
 
+        // Модальный экран плана тренировок. Ниже дня и его правки: день,
+        // открытый из плана, должен лечь поверх плана, а не под него.
+        AnimatedContent(
+            targetState = showPlan,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            label = "plan"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    PlanScreen(
+                        profile = profile,
+                        onOpenDay = { week, day -> dayDetail = week to day },
+                        onSetCurrent = { week, day ->
+                            store.updateActive { it.setCurrentWorkout(week, day) }
+                        },
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
+                }
+            }
+        }
+
         // Детали дня и настройки — поверх вкладок, как модальные экраны в iOS.
         AnimatedContent(
             targetState = dayDetail,
@@ -670,27 +693,6 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
                     CloseButton(Modifier.align(Alignment.TopEnd)) { customizing = null }
-                }
-            }
-        }
-
-        // Модальный экран плана тренировок
-        AnimatedContent(
-            targetState = showPlan,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
-            label = "plan"
-        ) { visible ->
-            if (visible) {
-                Box(Modifier.fillMaxSize().background(Theme.base)) {
-                    PlanScreen(
-                        profile = profile,
-                        onOpenDay = { week, day -> dayDetail = week to day },
-                        onSetCurrent = { week, day ->
-                            store.updateActive { it.setCurrentWorkout(week, day) }
-                        },
-                        contentPadding = screenPadding(bottomExtra = 32.dp)
-                    )
-                    CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
                 }
             }
         }
