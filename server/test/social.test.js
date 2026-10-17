@@ -9,7 +9,7 @@ const url = process.env.TEST_DATABASE_URL;
 
 test('лента, профили, подписки, фото и комментарии', { skip: !url && 'нет TEST_DATABASE_URL' }, async (t) => {
     const social = createSocial({ databaseUrl: url });
-    await social.pool().query('DROP TABLE IF EXISTS messages, comments, likes, posts, images, follows, users CASCADE');
+    await social.pool().query('DROP TABLE IF EXISTS messages, together, comments, likes, posts, images, follows, users CASCADE');
     await social.init();
 
     const app = express();
@@ -305,6 +305,52 @@ test('лента, профили, подписки, фото и коммента
         assert.equal((await call('POST', '/activity/seen', { token: me.token })).status, 200);
         assert.equal((await call('GET', '/badges', { token: me.token })).data.activity, 0);
         assert.ok(comment.id);
+    });
+
+    await t.test('совместная тренировка по приглашению', async () => {
+        const invite = await call('POST', '/users/semobsessed/together', { token: me.token });
+        assert.equal(invite.status, 201);
+        assert.equal(invite.data.status, 'pending');
+        assert.equal((await call('POST', '/users/semobsessed/together', { token: me.token })).data.id, invite.data.id, 'второе приглашение не плодится');
+        assert.equal((await call('GET', '/badges', { token: friend.token })).data.invites, 1);
+
+        // Приглашение — карточкой в переписке.
+        const chat = (await call('GET', '/chats/tim/messages', { token: friend.token })).data;
+        const card = chat.messages.find((m) => m.invite);
+        assert.equal(card.invite.id, invite.data.id);
+        assert.equal(card.invite.status, 'pending');
+
+        const incoming = (await call('GET', '/together', { token: friend.token })).data;
+        assert.equal(incoming.incoming[0].partner.username, 'tim');
+        assert.equal((await call('POST', `/together/${invite.data.id}/accept`, { token: me.token })).status, 403, 'принимает только приглашённый');
+        const accepted = await call('POST', `/together/${invite.data.id}/accept`, { token: friend.token });
+        assert.equal(accepted.data.status, 'accepted');
+
+        // Напарник видит тренировку, даже если она скрыта от подписчиков.
+        await call('PUT', '/me/live', { token: me.token, body: { title: 'День 1', exercise: 'Жим', done: 2, total: 4, partnerOnly: true } });
+        const active = (await call('GET', '/together', { token: friend.token })).data.active;
+        assert.equal(active.partner.username, 'tim');
+        assert.equal(active.partnerLive.exercise, 'Жим');
+        assert.equal(active.partnerLive.partnerOnly, undefined);
+        assert.equal((await call('GET', '/users/tim', { token: friend.token })).data.live, null, 'в профиле скрытая тренировка не видна');
+
+        // Пост «вместе с»: у автора — напарник, сам он отмечен закончившим.
+        const post = (await call('POST', '/posts', { token: me.token, body: { clientId: 'together1', title: 'Вдвоём', together: invite.data.id } })).data;
+        assert.equal(post.partner.username, 'semobsessed');
+        assert.equal((await call('GET', '/together', { token: me.token })).data.active, null, 'для закончившего совместная тренировка кончилась');
+        assert.ok((await call('GET', '/together', { token: friend.token })).data.active, 'у напарника ещё идёт');
+        await call('POST', `/together/${invite.data.id}/done`, { token: friend.token });
+        const updated = (await call('GET', `/chats/tim/messages?since=${chat.serverTime}`, { token: friend.token })).data;
+        assert.equal(updated.messages.find((m) => m.invite).invite.status, 'ended');
+
+        // Отказ и отмена.
+        const second = (await call('POST', '/users/tim/together', { token: friend.token })).data;
+        assert.equal((await call('POST', `/together/${second.id}/decline`, { token: me.token })).status, 200);
+        assert.equal((await call('GET', '/together', { token: me.token })).data.incoming.length, 0);
+        const third = (await call('POST', '/users/tim/together', { token: friend.token })).data;
+        assert.equal((await call('POST', `/together/${third.id}/cancel`, { token: friend.token })).status, 200);
+        assert.equal((await call('POST', `/together/${third.id}/accept`, { token: me.token })).status, 409);
+        await call('DELETE', '/me/live', { token: me.token });
     });
 
     await t.test('удаление поста убирает и его фото', async () => {

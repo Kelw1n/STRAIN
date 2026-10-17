@@ -19,6 +19,10 @@ const TYPING_TTL_MS = 6000;
 // Насколько раньше начинать следующее «что изменилось».
 const SINCE_OVERLAP_MS = 2000;
 const REACTIONS = new Set(['🔥', '💪', '👍', '❤️', '😂', '😮']);
+// Приглашение на совместную тренировку ждёт ответа два часа, а сама
+// совместная тренировка длится не дольше шести.
+const INVITE_TTL_MS = 2 * 60 * 60 * 1000;
+const TOGETHER_TTL_MS = 6 * 60 * 60 * 1000;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -114,6 +118,22 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS activity_seen_at TIMESTAMPTZ NOT NULL
 CREATE INDEX IF NOT EXISTS comments_reply_user ON comments (reply_to_user);
 CREATE INDEX IF NOT EXISTS messages_pair ON messages (LEAST(sender, recipient), GREATEST(sender, recipient), created_at DESC);
 CREATE INDEX IF NOT EXISTS messages_unread ON messages (recipient) WHERE read_at IS NULL;
+-- Совместная тренировка: приглашение, ответ и кто уже закончил.
+CREATE TABLE IF NOT EXISTS together (
+    id TEXT PRIMARY KEY,
+    inviter TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    invitee TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    inviter_done BOOLEAN NOT NULL DEFAULT FALSE,
+    invitee_done BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    responded_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS together_inviter ON together (inviter, created_at DESC);
+CREATE INDEX IF NOT EXISTS together_invitee ON together (invitee, created_at DESC);
+-- Приглашение видно в переписке карточкой, а пост — «вместе с @другом».
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS together TEXT REFERENCES together(id) ON DELETE SET NULL;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS partner TEXT REFERENCES users(id) ON DELETE SET NULL;
 `;
 
 const newId = () => crypto.randomBytes(12).toString('hex');
@@ -266,9 +286,16 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     }
 
     // Статус тренировки — только свежий: приложение могли закрыть, не завершив её.
-    const liveView = (row) => (row.live && row.live_at && Date.now() - new Date(row.live_at).getTime() < LIVE_TTL_MS
+    const freshLive = (row) => (row.live && row.live_at && Date.now() - new Date(row.live_at).getTime() < LIVE_TTL_MS
         ? { ...row.live, updatedAt: new Date(row.live_at).getTime() }
         : null);
+    // «Только напарнику» — когда человек скрыл тренировку, но тренируется вместе с другом.
+    const liveView = (row) => {
+        const live = freshLive(row);
+        if (!live || live.partnerOnly) return null;
+        delete live.partnerOnly;
+        return live;
+    };
 
     const shortUser = (row) => ({ id: row.id, username: row.username, avatar: row.avatar_id, bio: row.bio });
 
@@ -285,7 +312,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             (SELECT count(*) FROM likes l WHERE l.post_id = p.id)::int AS like_count,
             (SELECT count(*) FROM comments c WHERE c.post_id = p.id)::int AS comment_count,
             EXISTS (SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $1) AS liked
-        FROM posts p JOIN users u ON u.id = p.user_id`;
+        , pu.username AS partner_username, pu.avatar_id AS partner_avatar
+        FROM posts p JOIN users u ON u.id = p.user_id LEFT JOIN users pu ON pu.id = p.partner`;
 
     const postView = (row) => ({
         id: row.id,
@@ -299,6 +327,9 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         effort: row.effort,
         photos: row.photos,
         workout: row.workout,
+        partner: row.partner && row.partner_username
+            ? { id: row.partner, username: row.partner_username, avatar: row.partner_avatar }
+            : null,
         likes: row.like_count,
         comments: row.comment_count,
         liked: row.liked
@@ -472,9 +503,22 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             if (owned.length !== photos.length) throw new HttpError(400, 'Фото не найдено');
         }
         const effort = number(body.effort, 1, 10);
+        // Совместная тренировка — пост «вместе с»; напарник отмечается закончившим.
+        let partner = null;
+        if (body.together) {
+            const session = (await q(
+                `SELECT * FROM together WHERE id = $1 AND (inviter = $2 OR invitee = $2)
+                 AND status IN ('accepted', 'ended') AND responded_at > $3`,
+                [String(body.together), me.id, new Date(Date.now() - 2 * TOGETHER_TTL_MS)]
+            ))[0];
+            if (session) {
+                partner = session.inviter === me.id ? session.invitee : session.inviter;
+                await markDone(session, me);
+            }
+        }
         const inserted = await q(
-            `INSERT INTO posts (id, user_id, client_id, title, description, duration_seconds, volume_kg, sets, effort, photos, workout)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `INSERT INTO posts (id, user_id, client_id, title, description, duration_seconds, volume_kg, sets, effort, photos, workout, partner)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
              ON CONFLICT (user_id, client_id) DO NOTHING RETURNING id`,
             [
                 newId(), me.id, clientId,
@@ -485,7 +529,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
                 Math.round(number(body.sets, 0, 1000) || 0),
                 effort === null ? null : Math.round(effort),
                 JSON.stringify(photos),
-                JSON.stringify(jsonLimited(body.workout, 64_000, {}))
+                JSON.stringify(jsonLimited(body.workout, 64_000, {})),
+                partner
             ]
         );
         // Повтор той же публикации (обрыв связи после отправки) возвращает уже созданный пост.
@@ -626,6 +671,16 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             createdAt: new Date(row.created_at).getTime(),
             read: row.read_at !== null,
             reactions: reactionsView(row.reactions, me),
+            invite: row.together && row.t_status
+                ? {
+                    id: row.together,
+                    status: togetherStatus({
+                        status: row.t_status, created_at: row.t_created, responded_at: row.t_responded,
+                        inviter_done: row.t_inviter_done, invitee_done: row.t_invitee_done
+                    }),
+                    fromMe: row.sender === me.id
+                }
+                : null,
             replyTo: row.reply_id
                 ? { id: row.reply_id, text: row.reply_deleted ? '' : row.reply_text, image: row.reply_deleted ? null : row.reply_image, fromMe: row.reply_sender === me.id }
                 : null
@@ -633,8 +688,10 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     const MESSAGE_SELECT = `
         SELECT m.*, r.id AS reply_id, r.text AS reply_text, r.image AS reply_image, r.sender AS reply_sender,
-               r.deleted_at IS NOT NULL AS reply_deleted
-        FROM messages m LEFT JOIN messages r ON r.id = m.reply_to`;
+               r.deleted_at IS NOT NULL AS reply_deleted,
+               t.status AS t_status, t.created_at AS t_created, t.responded_at AS t_responded,
+               t.inviter_done AS t_inviter_done, t.invitee_done AS t_invitee_done
+        FROM messages m LEFT JOIN messages r ON r.id = m.reply_to LEFT JOIN together t ON t.id = m.together`;
 
     async function unreadCount(me) {
         const [row] = await q('SELECT count(*)::int AS count FROM messages WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL', [me.id]);
@@ -821,7 +878,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             total: Math.round(number(body.total, 0, 100) || 0),
             setsDone: Math.round(number(body.setsDone, 0, 500) || 0),
             setsTotal: Math.round(number(body.setsTotal, 0, 500) || 0),
-            startedAt: number(body.startedAt, 0, 9e15) || Date.now()
+            startedAt: number(body.startedAt, 0, 9e15) || Date.now(),
+            partnerOnly: !!body.partnerOnly
         };
         await q('UPDATE users SET live = $2, live_at = now() WHERE id = $1', [me.id, JSON.stringify(live)]);
         res.json({ success: true });
@@ -842,7 +900,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
              ORDER BY u.live_at DESC LIMIT 50`,
             [me.id, new Date(Date.now() - LIVE_TTL_MS)]
         );
-        res.json(rows.map((row) => ({ user: shortUser(row), live: liveView(row) })));
+        res.json(rows.map((row) => ({ user: shortUser(row), live: liveView(row) })).filter((item) => item.live));
     }));
 
     // MARK: Рейтинг недели
@@ -908,7 +966,143 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     // Точки на вкладках: непрочитанные сообщения и новая активность одним запросом.
     router.get('/badges', wrap(async (req, res) => {
         const me = await requireViewer(req);
-        res.json({ messages: await unreadCount(me), activity: await unseenActivity(me) });
+        res.json({ messages: await unreadCount(me), activity: await unseenActivity(me), invites: await pendingInvites(me) });
+    }));
+
+    // MARK: Совместная тренировка
+
+    // Статус с учётом времени: неотвеченное приглашение протухает, совместная
+    // тренировка заканчивается, когда оба закончили или прошло шесть часов.
+    function togetherStatus(row) {
+        const now = Date.now();
+        if (row.status === 'pending' && now - new Date(row.created_at).getTime() > INVITE_TTL_MS) return 'expired';
+        if (row.status === 'accepted'
+            && ((row.inviter_done && row.invitee_done) || now - new Date(row.responded_at).getTime() > TOGETHER_TTL_MS)) return 'ended';
+        return row.status;
+    }
+
+    const togetherView = (row, me, partner) => ({
+        id: row.id,
+        status: togetherStatus(row),
+        fromMe: row.inviter === me.id,
+        partner: shortUser(partner),
+        createdAt: new Date(row.created_at).getTime(),
+        meDone: row.inviter === me.id ? row.inviter_done : row.invitee_done,
+        partnerDone: row.inviter === me.id ? row.invitee_done : row.inviter_done
+    });
+
+    async function pendingInvites(me) {
+        const [row] = await q(
+            "SELECT count(*)::int AS count FROM together WHERE invitee = $1 AND status = 'pending' AND created_at > $2",
+            [me.id, new Date(Date.now() - INVITE_TTL_MS)]
+        );
+        return row.count;
+    }
+
+    // Карточка приглашения в переписке подтянет новый статус при обновлении.
+    const touchInvite = (id) => q('UPDATE messages SET updated_at = now() WHERE together = $1', [id]);
+
+    async function markDone(session, me) {
+        const column = session.inviter === me.id ? 'inviter_done' : 'invitee_done';
+        await q(`UPDATE together SET ${column} = TRUE WHERE id = $1`, [session.id]);
+        await touchInvite(session.id);
+    }
+
+    async function sessionFor(req, me) {
+        const row = (await q('SELECT * FROM together WHERE id = $1 AND (inviter = $2 OR invitee = $2)', [req.params.id, me.id]))[0];
+        if (!row) throw new HttpError(404, 'Приглашение не найдено');
+        return row;
+    }
+
+    // Позвать друга: приглашение уходит и карточкой в переписку.
+    router.post('/users/:username/together', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        messageLimit(me.id);
+        const other = await userByName(req.params.username);
+        if (other.id === me.id) throw new HttpError(400, 'Нельзя позвать самого себя');
+        // Уже звали друг друга и ответа ещё нет — второе приглашение не нужно.
+        const existing = (await q(
+            `SELECT * FROM together WHERE status = 'pending' AND created_at > $3
+             AND ((inviter = $1 AND invitee = $2) OR (inviter = $2 AND invitee = $1))
+             ORDER BY created_at DESC LIMIT 1`,
+            [me.id, other.id, new Date(Date.now() - INVITE_TTL_MS)]
+        ))[0];
+        if (existing) return res.json(togetherView(existing, me, other));
+        const id = newId();
+        const [row] = await q('INSERT INTO together (id, inviter, invitee) VALUES ($1, $2, $3) RETURNING *', [id, me.id, other.id]);
+        await q(
+            'INSERT INTO messages (id, sender, recipient, text, together) VALUES ($1, $2, $3, $4, $5)',
+            [newId(), me.id, other.id, 'Го тренироваться вместе 💪', id]
+        );
+        res.status(201).json(togetherView(row, me, other));
+    }));
+
+    // Входящие приглашения, свои ждущие ответа и идущая совместная тренировка
+    // с тем, что сейчас делает напарник.
+    router.get('/together', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT * FROM together WHERE (inviter = $1 OR invitee = $1)
+             AND ((status = 'pending' AND created_at > $2) OR (status = 'accepted' AND responded_at > $3))
+             ORDER BY created_at DESC LIMIT 20`,
+            [me.id, new Date(Date.now() - INVITE_TTL_MS), new Date(Date.now() - TOGETHER_TTL_MS)]
+        );
+        const ids = [...new Set(rows.map((row) => (row.inviter === me.id ? row.invitee : row.inviter)))];
+        const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [ids])).map((u) => [u.id, u]));
+        const views = rows
+            .filter((row) => users.has(row.inviter === me.id ? row.invitee : row.inviter))
+            .map((row) => ({ row, view: togetherView(row, me, users.get(row.inviter === me.id ? row.invitee : row.inviter)) }));
+        const activeEntry = views.find(({ view }) => view.status === 'accepted' && !view.meDone);
+        let active = null;
+        if (activeEntry) {
+            const partner = users.get(activeEntry.row.inviter === me.id ? activeEntry.row.invitee : activeEntry.row.inviter);
+            const live = freshLive(partner);
+            if (live) delete live.partnerOnly;
+            active = { ...activeEntry.view, partnerLive: live };
+        }
+        res.json({
+            incoming: views.filter(({ view }) => view.status === 'pending' && !view.fromMe).map(({ view }) => view),
+            outgoing: views.filter(({ view }) => view.status === 'pending' && view.fromMe).map(({ view }) => view),
+            active
+        });
+    }));
+
+    router.post('/together/:id/accept', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const row = await sessionFor(req, me);
+        if (row.invitee !== me.id) throw new HttpError(403, 'Принять может только приглашённый');
+        if (togetherStatus(row) !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
+        // Одна совместная тренировка за раз: прошлые у обоих заканчиваются.
+        await q(
+            `UPDATE together SET status = 'ended' WHERE status = 'accepted' AND id <> $2
+             AND (inviter = ANY($1) OR invitee = ANY($1))`,
+            [[row.inviter, row.invitee], row.id]
+        );
+        const [updated] = await q("UPDATE together SET status = 'accepted', responded_at = now() WHERE id = $1 RETURNING *", [row.id]);
+        await touchInvite(row.id);
+        const inviter = (await q('SELECT * FROM users WHERE id = $1', [row.inviter]))[0];
+        res.json(togetherView(updated, me, inviter));
+    }));
+
+    // Отказ, отмена своего приглашения или выход из совместной тренировки.
+    router.post('/together/:id/:action(decline|cancel|leave|done)', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const row = await sessionFor(req, me);
+        const status = togetherStatus(row);
+        const action = req.params.action;
+        if (action === 'decline') {
+            if (row.invitee !== me.id || status !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
+            await q("UPDATE together SET status = 'declined', responded_at = now() WHERE id = $1", [row.id]);
+        } else if (action === 'cancel') {
+            if (row.inviter !== me.id || status !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
+            await q("UPDATE together SET status = 'cancelled', responded_at = now() WHERE id = $1", [row.id]);
+        } else if (action === 'leave') {
+            if (status === 'accepted') await q("UPDATE together SET status = 'ended' WHERE id = $1", [row.id]);
+        } else if (status === 'accepted') {
+            await markDone(row, me);
+        }
+        await touchInvite(row.id);
+        res.json({ success: true });
     }));
 
     router.use((error, req, res, next) => {

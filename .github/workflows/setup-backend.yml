@@ -122,7 +122,7 @@ jobs:
           for i in $(seq 1 60); do
             body=$(curl -fsS --max-time 30 "$URL/health" || true)
             # Старая версия отвечает, пока новая собирается, — ждём свежую.
-            if echo "$body" | grep -q '"social":true' && echo "$body" | grep -q '"api":3'; then
+            if echo "$body" | grep -q '"social":true' && echo "$body" | grep -q '"api":4'; then
               echo "Сервер отвечает и база подключена: $URL"
               echo "### Лента готова: $URL" >> "$GITHUB_STEP_SUMMARY"
               exit 0
@@ -185,11 +185,17 @@ jobs:
           curl -fsS "$URL/v2/leaderboard" -H "Authorization: Bearer $token2" | jq -e '[.[].stats.workouts] | index(2) != null' > /dev/null
           curl -fsS "$URL/v2/activity" -H "$auth" | jq -e '[.items[].kind] | index("follow") != null' > /dev/null
           curl -fsS "$URL/v2/badges" -H "$auth" | jq -e '.activity >= 1' > /dev/null
+          # Совместная тренировка: приглашение, принятие, пост «вместе с».
+          together=$(curl -fsS -X POST "$URL/v2/users/$friend/together" -H "$auth" | jq -r .id)
+          curl -fsS "$URL/v2/together" -H "Authorization: Bearer $token2" | jq -e --arg t "$together" '.incoming[0].id == $t' > /dev/null
+          curl -fsS -X POST "$URL/v2/together/$together/accept" -H "Authorization: Bearer $token2" | jq -e '.status == "accepted"' > /dev/null
+          curl -fsS -X POST "$URL/v2/posts" -H "$auth" -H 'Content-Type: application/json' \
+            -d "{\"clientId\":\"smoke-together\",\"title\":\"Вдвоём\",\"together\":\"$together\"}" | jq -e --arg f "$friend" '.partner.username == $f' > /dev/null
           curl -fsS -X DELETE "$URL/v2/me" -H "Authorization: Bearer $token2" > /dev/null
           start=$(date +%s%N); curl -fsS "$URL/v2/feed" > /dev/null; end=$(date +%s%N)
           echo "Лента ответила за $(( (end - start) / 1000000 )) мс"
           curl -fsS -X DELETE "$URL/v2/me" -H "$auth" > /dev/null
-          echo "Живая проверка прошла: регистрация, фото, пост, лайк, комментарий, ответ, сообщения, реакции, «печатает», тренируется сейчас, рейтинг, активность, лента"
+          echo "Живая проверка прошла: регистрация, фото, пост, лайк, комментарий, ответ, сообщения, реакции, «печатает», тренируется сейчас, рейтинг, активность, совместная тренировка, лента"
           echo "Живая проверка прошла" >> "$GITHUB_STEP_SUMMARY"
 
-# Повторный запуск — любая правка этого файла в ветке. Попытка 6.
+# Повторный запуск — любая правка этого файла в ветке. Попытка 7.
