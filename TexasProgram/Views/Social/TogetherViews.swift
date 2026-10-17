@@ -19,7 +19,8 @@ struct TogetherInviteBanner: View {
                 Text("зовёт тренироваться вместе")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.white.opacity(0.65))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
             Button { respond(accept: false) } label: {

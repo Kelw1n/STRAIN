@@ -235,7 +235,7 @@ final class SnapshotTests: XCTestCase {
         let invite: SocialMessage = try Fixtures.decode("""
         {"id":"m9","text":"Го тренироваться вместе 💪","fromMe":false,"createdAt":\(now),"invite":{"id":"t1","status":"pending","fromMe":false}}
         """)
-        try snap("17-social-extras", height: 3000) {
+        try snap("17-social-extras", height: 2600) {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
