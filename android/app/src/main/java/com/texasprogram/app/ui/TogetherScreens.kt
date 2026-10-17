@@ -77,7 +77,7 @@ fun TogetherInviteBanner(invite: SocialTogether, modifier: Modifier = Modifier) 
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text("@${invite.partner.username}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("зовёт тренироваться вместе", color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2)
+            Text("зовёт на тренировку", color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2)
         }
         Box(
             Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)).pressable(enabled = !busy) { respond(false) },
