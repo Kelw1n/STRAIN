@@ -15,6 +15,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
@@ -500,7 +501,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // Экран «Сегодня» с точками подходов и настройки — поверх вкладок.
         AnimatedContent(
             targetState = showToday,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "today"
         ) { visible ->
             if (visible) {
@@ -558,7 +559,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showSettings,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "settings"
         ) { visible ->
             if (visible) {
@@ -586,7 +587,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // открытый из плана, должен лечь поверх плана, а не под него.
         AnimatedContent(
             targetState = showPlan,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "plan"
         ) { visible ->
             if (visible) {
@@ -608,11 +609,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = dayDetail,
             transitionSpec = {
-                if (targetState != null) {
-                    (slideInHorizontally(tween(250)) { it / 2 } + fadeIn(tween(200))) togetherWith fadeOut(tween(200))
-                } else {
-                    fadeIn(tween(200)) togetherWith (slideOutHorizontally(tween(250)) { it / 2 } + fadeOut(tween(200)))
-                }
+                Motion.pushEnter() togetherWith Motion.pushExit()
             },
             label = "detail"
         ) { detail ->
@@ -675,11 +672,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = customizing,
             transitionSpec = {
-                if (targetState != null) {
-                    (slideInVertically(tween(260)) { it / 3 } + fadeIn(tween(220))) togetherWith fadeOut(tween(180))
-                } else {
-                    fadeIn(tween(180)) togetherWith (slideOutVertically(tween(260)) { it / 3 } + fadeOut(tween(200)))
-                }
+                Motion.sheetEnter() togetherWith Motion.sheetExit()
             },
             label = "customize"
         ) { target ->
@@ -701,7 +694,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // Модальный экран жимовой волны
         AnimatedContent(
             targetState = benchFocus,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "benchFocus"
         ) { session ->
             if (session != null) {
@@ -727,8 +720,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = WorkoutSessionManager.isPresented,
             transitionSpec = {
-                (slideInVertically(tween(280)) { it } + fadeIn(tween(250))) togetherWith
-                        (slideOutVertically(tween(250)) { it } + fadeOut(tween(200)))
+                Motion.sheetEnter() togetherWith Motion.sheetExit()
             },
             label = "activeWorkout"
         ) { presented ->
@@ -770,7 +762,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // Список движений, история одного и заметки — тоже поверх вкладок.
         AnimatedContent(
             targetState = showHistoryList,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "historyList"
         ) { visible ->
             if (visible) {
@@ -788,7 +780,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = historyFor,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "history"
         ) { name ->
             if (name != null) {
@@ -805,7 +797,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showNotes,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "notes"
         ) { visible ->
             if (visible) {
@@ -822,7 +814,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showBodyWeight,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "bodyWeight"
         ) { visible ->
             if (visible) {
@@ -900,8 +892,16 @@ private fun KeepAliveTabs(
     frozen: Boolean,
     content: @Composable (MainTabItem) -> Unit
 ) {
-    val visited = remember { mutableSetOf<MainTabItem>() }
-    visited.add(selected)
+    val visited = remember { mutableStateListOf(selected) }
+    if (selected !in visited) visited.add(selected)
+    // Остальные вкладки собираются заранее, по одной и в паузах: когда ведёшь
+    // пальцем по панели, они открываются мгновенно, без сборки на лету.
+    LaunchedEffect(Unit) {
+        for (item in MainTabItem.entries) {
+            delay(900)
+            if (item !in visited) visited.add(item)
+        }
+    }
     val shift = with(LocalDensity.current) { 24.dp.toPx() }
     Box(Modifier.fillMaxSize()) {
         for (item in MainTabItem.entries) {

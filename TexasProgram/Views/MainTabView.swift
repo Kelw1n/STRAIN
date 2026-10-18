@@ -179,6 +179,15 @@ struct MainTabView: View {
                 await SocialService.shared.refreshUnread()
             }
         }
+        // Остальные вкладки собираются заранее, по одной и в паузах: когда
+        // ведёшь пальцем по панели, они открываются мгновенно, без сборки на лету.
+        .task {
+            for tab in MainTabItem.allCases {
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                guard !Task.isCancelled else { return }
+                visitedTabs.insert(tab)
+            }
+        }
         // Непрочитанные сообщения и активность — раз в минуту, пока приложение открыто.
         // Идущая тренировка заодно напоминает о себе, чтобы статус у друзей не протух.
         .task {

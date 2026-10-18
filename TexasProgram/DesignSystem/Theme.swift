@@ -137,8 +137,10 @@ enum Motion {
     static let reorder = Animation.spring(response: 0.26, dampingFraction: 0.86)
     /// Переключение вкладок.
     static let tab = Animation.easeOut(duration: 0.2)
-    /// Отклик кнопки на нажатие.
-    static let press = Animation.spring(response: 0.2, dampingFraction: 0.92)
+    /// Нажатие: кнопка прижимается сразу, без задержки.
+    static let press = Animation.spring(response: 0.16, dampingFraction: 0.95)
+    /// Отпускание: мягко пружинит назад с едва заметным отскоком.
+    static let release = Animation.spring(response: 0.34, dampingFraction: 0.68)
 
     static func maybe(_ animation: Animation, reduce: Bool) -> Animation? {
         reduce ? nil : animation

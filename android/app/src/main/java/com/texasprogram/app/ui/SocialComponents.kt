@@ -3,6 +3,10 @@ package com.texasprogram.app.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -332,7 +336,9 @@ class SocialNavigator {
 @Composable
 fun rememberSocialNavigator(): SocialNavigator = remember { SocialNavigator() }
 
-/// Корень вкладки и поверх него — открытые экраны. Новый въезжает справа.
+/// Корень вкладки и поверх него — открытые экраны. Как в iOS: новый экран
+/// въезжает справа целиком, а прежний в это время чуть уходит влево и темнеет;
+/// «Назад» — то же самое в обратную сторону.
 @Composable
 fun SocialHost(
     navigator: SocialNavigator,
@@ -342,17 +348,36 @@ fun SocialHost(
     // Скрытая вкладка живёт в памяти, но «Назад» не перехватывает.
     BackHandler(enabled = LocalTabActive.current && navigator.stack.isNotEmpty()) { navigator.pop() }
     val covered = navigator.stack.isNotEmpty()
+    // Корень уезжает влево вместе с первым открытым экраном. Когда тот лёг
+    // целиком, корень не рисуется вовсе — его всё равно не видно.
+    val rootShift by animateFloatAsState(
+        if (covered) 1f else 0f,
+        tween(if (covered) 360 else 300, easing = Motion.emphasized),
+        label = "rootShift"
+    )
     Box(Modifier.fillMaxSize()) {
         // Корень под открытым экраном не должен читаться TalkBack.
-        Box(if (covered) Modifier.fillMaxSize().clearAndSetSemantics {} else Modifier.fillMaxSize()) { root() }
+        Box(
+            (if (covered) Modifier.fillMaxSize().clearAndSetSemantics {} else Modifier.fillMaxSize())
+                .graphicsLayer {
+                    translationX = -size.width * 0.22f * rootShift
+                    alpha = if (rootShift >= 0.999f) 0f else 1f - 0.35f * rootShift
+                }
+        ) { root() }
         AnimatedContent(
             targetState = navigator.stack.toList(),
             transitionSpec = {
-                if (targetState.size >= initialState.size) {
-                    (slideInHorizontally(tween(280)) { it / 3 } + fadeIn(tween(200))) togetherWith fadeOut(tween(160))
+                val slide = tween<IntOffset>(360, easing = Motion.emphasized)
+                val back = tween<IntOffset>(300, easing = Motion.emphasized)
+                val transform = if (targetState.size >= initialState.size) {
+                    slideInHorizontally(slide) { it } togetherWith
+                        (slideOutHorizontally(slide) { -it * 22 / 100 } + fadeOut(tween(360), targetAlpha = 0.65f))
                 } else {
-                    fadeIn(tween(180)) togetherWith (slideOutHorizontally(tween(260)) { it / 3 } + fadeOut(tween(200)))
+                    (slideInHorizontally(back) { -it * 22 / 100 } + fadeIn(tween(300), initialAlpha = 0.65f)) togetherWith
+                        slideOutHorizontally(back) { it }
                 }
+                // Верхним рисуется экран, что глубже в стеке: при «Назад» уходящий — над прежним.
+                transform.apply { targetContentZIndex = targetState.size.toFloat() }
             },
             label = "socialStack"
         ) { stack ->

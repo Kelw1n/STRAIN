@@ -97,8 +97,8 @@ private val followSpring = spring<Float>(dampingRatio = 0.86f, stiffness = stiff
 /// Плавающая панель вкладок с линзой из жидкого стекла.
 ///
 /// Палец можно поставить и вести: линза поднимается над панелью, едет за ним,
-/// тянется по скорости и увеличивает иконки под собой. Отпустил — линза
-/// с пружиной садится на ближайшую вкладку, и та открывается.
+/// тянется по скорости и увеличивает иконки под собой. Вкладка под пальцем
+/// открывается сразу, пока ведёшь; отпустил — линза садится на неё.
 ///
 /// Иконки нарисованы дважды: нижний слой контурный, в линзе в нём дырка;
 /// верхний залитый, виден только сквозь линзу и увеличен вокруг её центра.
@@ -194,6 +194,9 @@ fun LiquidGlassTabBar(
                         tracker.addPosition(down.uptimeMillis, down.position)
                         var index = indexAt(down.position.x)
                         var lastX = down.position.x
+                        // Какую вкладку уже открыли этим жестом: ведёшь пальцем —
+                        // вкладки листаются сразу, а не после того, как отпустишь.
+                        var shown = currentSelected
                         haptics.light()
                         scope.launch {
                             if (lensX.value.isNaN()) lensX.snapTo(center(currentSelected))
@@ -220,12 +223,16 @@ fun LiquidGlassTabBar(
                                 if (next != index) {
                                     index = next
                                     haptics.selection()
+                                    if (next != shown) {
+                                        shown = next
+                                        currentOnSelect(tabs[next])
+                                    }
                                 }
                             }
                         } finally {
                             touching[0] = false
                             val target = indexAt(lastX)
-                            if (target != currentSelected) {
+                            if (target != shown) {
                                 haptics.medium()
                                 currentOnSelect(tabs[target])
                             }

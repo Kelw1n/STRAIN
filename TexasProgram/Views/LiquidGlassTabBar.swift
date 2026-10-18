@@ -29,8 +29,8 @@ enum MainTabItem: String, CaseIterable, Identifiable {
 /// Плавающая панель вкладок с линзой из жидкого стекла.
 ///
 /// Палец можно поставить и вести: линза поднимается над панелью, едет за ним,
-/// тянется по скорости и увеличивает иконки под собой. Отпустил — линза
-/// с пружиной садится на ближайшую вкладку, и та открывается.
+/// тянется по скорости и увеличивает иконки под собой. Вкладка под пальцем
+/// открывается сразу, пока ведёшь; отпустил — линза садится на неё.
 ///
 /// Иконки нарисованы дважды. Нижний слой — контурный, в линзе в нём дырка.
 /// Верхний — залитый, виден только сквозь линзу и увеличен вокруг её центра.
@@ -86,15 +86,16 @@ struct LiquidGlassTabBar: View {
         .frame(height: barHeight)
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
-        // Щелчок на каждой пересечённой вкладке, лёгкий удар при касании.
+        // Лёгкий удар при касании, щелчок на каждой пересечённой вкладке и мягкая
+        // посадка, когда отпускаешь.
         .sensoryFeedback(trigger: touch?.index) { old, new in
             switch (old, new) {
             case (nil, .some): return .impact(weight: .light)
             case let (.some(a), .some(b)) where a != b: return .selection
+            case (.some, nil): return .impact(flexibility: .soft, intensity: 0.7)
             default: return nil
             }
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: selectedTab)
     }
 
     // MARK: - Раскладка
@@ -180,6 +181,12 @@ struct LiquidGlassTabBar: View {
                     velocity: value.velocity.width,
                     index: layout.index(at: value.location.x)
                 )
+            }
+            // Вкладка под пальцем открывается сразу, пока ведёшь, — не после того,
+            // как отпустишь.
+            .onChanged { value in
+                let tab = tabs[layout.index(at: value.location.x)]
+                if tab != selectedTab { selectedTab = tab }
             }
             .onEnded { value in
                 let tab = tabs[layout.index(at: value.location.x)]

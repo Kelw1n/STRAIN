@@ -2,7 +2,19 @@ package com.texasprogram.app.ui
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
@@ -267,10 +279,33 @@ object Motion {
     fun <T> appear(): SpringSpec<T> = spring(dampingRatio = 0.95f, stiffness = stiffnessFor(0.34))
     fun <T> sheet(): SpringSpec<T> = spring(dampingRatio = 0.92f, stiffness = stiffnessFor(0.36))
     fun <T> reorder(): SpringSpec<T> = spring(dampingRatio = 0.86f, stiffness = stiffnessFor(0.26))
-    /// Отклик кнопки на нажатие.
-    fun <T> press(): SpringSpec<T> = spring(dampingRatio = 0.92f, stiffness = stiffnessFor(0.2))
+    /// Нажатие: кнопка прижимается сразу, без задержки.
+    fun <T> press(): SpringSpec<T> = spring(dampingRatio = 0.95f, stiffness = stiffnessFor(0.16))
+    /// Отпускание: мягко пружинит назад с едва заметным отскоком.
+    fun <T> release(): SpringSpec<T> = spring(dampingRatio = 0.68f, stiffness = stiffnessFor(0.34))
 
     val smooth: Easing = FastOutSlowInEasing
+    /// Быстрый старт и долгое мягкое торможение — как у переходов iOS.
+    val emphasized: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+    // Переходы экранов. Едут только слоем (сдвиг, масштаб, прозрачность) —
+    // компоновку они не трогают, поэтому не тормозят даже на слабых телефонах.
+
+    /// Раздел поверх вкладок: проявляется с лёгким приближением.
+    fun modalEnter(): EnterTransition =
+        fadeIn(tween(220, easing = LinearOutSlowInEasing)) + scaleIn(tween(360, easing = emphasized), initialScale = 0.94f)
+    fun modalExit(): ExitTransition =
+        fadeOut(tween(170)) + scaleOut(tween(220, easing = emphasized), targetScale = 0.96f)
+
+    /// Следующий экран въезжает справа целиком; назад — уезжает вправо.
+    fun pushEnter(): EnterTransition = slideInHorizontally(tween(360, easing = emphasized)) { it }
+    fun pushExit(): ExitTransition = slideOutHorizontally(tween(300, easing = emphasized)) { it }
+
+    /// Лист снизу: выезжает и уезжает по вертикали.
+    fun sheetEnter(): EnterTransition =
+        slideInVertically(tween(400, easing = emphasized)) { it } + fadeIn(tween(160))
+    fun sheetExit(): ExitTransition =
+        slideOutVertically(tween(300, easing = emphasized)) { it } + fadeOut(tween(220, delayMillis = 80))
     fun <T> fade(duration: Int = 280) = tween<T>(durationMillis = duration, easing = smooth)
 
     const val STAGGER_MS = 30

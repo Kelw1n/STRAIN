@@ -65,8 +65,8 @@ struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(Motion.press, value: configuration.isPressed)
+            .brightness(configuration.isPressed ? -0.04 : 0)
+            .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
     }
 }
 
@@ -87,7 +87,7 @@ struct GradientButtonStyle: ButtonStyle {
             .background(gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .shadow(color: glow.opacity(configuration.isPressed ? 0.15 : 0.35), radius: configuration.isPressed ? 6 : 16, y: 8)
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
-            .animation(Motion.press, value: configuration.isPressed)
+            .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
     }
 }
 

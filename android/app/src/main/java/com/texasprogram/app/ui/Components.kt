@@ -83,7 +83,11 @@ fun Modifier.appearIn(index: Int): Modifier = composed {
 fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.press(), label = "press")
+    val scale by animateFloatAsState(
+        if (pressed) 0.96f else 1f,
+        if (pressed) Motion.press() else Motion.release(),
+        label = "press"
+    )
     graphicsLayer { scaleX = scale; scaleY = scale }
         .clickable(
             interactionSource = interaction,
@@ -98,7 +102,11 @@ fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier =
 fun Modifier.combinedPressable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.press(), label = "press")
+    val scale by animateFloatAsState(
+        if (pressed) 0.96f else 1f,
+        if (pressed) Motion.press() else Motion.release(),
+        label = "press"
+    )
     graphicsLayer { scaleX = scale; scaleY = scale }
         .combinedClickable(
             interactionSource = interaction,
