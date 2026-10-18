@@ -1,31 +1,117 @@
+import ImageIO
 import SwiftUI
 import UIKit
 
 // MARK: - Фото с сервера
 
+/// Загрузчик фото: готовые картинки держит в памяти, распаковывает и уменьшает
+/// в фоне. Стандартный AsyncImage кэша в памяти не держит — при прокрутке назад
+/// фото грузилось заново, мигала заглушка, а распаковка шла на главном потоке.
+final class ImagePipeline: @unchecked Sendable {
+    static let shared = ImagePipeline()
+
+    private let cache = NSCache<NSString, UIImage>()
+    private let session: URLSession
+    private var tasks: [String: Task<UIImage?, Never>] = [:]
+    private let lock = NSLock()
+
+    private init() {
+        cache.totalCostLimit = 120 * 1024 * 1024
+        let configuration = URLSessionConfiguration.default
+        // Адрес фото никогда не меняется — диск хранит его надолго.
+        configuration.urlCache = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 250 * 1024 * 1024)
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        session = URLSession(configuration: configuration)
+    }
+
+    private func key(_ url: URL, _ maxPixel: Int) -> NSString { "\(url.absoluteString)#\(maxPixel)" as NSString }
+
+    /// Уже готовая картинка — сразу, без ожидания и без мигания.
+    func cached(_ url: URL, maxPixel: Int) -> UIImage? { cache.object(forKey: key(url, maxPixel)) }
+
+    func image(_ url: URL, maxPixel: Int) async -> UIImage? {
+        let cacheKey = key(url, maxPixel)
+        if let hit = cache.object(forKey: cacheKey) { return hit }
+        lock.lock()
+        if let running = tasks[cacheKey as String] {
+            lock.unlock()
+            return await running.value
+        }
+        let task = Task<UIImage?, Never>.detached(priority: .userInitiated) { [session] in
+            guard let (data, _) = try? await session.data(from: url) else { return nil }
+            return Self.decode(data, maxPixel: maxPixel)
+        }
+        tasks[cacheKey as String] = task
+        lock.unlock()
+        let image = await task.value
+        lock.lock()
+        tasks[cacheKey as String] = nil
+        lock.unlock()
+        if let image {
+            let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+            cache.setObject(image, forKey: cacheKey, cost: cost)
+        }
+        return image
+    }
+
+    /// Уменьшает до нужного размера сразу при чтении и распаковывает заранее:
+    /// главному потоку остаётся только показать готовые пиксели.
+    private static func decode(_ data: Data, maxPixel: Int) -> UIImage? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, options) else { return nil }
+        let thumbOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions) else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
 /// Фото по идентификатору. Адрес фото никогда не меняется, поэтому
-/// оно кэшируется системой и второй раз не скачивается.
+/// оно кэшируется и второй раз не скачивается и не распаковывается.
 struct RemoteImage: View {
     let id: String?
     var contentMode: ContentMode = .fill
+    /// Сторона в точках, под которую уменьшить. По умолчанию — ширина экрана.
+    var maxPoints: CGFloat = 430
+
+    @State private var image: UIImage?
+    @State private var failed = false
+    @Environment(\.displayScale) private var displayScale
+
+    private var url: URL? { SocialService.shared.imageURL(id) }
+    private var maxPixel: Int { Int(min(maxPoints * displayScale, 1600)) }
 
     var body: some View {
-        if let url = SocialService.shared.imageURL(id) {
-            AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: contentMode)
-                case .failure:
-                    placeholder(icon: "photo")
-                default:
-                    placeholder(icon: nil)
-                }
+        ZStack {
+            if let image = image ?? url.flatMap({ ImagePipeline.shared.cached($0, maxPixel: maxPixel) }) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+                    .transition(.opacity)
+            } else {
+                placeholder(icon: (url == nil || failed) ? "photo" : nil)
             }
-        } else {
-            placeholder(icon: "photo")
+        }
+        .animation(.easeOut(duration: 0.18), value: image != nil)
+        .task(id: id) {
+            failed = false
+            guard let url else { image = nil; return }
+            if let ready = ImagePipeline.shared.cached(url, maxPixel: maxPixel) {
+                image = ready
+                return
+            }
+            let loaded = await ImagePipeline.shared.image(url, maxPixel: maxPixel)
+            guard !Task.isCancelled else { return }
+            image = loaded
+            failed = loaded == nil
         }
     }
 
+    /// Ровная подложка без спиннера: в ленте десятки спиннеров съедали кадры.
     private func placeholder(icon: String?) -> some View {
         ZStack {
             Color(white: 0.12)
@@ -33,8 +119,6 @@ struct RemoteImage: View {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.25))
-            } else {
-                ProgressView().tint(.white.opacity(0.4))
             }
         }
     }
@@ -48,7 +132,7 @@ struct AvatarView: View {
     var body: some View {
         Group {
             if imageId != nil {
-                RemoteImage(id: imageId)
+                RemoteImage(id: imageId, maxPoints: size)
             } else {
                 ZStack {
                     LinearGradient(colors: [Theme.accent, Theme.accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)

@@ -735,7 +735,7 @@ struct MessageBubble: View {
                 .fill(message.fromMe ? Color.white : Theme.accent)
                 .frame(width: 3)
             if let image = quote.image {
-                RemoteImage(id: image)
+                RemoteImage(id: image, maxPoints: 64)
                     .frame(width: 32, height: 32)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
@@ -854,7 +854,7 @@ struct ImageViewer: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Color.black.opacity(1 - min(Double(abs(offset)) / 400.0, 0.6)).ignoresSafeArea()
-            RemoteImage(id: id, contentMode: .fit)
+            RemoteImage(id: id, contentMode: .fit, maxPoints: 1000)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .offset(y: offset)
                 .gesture(
