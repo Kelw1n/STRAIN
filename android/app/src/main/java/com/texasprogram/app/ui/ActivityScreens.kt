@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -421,16 +422,17 @@ fun LeaderboardSection(onOpen: (String) -> Unit) {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LeaderboardMetric.entries.forEach { item ->
                 val selected = item == metric
+                val label by animateColorAsState(if (selected) Color.Black else Color.White, Motion.fade(200), label = "metricLabel")
                 Box(
                     Modifier
                         .height(34.dp)
                         .pressable { metric = item }
                         .clip(CircleShape)
-                        .background(if (selected) Color.White else Color(0xFF242424))
+                        .selectionFill(selected, Color.White, Color(0xFF242424), CircleShape)
                         .padding(horizontal = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(item.title, color = if (selected) Color.Black else Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(item.title, color = label, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

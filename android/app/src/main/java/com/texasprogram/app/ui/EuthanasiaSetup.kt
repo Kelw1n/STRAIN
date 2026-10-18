@@ -112,17 +112,7 @@ fun EuthanasiaSetup(
                             .padding(vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            Modifier
-                                .size(18.dp)
-                                .clip(CircleShape)
-                                .background(if (selected) Theme.accent else Theme.surfaceSoft),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (selected) {
-                                Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
-                            }
-                        }
+                        CheckDot(selected, size = 18.dp, iconSize = 11.dp)
                         Spacer(Modifier.width(10.dp))
                         Text(option, color = Theme.textPrimary, fontSize = 13.sp)
                     }

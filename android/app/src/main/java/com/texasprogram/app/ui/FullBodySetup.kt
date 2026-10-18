@@ -85,17 +85,7 @@ fun FullBodySetup(
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            Modifier
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(if (level == item) Theme.accent else Theme.surfaceSoft),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (level == item) {
-                                Icon(Icons.Filled.Check, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(12.dp))
-                            }
-                        }
+                        CheckDot(level == item, size = 20.dp, iconSize = 12.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f, fill = false)) {
                             Text(item.title, color = Theme.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

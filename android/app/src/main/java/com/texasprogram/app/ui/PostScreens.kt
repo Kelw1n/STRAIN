@@ -1,5 +1,9 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.tween
 import android.content.Intent
 import androidx.compose.animation.core.Animatable
@@ -685,22 +689,40 @@ fun PostMedia(post: SocialPost, modifier: Modifier = Modifier) {
                 }
             }
         }
-        if (count > 1) {
-            Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                repeat(count) { index ->
-                    Box(
-                        Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else 0.45f))
+        if (count > 1) PageDots(pager, count, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
+    }
+}
+
+/// Точки страниц: активная вытягивается в капсулу и едет за пальцем прямо
+/// во время свайпа. Положение читается только в отрисовке — карточка поста
+/// при листании не перекомпонуется.
+@Composable
+internal fun PageDots(pager: androidx.compose.foundation.pager.PagerState, count: Int, modifier: Modifier) {
+    val dot = 7.dp
+    val gap = 6.dp
+    val stretch = 9.dp
+    Spacer(
+        modifier
+            .size(width = dot * count + gap * (count - 1) + stretch, height = dot)
+            .drawBehind {
+                val d = dot.toPx()
+                val g = gap.toPx()
+                val extra = stretch.toPx()
+                val position = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, (count - 1).toFloat())
+                var x = 0f
+                for (index in 0 until count) {
+                    val near = (1f - kotlin.math.abs(position - index)).coerceIn(0f, 1f)
+                    val width = d + extra * near
+                    drawRoundRect(
+                        Color.White.copy(alpha = 0.45f + 0.55f * near),
+                        topLeft = Offset(x, 0f),
+                        size = Size(width, d),
+                        cornerRadius = CornerRadius(d / 2)
                     )
+                    x += width + g
                 }
             }
-        }
-    }
+    )
 }
 
 /// Слайд тренировки как в REBRN: картинка упражнения, название и подходы.

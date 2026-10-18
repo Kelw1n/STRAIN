@@ -333,6 +333,8 @@ struct FollowButton: View {
                 .frame(maxWidth: compact ? nil : .infinity)
                 .frame(height: compact ? 32 : 50)
                 .background(isFollowing ? Color(white: 0.16) : Color.white, in: RoundedRectangle(cornerRadius: compact ? 16 : 18, style: .continuous))
+                // Подписался — кнопка плавно темнеет, а не перескакивает.
+                .animation(Motion.snappy, value: isFollowing)
         }
         .buttonStyle(.pressable)
     }

@@ -369,15 +369,18 @@ struct PostMedia: View {
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(alignment: .bottom) {
                 if count > 1 {
+                    // Активная точка вытягивается в капсулу и с пружиной
+                    // перетекает к новой странице.
                     HStack(spacing: 6) {
                         ForEach(0..<count, id: \.self) { index in
-                            Circle()
-                                .fill(Color.white.opacity(index == (page ?? 0) ? 1 : 0.45))
-                                .frame(width: 7, height: 7)
+                            let active = index == (page ?? 0)
+                            Capsule()
+                                .fill(Color.white.opacity(active ? 1 : 0.45))
+                                .frame(width: active ? 16 : 7, height: 7)
                         }
                     }
                     .padding(.bottom, 12)
-                    .animation(.easeOut(duration: 0.15), value: page)
+                    .animation(Motion.snappy, value: page)
                     .allowsHitTesting(false)
                 }
             }

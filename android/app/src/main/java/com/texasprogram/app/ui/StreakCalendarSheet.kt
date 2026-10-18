@@ -314,7 +314,7 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                                     haptics.light()
                                     days = if (on) days - weekday else days + weekday
                                 }
-                                .background(if (on) Theme.accent else Color(0xFF262626), CircleShape)
+                                .selectionFill(on, Theme.accent, Color(0xFF262626), CircleShape)
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {

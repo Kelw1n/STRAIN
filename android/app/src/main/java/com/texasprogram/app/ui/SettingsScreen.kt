@@ -112,7 +112,7 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .pressable { ThemeManager.set(themeStyle) }
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) Theme.accent.copy(alpha = 0.12f) else Color.Transparent)
+                            .selectionFill(isSelected, Theme.accent.copy(alpha = 0.12f), Color.Transparent, RoundedCornerShape(12.dp))
                             .padding(horizontal = 10.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -614,7 +614,7 @@ private fun ModeChip(text: String, selected: Boolean, modifier: Modifier = Modif
         modifier
             .pressable(onClick = onClick)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Theme.accentGradient else SolidColor(Theme.surfaceSoft))
+            .selectionFill(selected, Theme.accentGradient, Theme.surfaceSoft, RoundedCornerShape(12.dp))
             .padding(vertical = 10.dp, horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {

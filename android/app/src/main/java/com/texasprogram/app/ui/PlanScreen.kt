@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -111,9 +112,10 @@ private fun WeekChip(number: Int, selected: Boolean, done: Boolean, onClick: () 
     Box(
         Modifier
             .size(width = 48.dp, height = 52.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .pressable(onClick = onClick)
             .clip(CircleShape)
-            .background(if (selected) Theme.accentGradient else androidx.compose.ui.graphics.SolidColor(Theme.surface))
+            .selectionFill(selected, Theme.accentGradient, Theme.surface, CircleShape)
             .then(if (selected) Modifier else Modifier.border(1.dp, Theme.hairline, CircleShape)),
         contentAlignment = Alignment.Center
     ) {

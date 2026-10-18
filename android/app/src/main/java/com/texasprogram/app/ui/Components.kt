@@ -1,5 +1,12 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.draw.drawWithCache
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -145,6 +152,44 @@ fun RollingNumber(
         label = "rollingNumber"
     ) { number ->
         Text("$number", color = color, fontSize = fontSize, fontWeight = fontWeight)
+    }
+}
+
+/// Заливка выбранного: при смене выбора цвет плавно перетекает, а не
+/// перескакивает. Прогресс читается только в отрисовке — без перекомпоновки.
+fun Modifier.selectionFill(selected: Boolean, fill: Brush, idle: Color, shape: Shape): Modifier = composed {
+    val progress = animateFloatAsState(if (selected) 1f else 0f, Motion.fade(200), label = "selection")
+    drawWithCache {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        onDrawBehind {
+            val p = progress.value
+            if (p < 1f && idle.alpha > 0f) drawOutline(outline, idle)
+            if (p > 0f) drawOutline(outline, fill, alpha = p)
+        }
+    }
+}
+
+fun Modifier.selectionFill(selected: Boolean, fill: Color, idle: Color, shape: Shape): Modifier =
+    selectionFill(selected, SolidColor(fill), idle, shape)
+
+/// Кружок с галочкой: при выборе галочка выпрыгивает с отскоком.
+@Composable
+fun CheckDot(selected: Boolean, size: Dp = 20.dp, iconSize: Dp = 12.dp) {
+    val pop by animateFloatAsState(if (selected) 1f else 0f, Motion.bouncy(), label = "check")
+    Box(
+        Modifier.size(size).selectionFill(selected, Theme.accent, Theme.surfaceSoft, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Filled.Check,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(iconSize).graphicsLayer {
+                scaleX = pop
+                scaleY = pop
+                alpha = pop.coerceIn(0f, 1f)
+            }
+        )
     }
 }
 
@@ -408,7 +453,8 @@ fun TopBar(
 // MARK: - Сегментный переключатель
 
 /// Нейтральный серый, как системный segmented control в iOS,
-/// а не акцентный градиент.
+/// а не акцентный градиент. Подложка выбранного едет к новому сегменту
+/// с пружиной; её положение читается только в отрисовке.
 @Composable
 fun SegmentedControl(
     options: List<String>,
@@ -416,13 +462,32 @@ fun SegmentedControl(
     modifier: Modifier = Modifier,
     onSelect: (Int) -> Unit
 ) {
+    val position by animateFloatAsState(selectedIndex.toFloat(), Motion.snappy(), label = "segment")
+    val card = Theme.card
+    val hairline = Theme.hairline
     Row(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(Theme.surfaceSoft)
             .border(1.dp, Theme.hairline, RoundedCornerShape(10.dp))
-            .padding(3.dp),
+            .padding(3.dp)
+            .drawBehind {
+                if (selectedIndex !in options.indices) return@drawBehind
+                val gap = 3.dp.toPx()
+                val width = (size.width - gap * (options.size - 1)) / options.size
+                val left = position * (width + gap)
+                val radius = CornerRadius(8.dp.toPx())
+                val half = 0.5.dp.toPx()
+                drawRoundRect(card, Offset(left, 0f), Size(width, size.height), radius)
+                drawRoundRect(
+                    hairline,
+                    Offset(left + half, half),
+                    Size(width - half * 2, size.height - half * 2),
+                    radius,
+                    style = Stroke(1.dp.toPx())
+                )
+            },
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         options.forEachIndexed { index, title ->
@@ -431,9 +496,6 @@ fun SegmentedControl(
                 Modifier
                     .weight(1f)
                     .pressable { onSelect(index) }
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (selected) Theme.card else Color.Transparent)
-                    .then(if (selected) Modifier.border(1.dp, Theme.hairline, RoundedCornerShape(8.dp)) else Modifier)
                     .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center
             ) {

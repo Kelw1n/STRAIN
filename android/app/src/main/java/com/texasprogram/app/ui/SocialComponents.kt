@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -207,23 +208,7 @@ fun PhotoPager(ids: List<String>, modifier: Modifier = Modifier) {
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
             RemoteImage(ids[page], Modifier.fillMaxSize())
         }
-        if (ids.size > 1) {
-            Row(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                repeat(ids.size) { index ->
-                    Box(
-                        Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else 0.45f))
-                    )
-                }
-            }
-        }
+        if (ids.size > 1) PageDots(pager, ids.size, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
     }
 }
 
@@ -241,6 +226,7 @@ fun SocialStat(value: String, title: String, modifier: Modifier = Modifier) {
 fun FollowButton(isFollowing: Boolean, compact: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val haptics = rememberHapticEngine()
     val shape = RoundedCornerShape(if (compact) 16.dp else 18.dp)
+    val label by animateColorAsState(if (isFollowing) Color.White else Color.Black, Motion.fade(200), label = "followLabel")
     Box(
         modifier
             .then(if (compact) Modifier else Modifier.fillMaxWidth())
@@ -250,13 +236,13 @@ fun FollowButton(isFollowing: Boolean, compact: Boolean = false, modifier: Modif
                 onClick()
             }
             .clip(shape)
-            .background(if (isFollowing) Color(0xFF292929) else Color.White)
+            .selectionFill(isFollowing, Color(0xFF292929), Color.White, shape)
             .padding(horizontal = if (compact) 14.dp else 0.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             if (isFollowing) "Вы подписаны" else "Подписаться",
-            color = if (isFollowing) Color.White else Color.Black,
+            color = label,
             fontSize = if (compact) 13.sp else 16.sp,
             fontWeight = FontWeight.Bold
         )
