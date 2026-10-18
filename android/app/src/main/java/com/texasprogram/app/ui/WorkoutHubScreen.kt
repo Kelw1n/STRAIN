@@ -79,9 +79,9 @@ fun WorkoutHubScreen(
                     Box(
                         Modifier
                             .size(42.dp)
+                            .pressable(onClick = onOpenToday)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .pressable(onClick = onOpenToday),
+                            .background(Color.White.copy(alpha = 0.08f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Filled.ViewAgenda, contentDescription = "План на сегодня", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -145,10 +145,7 @@ fun WorkoutHubScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(16.dp, CircleShape, ambientColor = Color.White.copy(alpha = 0.2f))
-                        .clip(CircleShape)
-                        .background(Color.White)
-                        .clickable {
+                        .pressable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             if (isRunning) {
                                 WorkoutSessionManager.expand()
@@ -156,6 +153,9 @@ fun WorkoutHubScreen(
                                 onStartWorkout(focus)
                             }
                         }
+                        .shadow(16.dp, CircleShape, ambientColor = Color.White.copy(alpha = 0.2f))
+                        .clip(CircleShape)
+                        .background(Color.White)
                         .padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {

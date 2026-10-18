@@ -245,12 +245,12 @@ fun FollowButton(isFollowing: Boolean, compact: Boolean = false, modifier: Modif
         modifier
             .then(if (compact) Modifier else Modifier.fillMaxWidth())
             .height(if (compact) 32.dp else 50.dp)
-            .clip(shape)
-            .background(if (isFollowing) Color(0xFF292929) else Color.White)
             .pressable {
                 haptics.light()
                 onClick()
             }
+            .clip(shape)
+            .background(if (isFollowing) Color(0xFF292929) else Color.White)
             .padding(horizontal = if (compact) 14.dp else 0.dp),
         contentAlignment = Alignment.Center
     ) {

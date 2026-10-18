@@ -1,6 +1,9 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.animation.core.tween
 import android.content.Intent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -63,6 +66,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
@@ -174,7 +178,7 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
         }
         Box {
             Box(
-                Modifier.size(38.dp).clip(CircleShape).pressable { menu = true },
+                Modifier.size(38.dp).pressable { menu = true }.clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Filled.MoreHoriz, contentDescription = "Действия с постом", tint = Color.White.copy(alpha = 0.55f))
@@ -324,6 +328,9 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
     val scope = rememberCoroutineScope()
     val haptics = rememberHapticEngine()
     var busy by remember { mutableStateOf(false) }
+    // Сердце при лайке сжимается и выпрыгивает с отскоком. Масштаб читается
+    // только в отрисовке — сам пост при этом не перекомпонуется.
+    val heart = remember { Animatable(1f) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
         Row(
             Modifier.pressable {
@@ -331,6 +338,12 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
                 haptics.light()
                 // Сразу показываем лайк, не дожидаясь сервера; ошибка вернёт как было.
                 val optimistic = post.copy(liked = !post.liked, likes = post.likes + if (post.liked) -1 else 1)
+                if (optimistic.liked) {
+                    scope.launch {
+                        heart.snapTo(0.55f)
+                        heart.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 520f))
+                    }
+                }
                 onChange(optimistic)
                 busy = true
                 scope.launch {
@@ -350,9 +363,9 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
                 if (post.liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                 contentDescription = if (post.liked) "Убрать лайк" else "Лайк",
                 tint = if (post.liked) Theme.record else Color.White,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(26.dp).graphicsLayer { scaleX = heart.value; scaleY = heart.value }
             )
-            if (post.likes > 0) Text("${post.likes}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (post.likes > 0) RollingNumber(post.likes, color = Color.White, fontSize = 16.sp)
         }
         Row(
             Modifier.pressable(onClick = onComments),
@@ -360,7 +373,7 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Комментарии", tint = Color.White, modifier = Modifier.size(24.dp))
-            if (post.comments > 0) Text("${post.comments}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (post.comments > 0) RollingNumber(post.comments, color = Color.White, fontSize = 16.sp)
         }
     }
 }
@@ -374,7 +387,7 @@ fun SocialTopBar(title: String, onBack: () -> Unit, trailing: @Composable (() ->
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)).pressable(onClick = onBack),
+            Modifier.size(40.dp).pressable(onClick = onBack).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -478,6 +491,7 @@ fun PostDetailScreen(
         items(ordered, key = { it.id }) { comment ->
             CommentRow(
                 comment,
+                modifier = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = Motion.snappy(), fadeOutSpec = tween(160)),
                 canDelete = me != null && (comment.author.id == me.id || post.author.id == me.id),
                 canReply = SocialService.isSignedIn,
                 onOpenAuthor = { navigator.push(SocialRoute.User(comment.author.username)) },
@@ -507,12 +521,12 @@ fun PostDetailScreen(
                     Modifier
                         .fillMaxWidth()
                         .height(50.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFF1C1C1C))
                         .pressable {
                             replyingTo = null
                             composing = true
                         }
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFF1C1C1C))
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -591,11 +605,12 @@ private fun CommentRow(
     canReply: Boolean,
     onOpenAuthor: () -> Unit,
     onReply: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var menu by remember { mutableStateOf(false) }
     // Ответы — со сдвигом под своим комментарием, как в Instagram.
-    Row(Modifier.padding(start = if (comment.isReply) 44.dp else 0.dp), verticalAlignment = Alignment.Top) {
+    Row(modifier.padding(start = if (comment.isReply) 44.dp else 0.dp), verticalAlignment = Alignment.Top) {
         Box(Modifier.pressable(onClick = onOpenAuthor)) { Avatar(comment.author.avatar, comment.author.username, if (comment.isReply) 28.dp else 34.dp) }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -840,8 +855,6 @@ private fun CommentSheet(
                 Box(
                     Modifier
                         .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (canSend) Color.White else Color(0xFF4D4D4D))
                         .pressable(enabled = canSend) {
                             sending = true
                             scope.launch {
@@ -855,7 +868,9 @@ private fun CommentSheet(
                                     sending = false
                                 }
                             }
-                        },
+                        }
+                        .clip(CircleShape)
+                        .background(if (canSend) Color.White else Color(0xFF4D4D4D)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (sending) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))

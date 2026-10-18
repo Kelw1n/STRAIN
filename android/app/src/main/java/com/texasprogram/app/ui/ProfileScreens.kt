@@ -184,9 +184,9 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                             Modifier
                                 .fillMaxWidth()
                                 .height(50.dp)
+                                .pressable { navigator.push(SocialRoute.EditProfile) }
                                 .clip(RoundedCornerShape(18.dp))
-                                .background(Color(0xFF212121))
-                                .pressable { navigator.push(SocialRoute.EditProfile) },
+                                .background(Color(0xFF212121)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text("Редактировать", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -224,7 +224,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
 @Composable
 private fun RoundIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).pressable(onClick = onClick),
+        Modifier.size(40.dp).pressable(onClick = onClick).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -321,9 +321,9 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                             Modifier
                                 .weight(1f)
                                 .height(50.dp)
+                                .pressable { navigator.push(SocialRoute.Chat(username)) }
                                 .clip(RoundedCornerShape(18.dp))
-                                .background(Color(0xFF292929))
-                                .pressable { navigator.push(SocialRoute.Chat(username)) },
+                                .background(Color(0xFF292929)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text("Написать", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -430,9 +430,9 @@ fun ProfileContent(
                 Row(
                     Modifier
                         .fillMaxWidth()
+                        .pressable { navigator.push(SocialRoute.Program(day, programs, if (user.isMe) null else user.username)) }
                         .clip(RoundedCornerShape(22.dp))
                         .background(Color(0xFF161617))
-                        .pressable { navigator.push(SocialRoute.Program(day, programs, if (user.isMe) null else user.username)) }
                         .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -531,9 +531,9 @@ private fun AchievementsCard(badges: List<SocialBadge>, achievedCount: Int, onCl
     Column(
         Modifier
             .fillMaxWidth()
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(22.dp))
             .background(Color(0xFF161617))
-            .pressable(onClick = onClick)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -626,8 +626,6 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                 Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .clip(CircleShape)
-                    .background(if (valid) Color.White else Color(0xFF666666))
                     .pressable(enabled = valid && !busy) {
                         busy = true
                         error = null
@@ -640,7 +638,9 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                                 busy = false
                             }
                         }
-                    },
+                    }
+                    .clip(CircleShape)
+                    .background(if (valid) Color.White else Color(0xFF666666)),
                 contentAlignment = Alignment.Center
             ) {
                 if (busy) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
@@ -806,9 +806,9 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(10.dp)
+                        .pressable { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.55f))
-                        .pressable { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

@@ -91,9 +91,9 @@ fun CustomProgramBuilder(
                 Box(
                     Modifier
                         .size(40.dp)
+                        .pressable(onClick = onBack)
                         .clip(CircleShape)
-                        .background(Theme.surfaceSoft)
-                        .pressable(onClick = onBack),
+                        .background(Theme.surfaceSoft),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = "Назад", tint = Theme.textPrimary, modifier = Modifier.size(22.dp))
@@ -194,7 +194,7 @@ private fun ExerciseRow(
         Spacer(Modifier.width(8.dp))
         if (canMoveUp) {
             Box(
-                Modifier.size(30.dp).clip(CircleShape).pressable { onMove(-1) },
+                Modifier.size(30.dp).pressable { onMove(-1) }.clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Filled.ArrowUpward, contentDescription = "Выше", tint = Theme.textSecondary, modifier = Modifier.size(16.dp))
@@ -202,7 +202,7 @@ private fun ExerciseRow(
         }
         if (canMoveDown) {
             Box(
-                Modifier.size(30.dp).clip(CircleShape).pressable { onMove(1) },
+                Modifier.size(30.dp).pressable { onMove(1) }.clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Filled.ArrowDownward, contentDescription = "Ниже", tint = Theme.textSecondary, modifier = Modifier.size(16.dp))

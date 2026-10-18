@@ -212,6 +212,10 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
+            .pressable {
+                haptics.medium()
+                WorkoutSessionManager.expand()
+            }
             .graphicsLayer {
                 shadowElevation = 12.dp.toPx()
                 this.shape = shape
@@ -223,10 +227,6 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
                 Brush.linearGradient(listOf(Color.White.copy(alpha = 0.28f), Color.White.copy(alpha = 0.06f))),
                 shape
             )
-            .pressable {
-                haptics.medium()
-                WorkoutSessionManager.expand()
-            }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -753,9 +753,9 @@ private fun SessionHeader(topInset: Dp, onMinimize: () -> Unit, onFinish: () -> 
         Box(
             Modifier
                 .height(36.dp)
+                .pressable(onClick = onFinish)
                 .background(Color.White, CircleShape)
                 .clip(CircleShape)
-                .pressable(onClick = onFinish)
                 .padding(horizontal = 18.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -769,9 +769,9 @@ private fun CircleIconButton(icon: ImageVector, description: String, onClick: ()
     Box(
         Modifier
             .size(36.dp)
+            .pressable(onClick = onClick)
             .background(Color.White.copy(alpha = 0.12f), CircleShape)
-            .clip(CircleShape)
-            .pressable(onClick = onClick),
+            .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -851,9 +851,9 @@ private fun ExerciseHeader(
                 // и длинные названия рвались посреди слова.
                 Row(
                     Modifier
+                        .pressable { actions.chooseRest(index) }
                         .background(Color.White.copy(alpha = 0.10f), CircleShape)
                         .clip(CircleShape)
-                        .pressable { actions.chooseRest(index) }
                         .padding(horizontal = 9.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -881,8 +881,7 @@ private fun ExerciseHeader(
                 Box(
                     Modifier
                         .size(30.dp)
-                        .clip(CircleShape)
-                        .clickable { menuExpanded = true },
+                        .pressable { menuExpanded = true },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.MoreHoriz, "Действия с упражнением", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
@@ -975,9 +974,9 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
             Modifier
                 .padding(top = 4.dp)
                 .fillMaxWidth()
+                .pressable { actions.addSet(exIndex) }
                 .background(FieldColor, RoundedCornerShape(14.dp))
                 .clip(RoundedCornerShape(14.dp))
-                .pressable { actions.addSet(exIndex) }
                 .padding(vertical = 11.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
@@ -1022,8 +1021,8 @@ private fun SetRow(
             Modifier
                 .width(62.dp)
                 .height(44.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .pressable(enabled = set.previous != null) { actions.previous(exIndex, position) },
+                .pressable(enabled = set.previous != null) { actions.previous(exIndex, position) }
+                .clip(RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -1082,9 +1081,9 @@ private fun SetNumber(
         Box(
             Modifier
                 .size(34.dp)
+                .pressable(enabled = hasMenu) { menuExpanded = true }
                 .background(if (set.isRecord) Theme.accent else Color(0xFF262626), CircleShape)
-                .clip(CircleShape)
-                .pressable(enabled = hasMenu) { menuExpanded = true },
+                .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -1280,6 +1279,7 @@ private fun RecordBanner(record: RecordNotice?, modifier: Modifier = Modifier) {
             Modifier
                 .padding(horizontal = 24.dp)
                 .fillMaxWidth()
+                .pressable { WorkoutSessionManager.lastRecord = null }
                 .graphicsLayer {
                     shadowElevation = 16.dp.toPx()
                     this.shape = shape
@@ -1289,7 +1289,6 @@ private fun RecordBanner(record: RecordNotice?, modifier: Modifier = Modifier) {
                 }
                 .background(Color(0xFF1F1F1F))
                 .border(1.dp, Theme.accent.copy(alpha = 0.6f), shape)
-                .clickable { WorkoutSessionManager.lastRecord = null }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1357,8 +1356,7 @@ private fun ZeroSetsAlertOverlay(onConfirm: () -> Unit, onDismiss: () -> Unit) {
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable { onDismiss() }
+                    .pressable { onDismiss() }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             )
         }
@@ -1433,9 +1431,9 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
                     Box(
                         Modifier
                             .fillMaxWidth()
+                            .pressable { onSelect(seconds) }
                             .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
                             .clip(RoundedCornerShape(14.dp))
-                            .pressable { onSelect(seconds) }
                             .padding(vertical = 13.dp),
                         contentAlignment = Alignment.Center
                     ) {

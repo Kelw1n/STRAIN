@@ -158,10 +158,10 @@ private fun LiveCard(friend: SocialLiveFriend, onClick: () -> Unit) {
     Column(
         Modifier
             .width(196.dp)
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(18.dp))
             .background(Color(0xFF161617))
             .border(1.dp, Theme.success.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
-            .pressable(onClick = onClick)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
@@ -223,7 +223,7 @@ private fun SetDots(done: Int, total: Int) {
 @Composable
 fun ActivityBell(onClick: () -> Unit) {
     Box(
-        Modifier.size(42.dp).clip(CircleShape).pressable(onClick = onClick),
+        Modifier.size(42.dp).pressable(onClick = onClick).clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(Icons.Outlined.Notifications, contentDescription = "Активность", tint = Color.White)
@@ -424,9 +424,9 @@ fun LeaderboardSection(onOpen: (String) -> Unit) {
                 Box(
                     Modifier
                         .height(34.dp)
+                        .pressable { metric = item }
                         .clip(CircleShape)
                         .background(if (selected) Color.White else Color(0xFF242424))
-                        .pressable { metric = item }
                         .padding(horizontal = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -488,8 +488,8 @@ private fun LeaderboardRow(place: Int, entry: SocialLeaderboardEntry, metric: Le
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (entry.user.isMe) Theme.accent.copy(alpha = 0.1f) else Color.Transparent)
             .pressable(onClick = onClick)
+            .background(if (entry.user.isMe) Theme.accent.copy(alpha = 0.1f) else Color.Transparent)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

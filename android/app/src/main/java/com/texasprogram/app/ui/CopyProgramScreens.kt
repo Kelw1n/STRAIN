@@ -117,8 +117,6 @@ fun CopyProgramButton(
         Modifier
             .fillMaxWidth()
             .height(48.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
             .pressable(enabled = !loading) {
                 if (loadsAuthorProgram && loadedDays == null) {
                     loading = true
@@ -130,7 +128,9 @@ fun CopyProgramButton(
                 } else {
                     choosing = true
                 }
-            },
+            }
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -175,7 +175,7 @@ fun CopyProgramButton(
 @Composable
 private fun CopyOption(title: String, onClick: () -> Unit) {
     Column {
-        Box(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)) {
+        Box(Modifier.fillMaxWidth().pressable(onClick = onClick).padding(vertical = 12.dp)) {
             Text(title, color = Theme.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
         HorizontalDivider(color = Color.White.copy(alpha = 0.06f))

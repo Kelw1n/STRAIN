@@ -74,6 +74,10 @@ fun SetDotsView(total: Int, tracker: SetTracker, modifier: Modifier = Modifier) 
                 Modifier
                     .padding(end = 8.dp)
                     .size(22.dp)
+                    .combinedPressable(
+                        onClick = { tracker.onTap(index) },
+                        onLongClick = { tracker.onHold?.invoke(index) }
+                    )
                     .clip(CircleShape)
                     .background(if (filled) Theme.accentGradient else SolidColor(Theme.surfaceSoft))
                     .border(
@@ -84,10 +88,6 @@ fun SetDotsView(total: Int, tracker: SetTracker, modifier: Modifier = Modifier) 
                             else -> Theme.accent.copy(alpha = 0.28f)
                         },
                         CircleShape
-                    )
-                    .combinedPressable(
-                        onClick = { tracker.onTap(index) },
-                        onLongClick = { tracker.onHold?.invoke(index) }
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -153,10 +153,10 @@ fun AsPlannedButton(
     Box(
         modifier
             .fillMaxWidth()
+            .pressable { confirming = true }
             .clip(RoundedCornerShape(14.dp))
             .background(Theme.accent.copy(alpha = 0.13f))
             .border(1.dp, Theme.accent.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
-            .pressable { confirming = true }
             .padding(vertical = 13.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -205,13 +205,13 @@ fun RestTimerLauncher(
                 Box(
                     Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Theme.accent.copy(alpha = if (selected) 0.26f else 0.14f))
-                        .border(1.dp, Theme.accent.copy(alpha = if (selected) 0.7f else 0.32f), RoundedCornerShape(12.dp))
                         .pressable {
                             onSelect(preset.toInt())
                             timer.start(preset)
                         }
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Theme.accent.copy(alpha = if (selected) 0.26f else 0.14f))
+                        .border(1.dp, Theme.accent.copy(alpha = if (selected) 0.7f else 0.32f), RoundedCornerShape(12.dp))
                         .padding(vertical = 11.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -254,9 +254,9 @@ private fun StepSquare(
     Box(
         Modifier
             .size(width = 46.dp, height = 38.dp)
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(11.dp))
-            .background(Theme.accent.copy(alpha = 0.14f))
-            .pressable(onClick = onClick),
+            .background(Theme.accent.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = Theme.accent, modifier = Modifier.size(18.dp))
@@ -302,9 +302,9 @@ fun RestTimerBar(timer: RestTimer, modifier: Modifier = Modifier) {
         Box(
             Modifier
                 .size(30.dp)
+                .pressable { timer.stop() }
                 .clip(CircleShape)
-                .background(Theme.surfaceSoft)
-                .pressable { timer.stop() },
+                .background(Theme.surfaceSoft),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Стоп", tint = Theme.textSecondary, modifier = Modifier.size(14.dp))

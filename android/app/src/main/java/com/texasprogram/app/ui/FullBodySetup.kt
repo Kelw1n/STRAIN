@@ -63,9 +63,9 @@ fun FullBodySetup(
                 Box(
                     Modifier
                         .size(40.dp)
+                        .pressable(onClick = onBack)
                         .clip(CircleShape)
-                        .background(Theme.surfaceSoft)
-                        .pressable(onClick = onBack),
+                        .background(Theme.surfaceSoft),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = "Назад", tint = Theme.textPrimary, modifier = Modifier.size(22.dp))
@@ -80,8 +80,8 @@ fun FullBodySetup(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
                             .pressable { level = item }
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

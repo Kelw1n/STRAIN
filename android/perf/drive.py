@@ -4,9 +4,12 @@
 Ставит APK, проходит первый запуск, гоняет сценарии (вкладки, прокрутки,
 план, тренировка) и по каждому считает время кадров из `dumpsys gfxinfo`.
 
-UI-поток — то, что приложение делает само: ввод, анимации, компоновка и
-отрисовка списков. Его и смотрим: GPU у эмулятора программный, полное время
-кадра там всегда больше, чем на телефоне.
+Главная цифра — «работа» кадра: сколько UI-поток сам потратил на ввод,
+анимации, компоновку и запись отрисовки (SyncQueued − HandleInputStart).
+Ожидание программного GPU эмулятора в неё не входит — иначе все кадры
+выглядят одинаково медленными, и разницу между версиями не видно.
+Буфер gfxinfo держит только 120 кадров, поэтому кадры собираются в фоне
+раз в секунду и склеиваются по времени начала.
 
     python3 drive.py app-release.apk out_dir
 """
@@ -16,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 import xml.etree.ElementTree as ET
 
@@ -131,9 +135,9 @@ def screenshot(name):
 
 
 def frames():
-    """Кадры с момента сброса: UI-поток и полное время, в мс."""
+    """Кадры из буфера gfxinfo: {начало: (работа UI, UI до отправки, полное)}, в мс."""
     raw = sh(f"dumpsys gfxinfo {PKG} framestats")
-    result = []
+    result = {}
     for block in re.findall(r"---PROFILEDATA---\n(.*?)---PROFILEDATA---", raw, re.S):
         lines = [l for l in block.strip().splitlines() if l.strip()]
         if not lines:
@@ -146,14 +150,42 @@ def frames():
                 if int(cols[idx["Flags"]]) != 0:
                     continue
                 start = int(cols[idx["IntendedVsync"]])
+                handle = int(cols[idx["HandleInputStart"]])
+                anim = int(cols[idx["AnimationStart"]])
                 ui_end = int(cols[idx["SyncQueued"]])
                 done = int(cols[idx["FrameCompleted"]])
             except (KeyError, ValueError, IndexError):
                 continue
-            if start <= 0 or ui_end <= start or done <= start:
+            begin = handle if handle > 0 else anim
+            if start <= 0 or begin <= 0 or ui_end <= begin or done <= start:
                 continue
-            result.append(((ui_end - start) / 1e6, (done - start) / 1e6))
+            result[start] = ((ui_end - begin) / 1e6, (ui_end - start) / 1e6, (done - start) / 1e6)
     return result
+
+
+class Collector:
+    """Раз в секунду забирает буфер кадров, пока идёт сценарий."""
+
+    def __init__(self):
+        self.frames = {}
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self.run, daemon=True)
+
+    def run(self):
+        while not self.stop.wait(1.0):
+            try:
+                self.frames.update(frames())
+            except Exception:
+                pass
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *_):
+        self.stop.set()
+        self.thread.join()
+        self.frames.update(frames())
 
 
 def summary(raw):
@@ -179,23 +211,27 @@ def scenario(name, action):
     sh(f"dumpsys gfxinfo {PKG} reset")
     time.sleep(0.3)
     started = time.time()
-    try:
-        action()
-    except Exception as error:  # сценарий не должен ронять весь замер
-        print(f"  ! {name}: {error}")
+    with Collector() as collector:
+        try:
+            action()
+        except Exception as error:  # сценарий не должен ронять весь замер
+            print(f"  ! {name}: {error}")
     elapsed = time.time() - started
-    data = frames()
+    data = list(collector.frames.values())
     stats = summary(sh(f"dumpsys gfxinfo {PKG}"))
-    ui = [f[0] for f in data]
-    total = [f[1] for f in data]
+    work = [f[0] for f in data]
+    ui = [f[1] for f in data]
+    total = [f[2] for f in data]
+    share = lambda values, limit: round(100 * sum(1 for v in values if v > limit) / max(1, len(values)), 1)
     row = {
         "name": name,
         "frames": len(data),
-        "ui_p50": round(pct(ui, 50), 1),
+        "work_p50": round(pct(work, 50), 1),
+        "work_p90": round(pct(work, 90), 1),
+        "work_p99": round(pct(work, 99), 1),
+        "work_over8": share(work, 8),
+        "work_over16": share(work, 16.7),
         "ui_p90": round(pct(ui, 90), 1),
-        "ui_p99": round(pct(ui, 99), 1),
-        "ui_over16": round(100 * sum(1 for v in ui if v > 16.7) / max(1, len(ui)), 1),
-        "ui_over32": round(100 * sum(1 for v in ui if v > 33.4) / max(1, len(ui)), 1),
         "total_p90": round(pct(total, 90), 1),
         "janky_pct": stats["janky_pct"],
         "seconds": round(elapsed, 1),
@@ -280,12 +316,44 @@ def workout():
         tap(node["x"], node["y"], pause=0.7)
     swipe_up(5)
     swipe_down(5)
+    # Тренировку сворачиваем — дальше нужна панель вкладок.
+    if not tap_label("Свернуть тренировку", timeout=4, pause=1.2):
+        sh("input keyevent KEYCODE_BACK")
+        time.sleep(1.2)
 
 
 def community():
     tap_label("Друзья", pause=2.0)
     swipe_up(3)
     swipe_down(3)
+
+
+def tab_drag():
+    """Палец ведёт по панели вкладок туда и обратно — вкладки листаются на ходу."""
+    node = wait_for("Главное", 10)
+    last = wait_for("Профиль", 10)
+    if not node or not last:
+        print("  ! панель вкладок не нашлась")
+        return
+    y = node["y"]
+    for _ in range(3):
+        sh(f"input swipe {node['x']} {y} {last['x']} {y} 1400")
+        time.sleep(0.8)
+        sh(f"input swipe {last['x']} {y} {node['x']} {y} 1400")
+        time.sleep(0.8)
+
+
+def post_open():
+    """Пост из ленты: экран въезжает справа, «Назад» — обратно."""
+    tap_label("Главное", pause=1.5)
+    for _ in range(3):
+        swipe_up(1)
+        node = find("Комментарии")
+        if node:
+            tap(node["x"], node["y"], pause=1.5)
+            swipe_up(2)
+            sh("input keyevent KEYCODE_BACK")
+            time.sleep(1.2)
 
 
 scenario("tabs", tabs)
@@ -295,6 +363,8 @@ scenario("progress-scroll", progress)
 scenario("plan", plan)
 scenario("workout-sets", workout)
 scenario("community", community)
+scenario("tab-drag", tab_drag)
+scenario("post-open", post_open)
 
 # MARK: Отчёт
 
@@ -304,13 +374,15 @@ with open(os.path.join(OUT, "results.json"), "w") as f:
 lines = [
     f"### Плавность Android (эмулятор)\n",
     f"Холодный запуск: **{cold_start} мс**\n",
-    "| Сценарий | Кадров | UI p50 | UI p90 | UI p99 | UI > 16 мс | UI > 33 мс | Полный p90 | Janky (система) |",
-    "|---|---|---|---|---|---|---|---|---|",
+    "Работа — сколько UI-поток сам тратит на кадр (ввод, анимации, компоновка, запись отрисовки). "
+    "Бюджет кадра на 60 Гц — 16,7 мс, на 120 Гц — 8,3 мс.\n",
+    "| Сценарий | Кадров | Работа p50 | p90 | p99 | > 8 мс | > 16 мс | UI p90 | Полный p90 | Janky (система) |",
+    "|---|---|---|---|---|---|---|---|---|---|",
 ]
 for r in results:
     lines.append(
-        f"| {r['name']} | {r['frames']} | {r['ui_p50']} | {r['ui_p90']} | {r['ui_p99']} | "
-        f"{r['ui_over16']}% | {r['ui_over32']}% | {r['total_p90']} | {r['janky_pct']}% |"
+        f"| {r['name']} | {r['frames']} | {r['work_p50']} | {r['work_p90']} | {r['work_p99']} | "
+        f"{r['work_over8']}% | {r['work_over16']}% | {r['ui_p90']} | {r['total_p90']} | {r['janky_pct']}% |"
     )
 report = "\n".join(lines)
 print(report)

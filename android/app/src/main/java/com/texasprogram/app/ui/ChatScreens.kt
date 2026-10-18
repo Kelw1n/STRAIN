@@ -485,7 +485,8 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                     }
                 }
                 itemsIndexed(messages, key = { _, message -> message.id }) { index, message ->
-                    Column {
+                    // Новое сообщение проявляется, удалённое тает, соседи плавно съезжаются.
+                    Column(Modifier.animateItem(fadeInSpec = tween(220), placementSpec = Motion.snappy(), fadeOutSpec = tween(160))) {
                         val day = message.instant.atZone(ZoneId.systemDefault()).toLocalDate()
                         val previous = messages.getOrNull(index - 1)?.instant?.atZone(ZoneId.systemDefault())?.toLocalDate()
                         if (previous != day) {
@@ -530,7 +531,9 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         )
                     }
                 }
-                if (otherTyping) item(key = "typing") { TypingBubble() }
+                if (otherTyping) item(key = "typing") {
+                    Box(Modifier.animateItem(fadeInSpec = tween(200), placementSpec = Motion.snappy(), fadeOutSpec = tween(140))) { TypingBubble() }
+                }
             }
         }
 
@@ -562,7 +565,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         Text(if (quoted.fromMe) "Ответ себе" else "Ответ @$username", color = Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         Text(quoted.quote.preview, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Box(Modifier.size(32.dp).clip(CircleShape).pressable { replyingTo = null }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(32.dp).pressable { replyingTo = null }.clip(CircleShape), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Close, contentDescription = "Не отвечать", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                     }
                 }
@@ -574,9 +577,9 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         Modifier
                             .align(Alignment.TopEnd)
                             .size(22.dp)
+                            .pressable { attachment = null }
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.65f))
-                            .pressable { attachment = null },
+                            .background(Color.Black.copy(alpha = 0.65f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Filled.Close, contentDescription = "Убрать фото", tint = Color.White, modifier = Modifier.size(14.dp))
@@ -672,7 +675,7 @@ internal fun ChatTopBar(
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)).pressable(onClick = onBack),
+            Modifier.size(40.dp).pressable(onClick = onBack).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -879,10 +882,10 @@ internal fun MessageBubble(
                             Row(
                                 Modifier
                                     .height(26.dp)
+                                    .pressable { onReact(reaction.emoji) }
                                     .clip(CircleShape)
                                     .background(if (reaction.mine) Theme.accent.copy(alpha = 0.45f) else Color(0xFF292929))
                                     .border(1.dp, if (reaction.mine) Theme.accent else Color.White.copy(alpha = 0.08f), CircleShape)
-                                    .pressable { onReact(reaction.emoji) }
                                     .padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(3.dp)
@@ -923,12 +926,12 @@ internal fun MessageBubble(
                             Box(
                                 Modifier
                                     .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(if (mine) Theme.accent.copy(alpha = 0.3f) else Color.Transparent)
                                     .pressable {
                                         menu = false
                                         onReact(emoji)
-                                    },
+                                    }
+                                    .clip(CircleShape)
+                                    .background(if (mine) Theme.accent.copy(alpha = 0.3f) else Color.Transparent),
                                 contentAlignment = Alignment.Center
                             ) { Text(emoji, fontSize = 22.sp) }
                         }

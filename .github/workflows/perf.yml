@@ -79,4 +79,4 @@ jobs:
           echo "## После ($(git rev-parse --short HEAD))" >> "$GITHUB_STEP_SUMMARY"
           cat perf-current/report.md >> "$GITHUB_STEP_SUMMARY" || true
 
-# Повторный прогон — любая правка этого файла в ветке. Прогон 1.
+# Повторный прогон — любая правка этого файла в ветке. Прогон 2.

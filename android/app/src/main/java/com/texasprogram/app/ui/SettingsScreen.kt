@@ -92,9 +92,9 @@ fun SettingsScreen(
                 Box(
                     Modifier
                         .size(40.dp)
+                        .pressable(onClick = onClose)
                         .clip(CircleShape)
-                        .background(Theme.surfaceSoft)
-                        .pressable(onClick = onClose),
+                        .background(Theme.surfaceSoft),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = "Готово", tint = Theme.textPrimary, modifier = Modifier.size(20.dp))
@@ -110,9 +110,9 @@ fun SettingsScreen(
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .pressable { ThemeManager.set(themeStyle) }
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isSelected) Theme.accent.copy(alpha = 0.12f) else Color.Transparent)
-                            .pressable { ThemeManager.set(themeStyle) }
                             .padding(horizontal = 10.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -163,9 +163,9 @@ fun SettingsScreen(
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .pressable(enabled = !isActive) { onSwitchProfile(item.id) }
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isActive) Theme.accent.copy(alpha = 0.10f) else Color.Transparent)
-                            .pressable(enabled = !isActive) { onSwitchProfile(item.id) }
                             .padding(horizontal = 10.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -612,9 +612,9 @@ fun SectionLabel(text: String) {
 private fun ModeChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) Theme.accentGradient else SolidColor(Theme.surfaceSoft))
-            .pressable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -636,9 +636,9 @@ private fun WeekdayRow(label: String, weekday: Int, onSelect: (Int) -> Unit) {
         Row(
             Modifier
                 .fillMaxWidth()
+                .pressable { open = true }
                 .clip(RoundedCornerShape(12.dp))
                 .background(Theme.surfaceSoft)
-                .pressable { open = true }
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -678,9 +678,9 @@ fun ExercisePicker(category: AdditionalExerciseCategory, value: String?, onSelec
         Row(
             Modifier
                 .fillMaxWidth()
+                .pressable { open = true }
                 .clip(RoundedCornerShape(12.dp))
                 .background(Theme.surfaceSoft)
-                .pressable { open = true }
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -742,9 +742,9 @@ private fun StepButton(symbol: String, onClick: () -> Unit) {
     Box(
         Modifier
             .size(30.dp)
+            .pressable(onClick = onClick)
             .clip(CircleShape)
-            .background(Theme.accent.copy(alpha = 0.14f))
-            .pressable(onClick = onClick),
+            .background(Theme.accent.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center
     ) {
         Text(symbol, color = Theme.accent, fontSize = 15.sp, fontWeight = FontWeight.Black)

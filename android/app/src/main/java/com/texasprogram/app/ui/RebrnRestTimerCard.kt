@@ -109,11 +109,11 @@ fun RebrnRestTimerCard(
                 Box(
                     modifier = Modifier
                         .height(46.dp)
-                        .background(Theme.accent, CircleShape)
                         .pressable {
                             haptics.medium()
                             timer.stop()
                         }
+                        .background(Theme.accent, CircleShape)
                         .padding(horizontal = 22.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -210,8 +210,8 @@ private fun RoundButton(icon: ImageVector, description: String, onClick: () -> U
     Box(
         modifier = Modifier
             .size(44.dp)
-            .background(Color(0xFF2E2E2E), CircleShape)
-            .pressable(onClick = onClick),
+            .pressable(onClick = onClick)
+            .background(Color(0xFF2E2E2E), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(18.dp))

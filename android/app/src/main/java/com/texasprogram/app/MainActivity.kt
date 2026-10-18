@@ -859,8 +859,8 @@ private fun CloseButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
         modifier
             .padding(top = topInset + 12.dp, end = 16.dp)
             .size(40.dp)
-            .background(Theme.surfaceSoft, androidx.compose.foundation.shape.CircleShape)
-            .pressable(onClick = onClick),
+            .pressable(onClick = onClick)
+            .background(Theme.surfaceSoft, androidx.compose.foundation.shape.CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text("✕", color = Theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)

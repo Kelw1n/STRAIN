@@ -80,14 +80,14 @@ fun TogetherInviteBanner(invite: SocialTogether, modifier: Modifier = Modifier) 
             Text("зовёт на тренировку", color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2)
         }
         Box(
-            Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)).pressable(enabled = !busy) { respond(false) },
+            Modifier.size(36.dp).pressable(enabled = !busy) { respond(false) }.clip(CircleShape).background(Color.White.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Отказаться", tint = Color.White, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.height(36.dp).clip(CircleShape).background(Color.White).pressable(enabled = !busy) { respond(true) }.padding(horizontal = 14.dp),
+            Modifier.height(36.dp).pressable(enabled = !busy) { respond(true) }.clip(CircleShape).background(Color.White).padding(horizontal = 14.dp),
             contentAlignment = Alignment.Center
         ) {
             Text("Принять", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -266,9 +266,9 @@ private fun InviteAction(title: String, primary: Boolean, enabled: Boolean, modi
     Box(
         modifier
             .height(38.dp)
+            .pressable(enabled = enabled, onClick = onClick)
             .clip(CircleShape)
-            .background(if (primary) Color.White else Color.White.copy(alpha = 0.12f))
-            .pressable(enabled = enabled, onClick = onClick),
+            .background(if (primary) Color.White else Color.White.copy(alpha = 0.12f)),
         contentAlignment = Alignment.Center
     ) {
         Text(title, color = if (primary) Color.Black else Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -286,9 +286,6 @@ fun InviteButton(username: String, onSent: () -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .height(50.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Theme.success.copy(alpha = 0.22f))
-                .border(1.dp, Theme.success.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
                 .pressable(enabled = !busy) {
                     busy = true
                     scope.launch {
@@ -302,7 +299,10 @@ fun InviteButton(username: String, onSent: () -> Unit) {
                             busy = false
                         }
                     }
-                },
+                }
+                .clip(RoundedCornerShape(18.dp))
+                .background(Theme.success.copy(alpha = 0.22f))
+                .border(1.dp, Theme.success.copy(alpha = 0.5f), RoundedCornerShape(18.dp)),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {

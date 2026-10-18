@@ -111,10 +111,10 @@ private fun WeekChip(number: Int, selected: Boolean, done: Boolean, onClick: () 
     Box(
         Modifier
             .size(width = 48.dp, height = 52.dp)
+            .pressable(onClick = onClick)
             .clip(CircleShape)
             .background(if (selected) Theme.accentGradient else androidx.compose.ui.graphics.SolidColor(Theme.surface))
-            .then(if (selected) Modifier else Modifier.border(1.dp, Theme.hairline, CircleShape))
-            .pressable(onClick = onClick),
+            .then(if (selected) Modifier else Modifier.border(1.dp, Theme.hairline, CircleShape)),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -189,8 +189,8 @@ fun DaySummaryCard(
             Box(
                 Modifier
                     .size(32.dp)
-                    .clip(CircleShape)
-                    .pressable(onClick = onSetCurrent),
+                    .pressable(onClick = onSetCurrent)
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Filled.SportsScore, contentDescription = "Начать с этого дня", tint = Theme.textTertiary, modifier = Modifier.size(17.dp))
@@ -241,9 +241,9 @@ fun DayDetailScreen(
                 Box(
                     Modifier
                         .size(40.dp)
+                        .pressable(onClick = onCustomize)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Theme.surfaceSoft)
-                        .pressable(onClick = onCustomize),
+                        .background(Theme.surfaceSoft),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(

@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -237,7 +238,7 @@ fun FeedScreen(
                     Spacer(Modifier.weight(1f))
                     if (SocialService.isSignedIn) ActivityBell { navigator.push(SocialRoute.Activity) }
                     Box(
-                        Modifier.size(42.dp).clip(CircleShape).pressable(onClick = onFindPeople),
+                        Modifier.size(42.dp).pressable(onClick = onFindPeople).clip(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Filled.Search, contentDescription = "Найти людей", tint = Color.White)
@@ -246,16 +247,18 @@ fun FeedScreen(
             }
             if (!SocialService.isSignedIn) item(key = "teaser") { SignUpTeaser(onCreateProfile) }
             SocialService.together.active?.let { active ->
-                item(key = "together") { Box(Modifier.padding(top = 8.dp)) { TogetherCard(active) } }
+                item(key = "together") { Box(Modifier.animateItem(fadeInSpec = tween(240), placementSpec = Motion.snappy(), fadeOutSpec = tween(160)).padding(top = 8.dp)) { TogetherCard(active) } }
             }
             if (SocialService.isSignedIn && SocialService.liveFriends.isNotEmpty()) {
                 item(key = "live") {
-                    Box(Modifier.padding(top = 8.dp, bottom = 6.dp)) {
+                    Box(Modifier.animateItem(fadeInSpec = tween(240), placementSpec = Motion.snappy(), fadeOutSpec = tween(160)).padding(top = 8.dp, bottom = 6.dp)) {
                         LiveFriendsStrip(SocialService.liveFriends) { navigator.push(SocialRoute.User(it)) }
                     }
                 }
             }
-            if (SocialService.outbox.isNotEmpty()) item(key = "outbox") { OutboxCard() }
+            if (SocialService.outbox.isNotEmpty()) item(key = "outbox") {
+                Box(Modifier.animateItem(fadeInSpec = tween(240), placementSpec = Motion.snappy(), fadeOutSpec = tween(160))) { OutboxCard() }
+            }
             val currentError = error
             if (currentError != null && posts.isEmpty()) {
                 item(key = "error") {
@@ -265,7 +268,8 @@ fun FeedScreen(
                 item(key = "empty") { FeedEmpty(feedScope, onFindPeople) }
             }
             items(posts, key = { it.id }) { post ->
-                Column {
+                // Новый пост проявляется, удалённый тает, остальные плавно съезжаются.
+                Column(Modifier.animateItem(fadeInSpec = tween(260), placementSpec = Motion.snappy(), fadeOutSpec = tween(180))) {
                     PostCard(
                         post = post,
                         onOpen = { navigator.push(SocialRoute.Post(post)) },
@@ -304,7 +308,7 @@ private fun SignUpTeaser(onCreateProfile: () -> Unit) {
             fontSize = 14.sp
         )
         Box(
-            Modifier.height(44.dp).clip(CircleShape).background(Color.White).pressable(onClick = onCreateProfile).padding(horizontal = 18.dp),
+            Modifier.height(44.dp).pressable(onClick = onCreateProfile).clip(CircleShape).background(Color.White).padding(horizontal = 18.dp),
             contentAlignment = Alignment.Center
         ) {
             Text("Создать профиль", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -505,9 +509,9 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .pressable(onClick = onCreateProfile)
                             .clip(RoundedCornerShape(18.dp))
                             .background(Color(0xFF161617))
-                            .pressable(onClick = onCreateProfile)
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

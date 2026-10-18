@@ -1,7 +1,15 @@
 package com.texasprogram.app.ui
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
@@ -114,6 +123,29 @@ fun Modifier.combinedPressable(onClick: () -> Unit, onLongClick: (() -> Unit)? =
             onLongClick = onLongClick,
             onClick = onClick
         )
+}
+
+/// Число, которое при смене прокатывается: больше — новое въезжает снизу,
+/// меньше — сверху. Как `contentTransition(.numericText())` в SwiftUI.
+@Composable
+fun RollingNumber(
+    value: Int,
+    color: Color,
+    fontSize: TextUnit,
+    fontWeight: FontWeight = FontWeight.Bold
+) {
+    AnimatedContent(
+        targetState = value,
+        transitionSpec = {
+            val up = targetState > initialState
+            val enter = slideInVertically(Motion.snappy()) { if (up) it else -it } + fadeIn(tween(160))
+            val exit = slideOutVertically(Motion.snappy()) { if (up) -it else it } + fadeOut(tween(120))
+            (enter togetherWith exit).using(SizeTransform(clip = false))
+        },
+        label = "rollingNumber"
+    ) { number ->
+        Text("$number", color = color, fontSize = fontSize, fontWeight = fontWeight)
+    }
 }
 
 /// Мягкое затухание у краёв экрана. Состояние читается в фазе отрисовки,
@@ -347,8 +379,8 @@ fun TopBar(
                 Modifier
                     .align(Alignment.CenterStart)
                     .size(40.dp)
-                    .clip(CircleShape)
-                    .pressable(onClick = onBack),
+                    .pressable(onClick = onBack)
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -398,10 +430,10 @@ fun SegmentedControl(
             Box(
                 Modifier
                     .weight(1f)
+                    .pressable { onSelect(index) }
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (selected) Theme.card else Color.Transparent)
                     .then(if (selected) Modifier.border(1.dp, Theme.hairline, RoundedCornerShape(8.dp)) else Modifier)
-                    .pressable { onSelect(index) }
                     .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -481,9 +513,9 @@ private fun StepCircle(symbol: String, onClick: () -> Unit) {
     Box(
         Modifier
             .size(34.dp)
+            .pressable(onClick = onClick)
             .clip(CircleShape)
-            .background(Theme.accent.copy(alpha = 0.16f))
-            .pressable(onClick = onClick),
+            .background(Theme.accent.copy(alpha = 0.16f)),
         contentAlignment = Alignment.Center
     ) {
         Text(symbol, color = Theme.accent, fontSize = 17.sp, fontWeight = FontWeight.Black)
@@ -504,10 +536,10 @@ fun GradientButton(
     Row(
         modifier
             .fillMaxWidth()
+            .pressable(enabled = enabled, onClick = onClick)
             .clip(RoundedCornerShape(18.dp))
             .background(gradient)
             .alphaIf(!enabled)
-            .pressable(enabled = enabled, onClick = onClick)
             .padding(vertical = 16.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -531,10 +563,10 @@ fun SecondaryButton(
     Row(
         modifier
             .fillMaxWidth()
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(12.dp))
             .background(tint.copy(alpha = 0.12f))
             .border(1.dp, tint.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-            .pressable(onClick = onClick)
             .padding(vertical = 11.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically

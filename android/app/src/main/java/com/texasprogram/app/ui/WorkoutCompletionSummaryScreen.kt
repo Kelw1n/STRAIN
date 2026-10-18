@@ -263,13 +263,13 @@ fun WorkoutCompletionSummaryScreen(
                                             .align(Alignment.TopEnd)
                                             .padding(4.dp)
                                             .size(22.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.7f))
-                                            .clickable {
+                                            .pressable {
                                                 if (index < selectedImages.size) {
                                                     selectedImages.removeAt(index)
                                                 }
-                                            },
+                                            }
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.7f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -405,12 +405,12 @@ fun WorkoutCompletionSummaryScreen(
 
                         Box(
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Theme.accent)
-                                .clickable {
+                                .pressable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     showingDurationPicker = true
                                 }
+                                .clip(CircleShape)
+                                .background(Theme.accent)
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -468,10 +468,7 @@ fun WorkoutCompletionSummaryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .shadow(12.dp, CircleShape, ambientColor = Color.White.copy(alpha = 0.2f))
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .clickable {
+                    .pressable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         val updatedProfile = if (workoutDescription.isNotEmpty()) {
                             profile.setNote(workoutDescription, workout.week, workout.day.number)
@@ -498,7 +495,10 @@ fun WorkoutCompletionSummaryScreen(
                             onUpdateProfile = onUpdateProfile
                         )
                         WorkoutSessionManager.showingSummary = false
-                    },
+                    }
+                    .shadow(12.dp, CircleShape, ambientColor = Color.White.copy(alpha = 0.2f))
+                    .clip(CircleShape)
+                    .background(Color.White),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -593,9 +593,9 @@ private fun PhotoSourceTile(
     Column(
         modifier
             .then(if (large) Modifier.height(76.dp) else Modifier.size(80.dp))
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .pressable(onClick = onClick),
+            .background(Color.White.copy(alpha = 0.07f)),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

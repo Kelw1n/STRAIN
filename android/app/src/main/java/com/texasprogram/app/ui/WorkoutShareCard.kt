@@ -378,12 +378,12 @@ fun ShareCardSection(title: String, durationSeconds: Int, photo: Uri?) {
                 )
                 Row(
                     Modifier
-                        .background(Theme.accent, CircleShape)
-                        .clip(CircleShape)
                         .pressable(enabled = card != null) {
                             haptics.medium()
                             card?.let { WorkoutShareCard.share(context, it.first) }
                         }
+                        .background(Theme.accent, CircleShape)
+                        .clip(CircleShape)
                         .padding(horizontal = 16.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)

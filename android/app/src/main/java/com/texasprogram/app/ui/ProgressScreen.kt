@@ -311,7 +311,7 @@ fun MuscleGroupsRadarCard(
     val result = remember(profile) { MuscleGroupAnalytics.calculate(profile) }
 
     CardView(
-        modifier = modifier.clickable { onClick() }
+        modifier = modifier.pressable { onClick() }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -460,7 +460,7 @@ fun MuscleGroupsDetailDialog(
                     color = Theme.accent,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onDismiss() }
+                    modifier = Modifier.pressable { onDismiss() }
                 )
             }
         },
