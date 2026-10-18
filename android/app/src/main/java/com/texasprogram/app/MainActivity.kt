@@ -1,5 +1,7 @@
 package com.texasprogram.app
 
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import android.view.ViewTreeObserver
 import android.os.SystemClock
 import androidx.compose.runtime.rememberUpdatedState
@@ -16,11 +18,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
@@ -893,7 +893,13 @@ private fun screenPadding(bottomExtra: androidx.compose.ui.unit.Dp): PaddingValu
 
 /// Вкладки, открытые хотя бы раз, остаются в памяти; видна только выбранная.
 /// Переход — короткое проявление и сдвиг на 24 dp, рисуется слоем без пересборки
-/// экранов. Скрытая вкладка не размещается — не рисуется и не ловит касания.
+/// экранов.
+///
+/// Скрытая вкладка остаётся размещённой, но прозрачной: прозрачный слой система
+/// не рисует, а при показе его не надо заново раскладывать и записывать — смена
+/// вкладки, даже на ходу под пальцем, это только смена прозрачности. Касания
+/// скрытой вкладке не достаются: выбранная лежит сверху и ловит их целиком,
+/// а скрытая гасит всё, что до неё дошло.
 ///
 /// Скрытая вкладка ещё и «заморожена»: она держит прежний экран и не
 /// пересчитывается на каждую отметку подхода. Так же — видимая, пока поверх
@@ -938,10 +944,6 @@ private fun KeepAliveTabs(
                 LaunchedEffect(active) {
                     progress.animateTo(if (active) 1f else 0f, tween(if (active) 220 else 160, easing = FastOutSlowInEasing))
                 }
-                // Уходящая видна, пока гаснет; потом её не размещаем. Через
-                // derivedStateOf — чтобы не перестраивать обёртку каждый кадр.
-                val fading by remember { derivedStateOf { progress.value > 0f } }
-                val placed = active || fading
                 val side = if (item.ordinal > selected.ordinal) 1f else -1f
                 // Новый экран берём, только пока вкладку видно и её ничто не закрывает.
                 val held = remember { arrayOfNulls<@Composable (MainTabItem) -> Unit>(1) }
@@ -950,16 +952,11 @@ private fun KeepAliveTabs(
                     Modifier
                         .fillMaxSize()
                         .zIndex(if (active) 1f else 0f)
-                        .then(
-                            if (placed) Modifier.graphicsLayer {
-                                alpha = progress.value
-                                translationX = (1f - progress.value) * side * shift
-                            } else Modifier.layout { measurable, constraints ->
-                                val placeable = measurable.measure(constraints)
-                                layout(placeable.width, placeable.height) {}
-                            }
-                        )
-                        .then(if (active) Modifier else Modifier.clearAndSetSemantics {})
+                        .graphicsLayer {
+                            alpha = progress.value
+                            translationX = (1f - progress.value) * side * shift
+                        }
+                        .then(if (active) CatchTouches else SwallowTouches)
                 ) {
                     androidx.compose.runtime.CompositionLocalProvider(com.texasprogram.app.ui.LocalTabActive provides active) {
                         TabContent(held[0]!!, item)
@@ -969,6 +966,21 @@ private fun KeepAliveTabs(
         }
     }
 }
+
+/// Выбранная вкладка «ловит» касание в любой своей точке, даже пустой: иначе
+/// оно провалилось бы к скрытой вкладке под ней.
+private val CatchTouches = Modifier.pointerInput(Unit) {
+    awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Final) }
+}
+
+/// Скрытая вкладка гасит касания раньше своих кнопок и списков — и не читается TalkBack.
+private val SwallowTouches = Modifier
+    .pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+        }
+    }
+    .clearAndSetSemantics {}
 
 /// Отдельная функция — чтобы Compose мог пропустить её целиком, когда экран
 /// вкладки тот же самый (заморожен).
