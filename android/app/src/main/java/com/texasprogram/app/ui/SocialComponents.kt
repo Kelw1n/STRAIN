@@ -312,6 +312,10 @@ sealed interface SocialRoute {
     data class CopyProgram(val program: CustomProgram, val author: String) : SocialRoute
 }
 
+/// Видна ли вкладка, в которой лежит экран: скрытые остаются в памяти,
+/// но не должны отвечать на «Назад».
+val LocalTabActive = androidx.compose.runtime.compositionLocalOf { true }
+
 /// Стек экранов одной вкладки: «Назад» снимает верхний.
 @Stable
 class SocialNavigator {
@@ -330,7 +334,8 @@ fun SocialHost(
     screen: @Composable (SocialRoute) -> Unit,
     root: @Composable () -> Unit
 ) {
-    BackHandler(enabled = navigator.stack.isNotEmpty()) { navigator.pop() }
+    // Скрытая вкладка живёт в памяти, но «Назад» не перехватывает.
+    BackHandler(enabled = LocalTabActive.current && navigator.stack.isNotEmpty()) { navigator.pop() }
     val covered = navigator.stack.isNotEmpty()
     Box(Modifier.fillMaxSize()) {
         // Корень под открытым экраном не должен читаться TalkBack.

@@ -262,7 +262,7 @@ struct BenchWaveChart: View {
                             }
                         }
                         .animation(
-                            Motion.maybe(.spring(response: 0.65, dampingFraction: 0.78).delay(Double(index) * 0.035), reduce: reduceMotion),
+                            Motion.maybe(.spring(response: 0.42, dampingFraction: 0.9).delay(Double(index) * 0.03), reduce: reduceMotion),
                             value: grown
                         )
                         Text("\(session.id)")

@@ -123,15 +123,22 @@ enum Theme {
 
 // MARK: - Анимации
 
+/// Пружины почти без перелёта: экран не качается и не «дёргается»
+/// после движения, а быстро встаёт на место.
 enum Motion {
-    static let card = Animation.spring(response: 0.46, dampingFraction: 0.86)
-    static let snappy = Animation.spring(response: 0.32, dampingFraction: 0.78)
-    static let bouncy = Animation.spring(response: 0.42, dampingFraction: 0.62)
-    static let smooth = Animation.easeInOut(duration: 0.28)
+    static let card = Animation.spring(response: 0.36, dampingFraction: 0.92)
+    static let snappy = Animation.spring(response: 0.28, dampingFraction: 0.9)
+    /// Чуть живее — для отметок и наград, но без заметного качания.
+    static let bouncy = Animation.spring(response: 0.34, dampingFraction: 0.78)
+    static let smooth = Animation.easeInOut(duration: 0.22)
     /// Появление и уход крупных панелей: тренировка, листы, плашки.
-    static let sheet = Animation.spring(response: 0.42, dampingFraction: 0.86)
-    /// Перестановка и отклик на палец: быстро, с лёгким качанием.
-    static let reorder = Animation.spring(response: 0.3, dampingFraction: 0.78)
+    static let sheet = Animation.spring(response: 0.36, dampingFraction: 0.92)
+    /// Перестановка и отклик на палец.
+    static let reorder = Animation.spring(response: 0.26, dampingFraction: 0.86)
+    /// Переключение вкладок.
+    static let tab = Animation.easeOut(duration: 0.2)
+    /// Отклик кнопки на нажатие.
+    static let press = Animation.spring(response: 0.2, dampingFraction: 0.92)
 
     static func maybe(_ animation: Animation, reduce: Bool) -> Animation? {
         reduce ? nil : animation

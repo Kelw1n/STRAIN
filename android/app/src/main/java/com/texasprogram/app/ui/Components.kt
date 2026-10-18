@@ -33,6 +33,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -58,15 +61,21 @@ import kotlin.math.abs
 // MARK: - Модификаторы
 
 /// Каскадное появление: прозрачность и сдвиг вверх с задержкой по индексу.
+/// Только для первого экрана и один раз: список помнит, что карточку уже
+/// показали, и при прокрутке назад она не проявляется заново.
 fun Modifier.appearIn(index: Int): Modifier = composed {
-    val progress = remember { Animatable(0f) }
+    var shown by rememberSaveable { mutableStateOf(false) }
+    val progress = remember { Animatable(if (shown || index > 7) 1f else 0f) }
     LaunchedEffect(Unit) {
-        delay(index.coerceAtMost(12) * Motion.STAGGER_MS.toLong())
-        progress.animateTo(1f, Motion.appear())
+        if (progress.value < 1f) {
+            delay(index * Motion.STAGGER_MS.toLong())
+            progress.animateTo(1f, Motion.appear())
+        }
+        shown = true
     }
     graphicsLayer {
         alpha = progress.value
-        translationY = (1f - progress.value) * 18.dp.toPx()
+        translationY = (1f - progress.value) * 10.dp.toPx()
     }
 }
 
@@ -74,7 +83,7 @@ fun Modifier.appearIn(index: Int): Modifier = composed {
 fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.snappy(), label = "press")
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.press(), label = "press")
     graphicsLayer { scaleX = scale; scaleY = scale }
         .clickable(
             interactionSource = interaction,
@@ -89,7 +98,7 @@ fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier =
 fun Modifier.combinedPressable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.snappy(), label = "press")
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.press(), label = "press")
     graphicsLayer { scaleX = scale; scaleY = scale }
         .combinedClickable(
             interactionSource = interaction,
@@ -112,8 +121,8 @@ fun Modifier.softScroll(state: LazyListState, index: Int): Modifier = graphicsLa
     if (half <= 0f) return@graphicsLayer
     val distance = (abs(itemCenter - viewportCenter) / half).coerceIn(0f, 1f)
     val fade = ((distance - 0.72f) / 0.28f).coerceIn(0f, 1f)
-    alpha = 1f - fade * 0.7f
-    val shrink = 1f - fade * 0.06f
+    alpha = 1f - fade * 0.45f
+    val shrink = 1f - fade * 0.02f
     scaleX = shrink
     scaleY = shrink
 }

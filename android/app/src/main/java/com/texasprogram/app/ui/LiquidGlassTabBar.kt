@@ -87,10 +87,10 @@ private const val MAGNIFICATION = 1.28f
 
 /// Пружины с параметрами iOS-версии: stiffness = (2π / response)².
 private fun stiffness(response: Double): Float = ((2 * PI / response) * (2 * PI / response)).toFloat()
-/// Посадка на вкладку: чуть недодемпфирована, чтобы линза качнулась, как капля.
-private val settleSpring = spring<Float>(dampingRatio = 0.66f, stiffness = stiffness(0.42))
+/// Посадка на вкладку: быстро и мягко, с едва заметной каплей в конце.
+private val settleSpring = spring<Float>(dampingRatio = 0.82f, stiffness = stiffness(0.34))
 /// Подъём линзы в момент касания.
-private val liftSpring = spring<Float>(dampingRatio = 0.72f, stiffness = stiffness(0.26))
+private val liftSpring = spring<Float>(dampingRatio = 0.88f, stiffness = stiffness(0.22))
 /// Слежение за пальцем: почти без задержки, но не рывками.
 private val followSpring = spring<Float>(dampingRatio = 0.86f, stiffness = stiffness(0.18))
 

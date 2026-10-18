@@ -804,7 +804,7 @@ internal fun MessageBubble(
                         },
                         onDragStopped = {
                             if (swipe.value <= -replyDistance) onReply()
-                            swipe.animateTo(0f, spring(dampingRatio = 0.7f))
+                            swipe.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 900f))
                         }
                     ),
                 horizontalAlignment = if (message.fromMe) Alignment.End else Alignment.Start,

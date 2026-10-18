@@ -258,17 +258,22 @@ object Motion {
         return (omega * omega).toFloat()
     }
 
-    fun <T> card(): SpringSpec<T> = spring(dampingRatio = 0.86f, stiffness = stiffnessFor(0.46))
-    fun <T> snappy(): SpringSpec<T> = spring(dampingRatio = 0.78f, stiffness = stiffnessFor(0.32))
-    fun <T> bouncy(): SpringSpec<T> = spring(dampingRatio = 0.62f, stiffness = stiffnessFor(0.42))
-    fun <T> appear(): SpringSpec<T> = spring(dampingRatio = 0.85f, stiffness = stiffnessFor(0.55))
-    fun <T> sheet(): SpringSpec<T> = spring(dampingRatio = 0.86f, stiffness = stiffnessFor(0.42))
-    fun <T> reorder(): SpringSpec<T> = spring(dampingRatio = 0.78f, stiffness = stiffnessFor(0.30))
+    // Пружины почти без перелёта: экран не качается и не «дёргается»
+    // после движения, а быстро встаёт на место.
+    fun <T> card(): SpringSpec<T> = spring(dampingRatio = 0.92f, stiffness = stiffnessFor(0.36))
+    fun <T> snappy(): SpringSpec<T> = spring(dampingRatio = 0.9f, stiffness = stiffnessFor(0.28))
+    /// Чуть живее — для отметок и наград, но без заметного качания.
+    fun <T> bouncy(): SpringSpec<T> = spring(dampingRatio = 0.78f, stiffness = stiffnessFor(0.34))
+    fun <T> appear(): SpringSpec<T> = spring(dampingRatio = 0.95f, stiffness = stiffnessFor(0.34))
+    fun <T> sheet(): SpringSpec<T> = spring(dampingRatio = 0.92f, stiffness = stiffnessFor(0.36))
+    fun <T> reorder(): SpringSpec<T> = spring(dampingRatio = 0.86f, stiffness = stiffnessFor(0.26))
+    /// Отклик кнопки на нажатие.
+    fun <T> press(): SpringSpec<T> = spring(dampingRatio = 0.92f, stiffness = stiffnessFor(0.2))
 
     val smooth: Easing = FastOutSlowInEasing
     fun <T> fade(duration: Int = 280) = tween<T>(durationMillis = duration, easing = smooth)
 
-    const val STAGGER_MS = 50
+    const val STAGGER_MS = 30
 }
 
 /// Фон приложения: адаптивные радиальные пятна, зависящие от выбранной темы.

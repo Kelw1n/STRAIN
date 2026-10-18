@@ -245,7 +245,7 @@ struct HeatCell: View {
             .onAppear {
                 guard !shown else { return }
                 if reduceMotion { shown = true } else {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.75).delay(delay)) { shown = true }
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.9).delay(delay)) { shown = true }
                 }
             }
     }

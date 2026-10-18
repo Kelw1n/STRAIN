@@ -28,13 +28,12 @@ struct MainTabView: View {
         }
     }
 
-    /// В какую сторону листаем: новый экран въезжает с той стороны, куда ушла линза.
-    @State private var movingForward = true
+    /// Открытые хотя бы раз вкладки живут дальше: при возврате экран не
+    /// собирается заново — без пустого кадра, перезагрузки ленты и рывка.
+    @State private var visitedTabs: Set<MainTabItem> = [.today]
 
-    /// Направление выставляется в той же транзакции, что и вкладка, —
-    /// через `onChange` оно опоздало бы на один переход.
     private func select(_ tab: MainTabItem) {
-        movingForward = tab.index >= selectedTab.index
+        visitedTabs.insert(tab)
         selectedTab = tab
     }
 
@@ -42,15 +41,11 @@ struct MainTabView: View {
         Binding(get: { selectedTab }, set: { select($0) })
     }
 
-    /// Уходящий экран просто гаснет и чуть уменьшается, направление важно только
-    /// входящему. Так переход не зависит от того, с каким направлением уходящий
-    /// экран был нарисован в последний раз.
-    private var tabTransition: AnyTransition {
-        if reduceMotion { return .opacity }
-        return .asymmetric(
-            insertion: .offset(x: movingForward ? 36 : -36).combined(with: .opacity),
-            removal: .scale(scale: 0.97).combined(with: .opacity)
-        )
+    /// Скрытая вкладка стоит чуть в стороне — со своей стороны от выбранной.
+    /// Поэтому новая въезжает оттуда, куда ушла линза, а старая уходит в свою сторону.
+    private func tabOffset(_ tab: MainTabItem) -> CGFloat {
+        guard tab != selectedTab, !reduceMotion else { return 0 }
+        return tab.index > selectedTab.index ? 28 : -28
     }
 
     /// Точки: новые сообщения — на «Друзьях», новая активность — на «Главном».
@@ -99,11 +94,22 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             // Экраны контента
             ZStack {
-                screen(for: selectedTab)
-                    .id(selectedTab)
-                    .transition(tabTransition)
+                ForEach(MainTabItem.allCases) { tab in
+                    if visitedTabs.contains(tab) || tab == selectedTab {
+                        let active = tab == selectedTab
+                        screen(for: tab)
+                            .opacity(active ? 1 : 0)
+                            .offset(x: tabOffset(tab))
+                            .allowsHitTesting(active)
+                            .accessibilityHidden(!active)
+                            .zIndex(active ? 1 : 0)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Короткий плавный переход без пружины: только прозрачность и сдвиг,
+            // экраны при этом не пересобираются.
+            .animation(Motion.maybe(Motion.tab, reduce: reduceMotion), value: selectedTab)
 
             // Нижняя панель: свернутая тренировка + плашка отдыха + Liquid Glass Dock
             VStack(spacing: 8) {

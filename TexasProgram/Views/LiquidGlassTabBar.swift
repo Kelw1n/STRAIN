@@ -53,10 +53,10 @@ struct LiquidGlassTabBar: View {
         var index: Int
     }
 
-    /// Посадка на вкладку: чуть недодемпфирована, чтобы линза качнулась, как капля.
-    static let settle = Animation.spring(response: 0.42, dampingFraction: 0.66)
+    /// Посадка на вкладку: быстро и мягко, с едва заметной каплей в конце.
+    static let settle = Animation.spring(response: 0.34, dampingFraction: 0.82)
     /// Подъём линзы в момент касания.
-    private static let lift = Animation.spring(response: 0.26, dampingFraction: 0.72)
+    private static let lift = Animation.spring(response: 0.22, dampingFraction: 0.88)
     /// Слежение за пальцем: почти без задержки, но не рывками.
     private static let follow = Animation.interactiveSpring(response: 0.18, dampingFraction: 0.86)
 

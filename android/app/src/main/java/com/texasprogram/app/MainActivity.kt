@@ -9,9 +9,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.key
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -412,19 +417,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     KeepScreenOn(profile.keepScreenOn)
 
     Box(Modifier.fillMaxSize()) {
-        // Как в iOS-версии: новый раздел въезжает со стороны, куда ведёшь
-        // по панели, старый чуть уменьшается и гаснет.
-        val tabShift = with(LocalDensity.current) { 36.dp.roundToPx() }
-        AnimatedContent(
-            targetState = tab,
-            transitionSpec = {
-                val forward = targetState.ordinal > initialState.ordinal
-                (slideInHorizontally(Motion.sheet()) { if (forward) tabShift else -tabShift } + fadeIn(tween(220))) togetherWith
-                    (scaleOut(tween(200), targetScale = 0.97f) + fadeOut(tween(160))) using
-                    SizeTransform(clip = false)
-            },
-            label = "tab"
-        ) { current ->
+        // Открытые вкладки живут дальше: при возврате экран не собирается заново —
+        // без пустого кадра, перезагрузки ленты и рывка анимации.
+        KeepAliveTabs(selected = tab) { current ->
             when (current) {
                 MainTabItem.TODAY -> FeedScreen(
                     profile = profile,
@@ -608,9 +603,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             targetState = dayDetail,
             transitionSpec = {
                 if (targetState != null) {
-                    (slideInHorizontally(tween(300)) { it / 2 } + fadeIn(tween(200))) togetherWith fadeOut(tween(200))
+                    (slideInHorizontally(tween(250)) { it / 2 } + fadeIn(tween(200))) togetherWith fadeOut(tween(200))
                 } else {
-                    fadeIn(tween(200)) togetherWith (slideOutHorizontally(tween(300)) { it / 2 } + fadeOut(tween(200)))
+                    fadeIn(tween(200)) togetherWith (slideOutHorizontally(tween(250)) { it / 2 } + fadeOut(tween(200)))
                 }
             },
             label = "detail"
@@ -675,9 +670,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             targetState = customizing,
             transitionSpec = {
                 if (targetState != null) {
-                    (slideInVertically(tween(320)) { it / 3 } + fadeIn(tween(220))) togetherWith fadeOut(tween(180))
+                    (slideInVertically(tween(260)) { it / 3 } + fadeIn(tween(220))) togetherWith fadeOut(tween(180))
                 } else {
-                    fadeIn(tween(180)) togetherWith (slideOutVertically(tween(320)) { it / 3 } + fadeOut(tween(200)))
+                    fadeIn(tween(180)) togetherWith (slideOutVertically(tween(260)) { it / 3 } + fadeOut(tween(200)))
                 }
             },
             label = "customize"
@@ -726,8 +721,8 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = WorkoutSessionManager.isPresented,
             transitionSpec = {
-                (slideInVertically(tween(350)) { it } + fadeIn(tween(250))) togetherWith
-                        (slideOutVertically(tween(300)) { it } + fadeOut(tween(200)))
+                (slideInVertically(tween(280)) { it } + fadeIn(tween(250))) togetherWith
+                        (slideOutVertically(tween(250)) { it } + fadeOut(tween(200)))
             },
             label = "activeWorkout"
         ) { presented ->
@@ -884,4 +879,46 @@ private fun screenPadding(bottomExtra: androidx.compose.ui.unit.Dp): PaddingValu
         top = insets.calculateTopPadding() + 8.dp,
         bottom = insets.calculateBottomPadding() + bottomExtra
     )
+}
+
+/// Вкладки, открытые хотя бы раз, остаются в памяти; видна только выбранная.
+/// Переход — короткое проявление и сдвиг на 24 dp, рисуется слоем без пересборки
+/// экранов. Скрытая вкладка не размещается — не рисуется и не ловит касания.
+@Composable
+private fun KeepAliveTabs(selected: MainTabItem, content: @Composable (MainTabItem) -> Unit) {
+    val visited = remember { mutableSetOf<MainTabItem>() }
+    visited.add(selected)
+    val shift = with(LocalDensity.current) { 24.dp.toPx() }
+    Box(Modifier.fillMaxSize()) {
+        for (item in MainTabItem.entries) {
+            if (item !in visited) continue
+            key(item) {
+                val active = item == selected
+                val progress = remember { Animatable(if (active) 1f else 0f) }
+                LaunchedEffect(active) {
+                    progress.animateTo(if (active) 1f else 0f, tween(if (active) 220 else 160, easing = FastOutSlowInEasing))
+                }
+                // Уходящая видна, пока гаснет; потом её не размещаем.
+                val placed = active || progress.value > 0f
+                val side = if (item.ordinal > selected.ordinal) 1f else -1f
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .zIndex(if (active) 1f else 0f)
+                        .then(
+                            if (placed) Modifier.graphicsLayer {
+                                alpha = progress.value
+                                translationX = (1f - progress.value) * side * shift
+                            } else Modifier.layout { measurable, constraints ->
+                                val placeable = measurable.measure(constraints)
+                                layout(placeable.width, placeable.height) {}
+                            }
+                        )
+                        .then(if (active) Modifier else Modifier.clearAndSetSemantics {})
+                ) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.texasprogram.app.ui.LocalTabActive provides active) { content(item) }
+                }
+            }
+        }
+    }
 }
