@@ -321,11 +321,14 @@ struct PostActions: View {
 
 /// Карусель поста: сначала фото, последним слайдом — сама тренировка.
 /// Без фото — только тренировка.
+///
+/// Лёгкая горизонтальная прокрутка постранично, а не TabView: тот на каждый
+/// пост держал отдельный системный пейджер, и лента прокручивалась тяжелее.
 struct PostMedia: View {
     let post: SocialPost
     var onTap: () -> Void = {}
 
-    @State private var page = 0
+    @State private var page: Int? = 0
 
     private var hasWorkout: Bool { !post.workout.exercises.isEmpty }
 
@@ -337,26 +340,47 @@ struct PostMedia: View {
                 .onTapGesture(perform: onTap)
         } else {
             let count = post.photos.count + (hasWorkout ? 1 : 0)
-            TabView(selection: $page) {
-                ForEach(Array(post.photos.enumerated()), id: \.offset) { index, id in
-                    RemoteImage(id: id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(0..<count, id: \.self) { index in
+                        Group {
+                            if index < post.photos.count {
+                                RemoteImage(id: post.photos[index])
+                            } else {
+                                PostWorkoutSlide(workout: post.workout)
+                                    .padding(.horizontal, 4)
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 34)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                    .background(Color.black)
+                            }
+                        }
+                        .containerRelativeFrame([.horizontal, .vertical])
                         .clipped()
-                        .tag(index)
+                        .id(index)
+                    }
                 }
-                if hasWorkout {
-                    PostWorkoutSlide(workout: post.workout)
-                        .padding(.horizontal, 4)
-                        .padding(.top, 8)
-                        .padding(.bottom, 34)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .background(Color.black)
-                        .tag(post.photos.count)
-                }
+                .scrollTargetLayout()
             }
-            .tabViewStyle(.page(indexDisplayMode: count > 1 ? .always : .never))
+            .scrollTargetBehavior(.paging)
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: $page)
             .aspectRatio(4.0 / 5.0, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(alignment: .bottom) {
+                if count > 1 {
+                    HStack(spacing: 6) {
+                        ForEach(0..<count, id: \.self) { index in
+                            Circle()
+                                .fill(Color.white.opacity(index == (page ?? 0) ? 1 : 0.45))
+                                .frame(width: 7, height: 7)
+                        }
+                    }
+                    .padding(.bottom, 12)
+                    .animation(.easeOut(duration: 0.15), value: page)
+                    .allowsHitTesting(false)
+                }
+            }
             .contentShape(Rectangle())
             .onTapGesture(perform: onTap)
         }

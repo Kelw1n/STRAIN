@@ -733,9 +733,9 @@ private struct SetRowView: View {
 
     private var checkButton: some View {
         Button {
-            withAnimation(Motion.bouncy) {
-                manager.toggleSetDone(exIdx: exerciseIndex, sIdx: position, profile: profile, restTimer: restTimer)
-            }
+            // Без общей анимации: иначе вслед за галочкой анимировалось бы всё,
+            // что меняет отметка, — профиль, графики, таймер. Галочка анимируется сама.
+            manager.toggleSetDone(exIdx: exerciseIndex, sIdx: position, profile: profile, restTimer: restTimer)
         } label: {
             ZStack {
                 Circle()
@@ -751,6 +751,7 @@ private struct SetRowView: View {
                     .scaleEffect(set.isDone ? 1 : 0.4)
                     .opacity(set.isDone ? 1 : 0)
             }
+            .animation(Motion.bouncy, value: set.isDone)
             .frame(width: 30, height: 30)
             .frame(width: 40, height: 44)
             .contentShape(Rectangle())
