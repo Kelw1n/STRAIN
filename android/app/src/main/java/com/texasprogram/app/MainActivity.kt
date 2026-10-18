@@ -1,5 +1,6 @@
 package com.texasprogram.app
 
+import androidx.compose.runtime.rememberUpdatedState
 import com.texasprogram.app.ui.popIn
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -384,15 +385,20 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
-    fun startWorkout(workout: com.texasprogram.app.service.ScheduledWorkout) {
-        if (android.os.Build.VERSION.SDK_INT >= 33 &&
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context, android.Manifest.permission.POST_NOTIFICATIONS
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            runCatching { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+    // Одна и та же функция между перерисовками: иначе вкладка «Тренировка»,
+    // которой она передаётся, пересобиралась бы на каждое изменение экрана.
+    val currentProfile by rememberUpdatedState(profile)
+    val startWorkout = remember(store, notificationPermission) {
+        { workout: com.texasprogram.app.service.ScheduledWorkout ->
+            if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                runCatching { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+            }
+            WorkoutSessionManager.requestStart(workout, store.active ?: currentProfile)
         }
-        WorkoutSessionManager.requestStart(workout, store.active ?: profile)
     }
 
     BackHandler(
@@ -427,7 +433,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         val covered = WorkoutSessionManager.isPresented || showPlan || dayDetail != null || customizing != null ||
             benchFocus != null || showHistoryList || historyFor != null || showNotes || showBodyWeight ||
             showToday || showSettings
-        KeepAliveTabs(selected = tab, frozen = covered) { current ->
+        // Вкладка передаётся лямбдой: её смена перестраивает только KeepAliveTabs,
+        // а не весь этот экран — и открываемая вкладка не пересобирается заново.
+        KeepAliveTabs(selectedTab = { tab }, frozen = covered) { current ->
             when (current) {
                 MainTabItem.TODAY -> FeedScreen(
                     profile = profile,
@@ -890,10 +898,11 @@ private fun screenPadding(bottomExtra: androidx.compose.ui.unit.Dp): PaddingValu
 /// открыт полноэкранный раздел (`frozen`): её всё равно не видно.
 @Composable
 private fun KeepAliveTabs(
-    selected: MainTabItem,
+    selectedTab: () -> MainTabItem,
     frozen: Boolean,
     content: @Composable (MainTabItem) -> Unit
 ) {
+    val selected = selectedTab()
     val visited = remember { mutableStateListOf(selected) }
     if (selected !in visited) visited.add(selected)
     // Остальные вкладки собираются заранее, по одной и в паузах: когда ведёшь

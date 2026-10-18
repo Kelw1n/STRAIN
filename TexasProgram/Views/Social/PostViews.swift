@@ -287,6 +287,7 @@ struct PostActions: View {
                         Text("\(post.comments)")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(.white)
+                            .contentTransition(.numericText())
                     }
                 }
             }
