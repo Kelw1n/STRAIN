@@ -441,6 +441,7 @@ fun MuscleGroupsDetailDialog(
     val result = remember(profile) { MuscleGroupAnalytics.calculate(profile) }
 
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF161616),
         title = {

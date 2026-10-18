@@ -580,6 +580,7 @@ fun SettingsScreen(
 
     if (showDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { showDelete = false },
             title = { Text(if (profiles.size > 1) "Удалить профиль «${profile.name}»?" else "Полностью сбросить профиль?") },
             text = { Text("Действие нельзя отменить.") },

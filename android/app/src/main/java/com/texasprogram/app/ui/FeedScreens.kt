@@ -371,6 +371,7 @@ private fun OutboxCard() {
 
     if (confirmDiscard) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDiscard = false },
             containerColor = Theme.dialog,
             title = { Text("Не публиковать тренировку?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },

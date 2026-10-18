@@ -516,6 +516,7 @@ fun WorkoutCompletionSummaryScreen(
         var tempMinutes by remember { mutableIntStateOf(maxOf(1, durationSeconds / 60)) }
 
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { showingDurationPicker = false },
             title = {
                 Text(

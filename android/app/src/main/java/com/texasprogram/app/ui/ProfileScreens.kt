@@ -975,6 +975,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
 
     if (confirmSignOut) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmSignOut = false },
             containerColor = Theme.dialog,
             title = { Text("Выйти из профиля на этом телефоне?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -991,6 +992,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
     }
     if (confirmDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDelete = false },
             containerColor = Theme.dialog,
             title = { Text("Удалить профиль навсегда?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },

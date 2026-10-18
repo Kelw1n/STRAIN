@@ -1421,6 +1421,7 @@ private fun SlideToConfirm(title: String, onConfirmed: () -> Unit) {
 @Composable
 private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1C1C1F),
         title = { Text("Время отдыха", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
@@ -1459,6 +1460,7 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
 private fun WorkoutNoteDialog(initialNote: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialNote) }
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1C1C1F),
         title = { Text("Заметка к тренировке", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },

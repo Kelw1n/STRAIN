@@ -335,6 +335,7 @@ fun ExerciseHistoryListScreen(
 
     if (confirming) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirming = false },
             title = { Text("Заполнить историю плановыми весами?") },
             text = {

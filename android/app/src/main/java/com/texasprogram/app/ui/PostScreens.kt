@@ -127,6 +127,7 @@ fun PostCard(
 
     if (confirmDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDelete = false },
             containerColor = Theme.dialog,
             title = { Text("Удалить тренировку из ленты?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -546,6 +547,7 @@ fun PostDetailScreen(
 
     if (confirmDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDelete = false },
             containerColor = Theme.dialog,
             title = { Text("Удалить тренировку из ленты?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },

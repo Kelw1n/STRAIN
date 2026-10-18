@@ -106,6 +106,7 @@ fun ExerciseArtDialog(name: String, onDismiss: () -> Unit) {
         Column(
             Modifier
                 .fillMaxWidth()
+                .popIn()
                 .clip(RoundedCornerShape(28.dp))
                 .background(Color(0xFF121212))
                 .padding(22.dp),

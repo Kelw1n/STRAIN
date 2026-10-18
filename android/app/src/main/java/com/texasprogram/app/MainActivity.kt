@@ -1,5 +1,6 @@
 package com.texasprogram.app
 
+import com.texasprogram.app.ui.popIn
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -737,6 +738,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         WorkoutSessionManager.pendingWorkout?.let { next ->
             val current = WorkoutSessionManager.activeWorkout
             androidx.compose.material3.AlertDialog(
+                modifier = Modifier.popIn(),
                 onDismissRequest = { WorkoutSessionManager.cancelReplace() },
                 containerColor = Theme.dialog,
                 title = { Text("Идёт другая тренировка", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },

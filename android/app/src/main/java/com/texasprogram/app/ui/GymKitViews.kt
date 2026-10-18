@@ -168,6 +168,7 @@ fun AsPlannedButton(
 
     if (confirming) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirming = false },
             title = { Text("Записать все подходы плановыми весами?") },
             text = { Text("Повторы и веса возьмутся из плана. Что разошлось — поправишь через счётчик подходов.") },

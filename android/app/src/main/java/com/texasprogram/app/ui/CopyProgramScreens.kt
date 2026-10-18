@@ -68,6 +68,7 @@ fun CopyProgramScreen(program: CustomProgram, author: String, contentPadding: Pa
     val profile = saved
     if (profile != null) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = {
                 saved = null
                 navigator.pop()
@@ -142,6 +143,7 @@ fun CopyProgramButton(
 
     if (choosing) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { choosing = false },
             containerColor = Theme.dialog,
             title = { Text("Что скопировать?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },

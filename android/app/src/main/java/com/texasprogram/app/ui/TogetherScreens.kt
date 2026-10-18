@@ -166,6 +166,7 @@ fun TogetherCard(together: SocialTogether) {
     }
     if (confirmLeave) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmLeave = false },
             containerColor = Theme.dialog,
             title = { Text("Выйти из совместной тренировки?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },

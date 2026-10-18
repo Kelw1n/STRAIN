@@ -95,6 +95,20 @@ fun Modifier.appearIn(index: Int): Modifier = composed {
     }
 }
 
+/// Появление окна поверх экрана: проявляется и чуть приближается, как
+/// всплывающие окна в iOS. Только слоем — компоновку не трогает.
+fun Modifier.popIn(): Modifier = composed {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, Motion.sheet()) }
+    graphicsLayer {
+        val p = progress.value
+        alpha = p.coerceIn(0f, 1f)
+        val scale = 0.92f + 0.08f * p
+        scaleX = scale
+        scaleY = scale
+    }
+}
+
 /// Нажатие с пружинным сжатием — аналог PressableStyle из SwiftUI.
 fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }

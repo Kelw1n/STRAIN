@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.foundation.clickable
 import android.content.ClipData
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -998,8 +999,14 @@ private fun QuoteBlock(quote: SocialMessageQuote, name: String, onMine: Boolean,
 @Composable
 private fun ImageViewer(id: String, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black).pressable(onClick = onClose)) {
-            RemoteImage(id, Modifier.fillMaxSize(), ContentScale.Fit)
+        // Фото на весь экран не сжимается при касании — только закрывается.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
+        ) {
+            RemoteImage(id, Modifier.fillMaxSize().popIn(), ContentScale.Fit)
             Box(
                 Modifier
                     .align(Alignment.TopEnd)

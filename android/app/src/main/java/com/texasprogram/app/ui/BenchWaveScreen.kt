@@ -147,6 +147,7 @@ fun BenchWaveScreen(
     val pending = pendingStart
     if (pending != null) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { pendingStart = null },
             title = { Text("Начать с тренировки ${pending.id}?") },
             text = { Text(startMessage(profile, pending)) },
