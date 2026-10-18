@@ -15,6 +15,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.key
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
@@ -419,7 +420,12 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     Box(Modifier.fillMaxSize()) {
         // Открытые вкладки живут дальше: при возврате экран не собирается заново —
         // без пустого кадра, перезагрузки ленты и рывка анимации.
-        KeepAliveTabs(selected = tab) { current ->
+        // Пока поверх вкладок открыт полноэкранный раздел, вкладку под ним
+        // не пересчитываем — её не видно, а отметки подходов идут часто.
+        val covered = WorkoutSessionManager.isPresented || showPlan || dayDetail != null || customizing != null ||
+            benchFocus != null || showHistoryList || historyFor != null || showNotes || showBodyWeight ||
+            showToday || showSettings
+        KeepAliveTabs(selected = tab, frozen = covered) { current ->
             when (current) {
                 MainTabItem.TODAY -> FeedScreen(
                     profile = profile,
@@ -884,8 +890,16 @@ private fun screenPadding(bottomExtra: androidx.compose.ui.unit.Dp): PaddingValu
 /// Вкладки, открытые хотя бы раз, остаются в памяти; видна только выбранная.
 /// Переход — короткое проявление и сдвиг на 24 dp, рисуется слоем без пересборки
 /// экранов. Скрытая вкладка не размещается — не рисуется и не ловит касания.
+///
+/// Скрытая вкладка ещё и «заморожена»: она держит прежний экран и не
+/// пересчитывается на каждую отметку подхода. Так же — видимая, пока поверх
+/// открыт полноэкранный раздел (`frozen`): её всё равно не видно.
 @Composable
-private fun KeepAliveTabs(selected: MainTabItem, content: @Composable (MainTabItem) -> Unit) {
+private fun KeepAliveTabs(
+    selected: MainTabItem,
+    frozen: Boolean,
+    content: @Composable (MainTabItem) -> Unit
+) {
     val visited = remember { mutableSetOf<MainTabItem>() }
     visited.add(selected)
     val shift = with(LocalDensity.current) { 24.dp.toPx() }
@@ -898,9 +912,14 @@ private fun KeepAliveTabs(selected: MainTabItem, content: @Composable (MainTabIt
                 LaunchedEffect(active) {
                     progress.animateTo(if (active) 1f else 0f, tween(if (active) 220 else 160, easing = FastOutSlowInEasing))
                 }
-                // Уходящая видна, пока гаснет; потом её не размещаем.
-                val placed = active || progress.value > 0f
+                // Уходящая видна, пока гаснет; потом её не размещаем. Через
+                // derivedStateOf — чтобы не перестраивать обёртку каждый кадр.
+                val fading by remember { derivedStateOf { progress.value > 0f } }
+                val placed = active || fading
                 val side = if (item.ordinal > selected.ordinal) 1f else -1f
+                // Новый экран берём, только пока вкладку видно и её ничто не закрывает.
+                val held = remember { arrayOfNulls<@Composable (MainTabItem) -> Unit>(1) }
+                if ((active && !frozen) || held[0] == null) held[0] = content
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -916,9 +935,18 @@ private fun KeepAliveTabs(selected: MainTabItem, content: @Composable (MainTabIt
                         )
                         .then(if (active) Modifier else Modifier.clearAndSetSemantics {})
                 ) {
-                    androidx.compose.runtime.CompositionLocalProvider(com.texasprogram.app.ui.LocalTabActive provides active) { content(item) }
+                    androidx.compose.runtime.CompositionLocalProvider(com.texasprogram.app.ui.LocalTabActive provides active) {
+                        TabContent(held[0]!!, item)
+                    }
                 }
             }
         }
     }
+}
+
+/// Отдельная функция — чтобы Compose мог пропустить её целиком, когда экран
+/// вкладки тот же самый (заморожен).
+@Composable
+private fun TabContent(content: @Composable (MainTabItem) -> Unit, item: MainTabItem) {
+    content(item)
 }

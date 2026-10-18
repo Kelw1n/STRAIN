@@ -62,7 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import com.texasprogram.app.model.AchievementKind
 import com.texasprogram.app.model.CustomProgram
 import com.texasprogram.app.model.SocialBadge
@@ -81,15 +81,20 @@ fun RemoteImage(id: String?, modifier: Modifier = Modifier, contentScale: Conten
         ImagePlaceholder(modifier, loading = false)
         return
     }
-    SubcomposeAsyncImage(
+    // Лёгкий AsyncImage, а не SubcomposeAsyncImage: тот на каждое фото строил
+    // отдельный кусок интерфейса со спиннером — в ленте это рывки прокрутки.
+    AsyncImage(
         model = url,
         contentDescription = null,
         contentScale = contentScale,
-        modifier = modifier,
-        loading = { ImagePlaceholder(Modifier.fillMaxSize(), loading = true) },
-        error = { ImagePlaceholder(Modifier.fillMaxSize(), loading = false) }
+        placeholder = PlaceholderPainter,
+        error = PlaceholderPainter,
+        modifier = modifier
     )
 }
+
+/// Ровная подложка, пока фото грузится: без анимации, ничего не перерисовывает.
+private val PlaceholderPainter = androidx.compose.ui.graphics.painter.ColorPainter(Color(0xFF1F1F22))
 
 @Composable
 private fun ImagePlaceholder(modifier: Modifier, loading: Boolean) {
