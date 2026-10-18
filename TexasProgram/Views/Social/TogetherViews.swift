@@ -214,7 +214,7 @@ struct InviteBubble: View {
                 .frame(height: 38)
                 .background(primary ? Color.white : Color.white.opacity(0.12), in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     private func respond(_ action: String, status: String) {

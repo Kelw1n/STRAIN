@@ -62,7 +62,7 @@ struct BodyWeightCard: View {
                             .padding(.horizontal, 11)
                             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
 
                 Button("Записать") { record() }
@@ -72,7 +72,7 @@ struct BodyWeightCard: View {
                     .padding(.horizontal, 16)
                     .background(Theme.accentGradient.opacity(parsed == nil ? 0.35 : 1),
                                 in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .disabled(parsed == nil)
             }
             .toolbar {

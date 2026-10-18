@@ -150,7 +150,7 @@ struct DayCustomizeView: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle(scale: 0.985))
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
                         profile.hideExercise(exercise, week: week, day: day.number, scope: scope)
@@ -207,7 +207,7 @@ struct DayCustomizeView: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle(scale: 0.985))
                 .swipeActions {
                     Button(role: .destructive) { profile.removeEdit(item) } label: {
                         Label("Удалить", systemImage: "trash")

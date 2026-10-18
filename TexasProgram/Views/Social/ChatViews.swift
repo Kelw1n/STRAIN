@@ -39,7 +39,7 @@ struct ChatListView: View {
                 VStack(spacing: 0) {
                     ForEach(chats) { chat in
                         Button { onOpen(chat.user.username) } label: { ChatRow(chat: chat) }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressableStyle(scale: 0.985))
                         if chat.id != chats.last?.id {
                             Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 74)
                         }
@@ -279,7 +279,7 @@ struct ChatView: View {
                     }
                     .animation(Motion.snappy, value: status?.text)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
         .preferredColorScheme(.dark)
@@ -667,7 +667,7 @@ struct MessageBubble: View {
         BubbleStack(spacing: 4) {
             if let quote = message.replyTo {
                 Button { onOpenQuote(quote.id) } label: { quoteView(quote) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .padding(.horizontal, message.image == nil ? 0 : 5)
                     .padding(.top, message.image == nil ? 0 : 5)
             }
@@ -776,7 +776,7 @@ struct MessageBubble: View {
                     .background(reaction.mine ? Theme.accent.opacity(0.45) : Color(white: 0.16), in: Capsule())
                     .overlay(Capsule().strokeBorder(reaction.mine ? Theme.accent : Color.white.opacity(0.08), lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .transition(.scale.combined(with: .opacity))
                 .accessibilityLabel("\(reaction.emoji) \(reaction.count)")
             }

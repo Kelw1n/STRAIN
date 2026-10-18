@@ -180,7 +180,7 @@ struct PersonRow: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.985))
 
             if SocialService.shared.isSignedIn && !person.isMe {
                 FollowButton(isFollowing: person.isFollowing, compact: true) { toggle() }

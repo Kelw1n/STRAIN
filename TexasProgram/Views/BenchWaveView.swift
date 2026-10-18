@@ -271,7 +271,7 @@ struct BenchWaveChart: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Тренировка \(session.id), до \(Int(session.topWeight)) кг")
             }
         }

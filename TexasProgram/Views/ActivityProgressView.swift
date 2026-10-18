@@ -160,7 +160,7 @@ struct ActivityProgressView: View {
                     .padding(.vertical, 15)
                     .background(Color.white, in: Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .padding(.top, 4)
         }
         .padding(18)
@@ -257,7 +257,7 @@ struct ActivityProgressView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.985))
     }
 
     // MARK: - Карточка «Группы мышц» (Радарная диаграмма)
@@ -300,7 +300,7 @@ struct ActivityProgressView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.985))
     }
 
     // MARK: - Карточка «Сила» (Рекорды)

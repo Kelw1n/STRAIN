@@ -116,7 +116,7 @@ struct PostHeader<MenuContent: View>: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             Spacer()
             Menu(content: menu) {
                 Image(systemName: "ellipsis")
@@ -275,7 +275,7 @@ struct PostActions: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityLabel(post.liked ? "Убрать лайк" : "Лайк")
 
             Button(action: onComments) {
@@ -290,7 +290,7 @@ struct PostActions: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityLabel("Комментарии")
             Spacer()
         }
@@ -618,7 +618,7 @@ struct PostDetailView: View {
             Button { openAuthor?(comment.author.username) } label: {
                 AvatarView(imageId: comment.author.avatar, username: comment.author.username, size: small ? 28 : 34)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text("@\(comment.author.username)")

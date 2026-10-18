@@ -93,7 +93,7 @@ struct WorkoutCompletionSummaryView: View {
                             .frame(width: 38, height: 38)
                             .background(Color.white.opacity(0.12), in: Circle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityLabel("Назад")
                 }
 
@@ -412,7 +412,7 @@ struct WorkoutCompletionSummaryView: View {
                         .padding(.vertical, 8)
                         .background(Theme.accent, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             .padding(18)
             .background(Color(red: 0.10, green: 0.10, blue: 0.12))
@@ -514,7 +514,7 @@ struct WorkoutCompletionSummaryView: View {
                 .background(Color.white, in: Capsule())
                 .shadow(color: Color.white.opacity(0.20), radius: 12, y: 3)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     // MARK: - Модальное окно выбора продолжительности
@@ -560,7 +560,7 @@ struct WorkoutCompletionSummaryView: View {
                         .frame(height: 50)
                         .background(Color.white, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
             }

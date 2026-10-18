@@ -221,7 +221,7 @@ struct ActivityRow: View {
                 AvatarView(imageId: item.actor.avatar, username: item.actor.username, size: 44)
                     .overlay(alignment: .bottomTrailing) { kindIcon.offset(x: 4, y: 4) }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
 
             Button(action: onOpen) {
                 HStack(alignment: .top, spacing: 8) {
@@ -242,7 +242,7 @@ struct ActivityRow: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.985))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -376,7 +376,7 @@ struct LeaderboardView: View {
                                 .frame(height: 34)
                                 .background(metric == item ? Color.white : Color(white: 0.14), in: Capsule())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                     }
                 }
             }
@@ -473,7 +473,7 @@ struct LeaderboardRow: View {
             .background(entry.user.isMe ? Theme.accent.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.985))
     }
 
     /// Остальные цифры недели мелко — чтобы было видно, за счёт чего место.

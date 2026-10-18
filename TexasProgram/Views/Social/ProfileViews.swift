@@ -273,11 +273,11 @@ struct ProfileContent<Action: View>: View {
                 Button { path.append(FeedRoute.followers(user.username)) } label: {
                     SocialStat(value: "\(user.followers)", title: "Подписчики")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 Button { path.append(FeedRoute.following(user.username)) } label: {
                     SocialStat(value: "\(user.following)", title: "Подписки")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             primaryAction()
             achievementsCard
@@ -824,7 +824,7 @@ struct EditProfileView: View {
                 }
                 .padding(16)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.985))
             if showingCode, let token = social.token {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(token)
@@ -852,13 +852,13 @@ struct EditProfileView: View {
                 Text("Выйти из профиля").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.985))
             divider
             Button { confirmDelete = true } label: {
                 Text("Удалить профиль").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.record)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.985))
         }
         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }

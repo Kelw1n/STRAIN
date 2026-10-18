@@ -904,7 +904,7 @@ struct DayDetailView: View {
                     .background(Color.white, in: Capsule())
                     .shadow(color: Color.white.opacity(0.18), radius: 12, y: 4)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.bottom, 4)
 
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
