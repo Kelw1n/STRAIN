@@ -1,5 +1,7 @@
 package com.texasprogram.app
 
+import android.view.ViewTreeObserver
+import android.os.SystemClock
 import androidx.compose.runtime.rememberUpdatedState
 import com.texasprogram.app.ui.popIn
 import android.os.Bundle
@@ -905,12 +907,25 @@ private fun KeepAliveTabs(
     val selected = selectedTab()
     val visited = remember { mutableStateListOf(selected) }
     if (selected !in visited) visited.add(selected)
-    // Остальные вкладки собираются заранее, по одной и в паузах: когда ведёшь
-    // пальцем по панели, они открываются мгновенно, без сборки на лету.
+    // Остальные вкладки собираются заранее, по одной: когда ведёшь пальцем
+    // по панели, они открываются мгновенно, без сборки на лету. Собираем только
+    // в паузу — когда экран ничего не рисует. Пока листают ленту или идёт
+    // анимация, не мешаем; если пауз нет (идёт отдых с таймером), ждём не дольше 5 с.
+    val view = LocalView.current
     LaunchedEffect(Unit) {
-        for (item in MainTabItem.entries) {
-            delay(900)
-            if (item !in visited) visited.add(item)
+        var lastDraw = SystemClock.uptimeMillis()
+        val onDraw = ViewTreeObserver.OnDrawListener { lastDraw = SystemClock.uptimeMillis() }
+        view.viewTreeObserver.addOnDrawListener(onDraw)
+        try {
+            for (item in MainTabItem.entries) {
+                if (item in visited) continue
+                delay(900)
+                val waitUntil = SystemClock.uptimeMillis() + 5_000
+                while (SystemClock.uptimeMillis() - lastDraw < 350 && SystemClock.uptimeMillis() < waitUntil) delay(120)
+                if (item !in visited) visited.add(item)
+            }
+        } finally {
+            if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(onDraw)
         }
     }
     val shift = with(LocalDensity.current) { 24.dp.toPx() }
