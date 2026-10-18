@@ -74,8 +74,24 @@ def nodes():
     return found
 
 
+def dismiss_system_dialogs(found):
+    """Эмулятор иногда показывает «… isn't responding» поверх приложения — жмём «Wait»."""
+    if not any("isn't responding" in n["text"] or "не отвечает" in n["text"] for n in found):
+        return False
+    for node in found:
+        if node["text"] in ("Wait", "Подождать"):
+            tap(node["x"], node["y"], pause=1.0)
+            return True
+    sh("input keyevent KEYCODE_BACK")
+    time.sleep(1.0)
+    return True
+
+
 def find(label, contains=False):
-    for node in nodes():
+    found = nodes()
+    if dismiss_system_dialogs(found):
+        found = nodes()
+    for node in found:
         for value in (node["text"], node["desc"]):
             if value == label or (contains and label in value):
                 return node
@@ -248,6 +264,9 @@ sh(f"pm grant {PKG} android.permission.POST_NOTIFICATIONS")
 sh("settings put global window_animation_scale 1")
 sh("settings put global transition_animation_scale 1")
 sh("settings put global animator_duration_scale 1")
+# Системные окна «приложение не отвечает» на медленном эмуляторе закрывают экран.
+sh("settings put global hide_error_dialogs 1")
+sh("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
 launch = sh(f"am start -W -n {PKG}/.MainActivity")
 m = re.search(r"TotalTime: (\d+)", launch)
 cold_start = int(m.group(1)) if m else None
