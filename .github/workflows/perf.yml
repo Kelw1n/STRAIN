@@ -8,7 +8,7 @@ on:
     inputs:
       baseline:
         description: "Коммит для сравнения"
-        default: "6b58ca2"
+        default: "f254007"
   push:
     branches: ["claude/possible-improvements-b00203"]
     paths:
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
-      BASELINE: ${{ github.event.inputs.baseline || '6b58ca2' }}
+      BASELINE: ${{ github.event.inputs.baseline || 'f254007' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,4 +79,4 @@ jobs:
           echo "## После ($(git rev-parse --short HEAD))" >> "$GITHUB_STEP_SUMMARY"
           cat perf-current/report.md >> "$GITHUB_STEP_SUMMARY" || true
 
-# Повторный прогон — любая правка этого файла в ветке. Прогон 3.
+# Повторный прогон — любая правка этого файла в ветке. Прогон 4.

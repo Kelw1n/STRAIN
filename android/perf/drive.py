@@ -168,6 +168,8 @@ def frames():
                 start = int(cols[idx["IntendedVsync"]])
                 handle = int(cols[idx["HandleInputStart"]])
                 anim = int(cols[idx["AnimationStart"]])
+                traversal = int(cols[idx["PerformTraversalsStart"]])
+                draw = int(cols[idx["DrawStart"]])
                 ui_end = int(cols[idx["SyncQueued"]])
                 done = int(cols[idx["FrameCompleted"]])
             except (KeyError, ValueError, IndexError):
@@ -175,7 +177,15 @@ def frames():
             begin = handle if handle > 0 else anim
             if start <= 0 or begin <= 0 or ui_end <= begin or done <= start:
                 continue
-            result[start] = ((ui_end - begin) / 1e6, (ui_end - start) / 1e6, (done - start) / 1e6)
+            # Фазы кадра: ввод, сборка (анимации и перекомпоновка Compose),
+            # раскладка, запись отрисовки.
+            phases = (
+                max(0, anim - begin) / 1e6,
+                max(0, traversal - anim) / 1e6,
+                max(0, draw - traversal) / 1e6,
+                max(0, ui_end - draw) / 1e6,
+            )
+            result[start] = ((ui_end - begin) / 1e6, (ui_end - start) / 1e6, (done - start) / 1e6, phases)
     return result
 
 
@@ -252,6 +262,12 @@ def scenario(name, action):
         "janky_pct": stats["janky_pct"],
         "seconds": round(elapsed, 1),
     }
+    # Пять самых тяжёлых кадров по фазам — видно, что именно их тянет.
+    row["slowest"] = [
+        {"work": round(f[0], 1), "input": round(f[3][0], 1), "compose": round(f[3][1], 1),
+         "layout": round(f[3][2], 1), "draw": round(f[3][3], 1)}
+        for f in sorted(data, key=lambda f: -f[0])[:5]
+    ]
     results.append(row)
     print(json.dumps(row, ensure_ascii=False))
     screenshot(name)
