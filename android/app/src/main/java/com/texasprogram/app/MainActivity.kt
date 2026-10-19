@@ -486,14 +486,27 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         }
 
         Column(Modifier.align(Alignment.BottomCenter)) {
-            if (WorkoutSessionManager.isRunning && !WorkoutSessionManager.isPresented) {
+            // В переписке внизу поле ввода: свёрнутая тренировка, отдых и панель
+            // вкладок уезжают вниз, чтобы его не закрывать. Отдых при этом идёт
+            // дальше и виден в уведомлении; вышел из чата — плашки вернулись.
+            val chrome = !SocialService.hidesTabBar
+            AnimatedVisibility(
+                visible = chrome && WorkoutSessionManager.isRunning && !WorkoutSessionManager.isPresented,
+                enter = slideInVertically(Motion.sheet()) { it } + fadeIn(),
+                exit = slideOutVertically(Motion.sheet()) { it } + fadeOut()
+            ) {
                 MinimizedWorkoutBar()
             }
             // Карточка сама прячется и показывается с анимацией.
-            RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
-            // В переписке поле ввода внизу — панель вкладок там лишняя.
             AnimatedVisibility(
-                visible = !SocialService.hidesTabBar,
+                visible = chrome,
+                enter = slideInVertically(Motion.sheet()) { it } + fadeIn(),
+                exit = slideOutVertically(Motion.sheet()) { it } + fadeOut()
+            ) {
+                RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
+            }
+            AnimatedVisibility(
+                visible = chrome,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut()
             ) {

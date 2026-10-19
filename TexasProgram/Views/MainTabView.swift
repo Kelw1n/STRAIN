@@ -90,6 +90,10 @@ struct MainTabView: View {
         }
     }
 
+    private var showsMinimizedWorkout: Bool {
+        sessionManager.isRunning && !sessionManager.isPresented && !AppChrome.shared.hidesTabBar
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // Экраны контента
@@ -111,26 +115,27 @@ struct MainTabView: View {
             // экраны при этом не пересобираются.
             .animation(Motion.maybe(Motion.tab, reduce: reduceMotion), value: selectedTab)
 
-            // Нижняя панель: свернутая тренировка + плашка отдыха + Liquid Glass Dock
+            // Нижняя панель: свернутая тренировка + плашка отдыха + Liquid Glass Dock.
+            // В переписке внизу поле ввода — вся панель уезжает вниз, чтобы его не
+            // закрывать. Отдых при этом идёт дальше и виден на Dynamic Island.
             VStack(spacing: 8) {
-                if sessionManager.isRunning && !sessionManager.isPresented {
+                if showsMinimizedWorkout {
                     MinimizedWorkoutBar(profile: profile)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                if restTimer.isRunning {
+                if restTimer.isRunning && !AppChrome.shared.hidesTabBar {
                     RebrnRestTimerCard()
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                // В переписке поле ввода внизу — панель вкладок там лишняя.
                 if !AppChrome.shared.hidesTabBar {
                     LiquidGlassTabBar(selectedTab: tabSelection, badges: tabBadges)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: AppChrome.shared.hidesTabBar)
-            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: sessionManager.isRunning && !sessionManager.isPresented)
+            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: showsMinimizedWorkout)
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: restTimer.isRunning)
         }
         // Друг зовёт тренироваться вместе — плашка сверху поверх любой вкладки.
