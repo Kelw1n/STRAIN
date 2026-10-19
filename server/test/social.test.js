@@ -9,7 +9,7 @@ const url = process.env.TEST_DATABASE_URL;
 
 test('лента, профили, подписки, фото и комментарии', { skip: !url && 'нет TEST_DATABASE_URL' }, async (t) => {
     const social = createSocial({ databaseUrl: url });
-    await social.pool().query('DROP TABLE IF EXISTS messages, together, comments, likes, posts, images, follows, users CASCADE');
+    await social.pool().query('DROP TABLE IF EXISTS messages, together, comments, likes, posts, images, voices, follows, users CASCADE');
     await social.init();
 
     const app = express();
@@ -220,6 +220,28 @@ test('лента, профили, подписки, фото и коммента
         assert.equal((await call('GET', '/chats', { token: friend.token })).data.chats[0].last.image, photo);
         assert.equal((await call('DELETE', `/messages/${withPhoto.data.id}`, { token: me.token })).status, 200);
         assert.equal((await call('GET', `/images/${photo}`)).status, 404, 'с сообщением удаляется и фото');
+
+        // Голосовое: только своё, с длительностью и волной; удаляется вместе с сообщением.
+        const sound = Buffer.from('....ftypM4A voice', 'latin1');
+        assert.equal((await call('POST', '/voices?durationMs=4200&waveform=0f3a', { raw: sound, type: 'audio/mp4' })).status, 401);
+        assert.equal((await call('POST', '/voices?durationMs=120', { token: me.token, raw: sound, type: 'audio/mp4' })).status, 400, 'слишком короткое');
+        assert.equal((await call('POST', '/voices?durationMs=90000', { token: me.token, raw: sound, type: 'audio/mp4' })).status, 400, 'дольше минуты');
+        const voice = (await call('POST', '/voices?durationMs=4200&waveform=0f3a', { token: me.token, raw: sound, type: 'audio/mp4' })).data;
+        assert.equal(voice.durationMs, 4200);
+        const foreignVoice = (await call('POST', '/voices?durationMs=1000', { token: friend.token, raw: sound, type: 'audio/mp4' })).data.id;
+        assert.equal((await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { voice: foreignVoice } })).status, 400);
+        const spoken = await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { voice: voice.id } });
+        assert.equal(spoken.status, 201);
+        assert.deepEqual(spoken.data.voice, { id: voice.id, durationMs: 4200, waveform: '0f3a' });
+        const back = await call('GET', `/voices/${voice.id}`);
+        assert.equal(back.headers.get('content-type'), 'audio/mp4');
+        assert.ok(Buffer.compare(back.data, sound) === 0, 'звук приходит как был');
+        const answer = await call('POST', '/chats/tim/messages', { token: friend.token, body: { text: 'Услышал', replyTo: spoken.data.id } });
+        assert.equal(answer.data.replyTo.voice, true, 'в цитате видно, что это голосовое');
+        assert.equal((await call('GET', '/chats', { token: friend.token })).data.chats[0].last.text, 'Услышал');
+        assert.equal((await call('DELETE', `/messages/${spoken.data.id}`, { token: me.token })).status, 200);
+        assert.equal((await call('GET', `/voices/${voice.id}`)).status, 404, 'с сообщением удаляется и звук');
+        await call('DELETE', `/messages/${answer.data.id}`, { token: friend.token });
 
         assert.equal((await call('DELETE', `/messages/${thread.messages[0].id}`, { token: me.token })).status, 404, 'чужое не удалить');
         assert.equal((await call('DELETE', `/messages/${first.data.id}`, { token: me.token })).status, 200);

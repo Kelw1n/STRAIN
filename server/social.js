@@ -11,6 +11,9 @@ const express = require('express');
 const USERNAME = /^[a-z0-9_.]{3,24}$/;
 const RESERVED = new Set(['admin', 'strain', 'support', 'root', 'api', 'me', 'help', 'official']);
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+// Голосовое — до минуты: AAC 32 кбит/с даёт ~240 КБ, берём с запасом.
+const MAX_VOICE_BYTES = 1.5 * 1024 * 1024;
+const MAX_VOICE_MS = 62 * 1000;
 const PAGE = 20;
 // «Тренируется сейчас» гаснет само, если телефон давно не присылал статус.
 const LIVE_TTL_MS = 20 * 60 * 1000;
@@ -51,6 +54,17 @@ CREATE TABLE IF NOT EXISTS images (
     id TEXT PRIMARY KEY,
     owner TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     mime TEXT NOT NULL,
+    data BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Голосовые сообщения: звук AAC (m4a), длительность и «волна» — громкость
+-- по кусочкам строкой шестнадцатеричных цифр, чтобы пузырь рисовался сразу.
+CREATE TABLE IF NOT EXISTS voices (
+    id TEXT PRIMARY KEY,
+    owner TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mime TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    waveform TEXT NOT NULL DEFAULT '',
     data BYTEA NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -102,6 +116,8 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 -- Фото в сообщении: id из images, хозяин фото — отправитель.
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS image TEXT;
+-- Голосовое в сообщении: id из voices, хозяин — отправитель.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS voice TEXT;
 -- Ответ на сообщение, реакции {userId: emoji} и время последней правки:
 -- открытая переписка подтягивает всё, что поменялось после прошлого запроса.
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to TEXT REFERENCES messages(id) ON DELETE SET NULL;
@@ -215,6 +231,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     const commentLimit = limiter(150, 60 * 60 * 1000);
     const messageLimit = limiter(400, 60 * 60 * 1000);
     const imageLimit = limiter(80, 60 * 60 * 1000);
+    const voiceLimit = limiter(120, 60 * 60 * 1000);
 
     // Все маршруты раздела ждут готовую базу.
     router.use(async (req, res, next) => {
@@ -490,6 +507,34 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         res.type(rows[0].mime).send(rows[0].data);
     }));
 
+    // MARK: Голосовые
+
+    // Длительность и волна — в адресе: тело запроса целиком занято звуком.
+    router.post('/voices', express.raw({ type: ['audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac'], limit: MAX_VOICE_BYTES }), wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        voiceLimit(me.id);
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, 'Пустое голосовое');
+        const durationMs = Math.round(Number(req.query.durationMs));
+        if (!Number.isFinite(durationMs) || durationMs < 300) throw new HttpError(400, 'Слишком короткое голосовое');
+        if (durationMs > MAX_VOICE_MS) throw new HttpError(400, 'Голосовое — не длиннее минуты');
+        const waveform = /^[0-9a-f]{0,64}$/.test(String(req.query.waveform || '')) ? String(req.query.waveform || '') : '';
+        const id = newId();
+        await q(
+            'INSERT INTO voices (id, owner, mime, duration_ms, waveform, data) VALUES ($1, $2, $3, $4, $5, $6)',
+            [id, me.id, req.get('content-type'), durationMs, waveform, req.body]
+        );
+        res.status(201).json({ id, durationMs, waveform });
+    }));
+
+    router.get('/voices/:id', wrap(async (req, res) => {
+        if (!/^[a-f0-9]{24}$/.test(req.params.id)) throw new HttpError(404, 'Нет такого голосового');
+        const rows = await q('SELECT mime, data FROM voices WHERE id = $1', [req.params.id]);
+        if (!rows[0]) throw new HttpError(404, 'Нет такого голосового');
+        // Звук по одному адресу никогда не меняется — телефон кэширует его навсегда.
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+        res.type(rows[0].mime).send(rows[0].data);
+    }));
+
     // MARK: Посты
 
     router.post('/posts', wrap(async (req, res) => {
@@ -667,6 +712,9 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             id: row.id,
             text: row.text,
             image: row.image || null,
+            voice: row.voice
+                ? { id: row.voice, durationMs: Number(row.v_duration) || 0, waveform: row.v_waveform || '' }
+                : null,
             fromMe: row.sender === me.id,
             createdAt: new Date(row.created_at).getTime(),
             read: row.read_at !== null,
@@ -682,16 +730,24 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
                 }
                 : null,
             replyTo: row.reply_id
-                ? { id: row.reply_id, text: row.reply_deleted ? '' : row.reply_text, image: row.reply_deleted ? null : row.reply_image, fromMe: row.reply_sender === me.id }
+                ? {
+                    id: row.reply_id,
+                    text: row.reply_deleted ? '' : row.reply_text,
+                    image: row.reply_deleted ? null : row.reply_image,
+                    voice: !row.reply_deleted && !!row.reply_voice,
+                    fromMe: row.reply_sender === me.id
+                }
                 : null
         });
 
     const MESSAGE_SELECT = `
-        SELECT m.*, r.id AS reply_id, r.text AS reply_text, r.image AS reply_image, r.sender AS reply_sender,
-               r.deleted_at IS NOT NULL AS reply_deleted,
+        SELECT m.*, r.id AS reply_id, r.text AS reply_text, r.image AS reply_image, r.voice AS reply_voice,
+               r.sender AS reply_sender, r.deleted_at IS NOT NULL AS reply_deleted,
                t.status AS t_status, t.created_at AS t_created, t.responded_at AS t_responded,
-               t.inviter_done AS t_inviter_done, t.invitee_done AS t_invitee_done
-        FROM messages m LEFT JOIN messages r ON r.id = m.reply_to LEFT JOIN together t ON t.id = m.together`;
+               t.inviter_done AS t_inviter_done, t.invitee_done AS t_invitee_done,
+               v.duration_ms AS v_duration, v.waveform AS v_waveform
+        FROM messages m LEFT JOIN messages r ON r.id = m.reply_to LEFT JOIN together t ON t.id = m.together
+        LEFT JOIN voices v ON v.id = m.voice`;
 
     async function unreadCount(me) {
         const [row] = await q('SELECT count(*)::int AS count FROM messages WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL', [me.id]);
@@ -804,11 +860,15 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const other = await userByName(req.params.username);
         if (other.id === me.id) throw new HttpError(400, 'Нельзя написать самому себе');
         const body = text(req.body && req.body.text, 2000);
-        // Фото — только своё, загруженное через /images.
+        // Фото и голосовое — только свои, загруженные через /images и /voices.
         const image = imageIds([req.body && req.body.image])[0] || null;
-        if (!body && !image) throw new HttpError(400, 'Пустое сообщение');
+        const voice = imageIds([req.body && req.body.voice])[0] || null;
+        if (!body && !image && !voice) throw new HttpError(400, 'Пустое сообщение');
         if (image && !(await q('SELECT 1 FROM images WHERE id = $1 AND owner = $2', [image, me.id]))[0]) {
             throw new HttpError(400, 'Фото не найдено');
+        }
+        if (voice && !(await q('SELECT 1 FROM voices WHERE id = $1 AND owner = $2', [voice, me.id]))[0]) {
+            throw new HttpError(400, 'Голосовое не найдено');
         }
         // Ответить можно только на сообщение из этой же переписки.
         let replyTo = null;
@@ -823,9 +883,9 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         }
         const clientId = text(req.body && req.body.clientId, 64) || null;
         const inserted = await q(
-            `INSERT INTO messages (id, sender, recipient, client_id, text, image, reply_to) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO messages (id, sender, recipient, client_id, text, image, voice, reply_to) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (sender, client_id) DO NOTHING RETURNING id`,
-            [newId(), me.id, other.id, clientId, body, image, replyTo]
+            [newId(), me.id, other.id, clientId, body, image, voice, replyTo]
         );
         typing.delete(`${me.id}:${other.id}`);
         // Повтор отправки после обрыва связи возвращает уже созданное сообщение.
@@ -855,13 +915,14 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     // Удаление своего сообщения: у собеседника оно тоже пропадёт при следующем обновлении.
     router.delete('/messages/:id', wrap(async (req, res) => {
         const me = await requireViewer(req);
-        const own = (await q('SELECT id, image FROM messages WHERE id = $1 AND sender = $2 AND deleted_at IS NULL', [req.params.id, me.id]))[0];
+        const own = (await q('SELECT id, image, voice FROM messages WHERE id = $1 AND sender = $2 AND deleted_at IS NULL', [req.params.id, me.id]))[0];
         if (!own) throw new HttpError(404, 'Сообщение не найдено');
         await q(
-            `UPDATE messages SET deleted_at = now(), updated_at = now(), text = '', image = NULL, reactions = '{}' WHERE id = $1`,
+            `UPDATE messages SET deleted_at = now(), updated_at = now(), text = '', image = NULL, voice = NULL, reactions = '{}' WHERE id = $1`,
             [own.id]
         );
         if (own.image) await q('DELETE FROM images WHERE id = $1 AND owner = $2', [own.image, me.id]);
+        if (own.voice) await q('DELETE FROM voices WHERE id = $1 AND owner = $2', [own.voice, me.id]);
         res.json({ success: true });
     }));
 

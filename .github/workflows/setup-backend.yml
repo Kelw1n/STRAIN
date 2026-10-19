@@ -122,7 +122,7 @@ jobs:
           for i in $(seq 1 60); do
             body=$(curl -fsS --max-time 30 "$URL/health" || true)
             # Старая версия отвечает, пока новая собирается, — ждём свежую.
-            if echo "$body" | grep -q '"social":true' && echo "$body" | grep -q '"api":4'; then
+            if echo "$body" | grep -q '"social":true' && echo "$body" | grep -q '"api":5'; then
               echo "Сервер отвечает и база подключена: $URL"
               echo "### Лента готова: $URL" >> "$GITHUB_STEP_SUMMARY"
               exit 0
@@ -166,6 +166,11 @@ jobs:
           # Фото в личном сообщении.
           dm=$(curl -fsS -X POST "$URL/v2/images" -H "$auth" -H 'Content-Type: image/jpeg' --data-binary @photo.jpg | jq -r .id)
           curl -fsS -X POST "$URL/v2/chats/$friend/messages" -H "$auth" -H 'Content-Type: application/json' -d "{\"text\":\"\",\"image\":\"$dm\"}" | jq -e --arg i "$dm" '.image == $i' > /dev/null
+          # Голосовое в личном сообщении: звук, длительность и волна.
+          printf '....ftypM4A smoke voice' > voice.m4a
+          voice=$(curl -fsS -X POST "$URL/v2/voices?durationMs=1500&waveform=0a5f" -H "$auth" -H 'Content-Type: audio/mp4' --data-binary @voice.m4a | jq -r .id)
+          curl -fsS -X POST "$URL/v2/chats/$friend/messages" -H "$auth" -H 'Content-Type: application/json' -d "{\"voice\":\"$voice\"}" | jq -e '.voice.durationMs == 1500' > /dev/null
+          curl -fsS "$URL/v2/voices/$voice" -o back.m4a && cmp voice.m4a back.m4a
           # Ответ на сообщение, реакция, «печатает» и изменения с прошлого раза.
           first=$(curl -fsS "$URL/v2/chats/$name/messages" -H "Authorization: Bearer $token2" | jq -r '.messages[-1].id')
           since=$(curl -fsS "$URL/v2/chats/$friend/messages" -H "$auth" | jq -r .serverTime)
@@ -195,7 +200,7 @@ jobs:
           start=$(date +%s%N); curl -fsS "$URL/v2/feed" > /dev/null; end=$(date +%s%N)
           echo "Лента ответила за $(( (end - start) / 1000000 )) мс"
           curl -fsS -X DELETE "$URL/v2/me" -H "$auth" > /dev/null
-          echo "Живая проверка прошла: регистрация, фото, пост, лайк, комментарий, ответ, сообщения, реакции, «печатает», тренируется сейчас, рейтинг, активность, совместная тренировка, лента"
+          echo "Живая проверка прошла: регистрация, фото, пост, лайк, комментарий, ответ, сообщения, голосовое, реакции, «печатает», тренируется сейчас, рейтинг, активность, совместная тренировка, лента"
           echo "Живая проверка прошла" >> "$GITHUB_STEP_SUMMARY"
 
-# Повторный запуск — любая правка этого файла в ветке. Попытка 7.
+# Повторный запуск — любая правка этого файла в ветке. Попытка 8.
