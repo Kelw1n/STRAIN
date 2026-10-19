@@ -165,8 +165,15 @@ struct ChatView: View {
     @State private var lastSeen: Double?
     @State private var live: SocialLive?
     @FocusState private var typing: Bool
+    /// Голосовое: запись, сдвиг пальца влево (отмена) и подсказка над полем.
+    @State private var recorder = VoiceRecorder()
+    @State private var micHeld = false
+    @State private var micCancelled = false
+    @State private var micDrag: CGFloat = 0
+    @State private var hint: String?
 
     private var social: SocialService { .shared }
+    private static let cancelDistance: CGFloat = 110
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -300,8 +307,16 @@ struct ChatView: View {
         .fullScreenCover(item: $viewing) { item in
             ImageViewer(id: item.id) { viewing = nil }
         }
-        .onAppear { AppChrome.shared.hidesTabBar = true }
-        .onDisappear { AppChrome.shared.hidesTabBar = false }
+        .onAppear {
+            AppChrome.shared.hidesTabBar = true
+            // Дошли до минуты — голосовое уходит само.
+            recorder.onLimit = { finishRecording() }
+        }
+        .onDisappear {
+            AppChrome.shared.hidesTabBar = false
+            recorder.cancel()
+            VoicePlayer.shared.stop()
+        }
         .task {
             await loadLatest()
             await social.refreshUnread()
@@ -340,6 +355,15 @@ struct ChatView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .chatGlass(Capsule())
+            }
+            if let hint {
+                Text(hint)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .chatGlass(Capsule())
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let replyingTo {
                 HStack(spacing: 10) {
@@ -390,6 +414,10 @@ struct ChatView: View {
                 .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: 8) {
+                if recorder.isRecording {
+                    VoiceRecordingStrip(recorder: recorder, drag: micDrag, cancelDistance: Self.cancelDistance)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                } else {
                 Menu {
                     Button { showingCamera = true } label: { Label("Снять фото", systemImage: "camera") }
                         .disabled(!CameraPicker.isAvailable)
@@ -412,7 +440,12 @@ struct ChatView: View {
                     .padding(.vertical, 11)
                     .frame(minHeight: 44)
                     .chatGlass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
 
+                if showsMic {
+                    micButton
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                } else {
                 Button(action: send) {
                     Group {
                         if sending {
@@ -430,6 +463,8 @@ struct ChatView: View {
                 .disabled(!canSend)
                 .accessibilityLabel("Отправить")
                 .animation(Motion.snappy, value: canSend)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
             }
         }
         .padding(.horizontal, 10)
@@ -437,10 +472,132 @@ struct ChatView: View {
         .padding(.bottom, 6)
         .animation(Motion.snappy, value: attachment != nil)
         .animation(Motion.snappy, value: replyingTo?.id)
+        .animation(Motion.snappy, value: showsMic)
+        .animation(Motion.snappy, value: recorder.isRecording)
+        .animation(Motion.snappy, value: hint)
     }
 
     private var canSend: Bool {
         !sending && (attachment != nil || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    /// Поле пустое и фото нет — вместо «Отправить» микрофон, как в Telegram.
+    private var showsMic: Bool {
+        recorder.isRecording || (!sending && attachment == nil && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    // MARK: Голосовое
+
+    /// Зажал — пишет, отпустил — ушло, увёл влево — отменено. Пока пишет,
+    /// кнопка крупнее и едет за пальцем.
+    private var micButton: some View {
+        Image(systemName: "mic.fill")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 44, height: 44)
+            .background(recorder.isRecording ? Theme.record : Color.clear, in: Circle())
+            .chatGlass(Circle(), enabled: !recorder.isRecording)
+            .scaleEffect(recorder.isRecording ? 1.3 : 1)
+            .offset(x: recorder.isRecording ? micDrag : 0)
+            .animation(Motion.bouncy, value: recorder.isRecording)
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if !micHeld {
+                            micHeld = true
+                            micCancelled = false
+                            beginRecording()
+                        }
+                        guard recorder.isRecording, !micCancelled else { return }
+                        micDrag = min(0, value.translation.width)
+                        if micDrag < -Self.cancelDistance {
+                            micCancelled = true
+                            recorder.cancel()
+                            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                            withAnimation(Motion.snappy) { micDrag = 0 }
+                        }
+                    }
+                    .onEnded { _ in
+                        micHeld = false
+                        withAnimation(Motion.snappy) { micDrag = 0 }
+                        if micCancelled {
+                            micCancelled = false
+                            return
+                        }
+                        finishRecording()
+                    }
+            )
+            .accessibilityLabel("Голосовое: удерживай и говори")
+    }
+
+    private func beginRecording() {
+        switch recorder.permission {
+        case .granted:
+            if recorder.start() {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                error = nil
+                hint = nil
+            } else {
+                error = "Не удалось включить микрофон"
+            }
+        case .undetermined:
+            Task {
+                if await recorder.requestPermission() { showHint("Готово — теперь зажми микрофон и говори") }
+            }
+        case .denied:
+            error = "Микрофон выключен: Настройки → STRAIN → Микрофон"
+        }
+    }
+
+    private func finishRecording() {
+        guard recorder.isRecording else { return }
+        if let recording = recorder.stop() {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            sendVoice(recording)
+        } else {
+            showHint("Удерживай микрофон, чтобы записать голосовое")
+        }
+    }
+
+    private func showHint(_ text: String) {
+        withAnimation(Motion.snappy) { hint = text }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            if hint == text { withAnimation(Motion.snappy) { hint = nil } }
+        }
+    }
+
+    /// Голосовое сразу в переписке; звук уходит на сервер, потом само сообщение.
+    /// В тексте — подпись для старых версий приложения, которые голосовые не играют.
+    private func sendVoice(_ recording: VoiceRecording) {
+        let quoted = replyingTo
+        let clientId = UUID().uuidString.lowercased()
+        let local = SocialMessage(
+            id: "local-" + clientId,
+            text: SocialVoice.previewText,
+            voice: SocialVoice(id: "local-" + clientId, durationMs: recording.durationMs, waveform: recording.waveform),
+            fromMe: true,
+            createdAt: Date().timeIntervalSince1970 * 1000,
+            replyTo: quoted.map { SocialMessageQuote(id: $0.id, text: $0.text, image: $0.image, voice: $0.voice != nil, fromMe: $0.fromMe) }
+        )
+        replyingTo = nil
+        withAnimation(Motion.snappy) { messages.append(local) }
+        Task {
+            do {
+                let uploaded = try await social.uploadVoice(recording.data, durationMs: recording.durationMs, waveform: recording.waveform)
+                let sent = try await social.sendMessage(
+                    to: username, text: SocialVoice.previewText, voice: uploaded.id, replyTo: quoted?.id, clientId: clientId
+                )
+                messages.removeAll { $0.id == local.id }
+                apply([sent])
+                error = nil
+            } catch {
+                withAnimation(Motion.snappy) { messages.removeAll { $0.id == local.id } }
+                if replyingTo == nil { replyingTo = quoted }
+                self.error = error.socialMessage
+            }
+        }
     }
 
     private func dayTitle(_ date: Date) -> String {
@@ -549,7 +706,7 @@ struct ChatView: View {
             image: photo == nil ? nil : "local",
             fromMe: true,
             createdAt: Date().timeIntervalSince1970 * 1000,
-            replyTo: quoted.map { SocialMessageQuote(id: $0.id, text: $0.text, image: $0.image, fromMe: $0.fromMe) }
+            replyTo: quoted.map { SocialMessageQuote(id: $0.id, text: $0.text, image: $0.image, voice: $0.voice != nil, fromMe: $0.fromMe) }
         )
         if let photo { localImages[local.id] = photo }
         draft = ""
@@ -674,7 +831,9 @@ struct MessageBubble: View {
             if message.image != nil {
                 photo
             }
-            if !message.text.isEmpty {
+            if let voice = message.voice {
+                VoiceMessageContent(voice: voice, fromMe: message.fromMe, isLocal: message.isLocal)
+            } else if !message.text.isEmpty {
                 Text(message.text)
                     .font(.system(size: 16))
                     .foregroundStyle(message.fromMe ? Color.white : Color.white.opacity(0.92))
@@ -718,7 +877,7 @@ struct MessageBubble: View {
                 .controlGroupStyle(.palette)
                 Button(action: onReply) { Label("Ответить", systemImage: "arrowshape.turn.up.left") }
             }
-            if !message.text.isEmpty {
+            if !message.text.isEmpty && message.voice == nil {
                 Button {
                     UIPasteboard.general.string = message.text
                 } label: { Label("Скопировать", systemImage: "doc.on.doc") }
@@ -815,6 +974,121 @@ struct MessageBubble: View {
         .onTapGesture {
             if let id = message.image, !message.isLocal { onOpenImage(id) }
         }
+    }
+}
+
+// MARK: - Голосовые
+
+/// Пузырь голосового: ▶/❚❚, волна (проигранное — ярче) и время.
+/// Перерисовывается каждый кадр только пока играет — через `TimelineView`.
+struct VoiceMessageContent: View {
+    let voice: SocialVoice
+    let fromMe: Bool
+    var isLocal = false
+
+    private var player: VoicePlayer { .shared }
+
+    var body: some View {
+        let playing = player.playingId == voice.id
+        let loading = player.loadingId == voice.id
+        let failed = player.failedId == voice.id
+        HStack(spacing: 10) {
+            Button { player.toggle(voice) } label: {
+                ZStack {
+                    Circle().fill(fromMe ? Color.white : Theme.accent)
+                    if loading || isLocal {
+                        ProgressView().tint(fromMe ? Theme.accent : .white)
+                    } else {
+                        Image(systemName: failed ? "arrow.clockwise" : (playing ? "pause.fill" : "play.fill"))
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundStyle(fromMe ? Theme.accent : .white)
+                            .offset(x: playing || failed ? 0 : 1.5)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                }
+                .frame(width: 38, height: 38)
+            }
+            .buttonStyle(.pressable)
+            .disabled(isLocal)
+            .accessibilityLabel(playing ? "Пауза" : "Слушать голосовое, \(Int(voice.duration.rounded())) с")
+
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !playing)) { _ in
+                VStack(alignment: .leading, spacing: 3) {
+                    VoiceWaveform(levels: voice.levels, progress: player.progress(of: voice.id), fromMe: fromMe)
+                        .frame(width: 150, height: 24)
+                    Text(SocialVoice.format(playing ? player.currentTime(of: voice.id) : voice.duration))
+                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .foregroundStyle(Color.white.opacity(0.7))
+                }
+            }
+            .accessibilityHidden(true)
+        }
+        .padding(.vertical, 2)
+        .padding(.trailing, 4)
+    }
+}
+
+/// Столбики громкости. Проигранная часть — яркая, остальная — приглушённая.
+struct VoiceWaveform: View {
+    let levels: [Double]
+    var progress: Double = 0
+    var fromMe = true
+
+    var body: some View {
+        Canvas { context, size in
+            guard !levels.isEmpty else { return }
+            let gap: CGFloat = 2
+            let width = max(1.5, (size.width - gap * CGFloat(levels.count - 1)) / CGFloat(levels.count))
+            for (index, level) in levels.enumerated() {
+                let height = max(3, CGFloat(level) * size.height)
+                let x = CGFloat(index) * (width + gap)
+                let rect = CGRect(x: x, y: (size.height - height) / 2, width: width, height: height)
+                let played = Double(index) / Double(levels.count) < progress
+                let color: Color = played ? (fromMe ? .white : Theme.accent) : Color.white.opacity(fromMe ? 0.45 : 0.35)
+                context.fill(Path(roundedRect: rect, cornerRadius: width / 2), with: .color(color))
+            }
+        }
+    }
+}
+
+/// Вместо поля ввода, пока идёт запись: красная точка, время, живая волна
+/// и «влево — отмена», которая гаснет по мере того, как палец уходит влево.
+/// Отдельная вью — 20 раз в секунду перерисовывается только она, а не переписка.
+struct VoiceRecordingStrip: View {
+    let recorder: VoiceRecorder
+    let drag: CGFloat
+    let cancelDistance: CGFloat
+
+    var body: some View {
+        let pulled = min(1, -drag / cancelDistance)
+        HStack(spacing: 10) {
+            Circle()
+                .fill(Theme.record)
+                .frame(width: 10, height: 10)
+                .phaseAnimator([false, true]) { dot, dim in
+                    dot.opacity(dim ? 0.3 : 1)
+                } animation: { _ in Animation.easeInOut(duration: 0.6) }
+            Text(SocialVoice.format(recorder.elapsed))
+                .font(.system(size: 16, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.white)
+            VoiceWaveform(levels: recorder.recentLevels, progress: 1, fromMe: true)
+                .frame(height: 22)
+                .frame(maxWidth: 90)
+                .animation(.linear(duration: 0.05), value: recorder.recentLevels)
+            Spacer(minLength: 4)
+            HStack(spacing: 3) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 12, weight: .bold))
+                Text("отмена")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(Color.white.opacity(0.6))
+            .opacity(1 - pulled)
+            .offset(x: drag * 0.4)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 44)
+        .chatGlass(Capsule())
     }
 }
 

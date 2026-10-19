@@ -452,18 +452,35 @@ final class SocialService {
     private struct MessageBody: Encodable {
         let text: String
         let image: String?
+        let voice: String?
         let replyTo: String?
         let clientId: String
     }
 
-    /// `image` — id фото, уже загруженного через `uploadImage`; `replyTo` — сообщение, на которое отвечаем.
-    func sendMessage(to username: String, text: String, image: String? = nil, replyTo: String? = nil,
+    /// `image` — id фото, уже загруженного через `uploadImage`; `voice` — id голосового
+    /// из `uploadVoice`; `replyTo` — сообщение, на которое отвечаем.
+    func sendMessage(to username: String, text: String, image: String? = nil, voice: String? = nil, replyTo: String? = nil,
                      clientId: String = UUID().uuidString.lowercased()) async throws -> SocialMessage {
         try await request(
             "POST", "/chats/\(username)/messages",
-            json: MessageBody(text: text, image: image, replyTo: replyTo, clientId: clientId),
+            json: MessageBody(text: text, image: image, voice: voice, replyTo: replyTo, clientId: clientId),
             requiresAuth: true
         )
+    }
+
+    /// Звук голосового (AAC в m4a); длительность и волна — в адресе.
+    func uploadVoice(_ data: Data, durationMs: Int, waveform: String) async throws -> SocialVoice {
+        try await request(
+            "POST", "/voices",
+            query: [URLQueryItem(name: "durationMs", value: String(durationMs)), URLQueryItem(name: "waveform", value: waveform)],
+            data: data,
+            contentType: "audio/mp4",
+            requiresAuth: true
+        )
+    }
+
+    func voiceURL(_ id: String) -> URL? {
+        URL(string: "\(serverURL)/v2/voices/\(id)")
     }
 
     private struct ReactBody: Encodable { let emoji: String }

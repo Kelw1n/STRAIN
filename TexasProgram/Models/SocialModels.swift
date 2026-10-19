@@ -290,17 +290,23 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
     var replyTo: SocialMessageQuote?
     /// Приглашение на совместную тренировку — карточкой в переписке.
     var invite: SocialInvite?
+    /// Голосовое сообщение.
+    var voice: SocialVoice?
 
     var date: Date { Date(timeIntervalSince1970: createdAt / 1000) }
     var isLocal: Bool { id.hasPrefix("local-") }
-    /// Подпись в списке переписок: фото без текста — «Фото».
-    var preview: String { text.isEmpty && image != nil ? "📷 Фото" : text }
+    /// Подпись в списке переписок: фото без текста — «Фото», голосовое — «Голосовое».
+    var preview: String {
+        if voice != nil { return SocialVoice.previewText }
+        return text.isEmpty && image != nil ? "📷 Фото" : text
+    }
 
-    init(id: String, text: String, image: String? = nil, fromMe: Bool, createdAt: Double, read: Bool = false,
-         reactions: [SocialReaction] = [], replyTo: SocialMessageQuote? = nil) {
+    init(id: String, text: String, image: String? = nil, voice: SocialVoice? = nil, fromMe: Bool, createdAt: Double,
+         read: Bool = false, reactions: [SocialReaction] = [], replyTo: SocialMessageQuote? = nil) {
         self.id = id
         self.text = text
         self.image = image
+        self.voice = voice
         self.fromMe = fromMe
         self.createdAt = createdAt
         self.read = read
@@ -317,6 +323,7 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
         reactions = (try? c.decodeIfPresent([SocialReaction].self, forKey: .reactions)) ?? []
         replyTo = try? c.decodeIfPresent(SocialMessageQuote.self, forKey: .replyTo)
         invite = try? c.decodeIfPresent(SocialInvite.self, forKey: .invite)
+        voice = try? c.decodeIfPresent(SocialVoice.self, forKey: .voice)
         fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? false
         createdAt = try c.decodeIfPresent(Double.self, forKey: .createdAt) ?? 0
         read = try c.decodeIfPresent(Bool.self, forKey: .read) ?? false
@@ -370,12 +377,15 @@ struct SocialMessageQuote: Codable, Hashable, Sendable {
     let id: String
     let text: String
     var image: String?
+    /// Отвечают на голосовое.
+    var voice = false
     let fromMe: Bool
 
-    init(id: String, text: String, image: String?, fromMe: Bool) {
+    init(id: String, text: String, image: String?, voice: Bool = false, fromMe: Bool) {
         self.id = id
         self.text = text
         self.image = image
+        self.voice = voice
         self.fromMe = fromMe
     }
 
@@ -384,10 +394,53 @@ struct SocialMessageQuote: Codable, Hashable, Sendable {
         id = try c.decode(String.self, forKey: .id)
         text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
         image = try c.decodeIfPresent(String.self, forKey: .image)
+        voice = (try? c.decodeIfPresent(Bool.self, forKey: .voice)) ?? false
         fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? false
     }
 
-    var preview: String { text.isEmpty ? (image != nil ? "📷 Фото" : "Сообщение удалено") : text }
+    var preview: String {
+        if voice { return SocialVoice.previewText }
+        return text.isEmpty ? (image != nil ? "📷 Фото" : "Сообщение удалено") : text
+    }
+}
+
+/// Голосовое сообщение: звук на сервере, длительность и «волна» — громкость
+/// по кусочкам, по шестнадцатеричной цифре на кусочек.
+struct SocialVoice: Codable, Hashable, Sendable {
+    let id: String
+    var durationMs: Int
+    var waveform: String = ""
+
+    /// Подпись в списке переписок. Её же получают в тексте старые версии
+    /// приложения, которые голосовые ещё не умеют проигрывать.
+    static let previewText = "🎤 Голосовое сообщение"
+
+    var duration: TimeInterval { Double(durationMs) / 1000 }
+
+    /// Громкость кусочков от 0 до 1. Пустая волна — ровная полоска.
+    var levels: [Double] {
+        let values = waveform.compactMap { $0.hexDigitValue }.map { Double($0) / 15 }
+        return values.isEmpty ? Array(repeating: 0.25, count: 32) : values
+    }
+
+    init(id: String, durationMs: Int, waveform: String = "") {
+        self.id = id
+        self.durationMs = durationMs
+        self.waveform = waveform
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        durationMs = (try? c.decodeIfPresent(Int.self, forKey: .durationMs)) ?? 0
+        waveform = (try? c.decodeIfPresent(String.self, forKey: .waveform)) ?? ""
+    }
+
+    /// «0:07», «1:00».
+    static func format(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded(.down)))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
 }
 
 /// Идущая тренировка друга: что за день, какое упражнение и сколько подходов.
