@@ -407,6 +407,11 @@ private struct ExerciseSessionCard: View {
     let reorder: ExerciseReorder
 
     @GestureState private var holding = false
+    /// Только что добавленный подход: его номер пару секунд пульсирует, а под
+    /// кнопкой — подсказка, как убрать лишний (первые три раза).
+    @State private var justAdded: UUID?
+    @State private var showsDeleteHint = false
+    @AppStorage("hint.deleteSet") private var deleteHintsShown = 0
 
     private var manager: WorkoutSessionManager { .shared }
     private var doneCount: Int { exercise.sets.filter(\.isDone).count }
@@ -591,6 +596,7 @@ private struct ExerciseSessionCard: View {
                     exerciseIndex: index,
                     isCurrent: !set.isDone && exercise.sets.prefix(sIdx).allSatisfy(\.isDone),
                     canDelete: exercise.sets.count > 1,
+                    highlighted: set.id == justAdded,
                     profile: profile
                 )
                 .transition(.asymmetric(
@@ -601,6 +607,14 @@ private struct ExerciseSessionCard: View {
 
             Button {
                 withAnimation(Motion.reorder) { manager.addSet(to: index, profile: profile) }
+                let added = manager.exercises.indices.contains(index) ? manager.exercises[index].sets.last?.id : nil
+                withAnimation(Motion.snappy) {
+                    justAdded = added
+                    if deleteHintsShown < 3 {
+                        showsDeleteHint = true
+                        deleteHintsShown += 1
+                    }
+                }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")
@@ -615,6 +629,25 @@ private struct ExerciseSessionCard: View {
             }
             .buttonStyle(.pressable)
             .padding(.top, 4)
+
+            if showsDeleteHint {
+                Text("Лишний подход? Смахни его влево или нажми на номер")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        // Через три секунды подсветка и подсказка гаснут сами.
+        .task(id: justAdded) {
+            guard justAdded != nil else { return }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(Motion.snappy) {
+                justAdded = nil
+                showsDeleteHint = false
+            }
         }
     }
 
@@ -633,12 +666,40 @@ private struct SetRowView: View {
     let exerciseIndex: Int
     let isCurrent: Bool
     let canDelete: Bool
+    var highlighted = false
     let profile: ProgramProfile
 
     @Environment(RestTimer.self) private var restTimer
     private var manager: WorkoutSessionManager { .shared }
 
+    /// Насколько строку смахнули влево (≤ 0) и ширина строки.
+    @State private var swipe: CGFloat = 0
+    @State private var rowWidth: CGFloat = 0
+    /// Дотянули до порога: отпустишь — подход удалится.
+    @State private var armed = false
+
+    private var threshold: CGFloat { max(90, rowWidth * 0.38) }
+
     var body: some View {
+        rowContent
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { rowWidth = proxy.size.width }
+                        .onChange(of: proxy.size.width) { _, width in rowWidth = width }
+                }
+            }
+            .offset(x: swipe)
+            // Полоса стоит на месте, строка уезжает с неё влево.
+            .background(alignment: .trailing) { deleteStrip }
+            .simultaneousGesture(swipeGesture, including: canDelete ? .all : .subviews)
+            .sensoryFeedback(.impact(weight: .medium), trigger: armed) { _, isArmed in isArmed }
+            .accessibilityAction(named: "Удалить подход") {
+                if canDelete { delete() }
+            }
+    }
+
+    private var rowContent: some View {
         HStack(spacing: 8) {
             numberMenu
 
@@ -680,8 +741,69 @@ private struct SetRowView: View {
         }
     }
 
+    // MARK: Смахнуть, чтобы удалить
+
+    /// Красная полоса ровно на открытую часть, от правого края. Дотянул до
+    /// порога — она наливается и «Удалить» чуть подрастает.
+    private var deleteStrip: some View {
+        let revealed = max(0, -swipe)
+        return ZStack(alignment: .trailing) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.record.opacity(armed ? 1 : 0.78))
+            HStack(spacing: 6) {
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 14, weight: .bold))
+                Text("Удалить")
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .foregroundStyle(.white)
+            .scaleEffect(armed ? 1.1 : 0.9)
+            .opacity(min(1, max(0, (revealed - 28) / 40)))
+            .padding(.trailing, 16)
+        }
+        .frame(width: revealed)
+        .opacity(revealed > 0 ? 1 : 0)
+        .animation(Motion.bouncy, value: armed)
+        .accessibilityHidden(true)
+    }
+
+    /// Только горизонтальное движение влево: вертикальное — это прокрутка.
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 16, coordinateSpace: .local)
+            .onChanged { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard swipe != 0 || (dx < 0 && abs(dx) > abs(dy) * 1.4) else { return }
+                swipe = min(0, dx)
+                armed = -swipe > threshold
+            }
+            .onEnded { _ in
+                if armed {
+                    delete()
+                } else {
+                    withAnimation(Motion.bouncy) { swipe = 0 }
+                }
+            }
+    }
+
+    private func delete() {
+        withAnimation(.easeIn(duration: 0.17)) { swipe = -max(rowWidth, 400) }
+        let id = set.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.17) {
+            // По идентификатору: пока строка уезжала, номера могли сдвинуться.
+            guard manager.exercises.indices.contains(exerciseIndex),
+                  let at = manager.exercises[exerciseIndex].sets.firstIndex(where: { $0.id == id }) else { return }
+            withAnimation(Motion.reorder) { manager.deleteSet(exIdx: exerciseIndex, sIdx: at, profile: profile) }
+            // Если подход почему-то остался — строка возвращается на место.
+            armed = false
+            withAnimation(Motion.bouncy) { swipe = 0 }
+        }
+    }
+
     /// Номер подхода: оранжевая черта у текущего, кубок у рекорда.
-    /// Нажатие — меню подхода.
+    /// Нажатие — меню подхода. У только что добавленного — расходящееся кольцо.
     private var numberMenu: some View {
         Menu {
             if set.previous != nil {
@@ -704,7 +826,22 @@ private struct SetRowView: View {
                 .monospacedDigit()
                 .foregroundStyle(set.isRecord ? .black : .white)
                 .frame(width: 34, height: 34)
-                .background(set.isRecord ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color(white: 0.15)), in: Circle())
+                .background(numberFill, in: Circle())
+                .overlay {
+                    if highlighted {
+                        Circle()
+                            .strokeBorder(Theme.accent, lineWidth: 2)
+                            .phaseAnimator([false, true]) { ring, spread in
+                                ring
+                                    .scaleEffect(spread ? 1.4 : 1)
+                                    .opacity(spread ? 0 : 1)
+                            } animation: { spread in
+                                spread ? Animation.easeOut(duration: 0.9) : Animation.linear(duration: 0.01)
+                            }
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
                 .overlay(alignment: .topTrailing) {
                     if set.isRecord {
                         Image(systemName: "trophy.fill")
@@ -728,7 +865,14 @@ private struct SetRowView: View {
         }
         .animation(Motion.bouncy, value: set.isRecord)
         .animation(Motion.snappy, value: isCurrent)
+        .animation(Motion.snappy, value: highlighted)
         .accessibilityLabel("Подход \(position + 1)")
+    }
+
+    private var numberFill: AnyShapeStyle {
+        if set.isRecord { return AnyShapeStyle(Theme.accent) }
+        if highlighted { return AnyShapeStyle(Theme.accent.opacity(0.35)) }
+        return AnyShapeStyle(Color(white: 0.15))
     }
 
     private var checkButton: some View {
