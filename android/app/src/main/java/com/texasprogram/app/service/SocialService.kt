@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.exifinterface.media.ExifInterface
+import com.texasprogram.app.model.SocialVoice
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.SocialActivityPage
