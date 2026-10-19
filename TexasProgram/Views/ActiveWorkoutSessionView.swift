@@ -746,7 +746,8 @@ private struct SetRowView: View {
     /// Красная полоса ровно на открытую часть, от правого края. Дотянул до
     /// порога — она наливается и «Удалить» чуть подрастает.
     private var deleteStrip: some View {
-        let revealed = max(0, -swipe)
+        let revealed: CGFloat = max(0, -swipe)
+        let labelOpacity = Double(min(CGFloat(1), max(CGFloat(0), (revealed - 28) / 40)))
         return ZStack(alignment: .trailing) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Theme.record.opacity(armed ? 1 : 0.78))
@@ -760,7 +761,7 @@ private struct SetRowView: View {
             }
             .foregroundStyle(.white)
             .scaleEffect(armed ? 1.1 : 0.9)
-            .opacity(min(1, max(0, (revealed - 28) / 40)))
+            .opacity(labelOpacity)
             .padding(.trailing, 16)
         }
         .frame(width: revealed)
