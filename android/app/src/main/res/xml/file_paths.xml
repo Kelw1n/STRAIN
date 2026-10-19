@@ -4,4 +4,6 @@
 <paths>
     <cache-path name="share" path="share/" />
     <cache-path name="camera" path="camera/" />
+    <!-- Скачанное обновление: его открывает системный установщик. -->
+    <cache-path name="updates" path="updates/" />
 </paths>

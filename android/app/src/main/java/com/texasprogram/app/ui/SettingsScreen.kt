@@ -555,8 +555,12 @@ fun SettingsScreen(
             }
         }
 
+        item(key = "version") {
+            AppVersionCard(Modifier.appearIn(8))
+        }
+
         item(key = "delete") {
-            CardView(Modifier.appearIn(8)) {
+            CardView(Modifier.appearIn(9)) {
                 SecondaryButton(
                     if (profiles.size > 1) "Удалить этот профиль" else "Сбросить профиль",
                     icon = Icons.Filled.Delete,

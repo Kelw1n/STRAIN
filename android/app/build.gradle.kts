@@ -13,8 +13,10 @@ android {
         applicationId = "com.texasprogram.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "3.0.0"
+        // Номер сборки задаёт CI и увеличивает с каждой сборкой: по нему приложение
+        // понимает, что вышла новая версия, и предлагает обновиться. Локально — 25.
+        versionCode = System.getenv("STRAIN_VERSION_CODE")?.toIntOrNull() ?: 25
+        versionName = System.getenv("STRAIN_VERSION_NAME") ?: "3.0.0"
     }
 
     // Постоянный ключ подписи из секретов CI. Без одного и того же ключа Android

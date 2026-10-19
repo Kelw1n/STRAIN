@@ -197,6 +197,8 @@ class MainActivity : ComponentActivity() {
         // Неотправленные посты — в путь, как только приложение снова на экране.
         SocialService.flushOutbox()
         lifecycleScope.launch { SocialService.refreshUnread() }
+        // Вышла ли новая версия; вернулись из настроек с разрешением — ставим дальше.
+        com.texasprogram.app.service.AppUpdater.onResume(this)
     }
 
     override fun onStop() {
@@ -474,15 +476,21 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             }
         }
 
-        // Друг зовёт тренироваться вместе — плашка сверху поверх любой вкладки.
-        val invite = SocialService.together.incoming.firstOrNull()
-        AnimatedVisibility(
-            visible = invite != null,
-            enter = slideInVertically { -it } + fadeIn(),
-            exit = slideOutVertically { -it } + fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp)
+        // Плашки сверху поверх любой вкладки: друг зовёт тренироваться вместе
+        // и вышла новая версия приложения.
+        Column(
+            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            invite?.let { TogetherInviteBanner(it) }
+            val invite = SocialService.together.incoming.firstOrNull()
+            AnimatedVisibility(
+                visible = invite != null,
+                enter = slideInVertically { -it } + fadeIn(),
+                exit = slideOutVertically { -it } + fadeOut()
+            ) {
+                invite?.let { TogetherInviteBanner(it) }
+            }
+            com.texasprogram.app.ui.AppUpdateBanner()
         }
 
         Column(Modifier.align(Alignment.BottomCenter)) {

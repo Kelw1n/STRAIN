@@ -15,6 +15,9 @@
     <!-- Сеть для ленты тренировок -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Обновление прямо из приложения: скачанный APK отдаём системному
+         установщику. Android один раз спросит разрешение у пользователя. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Вибрация при таймере и тапах -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Фото к тренировке снимает системная камера: своего разрешения на камеру
