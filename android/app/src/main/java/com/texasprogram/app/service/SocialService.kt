@@ -451,12 +451,14 @@ object SocialService {
         text: String,
         clientId: String = newClientId(),
         image: String? = null,
-        replyTo: String? = null
+        replyTo: String? = null,
+        voice: String? = null
     ): SocialMessage {
         val body = buildJsonObject {
             put("text", text)
             put("clientId", clientId)
             if (image != null) put("image", image)
+            if (voice != null) put("voice", voice)
             if (replyTo != null) put("replyTo", replyTo)
         }.toString()
         return decode(call("POST", "/chats/${q(username)}/messages", body = body, requiresAuth = true))
@@ -561,6 +563,14 @@ object SocialService {
 
     @Serializable
     private data class ImageResponse(val id: String)
+
+    /// Звук голосового (AAC в m4a); длительность и волна — в адресе.
+    suspend fun uploadVoice(m4a: ByteArray, durationMs: Int, waveform: String): SocialVoice =
+        decode<SocialVoice>(
+            call("POST", "/voices?durationMs=$durationMs&waveform=$waveform", bytes = m4a, contentType = "audio/mp4", requiresAuth = true)
+        )
+
+    fun voiceUrl(id: String): String = "$serverUrl/v2/voices/$id"
 
     suspend fun uploadImage(jpeg: ByteArray): String =
         decode<ImageResponse>(call("POST", "/images", bytes = jpeg, contentType = "image/jpeg", requiresAuth = true)).id

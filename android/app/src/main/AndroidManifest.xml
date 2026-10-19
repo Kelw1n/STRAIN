@@ -18,6 +18,8 @@
     <!-- Обновление прямо из приложения: скачанный APK отдаём системному
          установщику. Android один раз спросит разрешение у пользователя. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Голосовые сообщения в переписке; спрашивается при первой записи. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Вибрация при таймере и тапах -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Фото к тренировке снимает системная камера: своего разрешения на камеру

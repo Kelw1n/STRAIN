@@ -1,5 +1,35 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.SideEffect
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.RepeatMode
+import com.texasprogram.app.service.VoiceRecording
+import com.texasprogram.app.service.VoiceRecorder
+import com.texasprogram.app.service.VoicePlayer
+import com.texasprogram.app.model.SocialVoice
 import androidx.compose.foundation.clickable
 import android.content.ClipData
 import androidx.compose.animation.core.Animatable
@@ -287,6 +317,12 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     var lastSeen by remember { mutableStateOf<Double?>(null) }
     var live by remember { mutableStateOf<SocialLive?>(null) }
     val listState = rememberLazyListState()
+    // Голосовое: запись, сдвиг пальца влево (отмена) и подсказка над полем.
+    val haptics = rememberHapticEngine()
+    val recorder = remember { VoiceRecorder(context.applicationContext) }
+    val micDrag = remember { Animatable(0f) }
+    var hint by remember { mutableStateOf<String?>(null) }
+    val cancelPx = with(density) { 110.dp.toPx() }
 
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) attachment = uri }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -294,9 +330,26 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         if (ok && uri != null) attachment = uri
     }
 
+    fun showHint(text: String) {
+        hint = text
+        scope.launch {
+            delay(2_500)
+            if (hint == text) hint = null
+        }
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) showHint("Готово — теперь зажми микрофон и говори")
+        else error = "Без доступа к микрофону голосовое не записать"
+    }
+
     DisposableEffect(Unit) {
         SocialService.hidesTabBar = true
-        onDispose { SocialService.hidesTabBar = false }
+        onDispose {
+            SocialService.hidesTabBar = false
+            recorder.cancel()
+            VoicePlayer.stop()
+        }
     }
 
     /// Новое добавляется, изменённое заменяется, удалённое пропадает.
@@ -439,6 +492,68 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         }
     }
 
+    /// Голосовое сразу в переписке; звук уходит на сервер, потом само сообщение.
+    /// В тексте — подпись для старых версий приложения, которые голосовые не играют.
+    fun sendVoice(recording: VoiceRecording) {
+        val quoted = replyingTo
+        val clientId = UUID.randomUUID().toString().lowercase()
+        val local = SocialMessage(
+            id = "local-$clientId",
+            text = SocialVoice.PREVIEW,
+            fromMe = true,
+            createdAt = System.currentTimeMillis().toDouble(),
+            replyTo = quoted?.quote,
+            voice = SocialVoice("local-$clientId", recording.durationMs, recording.waveform)
+        )
+        replyingTo = null
+        messages.add(local)
+        scope.launch {
+            try {
+                val uploaded = SocialService.uploadVoice(recording.data, recording.durationMs, recording.waveform)
+                val sent = SocialService.sendMessage(username, SocialVoice.PREVIEW, clientId, replyTo = quoted?.id, voice = uploaded.id)
+                messages.remove(local)
+                applyChanges(listOf(sent))
+                error = null
+            } catch (e: SocialException) {
+                messages.remove(local)
+                if (replyingTo == null) replyingTo = quoted
+                error = e.message
+            }
+        }
+    }
+
+    /// Нажали микрофон: есть разрешение — пишем, нет — спрашиваем.
+    fun beginRecording(): Boolean {
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+            return false
+        }
+        if (!recorder.start(scope)) {
+            error = "Не удалось включить микрофон"
+            return false
+        }
+        haptics.medium()
+        error = null
+        hint = null
+        return true
+    }
+
+    fun finishRecording() {
+        if (!recorder.isRecording) return
+        val recording = recorder.stop()
+        if (recording != null) {
+            haptics.light()
+            sendVoice(recording)
+        } else {
+            showHint("Удерживай микрофон, чтобы записать голосовое")
+        }
+    }
+
+    // Дошли до минуты — голосовое уходит само.
+    SideEffect { recorder.onLimit = { finishRecording() } }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -552,6 +667,13 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
             error?.let {
                 Text(it, color = Theme.warning, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
             }
+            AnimatedVisibility(
+                visible = hint != null,
+                enter = fadeIn(tween(180)) + slideInVertically(Motion.snappy()) { it / 2 },
+                exit = fadeOut(tween(160))
+            ) {
+                Text(hint.orEmpty(), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
+            }
             replyingTo?.let { quoted ->
                 Row(
                     Modifier
@@ -588,6 +710,9 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 }
             }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (recorder.isRecording) {
+                    VoiceRecordingStrip(recorder, { micDrag.value }, cancelPx, Modifier.weight(1f))
+                } else {
                 Box {
                     Box(
                         Modifier.size(44.dp).chatGlass(CircleShape).pressable { attachMenu = true },
@@ -634,7 +759,29 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                }
                 val canSend = !sending && (draft.isNotBlank() || attachment != null)
+                // Поле пустое и фото нет — вместо «Отправить» микрофон, как в Telegram.
+                val showsMic = recorder.isRecording || (!sending && attachment == null && draft.isBlank())
+                if (showsMic) {
+                    MicButton(
+                        recording = recorder.isRecording,
+                        drag = { micDrag.value },
+                        onPress = { beginRecording() },
+                        onDrag = { dx ->
+                            scope.launch { micDrag.snapTo(dx) }
+                            if (dx < -cancelPx) {
+                                recorder.cancel()
+                                haptics.medium()
+                                true
+                            } else false
+                        },
+                        onRelease = { cancelled ->
+                            scope.launch { micDrag.animateTo(0f, Motion.snappy()) }
+                            if (!cancelled) finishRecording()
+                        }
+                    )
+                } else {
                 Box(
                     Modifier
                         .size(44.dp)
@@ -644,6 +791,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 ) {
                     if (sending) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                     else Icon(Icons.Filled.ArrowUpward, contentDescription = "Отправить", tint = if (canSend) Color.Black else Color.White.copy(alpha = 0.5f))
+                }
                 }
             }
         }
@@ -851,7 +999,10 @@ internal fun MessageBubble(
                             }
                         }
                     }
-                    if (message.text.isNotEmpty()) {
+                    val voice = message.voice
+                    if (voice != null) {
+                        VoiceMessageContent(voice, fromMe = message.fromMe, isLocal = message.isLocal)
+                    } else if (message.text.isNotEmpty()) {
                         Text(message.text, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(horizontal = if (hasImage) 9.dp else 0.dp))
                     }
                     // Время всегда справа, как в Telegram.
@@ -947,7 +1098,7 @@ internal fun MessageBubble(
                         }
                     )
                 }
-                if (message.text.isNotEmpty()) {
+                if (message.text.isNotEmpty() && message.voice == null) {
                     DropdownMenuItem(text = { Text("Скопировать") }, onClick = {
                         menu = false
                         onCopy()
@@ -1019,5 +1170,180 @@ private fun ImageViewer(id: String, onClose: () -> Unit) {
                 Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
+    }
+}
+
+// MARK: - Голосовые
+
+/// Пузырь голосового: ▶/❚❚, волна (проигранное — ярче) и время. Пока играет,
+/// прогресс обновляется каждый кадр, но читается только в отрисовке волны.
+@Composable
+internal fun VoiceMessageContent(voice: SocialVoice, fromMe: Boolean, isLocal: Boolean) {
+    val context = LocalContext.current
+    val playing = VoicePlayer.playingId == voice.id
+    val loading = VoicePlayer.loadingId == voice.id
+    val failed = VoicePlayer.failedId == voice.id
+    val progress = remember { mutableFloatStateOf(0f) }
+    var positionMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(playing) {
+        if (!playing) {
+            progress.floatValue = 0f
+            positionMs = 0L
+            return@LaunchedEffect
+        }
+        while (true) {
+            withFrameMillis { }
+            progress.floatValue = VoicePlayer.progress(voice.id)
+            val position = VoicePlayer.positionMs(voice.id)
+            if (position / 1000 != positionMs / 1000) positionMs = position
+        }
+    }
+    Row(Modifier.padding(vertical = 2.dp).padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(38.dp)
+                .pressable(enabled = !isLocal) { VoicePlayer.toggle(context, voice) }
+                .clip(CircleShape)
+                .background(if (fromMe) Color.White else Theme.accent),
+            contentAlignment = Alignment.Center
+        ) {
+            val tint = if (fromMe) Theme.accent else Color.White
+            if (loading || isLocal) {
+                CircularProgressIndicator(color = tint, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            } else {
+                Icon(
+                    when {
+                        failed -> Icons.Filled.Refresh
+                        playing -> Icons.Filled.Pause
+                        else -> Icons.Filled.PlayArrow
+                    },
+                    contentDescription = if (playing) "Пауза" else "Слушать голосовое",
+                    tint = tint,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            VoiceWaveform(voice.levels, { progress.floatValue }, fromMe, Modifier.size(width = 150.dp, height = 24.dp))
+            Text(
+                SocialVoice.format(if (playing) positionMs else voice.durationMs.toLong()),
+                color = Color.White.copy(alpha = 0.7f),
+                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
+            )
+        }
+    }
+}
+
+/// Столбики громкости. Проигранная часть — яркая, остальная — приглушённая.
+@Composable
+internal fun VoiceWaveform(levels: List<Float>, progress: () -> Float, fromMe: Boolean, modifier: Modifier = Modifier) {
+    val played = if (fromMe) Color.White else Theme.accent
+    val rest = Color.White.copy(alpha = if (fromMe) 0.45f else 0.35f)
+    Canvas(modifier) {
+        if (levels.isEmpty()) return@Canvas
+        val gap = 2.dp.toPx()
+        val count = levels.size
+        val width = ((size.width - gap * (count - 1)) / count).coerceAtLeast(1.5.dp.toPx())
+        val minHeight = 3.dp.toPx()
+        val done = progress()
+        levels.forEachIndexed { index, level ->
+            val height = maxOf(minHeight, level * size.height)
+            drawRoundRect(
+                if (index.toFloat() / count < done) played else rest,
+                topLeft = Offset(index * (width + gap), (size.height - height) / 2),
+                size = Size(width, height),
+                cornerRadius = CornerRadius(width / 2)
+            )
+        }
+    }
+}
+
+/// Вместо поля ввода, пока идёт запись: красная точка, время, живая волна
+/// и «‹ отмена», которая гаснет по мере того, как палец уходит влево.
+/// Отдельная функция — 20 раз в секунду перерисовывается только она.
+@Composable
+private fun VoiceRecordingStrip(recorder: VoiceRecorder, drag: () -> Float, cancelPx: Float, modifier: Modifier = Modifier) {
+    val pulse = rememberInfiniteTransition(label = "recording")
+    val dot by pulse.animateFloat(1f, 0.3f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "recordingDot")
+    Row(
+        modifier
+            .height(44.dp)
+            .chatGlass(CircleShape)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(10.dp).graphicsLayer { alpha = dot }.background(Theme.record, CircleShape))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            SocialVoice.format(recorder.elapsedMs),
+            color = Color.White,
+            style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
+        )
+        Spacer(Modifier.width(10.dp))
+        VoiceWaveform(recorder.recentLevels.toList(), { 1f }, fromMe = true, modifier = Modifier.width(90.dp).height(22.dp))
+        Spacer(Modifier.weight(1f))
+        Row(
+            Modifier.graphicsLayer {
+                val pulled = (-drag() / cancelPx).coerceIn(0f, 1f)
+                alpha = 1f - pulled
+                translationX = drag() * 0.4f
+            },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+            Text("отмена", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/// Микрофон: зажал — пишет, отпустил — ушло, увёл влево — отменено. Пока
+/// пишет, кнопка крупнее, красная и едет за пальцем.
+@Composable
+private fun MicButton(
+    recording: Boolean,
+    drag: () -> Float,
+    onPress: () -> Boolean,
+    onDrag: (Float) -> Boolean,
+    onRelease: (cancelled: Boolean) -> Unit
+) {
+    val scale by animateFloatAsState(if (recording) 1.3f else 1f, Motion.bouncy(), label = "mic")
+    val currentPress by rememberUpdatedState(onPress)
+    val currentDrag by rememberUpdatedState(onDrag)
+    val currentRelease by rememberUpdatedState(onRelease)
+    Box(
+        Modifier
+            .size(44.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = drag()
+            }
+            .then(if (recording) Modifier.clip(CircleShape).background(Theme.record) else Modifier.chatGlass(CircleShape))
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    down.consume()
+                    if (!currentPress()) {
+                        waitForUpOrCancellation()
+                        return@awaitEachGesture
+                    }
+                    var cancelled = false
+                    while (true) {
+                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        change.consume()
+                        if (currentDrag((change.position.x - down.position.x).coerceAtMost(0f))) {
+                            cancelled = true
+                            break
+                        }
+                    }
+                    currentRelease(cancelled)
+                }
+            }
+            .semantics { contentDescription = "Голосовое: удерживай и говори" },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Filled.Mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
     }
 }

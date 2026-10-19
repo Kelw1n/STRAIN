@@ -178,14 +178,20 @@ data class SocialMessage(
     /// На какое сообщение это ответ.
     val replyTo: SocialMessageQuote? = null,
     /// Приглашение на совместную тренировку — карточкой в переписке.
-    val invite: SocialInvite? = null
+    val invite: SocialInvite? = null,
+    /// Голосовое сообщение.
+    val voice: SocialVoice? = null
 ) {
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
     val isLocal: Boolean get() = id.startsWith("local-")
-    /// Подпись в списке переписок: фото без текста — «Фото».
-    val preview: String get() = if (text.isEmpty() && image != null) "📷 Фото" else text
+    /// Подпись в списке переписок: фото без текста — «Фото», голосовое — «Голосовое».
+    val preview: String get() = when {
+        voice != null -> SocialVoice.PREVIEW
+        text.isEmpty() && image != null -> "📷 Фото"
+        else -> text
+    }
 
-    val quote: SocialMessageQuote get() = SocialMessageQuote(id, text, image, fromMe)
+    val quote: SocialMessageQuote get() = SocialMessageQuote(id, text, image, voice != null, fromMe)
 
     companion object {
         /// Переписка после обновления с сервера: новое добавлено, изменённое
@@ -222,8 +228,36 @@ data class SocialReaction(val emoji: String, val count: Int = 1, val mine: Boole
 
 /// Цитата сообщения, на которое ответили.
 @Serializable
-data class SocialMessageQuote(val id: String, val text: String = "", val image: String? = null, val fromMe: Boolean = false) {
-    val preview: String get() = text.ifEmpty { if (image != null) "📷 Фото" else "Сообщение удалено" }
+data class SocialMessageQuote(
+    val id: String,
+    val text: String = "",
+    val image: String? = null,
+    /// Отвечают на голосовое.
+    val voice: Boolean = false,
+    val fromMe: Boolean = false
+) {
+    val preview: String get() = if (voice) SocialVoice.PREVIEW else text.ifEmpty { if (image != null) "📷 Фото" else "Сообщение удалено" }
+}
+
+/// Голосовое сообщение: звук на сервере, длительность и «волна» — громкость
+/// по кусочкам, по шестнадцатеричной цифре на кусочек.
+@Serializable
+data class SocialVoice(val id: String, val durationMs: Int = 0, val waveform: String = "") {
+    /// Громкость кусочков от 0 до 1. Пустая волна — ровная полоска.
+    val levels: List<Float>
+        get() = waveform.mapNotNull { it.digitToIntOrNull(16) }.map { it / 15f }.ifEmpty { List(32) { 0.25f } }
+
+    companion object {
+        /// Подпись в списке переписок. Её же получают в тексте старые версии
+        /// приложения, которые голосовые ещё не умеют проигрывать.
+        const val PREVIEW = "🎤 Голосовое сообщение"
+
+        /// «0:07», «1:00».
+        fun format(millis: Long): String {
+            val total = (millis / 1000).coerceAtLeast(0)
+            return "%d:%02d".format(total / 60, total % 60)
+        }
+    }
 }
 
 /// Переписка в списке: с кем, последнее сообщение и сколько не прочитано.
