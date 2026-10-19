@@ -381,4 +381,19 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(VoiceRecorder.waveform([]), "")
         XCTAssertEqual(VoiceRecorder.waveform([0.5], bars: 4), "8888")
     }
+
+    /// Подтверждённое сообщение остаётся той же строкой: ключ не меняется ни
+    /// при подтверждении, ни при следующих обновлениях с сервера.
+    func testMergedKeepsRowKey() {
+        var confirmed = SocialMessage(id: "srv", text: "Го", fromMe: true, createdAt: 2)
+        confirmed.rowKey = "local-1"
+        let current = SocialMessage.merged([], with: [confirmed])
+        XCTAssertEqual(current.first?.key, "local-1")
+        let read = SocialMessage(id: "srv", text: "Го", fromMe: true, createdAt: 2, read: true)
+        let updated = SocialMessage.merged(current, with: [read])
+        XCTAssertEqual(updated.first?.key, "local-1", "прочтение не меняет строку")
+        XCTAssertTrue(updated.first?.read == true)
+        XCTAssertEqual(SocialMessage(id: "x", text: "", fromMe: false, createdAt: 1).key, "x")
+    }
 }
+

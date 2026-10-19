@@ -368,5 +368,20 @@ class SocialTest {
         assertEquals("", com.texasprogram.app.service.VoiceRecorder.waveform(emptyList()))
         assertEquals("8888", com.texasprogram.app.service.VoiceRecorder.waveform(listOf(0.5f), bars = 4))
     }
+
+    /// Подтверждённое сообщение остаётся той же строкой: ключ не меняется ни
+    /// при подтверждении, ни при следующих обновлениях с сервера.
+    @Test
+    fun mergedKeepsRowKey() {
+        val merge = com.texasprogram.app.model.SocialMessage
+        val confirmed = com.texasprogram.app.model.SocialMessage("srv", "Го", fromMe = true, createdAt = 2.0, rowKey = "local-1")
+        val current = merge.merged(emptyList(), listOf(confirmed))
+        assertEquals("local-1", current.first().key)
+        val read = com.texasprogram.app.model.SocialMessage("srv", "Го", fromMe = true, createdAt = 2.0, read = true)
+        val updated = merge.merged(current, listOf(read))
+        assertEquals("local-1", updated.first().key)
+        assertTrue(updated.first().read)
+        assertEquals("x", com.texasprogram.app.model.SocialMessage("x").key)
+    }
 }
 
