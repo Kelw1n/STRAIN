@@ -202,7 +202,9 @@ struct ChatView: View {
                             .multilineTextAlignment(.center)
                             .padding(30)
                     }
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                    // Ключ строки, а не id: своё сообщение после ответа сервера
+                    // остаётся той же строкой и не пересоздаётся.
+                    ForEach(Array(messages.enumerated()), id: \.element.key) { index, message in
                         if index == 0 || !Calendar.current.isDate(messages[index - 1].date, inSameDayAs: message.date) {
                             Text(dayTitle(message.date))
                                 .font(.system(size: 12, weight: .semibold))
@@ -214,24 +216,26 @@ struct ChatView: View {
                             InviteBubble(message: message, invite: invite, username: username) { updated in
                                 if let index = messages.firstIndex(where: { $0.id == message.id }) { messages[index].invite = updated }
                             }
-                            .id(message.id)
+                            .id(message.key)
+                            .transition(message.fromMe ? .ownMessage : .incomingMessage)
                         } else {
                         MessageBubble(
                             message: message,
                             username: username,
-                            localImage: localImages[message.id],
+                            localImage: localImages[message.key],
                             highlighted: highlighted == message.id,
                             onOpenImage: { viewing = ViewedImage(id: $0) },
                             onReply: { reply(to: message) },
                             onReact: { react(message, $0) },
                             onOpenQuote: { id in
-                                guard messages.contains(where: { $0.id == id }) else { return }
-                                withAnimation(Motion.snappy) { proxy.scrollTo(id, anchor: .center) }
+                                guard let target = messages.first(where: { $0.id == id }) else { return }
+                                withAnimation(Motion.snappy) { proxy.scrollTo(target.key, anchor: .center) }
                                 flash(id)
                             },
                             onDelete: { delete(message) }
                         )
-                        .id(message.id)
+                        .id(message.key)
+                        .transition(message.fromMe ? .ownMessage : .incomingMessage)
                         }
                     }
                     if otherTyping {
@@ -246,9 +250,11 @@ struct ChatView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
-            .onChange(of: messages.last?.id) { _, id in
-                guard let id else { return }
-                withAnimation(Motion.snappy) { proxy.scrollTo(id, anchor: .bottom) }
+            // Одна прокрутка на новое сообщение и той же пружиной, что и сам пузырь.
+            // Подтверждение сервера ключ не меняет — второй прокрутки нет.
+            .onChange(of: messages.last?.key) { _, key in
+                guard let key else { return }
+                withAnimation(Motion.chat) { proxy.scrollTo(key, anchor: .bottom) }
             }
             .onChange(of: otherTyping) { _, value in
                 if value { withAnimation(Motion.snappy) { proxy.scrollTo("typing", anchor: .bottom) } }
@@ -460,6 +466,7 @@ struct ChatView: View {
                     .background(canSend ? Color.white : Color.clear, in: Circle())
                     .chatGlass(Circle(), enabled: !canSend)
                 }
+                .buttonStyle(PressableStyle(scale: 0.88))
                 .disabled(!canSend)
                 .accessibilityLabel("Отправить")
                 .animation(Motion.snappy, value: canSend)
@@ -581,19 +588,20 @@ struct ChatView: View {
             createdAt: Date().timeIntervalSince1970 * 1000,
             replyTo: quoted.map { SocialMessageQuote(id: $0.id, text: $0.text, image: $0.image, voice: $0.voice != nil, fromMe: $0.fromMe) }
         )
-        replyingTo = nil
-        withAnimation(Motion.snappy) { messages.append(local) }
+        withAnimation(Motion.chat) {
+            replyingTo = nil
+            messages.append(local)
+        }
         Task {
             do {
                 let uploaded = try await social.uploadVoice(recording.data, durationMs: recording.durationMs, waveform: recording.waveform)
                 let sent = try await social.sendMessage(
                     to: username, text: SocialVoice.previewText, voice: uploaded.id, replyTo: quoted?.id, clientId: clientId
                 )
-                messages.removeAll { $0.id == local.id }
-                apply([sent])
+                confirm(local, with: sent)
                 error = nil
             } catch {
-                withAnimation(Motion.snappy) { messages.removeAll { $0.id == local.id } }
+                withAnimation(Motion.chat) { messages.removeAll { $0.id == local.id } }
                 if replyingTo == nil { replyingTo = quoted }
                 self.error = error.socialMessage
             }
@@ -609,10 +617,27 @@ struct ChatView: View {
 
     /// Новое добавляется, изменённое заменяется, удалённое пропадает.
     /// Сервер отдаёт новые первыми, на экране — старые сверху.
-    private func apply(_ incoming: [SocialMessage]) {
+    private func apply(_ incoming: [SocialMessage], animated: Bool = true) {
         let updated = SocialMessage.merged(messages, with: incoming)
         guard updated != messages else { return }
-        withAnimation(Motion.snappy) { messages = updated }
+        if animated {
+            withAnimation(Motion.chat) { messages = updated }
+        } else {
+            var quiet = Transaction()
+            quiet.disablesAnimations = true
+            withTransaction(quiet) { messages = updated }
+        }
+    }
+
+    /// Сервер принял своё сообщение: та же строка, только часики сменились
+    /// галочкой. Без анимации — пузырь не пересоздаётся и переписка не дёргается.
+    private func confirm(_ local: SocialMessage, with sent: SocialMessage) {
+        var confirmed = sent
+        confirmed.rowKey = local.key
+        let updated = SocialMessage.merged(messages.filter { $0.id != local.id }, with: [confirmed])
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) { messages = updated }
     }
 
     private func absorb(_ page: SocialChatPage) {
@@ -630,7 +655,8 @@ struct ChatView: View {
             let page = try await social.messages(with: username)
             absorb(page)
             older = page.next
-            apply(page.messages)
+            // Первая загрузка — сразу на месте, без вылетающих пузырей.
+            apply(page.messages, animated: !messages.isEmpty)
             error = nil
         } catch {
             if let message = error.socialMessage { self.error = message }
@@ -657,7 +683,7 @@ struct ChatView: View {
         defer { loadingOlder = false }
         if let page = try? await social.messages(with: username, before: older) {
             self.older = page.next
-            apply(page.messages)
+            apply(page.messages, animated: false)
         }
     }
 
@@ -708,25 +734,27 @@ struct ChatView: View {
             createdAt: Date().timeIntervalSince1970 * 1000,
             replyTo: quoted.map { SocialMessageQuote(id: $0.id, text: $0.text, image: $0.image, voice: $0.voice != nil, fromMe: $0.fromMe) }
         )
-        if let photo { localImages[local.id] = photo }
-        draft = ""
-        attachment = nil
-        replyingTo = nil
+        if let photo { localImages[local.key] = photo }
         sending = true
-        withAnimation(Motion.snappy) { messages.append(local) }
+        // Поле пустеет, пузырь вылетает, переписка едет вверх — одной пружиной,
+        // а не тремя анимациями наперегонки.
+        withAnimation(Motion.chat) {
+            draft = ""
+            attachment = nil
+            replyingTo = nil
+            messages.append(local)
+        }
         Task {
             defer { sending = false }
             do {
                 var imageId: String?
                 if let photo { imageId = try await social.uploadImage(photo, maxSide: 1600) }
                 let sent = try await social.sendMessage(to: username, text: text, image: imageId, replyTo: quoted?.id, clientId: clientId)
-                messages.removeAll { $0.id == local.id }
-                localImages[local.id] = nil
-                apply([sent])
+                confirm(local, with: sent)
                 error = nil
             } catch {
-                messages.removeAll { $0.id == local.id }
-                localImages[local.id] = nil
+                withAnimation(Motion.chat) { messages.removeAll { $0.id == local.id } }
+                localImages[local.key] = nil
                 if draft.isEmpty { draft = text }
                 if attachment == nil { attachment = photo }
                 if replyingTo == nil { replyingTo = quoted }
@@ -739,7 +767,8 @@ struct ChatView: View {
         Task {
             do {
                 try await social.deleteMessage(message.id)
-                withAnimation(Motion.snappy) { messages.removeAll { $0.id == message.id } }
+                UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                withAnimation(Motion.chat) { messages.removeAll { $0.id == message.id } }
             } catch {
                 self.error = error.socialMessage
             }
@@ -792,6 +821,8 @@ struct MessageBubble: View {
 
     /// Сдвиг при свайпе влево — «ответить», как в Telegram.
     @State private var swipe: CGFloat = 0
+    /// Дотянули до порога: отпустишь — ответ.
+    @State private var armed = false
 
     private static let replyDistance: CGFloat = 64
 
@@ -809,15 +840,34 @@ struct MessageBubble: View {
                 // Стрелка «ответить» выезжает справа, пока тянем пузырь.
                 Image(systemName: "arrowshape.turn.up.left.circle.fill")
                     .font(.system(size: 26))
-                    .foregroundStyle(Color.white.opacity(0.8))
+                    .foregroundStyle(armed ? Theme.accent : Color.white.opacity(0.8))
                     .opacity(Double(min(1, -swipe / Self.replyDistance)))
-                    .scaleEffect(0.6 + 0.4 * min(1, -swipe / Self.replyDistance))
+                    .scaleEffect(armed ? 1.15 : 0.6 + 0.4 * min(1, -swipe / Self.replyDistance))
+                    .animation(Motion.bouncy, value: armed)
                     .offset(x: swipe + 34)
             }
             if !message.fromMe { Spacer(minLength: 60) }
         }
         .contentShape(Rectangle())
-        .simultaneousGesture(swipeToReply)
+        .replySwipe(onChange: pull, onEnd: release)
+    }
+
+    /// Пузырь едет за пальцем; дальше порога — с сопротивлением и щелчком.
+    private func pull(_ dx: CGFloat) {
+        guard !message.isLocal else { return }
+        let pulled = min(0, dx)
+        swipe = pulled < -Self.replyDistance ? -Self.replyDistance + (pulled + Self.replyDistance) * 0.25 : pulled
+        let reached = swipe <= -Self.replyDistance
+        if reached != armed {
+            armed = reached
+            if reached { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+        }
+    }
+
+    private func release() {
+        if armed { onReply() }
+        armed = false
+        withAnimation(Motion.bouncy) { swipe = 0 }
     }
 
     private var bubble: some View {
@@ -942,28 +992,12 @@ struct MessageBubble: View {
         }
     }
 
-    /// Тянем влево — пузырь едет за пальцем; дотянули — ответ.
-    /// Вертикальная прокрутка не трогается: смотрим, куда палец пошёл сначала.
-    private var swipeToReply: some Gesture {
-        DragGesture(minimumDistance: 18)
-            .onChanged { value in
-                guard !message.isLocal, abs(value.translation.width) > abs(value.translation.height) * 1.6 else { return }
-                let pulled = min(0, value.translation.width)
-                // Дальше порога — с сопротивлением.
-                swipe = pulled < -Self.replyDistance ? -Self.replyDistance + (pulled + Self.replyDistance) * 0.25 : pulled
-            }
-            .onEnded { _ in
-                if swipe <= -Self.replyDistance { onReply() }
-                withAnimation(Motion.snappy) { swipe = 0 }
-            }
-    }
-
     @ViewBuilder
     private var photo: some View {
         Group {
             if let localImage {
                 Image(uiImage: localImage).resizable().scaledToFill()
-                    .overlay { ProgressView().tint(.white) }
+                    .overlay { if message.isLocal { ProgressView().tint(.white) } }
             } else {
                 RemoteImage(id: message.image)
             }
@@ -973,6 +1007,91 @@ struct MessageBubble: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if let id = message.image, !message.isLocal { onOpenImage(id) }
+        }
+    }
+}
+
+// MARK: - Появление и свайп
+
+extension AnyTransition {
+    /// Своё сообщение вылетает из поля ввода: снизу справа, с лёгким отскоком.
+    static var ownMessage: AnyTransition {
+        .asymmetric(
+            insertion: .scale(scale: 0.45, anchor: .bottomTrailing)
+                .combined(with: .offset(y: 26))
+                .combined(with: .opacity),
+            removal: .scale(scale: 0.6).combined(with: .opacity)
+        )
+    }
+
+    /// Сообщение друга проявляется слева, от его стороны переписки.
+    static var incomingMessage: AnyTransition {
+        .asymmetric(
+            insertion: .scale(scale: 0.6, anchor: .bottomLeading).combined(with: .opacity),
+            removal: .scale(scale: 0.6).combined(with: .opacity)
+        )
+    }
+}
+
+extension View {
+    /// Свайп влево по сообщению — «ответить». С iOS 18 — жест UIKit, который
+    /// берёт только горизонтальное движение и не спорит с прокруткой переписки;
+    /// на iOS 17 — обычный жест SwiftUI.
+    @ViewBuilder
+    func replySwipe(onChange: @escaping (CGFloat) -> Void, onEnd: @escaping () -> Void) -> some View {
+        if #available(iOS 18.0, *) {
+            gesture(HorizontalSwipeGesture(onChange: onChange, onEnd: onEnd))
+        } else {
+            simultaneousGesture(
+                DragGesture(minimumDistance: 18)
+                    .onChanged { value in
+                        guard abs(value.translation.width) > abs(value.translation.height) * 1.6 else { return }
+                        onChange(value.translation.width)
+                    }
+                    .onEnded { _ in onEnd() }
+            )
+        }
+    }
+}
+
+/// Горизонтальный свайп влево: начинается, только если палец пошёл в сторону,
+/// и работает вместе с прокруткой, а не вместо неё.
+@available(iOS 18.0, *)
+private struct HorizontalSwipeGesture: UIGestureRecognizerRepresentable {
+    var onChange: (CGFloat) -> Void
+    var onEnd: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed:
+            onChange(recognizer.translation(in: recognizer.view).x)
+        case .ended, .cancelled, .failed:
+            onEnd()
+        default:
+            break
+        }
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return velocity.x < 0 && abs(velocity.x) > abs(velocity.y) * 1.2
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
         }
     }
 }

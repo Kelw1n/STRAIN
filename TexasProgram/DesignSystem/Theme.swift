@@ -137,6 +137,8 @@ enum Motion {
     static let reorder = Animation.spring(response: 0.26, dampingFraction: 0.86)
     /// Переключение вкладок.
     static let tab = Animation.easeOut(duration: 0.2)
+    /// Сообщение в переписке: вылетает с лёгким отскоком, переписка едет следом.
+    static let chat = Animation.spring(response: 0.4, dampingFraction: 0.74)
     /// Нажатие: кнопка прижимается сразу, без задержки.
     static let press = Animation.spring(response: 0.16, dampingFraction: 0.95)
     /// Отпускание: мягко пружинит назад с едва заметным отскоком.

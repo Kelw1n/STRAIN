@@ -292,7 +292,11 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
     var invite: SocialInvite?
     /// Голосовое сообщение.
     var voice: SocialVoice?
+    /// Ключ строки на экране. У своего сообщения — тот, что был до ответа сервера:
+    /// подтверждённое сообщение не пересоздаётся и не дёргает переписку.
+    var rowKey: String?
 
+    var key: String { rowKey ?? id }
     var date: Date { Date(timeIntervalSince1970: createdAt / 1000) }
     var isLocal: Bool { id.hasPrefix("local-") }
     /// Подпись в списке переписок: фото без текста — «Фото», голосовое — «Голосовое».
@@ -337,7 +341,14 @@ extension SocialMessage {
         var byId: [String: SocialMessage] = [:]
         for message in current { byId[message.id] = message }
         for message in incoming {
-            if message.deleted { byId[message.id] = nil } else { byId[message.id] = message }
+            if message.deleted {
+                byId[message.id] = nil
+                continue
+            }
+            // Ключ строки остаётся прежним, что бы ни пришло с сервера.
+            var updated = message
+            if let old = byId[message.id] { updated.rowKey = old.rowKey ?? message.rowKey }
+            byId[message.id] = updated
         }
         return byId.values.sorted { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt < $1.createdAt }
     }
