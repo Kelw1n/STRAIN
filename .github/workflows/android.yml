@@ -10,6 +10,9 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    # Запись — чтобы выложить APK в релиз с прямой ссылкой.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -60,6 +63,26 @@ jobs:
           name: strain-android-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+      # Прямая ссылка на сам APK — без zip-архива и без входа в GitHub:
+      # открыл на Android-телефоне и сразу ставишь. Релиз «android-latest»
+      # пересоздаётся на каждой ручной сборке, ссылка остаётся той же:
+      # https://github.com/<репозиторий>/releases/download/android-latest/STRAIN.apk
+      - name: Publish APK
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp android/app/build/outputs/apk/release/app-release.apk STRAIN.apk
+          gh release delete android-latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create android-latest STRAIN.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "STRAIN для Android — последняя сборка" \
+            --notes "Открой на Android-телефоне и нажми STRAIN.apk. Если телефон спросит — разреши установку из этого источника. Сборка из коммита ${GITHUB_SHA::7}."
+          echo "Прямая ссылка: https://github.com/$GITHUB_REPOSITORY/releases/download/android-latest/STRAIN.apk" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test report
         if: failure()
