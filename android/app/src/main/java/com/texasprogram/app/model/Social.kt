@@ -180,8 +180,12 @@ data class SocialMessage(
     /// Приглашение на совместную тренировку — карточкой в переписке.
     val invite: SocialInvite? = null,
     /// Голосовое сообщение.
-    val voice: SocialVoice? = null
+    val voice: SocialVoice? = null,
+    /// Ключ строки на экране. У своего сообщения — тот, что был до ответа сервера:
+    /// подтверждённое сообщение не пересоздаётся и не мигает в переписке.
+    @kotlinx.serialization.Transient val rowKey: String? = null
 ) {
+    val key: String get() = rowKey ?: id
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
     val isLocal: Boolean get() = id.startsWith("local-")
     /// Подпись в списке переписок: фото без текста — «Фото», голосовое — «Голосовое».
@@ -199,7 +203,15 @@ data class SocialMessage(
         fun merged(current: List<SocialMessage>, incoming: List<SocialMessage>): List<SocialMessage> {
             val byId = LinkedHashMap<String, SocialMessage>()
             for (message in current) byId[message.id] = message
-            for (message in incoming) if (message.deleted) byId.remove(message.id) else byId[message.id] = message
+            for (message in incoming) {
+                if (message.deleted) {
+                    byId.remove(message.id)
+                    continue
+                }
+                // Ключ строки остаётся прежним, что бы ни пришло с сервера.
+                val old = byId[message.id]
+                byId[message.id] = if (old != null) message.copy(rowKey = old.rowKey ?: message.rowKey) else message
+            }
             return byId.values.sortedWith(compareBy({ it.createdAt }, { it.id }))
         }
     }

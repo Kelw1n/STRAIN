@@ -1,5 +1,7 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.composed
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.input.pointer.pointerInput
@@ -361,6 +363,17 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         messages.addAll(updated)
     }
 
+    /// Сервер принял своё сообщение: та же строка, только часики сменились
+    /// галочкой. Пузырь не пересоздаётся — ничего не мигает и не прыгает.
+    fun confirm(local: SocialMessage, sent: SocialMessage) {
+        val updated = SocialMessage.merged(messages.filter { it.id != local.id }, listOf(sent.copy(rowKey = local.key)))
+        messages.clear()
+        messages.addAll(updated)
+    }
+
+    /// Что пришло, пока переписка открыта, — вылетает; старое — сразу на месте.
+    val openedAt = remember { System.currentTimeMillis() - 5_000 }
+
     fun absorb(page: SocialChatPage) {
         user = page.user
         page.serverTime?.let { serverTime = it }
@@ -410,7 +423,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     }
 
     // Новое сообщение или «печатает» — список доезжает до низа.
-    LaunchedEffect(messages.lastOrNull()?.id, otherTyping) {
+    LaunchedEffect(messages.lastOrNull()?.key, otherTyping) {
         val count = (if (older != null) 1 else 0) + messages.size + (if (otherTyping) 1 else 0)
         if (messages.isNotEmpty()) listState.animateScrollToItem(count - 1)
     }
@@ -465,7 +478,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
             image = if (photo != null) "local" else null,
             replyTo = quoted?.quote
         )
-        if (photo != null) localImages[local.id] = photo
+        if (photo != null) localImages[local.key] = photo
         draft = ""
         attachment = null
         replyingTo = null
@@ -475,13 +488,11 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
             try {
                 val imageId = photo?.let { SocialService.uploadImage(context, it, maxSide = 1600) }
                 val sent = SocialService.sendMessage(username, text, clientId, image = imageId, replyTo = quoted?.id)
-                messages.remove(local)
-                localImages.remove(local.id)
-                applyChanges(listOf(sent))
+                confirm(local, sent)
                 error = null
             } catch (e: SocialException) {
                 messages.remove(local)
-                localImages.remove(local.id)
+                localImages.remove(local.key)
                 if (draft.isEmpty()) draft = text
                 if (attachment == null) attachment = photo
                 if (replyingTo == null) replyingTo = quoted
@@ -511,8 +522,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
             try {
                 val uploaded = SocialService.uploadVoice(recording.data, recording.durationMs, recording.waveform)
                 val sent = SocialService.sendMessage(username, SocialVoice.PREVIEW, clientId, replyTo = quoted?.id, voice = uploaded.id)
-                messages.remove(local)
-                applyChanges(listOf(sent))
+                confirm(local, sent)
                 error = null
             } catch (e: SocialException) {
                 messages.remove(local)
@@ -600,9 +610,14 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         }
                     }
                 }
-                itemsIndexed(messages, key = { _, message -> message.id }) { index, message ->
-                    // Новое сообщение проявляется, удалённое тает, соседи плавно съезжаются.
-                    Column(Modifier.animateItem(fadeInSpec = tween(220), placementSpec = Motion.snappy(), fadeOutSpec = tween(160))) {
+                // Ключ строки, а не id: своё сообщение после ответа сервера остаётся
+                // той же строкой. Новое вылетает, удалённое тает, соседи съезжаются.
+                itemsIndexed(messages, key = { _, message -> message.key }) { index, message ->
+                    Column(
+                        Modifier
+                            .animateItem(fadeInSpec = null, placementSpec = Motion.snappy(), fadeOutSpec = tween(180))
+                            .bubblePop(play = message.isLocal || message.createdAt > openedAt, fromMe = message.fromMe)
+                    ) {
                         val day = message.instant.atZone(ZoneId.systemDefault()).toLocalDate()
                         val previous = messages.getOrNull(index - 1)?.instant?.atZone(ZoneId.systemDefault())?.toLocalDate()
                         if (previous != day) {
@@ -624,7 +639,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         } else MessageBubble(
                             message,
                             username = username,
-                            localImage = localImages[message.id],
+                            localImage = localImages[message.key],
                             highlighted = highlighted == message.id,
                             onOpenImage = { viewing = it },
                             onReply = { reply(message) },
@@ -933,7 +948,10 @@ internal fun MessageBubble(
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val haptics = rememberHapticEngine()
     var menu by remember { mutableStateOf(false) }
+    /// Дотянули до порога: отпустишь — ответ.
+    var armed by remember { mutableStateOf(false) }
     val time = message.instant.atZone(ZoneId.systemDefault()).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
     val hasImage = message.image != null
     /// Сдвиг при свайпе влево — «ответить», как в Telegram.
@@ -953,10 +971,16 @@ internal fun MessageBubble(
                             // Дальше порога — с сопротивлением.
                             val next = (swipe.value + delta * if (swipe.value < -replyDistance) 0.25f else 1f).coerceIn(-replyDistance * 1.5f, 0f)
                             scope.launch { swipe.snapTo(next) }
+                            val reached = next <= -replyDistance
+                            if (reached != armed) {
+                                armed = reached
+                                if (reached) haptics.medium()
+                            }
                         },
                         onDragStopped = {
-                            if (swipe.value <= -replyDistance) onReply()
-                            swipe.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 900f))
+                            if (armed) onReply()
+                            armed = false
+                            swipe.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 700f))
                         }
                     ),
                 horizontalAlignment = if (message.fromMe) Alignment.End else Alignment.Start,
@@ -993,7 +1017,7 @@ internal fun MessageBubble(
                         Box(Modifier.size(width = 230.dp, height = 270.dp).clip(RoundedCornerShape(15.dp)), contentAlignment = Alignment.Center) {
                             if (localImage != null) {
                                 LocalImage(localImage, Modifier.fillMaxSize())
-                                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                                if (message.isLocal) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                             } else {
                                 RemoteImage(message.image, Modifier.fillMaxSize())
                             }
@@ -1060,12 +1084,13 @@ internal fun MessageBubble(
                         .offset { IntOffset((swipe.value + with(density) { 34.dp.toPx() }).roundToInt(), 0) }
                         .graphicsLayer {
                             alpha = pulled
-                            scaleX = 0.6f + 0.4f * pulled
-                            scaleY = 0.6f + 0.4f * pulled
+                            val scale = if (armed) 1.15f else 0.6f + 0.4f * pulled
+                            scaleX = scale
+                            scaleY = scale
                         }
                         .size(26.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f))
+                        .background(if (armed) Theme.accent else Color.White.copy(alpha = 0.2f))
                         .padding(4.dp)
                 )
             }
@@ -1345,5 +1370,23 @@ private fun MicButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(Icons.Filled.Mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+    }
+}
+
+/// Новое сообщение вылетает: своё — из поля ввода снизу справа, друга — слева,
+/// с лёгким отскоком. Только слоем: соседи не перекомпоновываются.
+private fun Modifier.bubblePop(play: Boolean, fromMe: Boolean): Modifier = composed {
+    val progress = remember { Animatable(if (play) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (progress.value < 1f) progress.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
+    }
+    graphicsLayer {
+        val p = progress.value
+        transformOrigin = TransformOrigin(if (fromMe) 1f else 0f, 1f)
+        val scale = 0.5f + 0.5f * p
+        scaleX = scale
+        scaleY = scale
+        alpha = p.coerceIn(0f, 1f)
+        translationY = (1f - p) * 26.dp.toPx()
     }
 }
