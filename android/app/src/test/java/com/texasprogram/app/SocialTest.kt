@@ -343,4 +343,30 @@ class SocialTest {
         assertEquals(listOf("last", "now", "empty", "old"), byStreak.map { it.user.username })
         assertEquals("6 т", com.texasprogram.app.model.LeaderboardMetric.VOLUME.format(byVolume[0].stats))
     }
+
+    @Test
+    fun voiceMessageDecodesAndPreviews() {
+        val message = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"v1","text":"🎤 Голосовое сообщение","fromMe":true,"createdAt":1,
+               "voice":{"id":"abc","durationMs":4200,"waveform":"0f8"},
+               "replyTo":{"id":"q","text":"","voice":true,"fromMe":false}}"""
+        )
+        assertEquals(4200, message.voice?.durationMs)
+        assertEquals(listOf(0f, 1f, 8f / 15), message.voice?.levels)
+        assertEquals(com.texasprogram.app.model.SocialVoice.PREVIEW, message.preview)
+        assertEquals(com.texasprogram.app.model.SocialVoice.PREVIEW, message.replyTo?.preview)
+        assertEquals("1:05", com.texasprogram.app.model.SocialVoice.format(65_900))
+    }
+
+    @Test
+    fun voiceWaveformBars() {
+        // 80 уровней в 40 столбиков: в каждом — громкий кусочек, цифрой от 0 до f.
+        val levels = List(80) { if (it % 2 == 0) 0f else 1f }
+        val wave = com.texasprogram.app.service.VoiceRecorder.waveform(levels)
+        assertEquals(40, wave.length)
+        assertTrue(wave.all { it == 'f' })
+        assertEquals("", com.texasprogram.app.service.VoiceRecorder.waveform(emptyList()))
+        assertEquals("8888", com.texasprogram.app.service.VoiceRecorder.waveform(listOf(0.5f), bars = 4))
+    }
 }
+

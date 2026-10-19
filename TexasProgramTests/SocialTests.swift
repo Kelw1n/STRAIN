@@ -355,4 +355,30 @@ final class SocialTests: XCTestCase {
         let without = try BackupService.archive(from: try BackupService.export([texas()], socialToken: nil))
         XCTAssertNil(without.socialToken)
     }
+
+    // MARK: Голосовые
+
+    func testVoiceMessageDecodesAndPreviews() throws {
+        let json = """
+        {"id":"v1","text":"🎤 Голосовое сообщение","fromMe":true,"createdAt":1,
+         "voice":{"id":"abc","durationMs":4200,"waveform":"0f8"},
+         "replyTo":{"id":"q","text":"","voice":true,"fromMe":false}}
+        """
+        let message = try JSONDecoder().decode(SocialMessage.self, from: Data(json.utf8))
+        XCTAssertEqual(message.voice?.durationMs, 4200)
+        XCTAssertEqual(message.voice?.levels, [0, 1, 8.0 / 15])
+        XCTAssertEqual(message.preview, SocialVoice.previewText)
+        XCTAssertEqual(message.replyTo?.preview, SocialVoice.previewText)
+        XCTAssertEqual(SocialVoice.format(65.9), "1:05")
+    }
+
+    func testVoiceWaveformBars() {
+        // 80 уровней в 40 столбиков: в каждом — громкий кусочек, цифрой от 0 до f.
+        let levels = (0..<80).map { $0 % 2 == 0 ? 0.0 : 1.0 }
+        let wave = VoiceRecorder.waveform(levels)
+        XCTAssertEqual(wave.count, 40)
+        XCTAssertTrue(wave.allSatisfy { $0 == "f" })
+        XCTAssertEqual(VoiceRecorder.waveform([]), "")
+        XCTAssertEqual(VoiceRecorder.waveform([0.5], bars: 4), "8888")
+    }
 }
