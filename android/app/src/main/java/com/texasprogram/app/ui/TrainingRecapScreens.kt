@@ -102,7 +102,7 @@ private val RECAP_PALETTE = listOf(
     Color(0xFF8C8C99) to Color(0xFF0F0F14)
 )
 
-private fun palette(index: Int) = RECAP_PALETTE[index % RECAP_PALETTE.size]
+internal fun palette(index: Int) = RECAP_PALETTE[index % RECAP_PALETTE.size]
 
 /// Карточка в «Прогрессе»: итоги этого и прошлого месяца, этого и прошлого года.
 @Composable
@@ -143,7 +143,7 @@ fun TrainingRecapEntryCard(profile: ProgramProfile, modifier: Modifier = Modifie
 
 // MARK: - Итоги историями
 
-private enum class RecapSlide { INTRO, TIME, VOLUME, RECORDS, FAVORITE, STREAK, SUMMARY }
+internal enum class RecapSlide { INTRO, TIME, VOLUME, RECORDS, FAVORITE, STREAK, SUMMARY }
 
 /// Итоги историями, как Spotify Wrapped: слайды сами листаются, нажатие справа —
 /// дальше, слева — назад, удержание — пауза. Последний слайд — карточка для сторис.
@@ -275,7 +275,7 @@ fun TrainingRecapDialog(recap: TrainingRecap, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun RecapSlideContent(slide: RecapSlide, recap: TrainingRecap, restart: () -> Unit) {
+internal fun RecapSlideContent(slide: RecapSlide, recap: TrainingRecap, restart: () -> Unit) {
     val white70 = Color.White.copy(alpha = 0.85f)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
         when (slide) {

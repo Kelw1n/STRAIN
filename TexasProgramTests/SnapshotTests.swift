@@ -206,6 +206,65 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Новое в переписке: пересланное, изменённое, тренировка карточкой,
+    /// непрослушанное голосовое, сообщение в очереди и не ушедшее.
+    @MainActor func testChatExtras() throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let messages: [SocialMessage] = try Fixtures.decode("""
+        [{"id":"1","text":"Смотри, как надо","fromMe":false,"createdAt":\(now - 3_600_000),"forwarded":{"username":"heavy.anna"}},
+         {"id":"2","text":"Жму 105 на 5","fromMe":true,"createdAt":\(now - 3_500_000),"read":true,"edited":true},
+         {"id":"3","text":"🏋️ День 1 · Объём","fromMe":false,"createdAt":\(now - 3_000_000),
+          "workout":{"title":"День 1 · Объём","durationSeconds":4380,"volumeKg":12850,"sets":18,"effort":8,
+                     "workout":{"exercises":[{"name":"Приседания","sets":[{"reps":5,"weight":140,"record":true},{"reps":5,"weight":140}]},
+                                             {"name":"Жим лёжа","sets":[{"reps":5,"weight":100}]},
+                                             {"name":"Тяга в наклоне","sets":[{"reps":8,"weight":70}]},
+                                             {"name":"Подъём на бицепс","sets":[{"reps":12,"weight":30}]}]}}},
+         {"id":"4","text":"🏋️ День 2","fromMe":true,"createdAt":\(now - 2_000_000),"read":false,
+          "workout":{"title":"День 2 · Восстановление","durationSeconds":2700,"volumeKg":6400,"sets":12,"workout":{"exercises":[{"name":"Жим стоя","sets":[{"reps":5,"weight":60}]}]}}},
+         {"id":"5","text":"🎤 Голосовое сообщение","fromMe":false,"createdAt":\(now - 120_000),"heard":false,
+          "voice":{"id":"v1","durationMs":14200,"waveform":"2468ace8642468aceca8642"}}]
+        """)
+        let pending = ChatPending(clientId: "c1", username: "bro.lifts", createdAt: now - 30_000, text: "Уже в зале, жду")
+        let failed = ChatPending(clientId: "c2", username: "bro.lifts", createdAt: now - 10_000, text: "Ответ на удалённое")
+        try snap("18-chat-extras", height: 1500) {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(messages) { MessageBubble(message: $0, username: "bro.lifts", onDelete: {}) }
+                        MessageBubble(message: pending.message, username: "bro.lifts", onDelete: {})
+                        MessageBubble(message: failed.message, username: "bro.lifts", failure: "Сообщение удалено", onDelete: {})
+                    }
+                    .padding(12)
+                }
+                .background(Color.black.ignoresSafeArea())
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .preferredColorScheme(.dark)
+        }
+    }
+
+    /// Итоги месяца: первый слайд историй и карточка для сторис.
+    @MainActor func testRecap() throws {
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let now = Date()
+        let parts = calendar.dateComponents([.year, .month], from: now)
+        func day(_ offset: Int) -> Date { calendar.date(byAdding: .day, value: -offset, to: now) ?? now }
+        let log = (0..<9).map { index in
+            CompletionRecord(key: "1-\(index)", date: day(index * 3), week: 1, day: index, durationSeconds: 3600 + index * 120)
+        }
+        var sets: [String: SetEntry] = [:]
+        for index in 0..<9 {
+            sets["1-\(index)|Приседания|0"] = SetEntry(reps: 5, weight: 120 + Double(index) * 2.5)
+            sets["1-\(index)|Жим лёжа|0"] = SetEntry(reps: 5, weight: 90 + Double(index))
+            sets["1-\(index)|Становая тяга|0"] = SetEntry(reps: 3, weight: 160)
+        }
+        let recap = TrainingRecap.build(log: log, setLog: sets, period: .month(year: parts.year ?? 2026, month: parts.month ?? 1), calendar: calendar)
+        try snap("19-recap-intro", wait: 2.5) { TrainingRecapView(recap: recap) }
+        try snap("20-recap-card") {
+            ZStack { Color.black.ignoresSafeArea(); TrainingRecapCard(recap: recap) }
+        }
+    }
+
     /// Тренируются сейчас, колокольчик активности и рейтинг недели.
     @MainActor func testSocialExtras() throws {
         let now = Date().timeIntervalSince1970 * 1000

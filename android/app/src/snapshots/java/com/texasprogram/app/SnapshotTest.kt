@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityOptionsCompat
@@ -260,6 +261,76 @@ class SnapshotTest {
                     Column { activity.items.forEach { com.texasprogram.app.ui.ActivityRow(it, onOpenActor = {}, onOpen = {}) } }
                     com.texasprogram.app.ui.LeaderboardCard(com.texasprogram.app.model.LeaderboardMetric.ranked(board, metric), metric) {}
                 }
+            }
+        }
+    }
+
+    /// Новое в переписке: пересланное, изменённое, тренировка карточкой,
+    /// непрослушанное голосовое, сообщение в очереди и не ушедшее; плашка обновления.
+    @Test
+    fun chatExtras() {
+        tall(3000)
+        val now = System.currentTimeMillis().toDouble()
+        val messages = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialMessage>>(
+            """[{"id":"1","text":"Смотри, как надо","fromMe":false,"createdAt":${now - 3_600_000},"forwarded":{"username":"heavy.anna"}},
+               {"id":"2","text":"Жму 105 на 5","fromMe":true,"createdAt":${now - 3_500_000},"read":true,"edited":true},
+               {"id":"3","text":"🏋️ День 1 · Объём","fromMe":false,"createdAt":${now - 3_000_000},
+                "workout":{"title":"День 1 · Объём","durationSeconds":4380,"volumeKg":12850,"sets":18,"effort":8,
+                           "workout":{"exercises":[{"name":"Приседания","sets":[{"reps":5,"weight":140,"record":true},{"reps":5,"weight":140}]},
+                                                   {"name":"Жим лёжа","sets":[{"reps":5,"weight":100}]},
+                                                   {"name":"Тяга в наклоне","sets":[{"reps":8,"weight":70}]},
+                                                   {"name":"Подъём на бицепс","sets":[{"reps":12,"weight":30}]}]}}},
+               {"id":"4","text":"🏋️ День 2","fromMe":true,"createdAt":${now - 2_000_000},
+                "workout":{"title":"День 2 · Восстановление","durationSeconds":2700,"volumeKg":6400,"sets":12,"workout":{"exercises":[{"name":"Жим стоя","sets":[{"reps":5,"weight":60}]}]}}},
+               {"id":"5","text":"🎤 Голосовое сообщение","fromMe":false,"createdAt":${now - 120_000},"heard":false,
+                "voice":{"id":"v1","durationMs":14200,"waveform":"2468ace8642468aceca8642"}}]"""
+        )
+        val pending = com.texasprogram.app.model.ChatPending(clientId = "c1", username = "bro.lifts", createdAt = now - 30_000, text = "Уже в зале, жду")
+        val failed = com.texasprogram.app.model.ChatPending(clientId = "c2", username = "bro.lifts", createdAt = now - 10_000, text = "Ответ на удалённое")
+        val release = com.texasprogram.app.service.AppUpdater.Release(1200, "3.1.120", "Переписка без рывков, итоги месяца")
+        paparazzi.snapshot("18-chat-extras") {
+            Screen {
+                Column(Modifier.padding(padding), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+                    com.texasprogram.app.ui.AppUpdateBanner(state = com.texasprogram.app.service.AppUpdater.State.Downloading(release, 0.94f))
+                    com.texasprogram.app.ui.AppUpdateBanner(state = com.texasprogram.app.service.AppUpdater.State.Available(release))
+                    messages.forEach { com.texasprogram.app.ui.MessageBubble(it, username = "bro.lifts", onCopy = {}, onDelete = {}) }
+                    com.texasprogram.app.ui.MessageBubble(pending.message, username = "bro.lifts", onCopy = {}, onDelete = {})
+                    com.texasprogram.app.ui.MessageBubble(failed.message, username = "bro.lifts", failure = "Сообщение удалено", onCopy = {}, onDelete = {})
+                }
+            }
+        }
+    }
+
+    /// Итоги месяца: первый слайд, слайд объёма и карточка для сторис.
+    @Test
+    fun recap() {
+        val today = LocalDate.now()
+        val log = (0 until 9).map { index ->
+            com.texasprogram.app.model.CompletionRecord(key = "1-$index", epochDay = today.minusDays(index * 3L).toEpochDay(), week = 1, day = index, durationSeconds = 3600 + index * 120)
+        }
+        val sets = buildMap {
+            for (index in 0 until 9) {
+                put("1-$index|Приседания|0", com.texasprogram.app.model.SetEntry(5, 120 + index * 2.5))
+                put("1-$index|Жим лёжа|0", com.texasprogram.app.model.SetEntry(5, 90.0 + index))
+                put("1-$index|Становая тяга|0", com.texasprogram.app.model.SetEntry(3, 160.0))
+            }
+        }
+        val recap = com.texasprogram.app.model.TrainingRecap.build(log, sets, period = com.texasprogram.app.model.TrainingRecap.Period.Month(today.year, today.monthValue))
+        for ((name, slide) in listOf("19-recap-intro" to com.texasprogram.app.ui.RecapSlide.INTRO, "20-recap-volume" to com.texasprogram.app.ui.RecapSlide.VOLUME)) {
+            paparazzi.snapshot(name) {
+                Screen {
+                    val (from, to) = com.texasprogram.app.ui.palette(0)
+                    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(from, to))).padding(26.dp)) {
+                        com.texasprogram.app.ui.RecapSlideContent(slide, recap) {}
+                    }
+                }
+            }
+        }
+        paparazzi.snapshot("21-recap-card") {
+            Screen {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val bitmap = remember { com.texasprogram.app.ui.TrainingRecapCard.render(context, recap) }
+                androidx.compose.foundation.Image(bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
             }
         }
     }

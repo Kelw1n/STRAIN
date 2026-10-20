@@ -49,9 +49,8 @@ import kotlinx.coroutines.launch
 /// Плашка сверху экрана: вышла новая версия. «Обновить» — скачать с полоской
 /// прогресса и открыть системный установщик; «×» — напомнить при следующем запуске.
 @Composable
-fun AppUpdateBanner(modifier: Modifier = Modifier) {
+fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.state) {
     val context = LocalContext.current
-    val state = AppUpdater.state
     val visible = state.release != null && !(AppUpdater.dismissed && state is State.Available)
     // Пока плашка уезжает, показываем последнее, что на ней было.
     val shown = remember { arrayOfNulls<State>(1) }
