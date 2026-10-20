@@ -284,6 +284,66 @@ test('лента, профили, подписки, фото и коммента
         assert.equal((await call('GET', '/chats/tim/messages', { token: friend.token })).data.messages.some((m) => m.id === question.id), false);
     });
 
+    await t.test('правка, пересылка, «прослушано» и тренировка в переписке', async () => {
+        // Свой clientId приходит обратно — по нему приложение узнаёт сообщение из очереди.
+        const draft = (await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { text: 'Жму 100', clientId: 'q1' } })).data;
+        assert.equal(draft.clientId, 'q1');
+        assert.equal(draft.edited, false);
+        const seenByFriend = (await call('GET', '/chats/tim/messages', { token: friend.token })).data;
+        assert.equal(seenByFriend.messages.find((m) => m.id === draft.id).clientId, null, 'чужой clientId не виден');
+        const reply = (await call('POST', '/chats/tim/messages', { token: friend.token, body: { text: 'Ого', replyTo: draft.id } })).data;
+
+        const since = seenByFriend.serverTime;
+        assert.equal((await call('PATCH', `/messages/${draft.id}`, { token: friend.token, body: { text: 'x' } })).status, 404, 'чужое не правится');
+        assert.equal((await call('PATCH', `/messages/${draft.id}`, { token: me.token, body: { text: '  ' } })).status, 400, 'пустым не сделать');
+        const edited = await call('PATCH', `/messages/${draft.id}`, { token: me.token, body: { text: 'Жму 105' } });
+        assert.equal(edited.status, 200);
+        assert.equal(edited.data.text, 'Жму 105');
+        assert.equal(edited.data.edited, true);
+        const changes = (await call('GET', `/chats/tim/messages?since=${since}`, { token: friend.token })).data.messages;
+        assert.equal(changes.find((m) => m.id === draft.id).text, 'Жму 105', 'собеседник видит правку');
+        assert.equal(changes.find((m) => m.id === reply.id).replyTo.text, 'Жму 105', 'и цитата в ответе обновилась');
+
+        // Пересылка фото: копия — у другого человека, «от кого» — автор первого сообщения.
+        const third = (await call('POST', '/register', { body: { username: 'thirdguy' } })).data;
+        const photo = (await call('POST', '/images', { token: me.token, raw: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) })).data.id;
+        const original = (await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { text: 'Форма', image: photo } })).data;
+        assert.equal((await call('POST', '/chats/semobsessed/messages', { token: third.token, body: { forward: original.id } })).status, 404, 'чужую переписку не переслать');
+        const forwarded = await call('POST', '/chats/thirdguy/messages', { token: friend.token, body: { forward: original.id, clientId: 'f1' } });
+        assert.equal(forwarded.status, 201);
+        assert.equal(forwarded.data.text, 'Форма');
+        assert.equal(forwarded.data.image, photo);
+        assert.deepEqual(forwarded.data.forwarded, { username: 'tim' });
+        const again = await call('POST', '/chats/tim/messages', { token: third.token, body: { forward: forwarded.data.id } });
+        assert.deepEqual(again.data.forwarded, { username: 'tim' }, 'пересланное дальше — всё ещё от автора');
+        assert.equal((await call('PATCH', `/messages/${forwarded.data.id}`, { token: friend.token, body: { text: 'y' } })).status, 400, 'пересланное не правится');
+        await call('DELETE', `/messages/${original.id}`, { token: me.token });
+        assert.equal((await call('GET', `/images/${photo}`)).status, 200, 'фото живо, пока его пересланная копия на месте');
+        await call('DELETE', `/messages/${forwarded.data.id}`, { token: friend.token });
+        await call('DELETE', `/messages/${again.data.id}`, { token: third.token });
+        assert.equal((await call('GET', `/images/${photo}`)).status, 404, 'последняя копия ушла — и фото удалено');
+
+        // Голосовое прослушано: отмечает только получатель.
+        const sound = Buffer.from('....ftypM4A heard', 'latin1');
+        const voice = (await call('POST', '/voices?durationMs=2000', { token: me.token, raw: sound, type: 'audio/mp4' })).data;
+        const spoken = (await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { voice: voice.id } })).data;
+        assert.equal(spoken.heard, false);
+        await call('POST', `/messages/${spoken.id}/heard`, { token: me.token });
+        assert.equal((await call('GET', '/chats/semobsessed/messages', { token: me.token })).data.messages.find((m) => m.id === spoken.id).heard, false, 'сам себе не слушатель');
+        await call('POST', `/messages/${spoken.id}/heard`, { token: friend.token });
+        assert.equal((await call('GET', '/chats/semobsessed/messages', { token: me.token })).data.messages.find((m) => m.id === spoken.id).heard, true);
+        assert.equal((await call('PATCH', `/messages/${spoken.id}`, { token: me.token, body: { text: 'z' } })).status, 400, 'голосовое не правится');
+
+        // Тренировка карточкой: без текста и фото — тоже сообщение.
+        const card = { title: 'День 1', durationSeconds: 3600, volumeKg: 5200, sets: 15, workout: { exercises: [{ name: 'Присед', sets: [{ reps: 5, weight: 100, record: true }] }] } };
+        const sent = await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { workout: card } });
+        assert.equal(sent.status, 201);
+        assert.deepEqual(sent.data.workout, card);
+        assert.equal((await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { workout: { huge: 'x'.repeat(40_000) } } })).status, 413);
+        const shared = await call('POST', '/chats/thirdguy/messages', { token: friend.token, body: { forward: sent.data.id } });
+        assert.deepEqual(shared.data.workout, card, 'тренировку можно переслать дальше');
+    });
+
     await t.test('тренируется сейчас и рейтинг недели', async () => {
         assert.equal((await call('PUT', '/me/live', { token: me.token, body: { title: 'День 1', exercise: 'Присед', done: 3, total: 5 } })).status, 200);
         const live = (await call('GET', '/live', { token: friend.token })).data;

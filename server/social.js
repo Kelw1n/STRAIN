@@ -150,6 +150,14 @@ CREATE INDEX IF NOT EXISTS together_invitee ON together (invitee, created_at DES
 -- Приглашение видно в переписке карточкой, а пост — «вместе с @другом».
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS together TEXT REFERENCES together(id) ON DELETE SET NULL;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS partner TEXT REFERENCES users(id) ON DELETE SET NULL;
+-- Правка текста, пересылка (от кого изначально), «прослушано» у голосового
+-- и тренировка карточкой прямо в переписке.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS forward_from TEXT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS heard_at TIMESTAMPTZ;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS workout JSONB;
+CREATE INDEX IF NOT EXISTS messages_reply ON messages (reply_to) WHERE reply_to IS NOT NULL;
 `;
 
 const newId = () => crypto.randomBytes(12).toString('hex');
@@ -200,6 +208,12 @@ function jsonLimited(value, maxBytes, fallback) {
     const raw = JSON.stringify(value);
     if (raw.length > maxBytes) throw new HttpError(413, 'Слишком много данных');
     return value;
+}
+
+// Тренировка карточкой в сообщении — объект с упражнениями, не больше 32 КБ.
+function chatWorkout(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return jsonLimited(value, 32_000, null);
 }
 
 function createSocial({ databaseUrl, pool: injectedPool } = {}) {
@@ -710,14 +724,21 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         ? { id: row.id, deleted: true, fromMe: row.sender === me.id, createdAt: new Date(row.created_at).getTime(), text: '' }
         : {
             id: row.id,
+            // Свой clientId — чтобы приложение узнало сообщение из своей очереди
+            // неотправленных, даже если ответ на отправку потерялся.
+            clientId: row.sender === me.id ? row.client_id || null : null,
             text: row.text,
             image: row.image || null,
             voice: row.voice
                 ? { id: row.voice, durationMs: Number(row.v_duration) || 0, waveform: row.v_waveform || '' }
                 : null,
+            workout: row.workout || null,
             fromMe: row.sender === me.id,
             createdAt: new Date(row.created_at).getTime(),
             read: row.read_at !== null,
+            heard: !!row.heard_at,
+            edited: !!row.edited_at,
+            forwarded: row.forwarded ? { username: row.forward_username || null } : null,
             reactions: reactionsView(row.reactions, me),
             invite: row.together && row.t_status
                 ? {
@@ -745,9 +766,22 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
                r.sender AS reply_sender, r.deleted_at IS NOT NULL AS reply_deleted,
                t.status AS t_status, t.created_at AS t_created, t.responded_at AS t_responded,
                t.inviter_done AS t_inviter_done, t.invitee_done AS t_invitee_done,
-               v.duration_ms AS v_duration, v.waveform AS v_waveform
+               v.duration_ms AS v_duration, v.waveform AS v_waveform, f.username AS forward_username
         FROM messages m LEFT JOIN messages r ON r.id = m.reply_to LEFT JOIN together t ON t.id = m.together
-        LEFT JOIN voices v ON v.id = m.voice`;
+        LEFT JOIN voices v ON v.id = m.voice LEFT JOIN users f ON f.id = m.forward_from`;
+
+    // Фото и звук сообщения могли переслать дальше — удаляем их, только когда
+    // на них больше не ссылается ни одно сообщение, профиль или пост.
+    const dropImageIfUnused = (id) => q(
+        `DELETE FROM images WHERE id = $1
+         AND NOT EXISTS (SELECT 1 FROM messages WHERE image = $1)
+         AND NOT EXISTS (SELECT 1 FROM users WHERE avatar_id = $1 OR cover_id = $1)
+         AND NOT EXISTS (SELECT 1 FROM posts WHERE photos ? $1)`,
+        [id]
+    );
+    const dropVoiceIfUnused = (id) => q('DELETE FROM voices WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM messages WHERE voice = $1)', [id]);
+    // Ответы на изменённое или удалённое сообщение: их цитата обновится у обоих.
+    const touchReplies = (id) => q('UPDATE messages SET updated_at = now() WHERE reply_to = $1', [id]);
 
     async function unreadCount(me) {
         const [row] = await q('SELECT count(*)::int AS count FROM messages WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL', [me.id]);
@@ -859,20 +893,35 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         messageLimit(me.id);
         const other = await userByName(req.params.username);
         if (other.id === me.id) throw new HttpError(400, 'Нельзя написать самому себе');
-        const body = text(req.body && req.body.text, 2000);
+        let body = text(req.body && req.body.text, 2000);
         // Фото и голосовое — только свои, загруженные через /images и /voices.
-        const image = imageIds([req.body && req.body.image])[0] || null;
-        const voice = imageIds([req.body && req.body.voice])[0] || null;
-        if (!body && !image && !voice) throw new HttpError(400, 'Пустое сообщение');
-        if (image && !(await q('SELECT 1 FROM images WHERE id = $1 AND owner = $2', [image, me.id]))[0]) {
+        let image = imageIds([req.body && req.body.image])[0] || null;
+        let voice = imageIds([req.body && req.body.voice])[0] || null;
+        let workout = chatWorkout(req.body && req.body.workout);
+        // Пересылка: содержимое берём из сообщения, которое видно отправителю,
+        // а «от кого» — от автора самого первого сообщения цепочки.
+        let forwardFrom = null;
+        const forward = req.body && req.body.forward ? String(req.body.forward) : null;
+        if (forward) {
+            const source = (await q(
+                'SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL AND (sender = $2 OR recipient = $2)',
+                [forward, me.id]
+            ))[0];
+            if (!source) throw new HttpError(404, 'Сообщение удалено');
+            if (source.together) throw new HttpError(400, 'Приглашение нельзя переслать');
+            ({ text: body, image, voice, workout } = source);
+            forwardFrom = source.forwarded ? source.forward_from : source.sender;
+        }
+        if (!body && !image && !voice && !workout) throw new HttpError(400, 'Пустое сообщение');
+        if (!forward && image && !(await q('SELECT 1 FROM images WHERE id = $1 AND owner = $2', [image, me.id]))[0]) {
             throw new HttpError(400, 'Фото не найдено');
         }
-        if (voice && !(await q('SELECT 1 FROM voices WHERE id = $1 AND owner = $2', [voice, me.id]))[0]) {
+        if (!forward && voice && !(await q('SELECT 1 FROM voices WHERE id = $1 AND owner = $2', [voice, me.id]))[0]) {
             throw new HttpError(400, 'Голосовое не найдено');
         }
         // Ответить можно только на сообщение из этой же переписки.
         let replyTo = null;
-        if (req.body && req.body.replyTo) {
+        if (!forward && req.body && req.body.replyTo) {
             const target = (await q(
                 `SELECT id FROM messages WHERE id = $1 AND deleted_at IS NULL
                  AND ((sender = $2 AND recipient = $3) OR (sender = $3 AND recipient = $2))`,
@@ -883,9 +932,13 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         }
         const clientId = text(req.body && req.body.clientId, 64) || null;
         const inserted = await q(
-            `INSERT INTO messages (id, sender, recipient, client_id, text, image, voice, reply_to) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `INSERT INTO messages (id, sender, recipient, client_id, text, image, voice, reply_to, workout, forwarded, forward_from)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              ON CONFLICT (sender, client_id) DO NOTHING RETURNING id`,
-            [newId(), me.id, other.id, clientId, body, image, voice, replyTo]
+            [
+                newId(), me.id, other.id, clientId, body, image, voice, replyTo,
+                workout ? JSON.stringify(workout) : null, !!forward, forwardFrom
+            ]
         );
         typing.delete(`${me.id}:${other.id}`);
         // Повтор отправки после обрыва связи возвращает уже созданное сообщение.
@@ -912,17 +965,48 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         res.json(messageView(updated, me));
     }));
 
+    // Правка своего сообщения: текст или подпись к фото. Голосовое, приглашение,
+    // тренировку и пересланное не правят — там нечего или нельзя менять.
+    router.patch('/messages/:id', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        messageLimit(me.id);
+        const own = (await q('SELECT * FROM messages WHERE id = $1 AND sender = $2 AND deleted_at IS NULL', [req.params.id, me.id]))[0];
+        if (!own) throw new HttpError(404, 'Сообщение не найдено');
+        if (own.voice || own.together || own.workout || own.forwarded) throw new HttpError(400, 'Это сообщение нельзя изменить');
+        const body = text(req.body && req.body.text, 2000);
+        if (!body && !own.image) throw new HttpError(400, 'Пустое сообщение — лучше удали его');
+        if (body !== own.text) {
+            await q('UPDATE messages SET text = $2, edited_at = now(), updated_at = now() WHERE id = $1', [own.id, body]);
+            await touchReplies(own.id);
+        }
+        const row = (await q(`${MESSAGE_SELECT} WHERE m.id = $1`, [own.id]))[0];
+        res.json(messageView(row, me));
+    }));
+
+    // Голосовое прослушано получателем — гаснет точка у обоих.
+    router.post('/messages/:id/heard', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        await q(
+            `UPDATE messages SET heard_at = now(), updated_at = now()
+             WHERE id = $1 AND recipient = $2 AND voice IS NOT NULL AND heard_at IS NULL AND deleted_at IS NULL`,
+            [req.params.id, me.id]
+        );
+        res.json({ success: true });
+    }));
+
     // Удаление своего сообщения: у собеседника оно тоже пропадёт при следующем обновлении.
     router.delete('/messages/:id', wrap(async (req, res) => {
         const me = await requireViewer(req);
         const own = (await q('SELECT id, image, voice FROM messages WHERE id = $1 AND sender = $2 AND deleted_at IS NULL', [req.params.id, me.id]))[0];
         if (!own) throw new HttpError(404, 'Сообщение не найдено');
         await q(
-            `UPDATE messages SET deleted_at = now(), updated_at = now(), text = '', image = NULL, voice = NULL, reactions = '{}' WHERE id = $1`,
+            `UPDATE messages SET deleted_at = now(), updated_at = now(), text = '', image = NULL, voice = NULL,
+             workout = NULL, reactions = '{}' WHERE id = $1`,
             [own.id]
         );
-        if (own.image) await q('DELETE FROM images WHERE id = $1 AND owner = $2', [own.image, me.id]);
-        if (own.voice) await q('DELETE FROM voices WHERE id = $1 AND owner = $2', [own.voice, me.id]);
+        await touchReplies(own.id);
+        if (own.image) await dropImageIfUnused(own.image);
+        if (own.voice) await dropVoiceIfUnused(own.voice);
         res.json({ success: true });
     }));
 
