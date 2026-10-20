@@ -94,6 +94,11 @@ fun ProgressScreen(
             }
         }
 
+        // Итоги месяца и года историями.
+        item(key = "recap") {
+            TrainingRecapEntryCard(profile, Modifier.appearIn(1))
+        }
+
         item(key = "streak") {
             val streak = profile.weekStreak
             StreakCard(streak.first, streak.second, Modifier.appearIn(1))

@@ -301,10 +301,10 @@ object WorkoutShareCard {
 
     /// Картинка — во временную папку, оттуда системное «Поделиться» отдаёт её
     /// в Instagram, Telegram или галерею. Разрешение на память не нужно.
-    fun share(context: Context, bitmap: Bitmap) {
+    fun share(context: Context, bitmap: Bitmap, title: String = "Поделиться тренировкой", fileName: String = "strain-workout.png") {
         runCatching {
             val dir = File(context.cacheDir, "share").apply { mkdirs() }
-            val file = File(dir, "strain-workout.png")
+            val file = File(dir, fileName)
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
             val send = Intent(Intent.ACTION_SEND)
@@ -312,7 +312,7 @@ object WorkoutShareCard {
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             context.startActivity(
-                Intent.createChooser(send, "Поделиться тренировкой").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }
     }
