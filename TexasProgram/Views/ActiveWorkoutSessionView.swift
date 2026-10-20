@@ -97,7 +97,9 @@ struct ActiveWorkoutSessionView: View {
                 .id(exercise.id)
                 .offset(y: reorder.offset(for: exercise.id, index: index))
                 .scaleEffect(dragged && !reduceMotion ? 1.03 : 1)
-                .shadow(color: .black.opacity(dragged ? 0.6 : 0), radius: 18, y: 10)
+                // Тень только у карточки, которую тащат: прозрачная тень всё равно
+                // размывалась бы на каждом кадре прокрутки.
+                .shadow(color: .black.opacity(dragged ? 0.6 : 0), radius: dragged ? 18 : 0, y: dragged ? 10 : 0)
                 .zIndex(dragged ? 1 : 0)
             }
         }

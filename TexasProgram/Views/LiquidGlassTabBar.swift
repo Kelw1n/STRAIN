@@ -318,7 +318,7 @@ struct LiquidGlassTabBar: View {
                 lineWidth: lens.lifted ? 1.2 : 1
             )
         }
-        .shadow(color: Color.black.opacity(lens.lifted ? 0.45 : 0), radius: 14, y: 8)
+        .shadow(color: Color.black.opacity(lens.lifted ? 0.45 : 0), radius: lens.lifted ? 14 : 0, y: lens.lifted ? 8 : 0)
         .frame(width: lens.width, height: lens.height)
         .position(x: lens.midX, y: barHeight / 2)
     }
