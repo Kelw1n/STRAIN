@@ -132,9 +132,10 @@ struct ChatRow: View {
 
 // MARK: - Переписка
 
-/// Переписка с одним человеком. Новое — сообщения, реакции, прочтение и
-/// удаление — подтягивается каждые несколько секунд, пока экран открыт;
-/// панель вкладок на это время прячется.
+/// Переписка с одним человеком. Новое — сообщения, реакции, прочтение,
+/// правки и удаление — подтягивается каждые несколько секунд, пока экран
+/// открыт; панель вкладок на это время прячется. Своё сообщение сначала
+/// ложится в очередь на телефоне: без связи оно ждёт с часиками и уходит само.
 struct ChatView: View {
     let username: String
     @Binding var path: NavigationPath
@@ -145,7 +146,6 @@ struct ChatView: View {
     @State private var loading = true
     @State private var loadingOlder = false
     @State private var draft = ""
-    @State private var sending = false
     @State private var error: String?
     /// Фото, выбранное к отправке, — показывается над полем ввода.
     @State private var attachment: UIImage?
@@ -157,6 +157,13 @@ struct ChatView: View {
     @State private var viewing: ViewedImage?
     /// На какое сообщение отвечаем — цитата над полем ввода.
     @State private var replyingTo: SocialMessage?
+    /// Какое своё сообщение правим — его текст в поле ввода.
+    @State private var editing: SocialMessage?
+    /// Какое сообщение пересылаем — открыт выбор, кому.
+    @State private var forwarding: SocialMessage?
+    /// Не ушедшее сообщение, по которому нажали: повторить или удалить.
+    @State private var failed: SocialMessage?
+    @State private var openedWorkout: OpenedWorkout?
     /// Сообщение, к которому прокрутили по цитате, — коротко подсвечено.
     @State private var highlighted: String?
     /// С этого времени сервера спрашиваем изменения.
@@ -224,6 +231,7 @@ struct ChatView: View {
                             username: username,
                             localImage: localImages[message.key],
                             highlighted: highlighted == message.id,
+                            failure: message.clientId.flatMap { message.isLocal ? social.pendingFailures[$0] : nil },
                             onOpenImage: { viewing = ViewedImage(id: $0) },
                             onReply: { reply(to: message) },
                             onReact: { react(message, $0) },
@@ -232,6 +240,16 @@ struct ChatView: View {
                                 withAnimation(Motion.snappy) { proxy.scrollTo(target.key, anchor: .center) }
                                 flash(id)
                             },
+                            onEdit: { startEditing(message) },
+                            onForward: { forwarding = message },
+                            onOpenWorkout: { workout in
+                                openedWorkout = OpenedWorkout(
+                                    workout: workout,
+                                    author: message.forwarded?.username ?? (message.fromMe ? nil : username)
+                                )
+                            },
+                            onListen: { listened(message) },
+                            onFailedTap: { failed = message },
                             onDelete: { delete(message) }
                         )
                         .id(message.key)
@@ -307,19 +325,44 @@ struct ChatView: View {
             }
         }
         .onChange(of: draft) { _, value in
-            if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { social.sendTyping(to: username) }
+            if editing == nil && !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { social.sendTyping(to: username) }
         }
         .cameraSheet(isPresented: $showingCamera) { attachment = $0.downscaled() }
         .fullScreenCover(item: $viewing) { item in
             ImageViewer(id: item.id) { viewing = nil }
         }
+        .sheet(item: $forwarding) { message in
+            ChatTargetSheet(title: "Переслать") { target in forward(message, to: target) }
+        }
+        .sheet(item: $openedWorkout) { opened in
+            ChatWorkoutDetail(workout: opened.workout, author: opened.author)
+        }
+        .confirmationDialog(
+            failed.flatMap { $0.clientId }.flatMap { social.pendingFailures[$0] } ?? "Сообщение не отправлено",
+            isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } }),
+            titleVisibility: .visible,
+            presenting: failed
+        ) { message in
+            Button("Повторить") {
+                if let clientId = message.clientId { social.retryPending(clientId) }
+            }
+            Button("Удалить", role: .destructive) { delete(message) }
+            Button("Отмена", role: .cancel) {}
+        }
         .onAppear {
             AppChrome.shared.hidesTabBar = true
             // Дошли до минуты — голосовое уходит само.
             recorder.onLimit = { finishRecording() }
+            // Ушло из очереди — пузырь с часиками становится обычным на том же месте.
+            social.onMessageSent(in: username) { clientId, sent in confirm(clientId: clientId, with: sent) }
+            // Доиграло голосовое — следующее включается само.
+            VoicePlayer.shared.onFinish = { id in playNext(after: id) }
+            restorePending()
         }
         .onDisappear {
             AppChrome.shared.hidesTabBar = false
+            social.onMessageSent(in: username, nil)
+            VoicePlayer.shared.onFinish = nil
             recorder.cancel()
             VoicePlayer.shared.stop()
         }
@@ -329,6 +372,8 @@ struct ChatView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 guard !Task.isCancelled else { return }
+                // Связь вернулась — то, что ждало в очереди, уходит.
+                if !social.pending(for: username).isEmpty { social.flushMessages() }
                 await loadChanges()
             }
         }
@@ -350,6 +395,11 @@ struct ChatView: View {
         return nil
     }
 
+    /// Сообщения этой переписки ждут связи.
+    private var waitingForNetwork: Bool {
+        social.chatOffline && social.pending(for: username).contains { social.pendingFailures[$0.clientId] == nil }
+    }
+
     /// Поле ввода как в Telegram на iOS 26: стеклянные капсулы поверх переписки,
     /// слева — прикрепить фото, справа — отправить.
     private var inputBar: some View {
@@ -361,6 +411,14 @@ struct ChatView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .chatGlass(Capsule())
+            } else if waitingForNetwork {
+                Label("Нет связи — сообщения уйдут сами, когда она появится", systemImage: "wifi.slash")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.8))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .chatGlass(Capsule())
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let hint {
                 Text(hint)
@@ -371,34 +429,20 @@ struct ChatView: View {
                     .chatGlass(Capsule())
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            if let replyingTo {
-                HStack(spacing: 10) {
-                    Image(systemName: "arrowshape.turn.up.left.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(replyingTo.fromMe ? "Ответ себе" : "Ответ @\(username)")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.accent)
-                        Text(replyingTo.preview)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.white.opacity(0.7))
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Button { withAnimation(Motion.snappy) { self.replyingTo = nil } } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.6))
-                            .frame(width: 28, height: 28)
-                    }
-                    .accessibilityLabel("Не отвечать")
-                }
-                .padding(.leading, 14)
-                .padding(.trailing, 6)
-                .padding(.vertical, 6)
-                .chatGlass(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            if let editing {
+                composerBanner(
+                    icon: "pencil",
+                    title: "Изменить сообщение",
+                    text: editing.text.isEmpty ? "📷 Фото" : editing.text,
+                    close: "Не изменять"
+                ) { cancelEditing() }
+            } else if let replyingTo {
+                composerBanner(
+                    icon: "arrowshape.turn.up.left.fill",
+                    title: replyingTo.fromMe ? "Ответ себе" : "Ответ @\(username)",
+                    text: replyingTo.preview,
+                    close: "Не отвечать"
+                ) { self.replyingTo = nil }
             }
             if let attachment {
                 ZStack(alignment: .topTrailing) {
@@ -436,9 +480,11 @@ struct ChatView: View {
                         .frame(width: 44, height: 44)
                         .chatGlass(Circle())
                 }
+                .disabled(editing != nil)
+                .opacity(editing == nil ? 1 : 0.4)
                 .accessibilityLabel("Прикрепить фото")
 
-                TextField("Сообщение", text: $draft, axis: .vertical)
+                TextField(editing == nil ? "Сообщение" : "Новый текст", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($typing)
                     .font(.system(size: 16))
@@ -453,22 +499,17 @@ struct ChatView: View {
                         .transition(.scale(scale: 0.6).combined(with: .opacity))
                 } else {
                 Button(action: send) {
-                    Group {
-                        if sending {
-                            ProgressView().tint(.black)
-                        } else {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 17, weight: .heavy))
-                        }
-                    }
-                    .foregroundStyle(canSend ? Color.black : Color.white.opacity(0.5))
-                    .frame(width: 44, height: 44)
-                    .background(canSend ? Color.white : Color.clear, in: Circle())
-                    .chatGlass(Circle(), enabled: !canSend)
+                    Image(systemName: editing == nil ? "arrow.up" : "checkmark")
+                        .font(.system(size: 17, weight: .heavy))
+                        .contentTransition(.symbolEffect(.replace))
+                        .foregroundStyle(canSend ? Color.black : Color.white.opacity(0.5))
+                        .frame(width: 44, height: 44)
+                        .background(canSend ? Color.white : Color.clear, in: Circle())
+                        .chatGlass(Circle(), enabled: !canSend)
                 }
                 .buttonStyle(PressableStyle(scale: 0.88))
                 .disabled(!canSend)
-                .accessibilityLabel("Отправить")
+                .accessibilityLabel(editing == nil ? "Отправить" : "Сохранить")
                 .animation(Motion.snappy, value: canSend)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
@@ -479,18 +520,54 @@ struct ChatView: View {
         .padding(.bottom, 6)
         .animation(Motion.snappy, value: attachment != nil)
         .animation(Motion.snappy, value: replyingTo?.id)
+        .animation(Motion.snappy, value: editing?.id)
         .animation(Motion.snappy, value: showsMic)
         .animation(Motion.snappy, value: recorder.isRecording)
         .animation(Motion.snappy, value: hint)
+        .animation(Motion.snappy, value: waitingForNetwork)
     }
 
+    /// Плашка над полем ввода: на что отвечаем или что правим.
+    private func composerBanner(icon: String, title: String, text: String, close: String, onClose: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+                Text(text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Button { withAnimation(Motion.snappy) { onClose() } } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.6))
+                    .frame(width: 28, height: 28)
+            }
+            .accessibilityLabel(close)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .chatGlass(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     private var canSend: Bool {
-        !sending && (attachment != nil || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        if let editing { return !trimmedDraft.isEmpty || editing.image != nil }
+        return attachment != nil || !trimmedDraft.isEmpty
     }
 
     /// Поле пустое и фото нет — вместо «Отправить» микрофон, как в Telegram.
     private var showsMic: Bool {
-        recorder.isRecording || (!sending && attachment == nil && draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        editing == nil && (recorder.isRecording || (attachment == nil && trimmedDraft.isEmpty))
     }
 
     // MARK: Голосовое
@@ -575,37 +652,42 @@ struct ChatView: View {
         }
     }
 
-    /// Голосовое сразу в переписке; звук уходит на сервер, потом само сообщение.
+    /// Голосовое сразу в переписке, звук — в очередь вместе с сообщением.
     /// В тексте — подпись для старых версий приложения, которые голосовые не играют.
     private func sendVoice(_ recording: VoiceRecording) {
-        let quoted = replyingTo
         let clientId = UUID().uuidString.lowercased()
-        let local = SocialMessage(
-            id: "local-" + clientId,
+        let item = ChatPending(
+            clientId: clientId,
+            username: username,
             text: SocialVoice.previewText,
-            voice: SocialVoice(id: "local-" + clientId, durationMs: recording.durationMs, waveform: recording.waveform),
-            fromMe: true,
-            createdAt: Date().timeIntervalSince1970 * 1000,
-            replyTo: quoted.map { SocialMessageQuote(id: $0.id, text: $0.text, image: $0.image, voice: $0.voice != nil, fromMe: $0.fromMe) }
+            replyTo: replyingTo.map { SocialMessageQuote($0) },
+            voice: SocialVoice(id: "local-" + clientId, durationMs: recording.durationMs, waveform: recording.waveform)
         )
         withAnimation(Motion.chat) {
             replyingTo = nil
-            messages.append(local)
+            messages.append(item.message)
         }
-        Task {
-            do {
-                let uploaded = try await social.uploadVoice(recording.data, durationMs: recording.durationMs, waveform: recording.waveform)
-                let sent = try await social.sendMessage(
-                    to: username, text: SocialVoice.previewText, voice: uploaded.id, replyTo: quoted?.id, clientId: clientId
-                )
-                confirm(local, with: sent)
-                error = nil
-            } catch {
-                withAnimation(Motion.chat) { messages.removeAll { $0.id == local.id } }
-                if replyingTo == nil { replyingTo = quoted }
-                self.error = error.socialMessage
-            }
-        }
+        social.queue(item, voice: recording.data)
+        error = nil
+    }
+
+    // MARK: Голосовые: прослушано и следующее
+
+    /// Чужое голосовое включили — точка гаснет у обоих.
+    private func listened(_ message: SocialMessage) {
+        guard !message.fromMe, !message.heard, !message.isLocal,
+              let index = messages.firstIndex(where: { $0.id == message.id }) else { return }
+        messages[index].heard = true
+        social.markHeard(message.id)
+    }
+
+    /// Следующее голосовое ниже по переписке включается само, как в Telegram.
+    private func playNext(after voiceId: String) {
+        guard let index = messages.firstIndex(where: { $0.voice?.id == voiceId }),
+              let next = messages[(index + 1)...].first(where: { $0.voice != nil && !$0.isLocal }),
+              let voice = next.voice else { return }
+        listened(next)
+        VoicePlayer.shared.play(voice)
     }
 
     private func dayTitle(_ date: Date) -> String {
@@ -629,15 +711,28 @@ struct ChatView: View {
         }
     }
 
-    /// Сервер принял своё сообщение: та же строка, только часики сменились
+    /// Очередь отправила сообщение: та же строка, только часики сменились
     /// галочкой. Без анимации — пузырь не пересоздаётся и переписка не дёргается.
-    private func confirm(_ local: SocialMessage, with sent: SocialMessage) {
+    private func confirm(clientId: String, with sent: SocialMessage) {
         var confirmed = sent
-        confirmed.rowKey = local.key
-        let updated = SocialMessage.merged(messages.filter { $0.id != local.id }, with: [confirmed])
+        confirmed.rowKey = "local-" + clientId
+        let updated = SocialMessage.merged(messages.filter { $0.id != "local-" + clientId }, with: [confirmed])
         var quiet = Transaction()
         quiet.disablesAnimations = true
         withTransaction(quiet) { messages = updated }
+    }
+
+    /// Сообщения, которые ждали отправки, когда переписку закрыли, — снова на месте.
+    private func restorePending() {
+        let known = Set(messages.map(\.key))
+        let waiting = social.pending(for: username).filter { !known.contains($0.message.key) }
+        guard !waiting.isEmpty else { return }
+        for item in waiting where item.hasPhotoFile {
+            if let data = ChatOutboxStore.photo(item.clientId), let image = UIImage(data: data) {
+                localImages[item.message.key] = image
+            }
+        }
+        apply(waiting.map(\.message), animated: false)
     }
 
     private func absorb(_ page: SocialChatPage) {
@@ -656,14 +751,14 @@ struct ChatView: View {
             absorb(page)
             older = page.next
             // Первая загрузка — сразу на месте, без вылетающих пузырей.
-            apply(page.messages, animated: !messages.isEmpty)
+            apply(page.messages, animated: !messages.contains { !$0.isLocal })
             error = nil
         } catch {
             if let message = error.socialMessage { self.error = message }
         }
     }
 
-    /// Всё, что поменялось с прошлого раза: новые сообщения, реакции, прочтение, удаление.
+    /// Всё, что поменялось с прошлого раза: новые сообщения, реакции, прочтение, правки, удаление.
     private func loadChanges() async {
         guard let since = serverTime else {
             await loadLatest()
@@ -671,6 +766,7 @@ struct ChatView: View {
         }
         guard let page = try? await social.messages(with: username, since: since) else { return }
         absorb(page)
+        if error == SocialError.offline.message { error = nil }
         let known = Set(messages.map(\.id))
         let hadIncoming = page.messages.contains { !$0.fromMe && !$0.deleted && !known.contains($0.id) }
         apply(page.messages)
@@ -690,7 +786,10 @@ struct ChatView: View {
     private func reply(to message: SocialMessage) {
         guard !message.isLocal else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        withAnimation(Motion.snappy) { replyingTo = message }
+        withAnimation(Motion.snappy) {
+            editing = nil
+            replyingTo = message
+        }
         typing = true
     }
 
@@ -718,24 +817,24 @@ struct ChatView: View {
         }
     }
 
-    /// Сообщение сразу на экране; фото сначала грузится на сервер.
-    /// Не ушло — текст, фото и цитата возвращаются в поле.
+    /// Сообщение сразу на экране и в очереди на телефоне; фото сначала
+    /// загружается на сервер. Нет связи — пузырь ждёт с часиками и уходит сам.
     private func send() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if editing != nil {
+            saveEdit()
+            return
+        }
+        let text = trimmedDraft
         let photo = attachment
-        let quoted = replyingTo
         guard !text.isEmpty || photo != nil else { return }
-        let clientId = UUID().uuidString.lowercased()
-        let local = SocialMessage(
-            id: "local-" + clientId,
+        let item = ChatPending(
+            username: username,
             text: text,
-            image: photo == nil ? nil : "local",
-            fromMe: true,
-            createdAt: Date().timeIntervalSince1970 * 1000,
-            replyTo: quoted.map { SocialMessageQuote(id: $0.id, text: $0.text, image: $0.image, voice: $0.voice != nil, fromMe: $0.fromMe) }
+            replyTo: replyingTo.map { SocialMessageQuote($0) },
+            image: photo == nil ? nil : "local"
         )
+        let local = item.message
         if let photo { localImages[local.key] = photo }
-        sending = true
         // Поле пустеет, пузырь вылетает, переписка едет вверх — одной пружиной,
         // а не тремя анимациями наперегонки.
         withAnimation(Motion.chat) {
@@ -744,26 +843,86 @@ struct ChatView: View {
             replyingTo = nil
             messages.append(local)
         }
+        social.queue(item, photo: photo.flatMap { SocialService.jpeg($0, maxSide: 1600) })
+        error = nil
+    }
+
+    // MARK: Правка и пересылка
+
+    private func startEditing(_ message: SocialMessage) {
+        guard message.canEdit else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(Motion.snappy) {
+            replyingTo = nil
+            attachment = nil
+            editing = message
+            draft = message.text
+        }
+        typing = true
+    }
+
+    private func cancelEditing() {
+        editing = nil
+        draft = ""
+    }
+
+    /// Новый текст виден сразу; не вышло — возвращается прежний.
+    private func saveEdit() {
+        guard let original = editing, let index = messages.firstIndex(where: { $0.id == original.id }) else {
+            cancelEditing()
+            return
+        }
+        let text = trimmedDraft
+        guard text != original.text else {
+            withAnimation(Motion.snappy) { cancelEditing() }
+            return
+        }
+        var optimistic = messages[index]
+        optimistic.text = text
+        optimistic.edited = true
+        withAnimation(Motion.chat) {
+            messages[index] = optimistic
+            cancelEditing()
+        }
         Task {
-            defer { sending = false }
             do {
-                var imageId: String?
-                if let photo { imageId = try await social.uploadImage(photo, maxSide: 1600) }
-                let sent = try await social.sendMessage(to: username, text: text, image: imageId, replyTo: quoted?.id, clientId: clientId)
-                confirm(local, with: sent)
+                apply([try await social.editMessage(original.id, text: text)], animated: false)
                 error = nil
             } catch {
-                withAnimation(Motion.chat) { messages.removeAll { $0.id == local.id } }
-                localImages[local.key] = nil
-                if draft.isEmpty { draft = text }
-                if attachment == nil { attachment = photo }
-                if replyingTo == nil { replyingTo = quoted }
+                apply([original])
                 self.error = error.socialMessage
             }
         }
     }
 
+    /// Пересланное уходит той же очередью; переслали сюда же — появляется и здесь.
+    private func forward(_ message: SocialMessage, to target: SocialUserShort) {
+        let item = ChatPending(
+            username: target.username,
+            text: message.text,
+            image: message.image,
+            voice: message.voice,
+            workout: message.workout,
+            forward: message.id,
+            forwarded: message.forwarded ?? SocialForward(username: message.fromMe ? social.me?.username : username)
+        )
+        social.queue(item)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if target.username == username {
+            withAnimation(Motion.chat) { messages.append(item.message) }
+        } else {
+            showHint("Переслано @\(target.username)")
+        }
+    }
+
     private func delete(_ message: SocialMessage) {
+        // Не ушедшее — просто убираем из очереди.
+        if message.isLocal {
+            if let clientId = message.clientId { social.discardPending(clientId) }
+            withAnimation(Motion.chat) { messages.removeAll { $0.id == message.id } }
+            localImages[message.key] = nil
+            return
+        }
         Task {
             do {
                 try await social.deleteMessage(message.id)
@@ -774,6 +933,14 @@ struct ChatView: View {
             }
         }
     }
+}
+
+/// Тренировка из переписки, открытая целиком.
+struct OpenedWorkout: Identifiable {
+    let id = UUID()
+    let workout: SocialChatWorkout
+    /// Чья это тренировка — для «Скопировать к себе»; `nil` — своя.
+    let author: String?
 }
 
 /// Три точки собеседника, пока он печатает.
@@ -813,10 +980,17 @@ struct MessageBubble: View {
     var username: String = ""
     var localImage: UIImage? = nil
     var highlighted = false
+    /// Почему своё сообщение не ушло: сервер отказал.
+    var failure: String? = nil
     var onOpenImage: (String) -> Void = { _ in }
     var onReply: () -> Void = {}
     var onReact: (String) -> Void = { _ in }
     var onOpenQuote: (String) -> Void = { _ in }
+    var onEdit: () -> Void = {}
+    var onForward: () -> Void = {}
+    var onOpenWorkout: (SocialChatWorkout) -> Void = { _ in }
+    var onListen: () -> Void = {}
+    var onFailedTap: () -> Void = {}
     var onDelete: () -> Void
 
     /// Сдвиг при свайпе влево — «ответить», как в Telegram.
@@ -834,6 +1008,15 @@ struct MessageBubble: View {
                 if !message.reactions.isEmpty {
                     reactions
                 }
+                if failure != nil {
+                    Button(action: onFailedTap) {
+                        Label("Не отправлено — нажми", systemImage: "exclamationmark.circle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.record)
+                    }
+                    .buttonStyle(.pressable)
+                    .transition(.opacity)
+                }
             }
             .offset(x: swipe)
             .background(alignment: .trailing) {
@@ -850,11 +1033,14 @@ struct MessageBubble: View {
         }
         .contentShape(Rectangle())
         .replySwipe(onChange: pull, onEnd: release)
+        .animation(Motion.snappy, value: failure)
     }
 
     /// Пузырь едет за пальцем; дальше порога — с сопротивлением и щелчком.
+    /// Пока своё голосовое играет, палец по волне перематывает, а не отвечает.
     private func pull(_ dx: CGFloat) {
         guard !message.isLocal else { return }
+        if let voice = message.voice, VoicePlayer.shared.playingId == voice.id { return }
         let pulled = min(0, dx)
         swipe = pulled < -Self.replyDistance ? -Self.replyDistance + (pulled + Self.replyDistance) * 0.25 : pulled
         let reached = swipe <= -Self.replyDistance
@@ -872,6 +1058,14 @@ struct MessageBubble: View {
 
     private var bubble: some View {
         BubbleStack(spacing: 4) {
+            if let forwarded = message.forwarded {
+                Label(forwarded.title, systemImage: "arrowshape.turn.up.right.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(message.fromMe ? Color.white.opacity(0.8) : Theme.accent)
+                    .lineLimit(1)
+                    .padding(.horizontal, message.image == nil ? 0 : 9)
+                    .padding(.top, message.image == nil ? 0 : 5)
+            }
             if let quote = message.replyTo {
                 Button { onOpenQuote(quote.id) } label: { quoteView(quote) }
                     .buttonStyle(.pressable)
@@ -882,7 +1076,15 @@ struct MessageBubble: View {
                 photo
             }
             if let voice = message.voice {
-                VoiceMessageContent(voice: voice, fromMe: message.fromMe, isLocal: message.isLocal)
+                VoiceMessageContent(
+                    voice: voice,
+                    fromMe: message.fromMe,
+                    isLocal: message.isLocal,
+                    heard: message.heard,
+                    onListen: onListen
+                )
+            } else if let workout = message.workout {
+                ChatWorkoutCard(workout: workout, fromMe: message.fromMe) { onOpenWorkout(workout) }
             } else if !message.text.isEmpty {
                 Text(message.text)
                     .font(.system(size: 16))
@@ -893,9 +1095,14 @@ struct MessageBubble: View {
                     .padding(.horizontal, message.image == nil ? 0 : 9)
             }
             HStack(spacing: 4) {
+                if message.edited {
+                    Text("изменено")
+                }
                 Text(message.date, format: .dateTime.hour().minute())
                 if message.fromMe {
-                    Image(systemName: message.isLocal ? "clock" : (message.read ? "checkmark.circle.fill" : "checkmark"))
+                    Image(systemName: statusIcon)
+                        .foregroundStyle(failure != nil ? Theme.record : Color.white.opacity(0.55))
+                        .contentTransition(.symbolEffect(.replace))
                 }
             }
             .font(.system(size: 11))
@@ -907,7 +1114,7 @@ struct MessageBubble: View {
         .padding(.horizontal, message.image == nil ? 13 : 4)
         .padding(.vertical, message.image == nil ? 8 : 4)
         .background(
-            message.fromMe ? Theme.accent.opacity(0.9) : Color(white: 0.16),
+            message.fromMe ? Theme.accent.opacity(failure == nil ? 0.9 : 0.5) : Color(white: 0.16),
             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
         .overlay(
@@ -927,15 +1134,33 @@ struct MessageBubble: View {
                 .controlGroupStyle(.palette)
                 Button(action: onReply) { Label("Ответить", systemImage: "arrowshape.turn.up.left") }
             }
-            if !message.text.isEmpty && message.voice == nil {
+            if message.canForward {
+                Button(action: onForward) { Label("Переслать", systemImage: "arrowshape.turn.up.right") }
+            }
+            if message.canEdit {
+                Button(action: onEdit) { Label("Изменить", systemImage: "pencil") }
+            }
+            if !message.text.isEmpty && message.voice == nil && message.workout == nil {
                 Button {
                     UIPasteboard.general.string = message.text
                 } label: { Label("Скопировать", systemImage: "doc.on.doc") }
             }
-            if message.fromMe && !message.isLocal {
-                Button(role: .destructive, action: onDelete) { Label("Удалить", systemImage: "trash") }
+            if failure != nil {
+                Button(action: onFailedTap) { Label("Повторить", systemImage: "arrow.clockwise") }
+            }
+            if message.fromMe {
+                Button(role: .destructive, action: onDelete) {
+                    Label(message.isLocal ? "Не отправлять" : "Удалить", systemImage: "trash")
+                }
             }
         }
+    }
+
+    /// Часики — в пути или ждёт связи, «!» — не ушло, галочка — доставлено, две — прочитано.
+    private var statusIcon: String {
+        if failure != nil { return "exclamationmark.circle.fill" }
+        if message.isLocal { return "clock" }
+        return message.read ? "checkmark.circle.fill" : "checkmark"
     }
 
     private func quoteView(_ quote: SocialMessageQuote) -> some View {
@@ -997,7 +1222,9 @@ struct MessageBubble: View {
         Group {
             if let localImage {
                 Image(uiImage: localImage).resizable().scaledToFill()
-                    .overlay { if message.isLocal { ProgressView().tint(.white) } }
+                    .overlay {
+                        if message.isLocal && failure == nil { ProgressView().tint(.white) }
+                    }
             } else {
                 RemoteImage(id: message.image)
             }
@@ -1006,7 +1233,7 @@ struct MessageBubble: View {
         .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture {
-            if let id = message.image, !message.isLocal { onOpenImage(id) }
+            if let id = message.image, id != "local", localImage == nil || !message.isLocal { onOpenImage(id) }
         }
     }
 }
@@ -1098,21 +1325,33 @@ private struct HorizontalSwipeGesture: UIGestureRecognizerRepresentable {
 
 // MARK: - Голосовые
 
-/// Пузырь голосового: ▶/❚❚, волна (проигранное — ярче) и время.
+/// Пузырь голосового: ▶/❚❚, волна (проигранное — ярче), время, скорость
+/// и точка, пока его не прослушали. По волне можно перематывать пальцем.
 /// Перерисовывается каждый кадр только пока играет — через `TimelineView`.
 struct VoiceMessageContent: View {
     let voice: SocialVoice
     let fromMe: Bool
     var isLocal = false
+    /// Получатель уже прослушал.
+    var heard = true
+    /// Включили — для «прослушано».
+    var onListen: () -> Void = {}
+
+    /// Куда тянут пальцем по волне, от 0 до 1.
+    @State private var scrub: Double?
 
     private var player: VoicePlayer { .shared }
+    private static let waveWidth: CGFloat = 150
 
     var body: some View {
         let playing = player.playingId == voice.id
         let loading = player.loadingId == voice.id
         let failed = player.failedId == voice.id
         HStack(spacing: 10) {
-            Button { player.toggle(voice) } label: {
+            Button {
+                if !playing { onListen() }
+                player.toggle(voice)
+            } label: {
                 ZStack {
                     Circle().fill(fromMe ? Color.white : Theme.accent)
                     if loading || isLocal {
@@ -1133,17 +1372,72 @@ struct VoiceMessageContent: View {
 
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !playing)) { _ in
                 VStack(alignment: .leading, spacing: 3) {
-                    VoiceWaveform(levels: voice.levels, progress: player.progress(of: voice.id), fromMe: fromMe)
-                        .frame(width: 150, height: 24)
-                    Text(SocialVoice.format(playing ? player.currentTime(of: voice.id) : voice.duration))
-                        .font(.system(size: 12, weight: .medium).monospacedDigit())
-                        .foregroundStyle(Color.white.opacity(0.7))
+                    VoiceWaveform(levels: voice.levels, progress: scrub ?? player.progress(of: voice.id), fromMe: fromMe)
+                        .frame(width: Self.waveWidth, height: 24)
+                        .contentShape(Rectangle())
+                        // Не играет — нажатие включает с этого места; играет — палец
+                        // по волне перематывает.
+                        .onTapGesture(coordinateSpace: .local) { location in
+                            guard !isLocal, !playing else { return }
+                            onListen()
+                            player.play(voice, from: Double(location.x / Self.waveWidth))
+                        }
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in scrub = fraction(value.location.x) }
+                                .onEnded { value in
+                                    player.seek(voice, to: fraction(value.location.x))
+                                    scrub = nil
+                                },
+                            including: playing ? .all : .subviews
+                        )
+                    HStack(spacing: 6) {
+                        Text(SocialVoice.format(timeShown(playing: playing)))
+                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Color.white.opacity(0.7))
+                        if !heard && !isLocal {
+                            Circle()
+                                .fill(fromMe ? Color.white : Theme.accent)
+                                .frame(width: 6, height: 6)
+                                .transition(.scale.combined(with: .opacity))
+                                .accessibilityLabel("Не прослушано")
+                        }
+                        Spacer(minLength: 0)
+                        if playing {
+                            Button { player.cycleRate() } label: {
+                                Text(rateText)
+                                    .font(.system(size: 11, weight: .heavy).monospacedDigit())
+                                    .foregroundStyle(fromMe ? Theme.accent : .white)
+                                    .padding(.horizontal, 6)
+                                    .frame(height: 18)
+                                    .background(fromMe ? Color.white : Theme.accent.opacity(0.85), in: Capsule())
+                                    .contentTransition(.numericText())
+                            }
+                            .buttonStyle(.pressable)
+                            .accessibilityLabel("Скорость \(rateText)")
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                    .frame(width: Self.waveWidth)
+                    .animation(Motion.snappy, value: playing)
+                    .animation(Motion.snappy, value: heard)
+                    .animation(Motion.snappy, value: player.rate)
                 }
             }
-            .accessibilityHidden(true)
         }
         .padding(.vertical, 2)
         .padding(.trailing, 4)
+    }
+
+    private var rateText: String {
+        player.rate == 1 ? "1×" : (player.rate == 2 ? "2×" : "1,5×")
+    }
+
+    private func fraction(_ x: CGFloat) -> Double { Double(min(max(x / Self.waveWidth, 0), 1)) }
+
+    private func timeShown(playing: Bool) -> TimeInterval {
+        if let scrub { return scrub * voice.duration }
+        return playing ? player.currentTime(of: voice.id) : voice.duration
     }
 }
 

@@ -15,6 +15,7 @@ struct PostCardView: View {
 
     @State private var confirmDelete = false
     @State private var error: String?
+    @State private var sharing = false
 
     private var social: SocialService { .shared }
     private var isMine: Bool { social.me?.id == post.author.id }
@@ -25,6 +26,11 @@ struct PostCardView: View {
                 if isMine {
                     Button(role: .destructive) { confirmDelete = true } label: {
                         Label("Удалить пост", systemImage: "trash")
+                    }
+                }
+                if social.isSignedIn {
+                    Button { sharing = true } label: {
+                        Label("Отправить другу", systemImage: "paperplane")
                     }
                 }
                 ShareLink(item: shareText) {
@@ -61,6 +67,11 @@ struct PostCardView: View {
             }
         }
         .padding(.vertical, 18)
+        .sheet(isPresented: $sharing) {
+            ChatTargetSheet(title: "Отправить другу") { friend in
+                social.send(SocialChatWorkout(post: post), to: friend.username)
+            }
+        }
         .confirmationDialog("Удалить тренировку из ленты?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Удалить", role: .destructive) {
                 Task {
@@ -506,6 +517,7 @@ struct PostDetailView: View {
     @State private var composing = false
     @State private var confirmDelete = false
     @State private var showingSets = false
+    @State private var sharing = false
     /// На какой комментарий отвечаем; `nil` — обычный комментарий к посту.
     @State private var replyingTo: SocialComment?
     @FocusState private var typing: Bool
@@ -519,6 +531,11 @@ struct PostDetailView: View {
                     if social.me?.id == post.author.id {
                         Button(role: .destructive) { confirmDelete = true } label: {
                             Label("Удалить пост", systemImage: "trash")
+                        }
+                    }
+                    if social.isSignedIn {
+                        Button { sharing = true } label: {
+                            Label("Отправить другу", systemImage: "paperplane")
                         }
                     }
                 }
@@ -547,6 +564,11 @@ struct PostDetailView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $composing) { composer }
+        .sheet(isPresented: $sharing) {
+            ChatTargetSheet(title: "Отправить другу") { friend in
+                social.send(SocialChatWorkout(post: post), to: friend.username)
+            }
+        }
         .sheet(isPresented: $showingSets) {
             NavigationStack {
                 ScrollView { PostWorkoutSets(workout: post.workout).padding(16) }

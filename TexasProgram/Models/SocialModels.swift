@@ -277,7 +277,10 @@ struct SocialCommentThread: Identifiable, Hashable, Sendable {
 
 struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
     let id: String
-    let text: String
+    /// Свой clientId: по нему сообщение из очереди неотправленных узнаётся
+    /// в ответе сервера, даже если ответ на саму отправку потерялся.
+    var clientId: String?
+    var text: String
     /// Фото в сообщении — id картинки на сервере.
     var image: String?
     let fromMe: Bool
@@ -292,25 +295,49 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
     var invite: SocialInvite?
     /// Голосовое сообщение.
     var voice: SocialVoice?
+    /// Голосовое прослушано получателем.
+    var heard = false
+    /// Текст поправили после отправки.
+    var edited = false
+    /// Переслано — от кого изначально.
+    var forwarded: SocialForward?
+    /// Тренировка карточкой.
+    var workout: SocialChatWorkout?
     /// Ключ строки на экране. У своего сообщения — тот, что был до ответа сервера:
     /// подтверждённое сообщение не пересоздаётся и не дёргает переписку.
     var rowKey: String?
 
-    var key: String { rowKey ?? id }
+    /// У своего сообщения ключ строки — от clientId: им же помечен пузырь,
+    /// пока сообщение ждало отправки, и строка остаётся той же.
+    var key: String { rowKey ?? clientId.map { "local-" + $0 } ?? id }
     var date: Date { Date(timeIntervalSince1970: createdAt / 1000) }
     var isLocal: Bool { id.hasPrefix("local-") }
     /// Подпись в списке переписок: фото без текста — «Фото», голосовое — «Голосовое».
     var preview: String {
         if voice != nil { return SocialVoice.previewText }
+        if let workout { return workout.previewText }
         return text.isEmpty && image != nil ? "📷 Фото" : text
     }
 
-    init(id: String, text: String, image: String? = nil, voice: SocialVoice? = nil, fromMe: Bool, createdAt: Double,
+    /// Свой текст или подпись к фото можно поправить; голосовое, приглашение,
+    /// тренировку и пересланное — нет, как и на сервере.
+    var canEdit: Bool {
+        fromMe && !isLocal && voice == nil && invite == nil && workout == nil && forwarded == nil
+    }
+
+    /// Пересылают всё, кроме приглашения на совместную тренировку.
+    var canForward: Bool { !isLocal && invite == nil }
+
+    init(id: String, clientId: String? = nil, text: String, image: String? = nil, voice: SocialVoice? = nil,
+         workout: SocialChatWorkout? = nil, forwarded: SocialForward? = nil, fromMe: Bool, createdAt: Double,
          read: Bool = false, reactions: [SocialReaction] = [], replyTo: SocialMessageQuote? = nil) {
         self.id = id
+        self.clientId = clientId
         self.text = text
         self.image = image
         self.voice = voice
+        self.workout = workout
+        self.forwarded = forwarded
         self.fromMe = fromMe
         self.createdAt = createdAt
         self.read = read
@@ -321,6 +348,7 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        clientId = try? c.decodeIfPresent(String.self, forKey: .clientId)
         text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
         image = try c.decodeIfPresent(String.self, forKey: .image)
         deleted = try c.decodeIfPresent(Bool.self, forKey: .deleted) ?? false
@@ -328,6 +356,10 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
         replyTo = try? c.decodeIfPresent(SocialMessageQuote.self, forKey: .replyTo)
         invite = try? c.decodeIfPresent(SocialInvite.self, forKey: .invite)
         voice = try? c.decodeIfPresent(SocialVoice.self, forKey: .voice)
+        heard = (try? c.decodeIfPresent(Bool.self, forKey: .heard)) ?? false
+        edited = (try? c.decodeIfPresent(Bool.self, forKey: .edited)) ?? false
+        forwarded = try? c.decodeIfPresent(SocialForward.self, forKey: .forwarded)
+        workout = try? c.decodeIfPresent(SocialChatWorkout.self, forKey: .workout)
         fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? false
         createdAt = try c.decodeIfPresent(Double.self, forKey: .createdAt) ?? 0
         read = try c.decodeIfPresent(Bool.self, forKey: .read) ?? false
@@ -336,7 +368,8 @@ struct SocialMessage: Codable, Hashable, Identifiable, Sendable {
 
 extension SocialMessage {
     /// Переписка после обновления с сервера: новое добавлено, изменённое
-    /// (реакции, прочтение) заменено, удалённое убрано. Старые — сверху.
+    /// (реакции, прочтение, правка) заменено, удалённое убрано. Своё сообщение
+    /// из очереди уступает место пришедшему с тем же clientId. Старые — сверху.
     static func merged(_ current: [SocialMessage], with incoming: [SocialMessage]) -> [SocialMessage] {
         var byId: [String: SocialMessage] = [:]
         for message in current { byId[message.id] = message }
@@ -345,13 +378,70 @@ extension SocialMessage {
                 byId[message.id] = nil
                 continue
             }
-            // Ключ строки остаётся прежним, что бы ни пришло с сервера.
             var updated = message
-            if let old = byId[message.id] { updated.rowKey = old.rowKey ?? message.rowKey }
+            if let clientId = message.clientId, let local = byId.removeValue(forKey: "local-" + clientId) {
+                updated.rowKey = local.key
+            }
+            // Ключ строки остаётся прежним, что бы ни пришло с сервера.
+            if let old = byId[message.id] { updated.rowKey = old.rowKey ?? message.rowKey ?? updated.rowKey }
             byId[message.id] = updated
         }
         return byId.values.sorted { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt < $1.createdAt }
     }
+}
+
+/// От кого переслано. Имени нет — автор удалил профиль.
+struct SocialForward: Codable, Hashable, Sendable {
+    var username: String?
+
+    init(username: String?) { self.username = username }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        username = try? c.decodeIfPresent(String.self, forKey: .username)
+    }
+
+    var title: String { username.map { "Переслано от @\($0)" } ?? "Пересланное сообщение" }
+}
+
+/// Тренировка, отправленная в переписку карточкой: то же, что в посте ленты,
+/// но без лайков и комментариев.
+struct SocialChatWorkout: Codable, Hashable, Sendable {
+    var title: String
+    var durationSeconds: Int
+    var volumeKg: Double
+    var sets: Int
+    var effort: Int?
+    var workout: SocialWorkout
+
+    init(title: String, durationSeconds: Int, volumeKg: Double, sets: Int, effort: Int?, workout: SocialWorkout) {
+        self.title = title
+        self.durationSeconds = durationSeconds
+        self.volumeKg = volumeKg
+        self.sets = sets
+        self.effort = effort
+        self.workout = workout
+    }
+
+    init(post: SocialPost) {
+        self.init(title: post.title, durationSeconds: post.durationSeconds, volumeKg: post.volumeKg,
+                  sets: post.sets, effort: post.effort, workout: post.workout)
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Тренировка"
+        durationSeconds = (try? c.decodeIfPresent(Int.self, forKey: .durationSeconds)) ?? 0
+        volumeKg = (try? c.decodeIfPresent(Double.self, forKey: .volumeKg)) ?? 0
+        sets = (try? c.decodeIfPresent(Int.self, forKey: .sets)) ?? 0
+        effort = try? c.decodeIfPresent(Int.self, forKey: .effort)
+        workout = (try? c.decodeIfPresent(SocialWorkout.self, forKey: .workout)) ?? .empty
+    }
+
+    var records: Int { workout.exercises.reduce(0) { $0 + $1.sets.filter(\.record).count } }
+
+    /// Подпись в списке переписок и текст для старых версий приложения.
+    var previewText: String { "🏋️ \(title)" }
 }
 
 struct SocialReaction: Codable, Hashable, Sendable {
@@ -412,6 +502,14 @@ struct SocialMessageQuote: Codable, Hashable, Sendable {
     var preview: String {
         if voice { return SocialVoice.previewText }
         return text.isEmpty ? (image != nil ? "📷 Фото" : "Сообщение удалено") : text
+    }
+}
+
+extension SocialMessageQuote {
+    /// Цитата сообщения, на которое отвечают.
+    init(_ message: SocialMessage) {
+        self.init(id: message.id, text: message.workout?.previewText ?? message.text, image: message.image,
+                  voice: message.voice != nil, fromMe: message.fromMe)
     }
 }
 
@@ -687,6 +785,57 @@ struct SocialPostDraft: Codable, Hashable, Identifiable, Sendable {
     var uploadedPhotos: [String?]
     /// Совместная тренировка — пост выйдет «вместе с» напарником.
     var together: String?
+}
+
+/// Сообщение, которое ещё не ушло: лежит на телефоне вместе с фото или звуком
+/// и уходит само, как только появится связь. Пока ждёт — видно в переписке
+/// пузырём с часиками.
+struct ChatPending: Codable, Hashable, Identifiable, Sendable {
+    var id: String { clientId }
+    let clientId: String
+    /// Кому.
+    let username: String
+    let createdAt: Double
+    var text: String
+    var replyTo: SocialMessageQuote?
+    /// Что показать в пузыре: «local» — своё фото ещё на телефоне, иначе id на сервере.
+    var image: String?
+    /// Своё голосовое ещё на телефоне — с id «local-…».
+    var voice: SocialVoice?
+    var workout: SocialChatWorkout?
+    /// Пересылка: какое сообщение и от кого оно изначально.
+    var forward: String?
+    var forwarded: SocialForward?
+    /// Уже загруженные фото и звук: после обрыва связи второй раз их не грузим.
+    var uploadedImage: String?
+    var uploadedVoice: String?
+
+    init(clientId: String = UUID().uuidString.lowercased(), username: String, createdAt: Double = Date().timeIntervalSince1970 * 1000,
+         text: String, replyTo: SocialMessageQuote? = nil, image: String? = nil, voice: SocialVoice? = nil,
+         workout: SocialChatWorkout? = nil, forward: String? = nil, forwarded: SocialForward? = nil) {
+        self.clientId = clientId
+        self.username = username
+        self.createdAt = createdAt
+        self.text = text
+        self.replyTo = replyTo
+        self.image = image
+        self.voice = voice
+        self.workout = workout
+        self.forward = forward
+        self.forwarded = forwarded
+    }
+
+    /// Своё фото или голосовое, которое ещё надо загрузить на сервер.
+    var hasPhotoFile: Bool { forward == nil && image == "local" }
+    var hasVoiceFile: Bool { forward == nil && voice?.id.hasPrefix("local-") == true }
+
+    /// Пузырь, пока сообщение в пути.
+    var message: SocialMessage {
+        SocialMessage(
+            id: "local-" + clientId, clientId: clientId, text: text, image: image, voice: voice,
+            workout: workout, forwarded: forwarded, fromMe: true, createdAt: createdAt, replyTo: replyTo
+        )
+    }
 }
 
 // MARK: - Подписи

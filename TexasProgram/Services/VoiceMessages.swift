@@ -134,19 +134,30 @@ final class VoiceRecorder {
 }
 
 /// Проигрывание голосовых: одновременно звучит одно. Звук скачивается один
-/// раз и дальше берётся из памяти.
+/// раз и дальше берётся из памяти. Скорость — 1×, 1,5× или 2×, как в Telegram,
+/// и запоминается; доигравшее голосовое передаёт ход следующему.
 @Observable
 @MainActor
 final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     static let shared = VoicePlayer()
+    static let rates: [Float] = [1, 1.5, 2]
 
     /// Какое голосовое играет и какое скачивается.
     private(set) var playingId: String?
     private(set) var loadingId: String?
     private(set) var failedId: String?
+    private(set) var rate: Float = VoicePlayer.savedRate()
+
+    /// Голосовое доиграло до конца — переписка включает следующее.
+    @ObservationIgnored var onFinish: ((String) -> Void)?
 
     @ObservationIgnored private var player: AVAudioPlayer?
     @ObservationIgnored private let cache = NSCache<NSString, NSData>()
+
+    private static func savedRate() -> Float {
+        let saved = UserDefaults.standard.float(forKey: "voice_rate")
+        return rates.contains(saved) ? saved : 1
+    }
 
     /// Сколько уже проиграно, от 0 до 1. Читается из `TimelineView`, поэтому
     /// не наблюдаемое: перерисовывается только играющий пузырь.
@@ -163,11 +174,34 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     func toggle(_ voice: SocialVoice) {
         if playingId == voice.id {
             stop()
-            return
+        } else {
+            play(voice)
         }
+    }
+
+    /// С начала или с места на волне, от 0 до 1.
+    func play(_ voice: SocialVoice, from fraction: Double = 0) {
         stop()
         failedId = nil
-        Task { await play(voice) }
+        Task { await start(voice, from: fraction) }
+    }
+
+    /// Перемотка пальцем по волне: играет — сразу туда, не играет — с этого места.
+    func seek(_ voice: SocialVoice, to fraction: Double) {
+        let fraction = min(max(fraction, 0), 1)
+        if playingId == voice.id, let player {
+            player.currentTime = fraction * player.duration
+        } else {
+            play(voice, from: fraction)
+        }
+    }
+
+    /// 1× → 1,5× → 2× → 1×.
+    func cycleRate() {
+        let next = Self.rates.first { $0 > rate + 0.01 } ?? Self.rates[0]
+        rate = next
+        UserDefaults.standard.set(next, forKey: "voice_rate")
+        player?.rate = next
     }
 
     func stop() {
@@ -177,7 +211,7 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    private func play(_ voice: SocialVoice) async {
+    private func start(_ voice: SocialVoice, from fraction: Double) async {
         let data: Data
         if let cached = cache.object(forKey: voice.id as NSString) {
             data = cached as Data
@@ -203,7 +237,10 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
             try session.setActive(true)
             let player = try AVAudioPlayer(data: data)
             player.delegate = self
+            player.enableRate = true
             player.prepareToPlay()
+            player.rate = rate
+            if fraction > 0 && fraction < 0.98 { player.currentTime = fraction * player.duration }
             player.play()
             self.player = player
             playingId = voice.id
@@ -214,8 +251,9 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
-            guard self.player === player else { return }
+            guard self.player === player, let id = self.playingId else { return }
             self.stop()
+            if flag { self.onFinish?(id) }
         }
     }
 }

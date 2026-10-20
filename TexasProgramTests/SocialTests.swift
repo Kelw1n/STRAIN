@@ -395,5 +395,63 @@ final class SocialTests: XCTestCase {
         XCTAssertTrue(updated.first?.read == true)
         XCTAssertEqual(SocialMessage(id: "x", text: "", fromMe: false, createdAt: 1).key, "x")
     }
+
+    // MARK: Очередь, правка, пересылка, тренировка
+
+    /// Сообщение из очереди уступает место пришедшему с сервера с тем же
+    /// clientId — на той же строке, даже если ответ на отправку потерялся.
+    func testPendingReplacedByServerCopy() throws {
+        let pending = ChatPending(clientId: "c1", username: "bro", createdAt: 5, text: "Го")
+        let local = pending.message
+        XCTAssertTrue(local.isLocal)
+        XCTAssertEqual(local.key, "local-c1")
+        let json = #"{"id":"srv","clientId":"c1","text":"Го","fromMe":true,"createdAt":6,"edited":true}"#
+        let server = try JSONDecoder().decode(SocialMessage.self, from: Data(json.utf8))
+        XCTAssertEqual(server.key, "local-c1", "ключ от clientId — та же строка")
+        let merged = SocialMessage.merged([local], with: [server])
+        XCTAssertEqual(merged.map(\.id), ["srv"], "часики не остаются рядом с настоящим сообщением")
+        XCTAssertEqual(merged.first?.key, "local-c1")
+        XCTAssertTrue(merged.first?.edited == true)
+    }
+
+    func testForwardAndWorkoutDecode() throws {
+        let json = """
+        {"id":"m","text":"🏋️ День 1","fromMe":false,"createdAt":1,"forwarded":{"username":"tim"},
+         "workout":{"title":"День 1","durationSeconds":3600,"volumeKg":5200,"sets":15,
+                    "workout":{"exercises":[{"name":"Присед","sets":[{"reps":5,"weight":100,"record":true},{"reps":5,"weight":100}]}]}}}
+        """
+        let message = try JSONDecoder().decode(SocialMessage.self, from: Data(json.utf8))
+        XCTAssertEqual(message.forwarded?.title, "Переслано от @tim")
+        XCTAssertEqual(message.workout?.records, 1)
+        XCTAssertEqual(message.preview, "🏋️ День 1")
+        XCTAssertFalse(message.canEdit, "чужое не правится")
+        XCTAssertTrue(message.canForward)
+        XCTAssertEqual(SocialMessageQuote(message).text, "🏋️ День 1")
+        // Без имени автора — просто «пересланное».
+        XCTAssertEqual(SocialForward(username: nil).title, "Пересланное сообщение")
+    }
+
+    func testOnlyOwnPlainMessagesAreEditable() {
+        let own = SocialMessage(id: "a", text: "Жму 100", fromMe: true, createdAt: 1)
+        XCTAssertTrue(own.canEdit)
+        let voice = SocialMessage(id: "b", text: "", voice: SocialVoice(id: "v", durationMs: 1000), fromMe: true, createdAt: 1)
+        XCTAssertFalse(voice.canEdit)
+        let forwarded = SocialMessage(id: "c", text: "x", forwarded: SocialForward(username: "tim"), fromMe: true, createdAt: 1)
+        XCTAssertFalse(forwarded.canEdit)
+        XCTAssertFalse(ChatPending(username: "bro", text: "в пути").message.canEdit, "не ушедшее не правится")
+    }
+
+    /// Своё фото и голосовое грузятся из очереди; у пересланного они уже на сервере.
+    func testPendingKnowsWhatToUpload() {
+        let photo = ChatPending(username: "bro", text: "", image: "local")
+        XCTAssertTrue(photo.hasPhotoFile)
+        let voice = ChatPending(clientId: "c", username: "bro", text: "", voice: SocialVoice(id: "local-c", durationMs: 900))
+        XCTAssertTrue(voice.hasVoiceFile)
+        let forwarded = ChatPending(username: "bro", text: "", image: "0123456789abcdef01234567", forward: "m")
+        XCTAssertFalse(forwarded.hasPhotoFile)
+        XCTAssertFalse(forwarded.hasVoiceFile)
+        XCTAssertTrue(SocialError.offline.isRetryable)
+        XCTAssertFalse(SocialError(message: "Фото не найдено", status: 400).isRetryable)
+    }
 }
 

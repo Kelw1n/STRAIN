@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Observation
 import Security
 import UIKit
@@ -14,6 +15,9 @@ struct SocialError: LocalizedError, Equatable {
         message: "Нет связи с сервером. Если ленту давно не открывали, сервер просыпается — попробуй через полминуты."
     )
     static let signedOut = SocialError(message: "Сначала создай профиль STRAIN во вкладке «Профиль».", status: 401)
+
+    /// Нет связи, сервер просыпается или занят — стоит попробовать ещё раз позже.
+    var isRetryable: Bool { status == 0 || status == 429 || status >= 500 }
 }
 
 extension Error {
@@ -89,6 +93,13 @@ final class SocialService {
     /// Приглашения на совместную тренировку и идущая совместная тренировка.
     private(set) var together = SocialTogetherState()
 
+    /// Сообщения, которые ещё не ушли: лежат на телефоне и отправляются сами.
+    private(set) var pendingMessages: [ChatPending] = []
+    /// Сервер отказал — такое сообщение само больше не уйдёт: его повторяют или удаляют.
+    private(set) var pendingFailures: [String: String] = [:]
+    /// Последняя попытка отправить упёрлась в отсутствие связи.
+    private(set) var chatOffline = false
+
     /// Видно ли друзьям, что идёт тренировка.
     var sharesLive: Bool {
         get { access(keyPath: \.sharesLive); return UserDefaults.standard.object(forKey: "social_share_live") as? Bool ?? true }
@@ -113,6 +124,8 @@ final class SocialService {
 
     private let session: URLSession
     private var syncTask: Task<Void, Never>?
+    /// Связь вернулась — неотправленное уходит само.
+    @ObservationIgnored private let pathMonitor = NWPathMonitor()
 
     private init() {
         let configuration = URLSessionConfiguration.default
@@ -122,6 +135,12 @@ final class SocialService {
         session = URLSession(configuration: configuration)
         token = SocialKeychain.load()
         outbox = SocialOutboxStore.loadAll()
+        pendingMessages = ChatOutboxStore.loadAll()
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in self?.flushOutbox() }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "strain.social.network"))
     }
 
     func imageURL(_ id: String?) -> URL? {
@@ -221,6 +240,10 @@ final class SocialService {
     }
 
     func signOut() {
+        // Неотправленные сообщения не должны уйти от имени следующего профиля.
+        for item in pendingMessages { ChatOutboxStore.remove(item.clientId) }
+        pendingMessages = []
+        pendingFailures = [:]
         setToken(nil)
         me = nil
         unreadMessages = 0
@@ -451,21 +474,131 @@ final class SocialService {
 
     private struct MessageBody: Encodable {
         let text: String
-        let image: String?
-        let voice: String?
-        let replyTo: String?
+        var image: String?
+        var voice: String?
+        var replyTo: String?
         let clientId: String
+        var workout: SocialChatWorkout?
+        var forward: String?
     }
 
-    /// `image` — id фото, уже загруженного через `uploadImage`; `voice` — id голосового
-    /// из `uploadVoice`; `replyTo` — сообщение, на которое отвечаем.
-    func sendMessage(to username: String, text: String, image: String? = nil, voice: String? = nil, replyTo: String? = nil,
-                     clientId: String = UUID().uuidString.lowercased()) async throws -> SocialMessage {
-        try await request(
-            "POST", "/chats/\(username)/messages",
-            json: MessageBody(text: text, image: image, voice: voice, replyTo: replyTo, clientId: clientId),
-            requiresAuth: true
-        )
+    private struct EditBody: Encodable { let text: String }
+
+    /// Новый текст своего сообщения или подписи к фото.
+    func editMessage(_ id: String, text: String) async throws -> SocialMessage {
+        try await request("PATCH", "/messages/\(id)", json: EditBody(text: text), requiresAuth: true)
+    }
+
+    /// Голосовое прослушано — точка гаснет и у отправителя.
+    func markHeard(_ id: String) {
+        guard token != nil else { return }
+        Task { let _: Empty? = try? await request("POST", "/messages/\(id)/heard", requiresAuth: true) }
+    }
+
+    // MARK: Очередь сообщений
+
+    /// Открытые переписки: ушедшее сообщение сразу встаёт на место своего пузыря.
+    @ObservationIgnored private var sentHandlers: [String: (String, SocialMessage) -> Void] = [:]
+    @ObservationIgnored private var flushingMessages = false
+    @ObservationIgnored private var flushRequested = false
+
+    func onMessageSent(in username: String, _ handler: ((String, SocialMessage) -> Void)?) {
+        sentHandlers[username] = handler
+    }
+
+    func pending(for username: String) -> [ChatPending] {
+        pendingMessages.filter { $0.username == username }
+    }
+
+    /// Сообщение — сначала на диск, потом в путь. Нет связи — дождётся её.
+    func queue(_ item: ChatPending, photo: Data? = nil, voice: Data? = nil) {
+        ChatOutboxStore.save(item, photo: photo, voice: voice)
+        pendingMessages.append(item)
+        flushMessages()
+    }
+
+    func retryPending(_ clientId: String) {
+        pendingFailures[clientId] = nil
+        flushMessages()
+    }
+
+    func discardPending(_ clientId: String) {
+        ChatOutboxStore.remove(clientId)
+        pendingMessages.removeAll { $0.clientId == clientId }
+        pendingFailures[clientId] = nil
+    }
+
+    /// Отправляет очередь по порядку. Нет связи — останавливается до следующего
+    /// раза; сервер отказал — сообщение помечается и не мешает остальным.
+    func flushMessages() {
+        guard token != nil else { return }
+        if flushingMessages {
+            flushRequested = true
+            return
+        }
+        guard pendingMessages.contains(where: { pendingFailures[$0.clientId] == nil }) else { return }
+        flushingMessages = true
+        Task {
+            var stalled = false
+            delivery: for item in pendingMessages.sorted(by: { $0.createdAt < $1.createdAt }) where pendingFailures[item.clientId] == nil {
+                // Пока отправляли предыдущие, это сообщение могли удалить.
+                guard pendingMessages.contains(where: { $0.clientId == item.clientId }) else { continue }
+                do {
+                    let sent = try await deliver(item)
+                    ChatOutboxStore.remove(item.clientId)
+                    pendingMessages.removeAll { $0.clientId == item.clientId }
+                    chatOffline = false
+                    sentHandlers[item.username]?(item.clientId, sent)
+                } catch let error as SocialError where error.isRetryable {
+                    chatOffline = true
+                    stalled = true
+                    break delivery
+                } catch is CancellationError {
+                    stalled = true
+                    break delivery
+                } catch {
+                    pendingFailures[item.clientId] = error.socialMessage ?? "Не отправлено"
+                }
+            }
+            flushingMessages = false
+            let again = flushRequested && !stalled
+            flushRequested = false
+            if again { flushMessages() }
+        }
+    }
+
+    private func savePending(_ item: ChatPending) {
+        ChatOutboxStore.update(item)
+        if let index = pendingMessages.firstIndex(where: { $0.clientId == item.clientId }) { pendingMessages[index] = item }
+    }
+
+    /// Фото и звук грузятся один раз, потом уходит само сообщение. Повтор с тем же
+    /// clientId сервер не дублирует, поэтому оборванную отправку можно повторять.
+    private func deliver(_ pending: ChatPending) async throws -> SocialMessage {
+        var item = pending
+        if item.hasPhotoFile && item.uploadedImage == nil {
+            guard let data = ChatOutboxStore.photo(item.clientId) else { throw SocialError(message: "Фото потерялось — отправь его заново") }
+            item.uploadedImage = try await uploadImage(data)
+            savePending(item)
+        }
+        if item.hasVoiceFile, item.uploadedVoice == nil, let voice = item.voice {
+            guard let data = ChatOutboxStore.voice(item.clientId) else { throw SocialError(message: "Запись потерялась — запиши заново") }
+            item.uploadedVoice = try await uploadVoice(data, durationMs: voice.durationMs, waveform: voice.waveform).id
+            savePending(item)
+        }
+        var body = MessageBody(text: item.text, replyTo: item.replyTo?.id, clientId: item.clientId, workout: item.workout, forward: item.forward)
+        if item.forward == nil {
+            body.image = item.hasPhotoFile ? item.uploadedImage : item.image
+            body.voice = item.hasVoiceFile ? item.uploadedVoice : nil
+        }
+        do {
+            return try await request("POST", "/chats/\(item.username)/messages", json: body, requiresAuth: true)
+        } catch let error as SocialError where error.status == 404 && item.replyTo != nil && error.message == "Сообщение удалено" {
+            // Сообщение, на которое отвечали, удалили, пока ждали связи, — уходим без цитаты.
+            item.replyTo = nil
+            savePending(item)
+            return try await deliver(item)
+        }
     }
 
     /// Звук голосового (AAC в m4a); длительность и волна — в адресе.
@@ -628,6 +761,7 @@ final class SocialService {
     }
 
     func flushOutbox() {
+        flushMessages()
         guard token != nil, !isFlushing, !outbox.isEmpty else { return }
         isFlushing = true
         outboxError = nil
@@ -719,6 +853,56 @@ enum SocialOutboxStore {
         return items.compactMap { dir in
             guard let data = try? Data(contentsOf: dir.appendingPathComponent("draft.json")) else { return nil }
             return try? JSONDecoder().decode(SocialPostDraft.self, from: data)
+        }
+        .sorted { $0.createdAt < $1.createdAt }
+    }
+}
+
+// MARK: - Очередь сообщений на диске
+
+/// Каждое неотправленное сообщение — папка с `pending.json`, рядом `photo.jpg`
+/// или `voice.m4a`, если они ещё не загружены.
+enum ChatOutboxStore {
+    private static var root: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return base.appendingPathComponent("ChatOutbox", isDirectory: true)
+    }
+
+    private static func folder(_ id: String) -> URL { root.appendingPathComponent(id, isDirectory: true) }
+
+    static func save(_ item: ChatPending, photo: Data?, voice: Data?) {
+        let dir = folder(item.clientId)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let photo { try? photo.write(to: dir.appendingPathComponent("photo.jpg"), options: .atomic) }
+        if let voice { try? voice.write(to: dir.appendingPathComponent("voice.m4a"), options: .atomic) }
+        update(item)
+    }
+
+    static func update(_ item: ChatPending) {
+        let dir = folder(item.clientId)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let data = try? JSONEncoder().encode(item) {
+            try? data.write(to: dir.appendingPathComponent("pending.json"), options: .atomic)
+        }
+    }
+
+    static func photo(_ id: String) -> Data? {
+        try? Data(contentsOf: folder(id).appendingPathComponent("photo.jpg"))
+    }
+
+    static func voice(_ id: String) -> Data? {
+        try? Data(contentsOf: folder(id).appendingPathComponent("voice.m4a"))
+    }
+
+    static func remove(_ id: String) {
+        try? FileManager.default.removeItem(at: folder(id))
+    }
+
+    static func loadAll() -> [ChatPending] {
+        guard let items = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return [] }
+        return items.compactMap { dir in
+            guard let data = try? Data(contentsOf: dir.appendingPathComponent("pending.json")) else { return nil }
+            return try? JSONDecoder().decode(ChatPending.self, from: data)
         }
         .sorted { $0.createdAt < $1.createdAt }
     }
