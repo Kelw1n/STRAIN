@@ -291,7 +291,7 @@ internal fun RecapSlideContent(slide: RecapSlide, recap: TrainingRecap, restart:
                     val word = RuPlural.word(kotlin.math.abs(difference), "тренировку", "тренировки", "тренировок")
                     Text(
                         when {
-                            difference > 0 -> "На $difference $word больше, чем ${recap.period.previousPhrase} 💪"
+                            difference > 0 -> "На $difference $word больше, чем ${recap.period.previousPhrase}\u00A0💪"
                             difference < 0 -> "На ${-difference} $word меньше, чем ${recap.period.previousPhrase}"
                             else -> "Столько же, сколько ${recap.period.previousPhrase}"
                         },

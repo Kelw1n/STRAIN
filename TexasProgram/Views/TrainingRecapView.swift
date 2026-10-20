@@ -473,7 +473,7 @@ struct TrainingRecapView: View {
         if now == before { return "Столько же, сколько \(previousPhrase)" }
         let difference = abs(now - before)
         let word = RuPlural.word(difference, "тренировку", "тренировки", "тренировок")
-        return now > before ? "На \(difference) \(word) больше, чем \(previousPhrase) 💪" : "На \(difference) \(word) меньше, чем \(previousPhrase)"
+        return now > before ? "На \(difference) \(word) больше, чем \(previousPhrase)\u{00A0}💪" : "На \(difference) \(word) меньше, чем \(previousPhrase)"
     }
 
     /// «по понедельникам» — индекс как у `Calendar`: 1 — воскресенье.
