@@ -943,21 +943,25 @@ struct OpenedWorkout: Identifiable {
     let author: String?
 }
 
-/// Три точки собеседника, пока он печатает.
+/// Три точки собеседника, пока он печатает. Анимацию ведёт сама система —
+/// с частотой экрана, без пересчёта вью на каждый кадр.
 struct TypingBubble: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bouncing = false
 
     var body: some View {
         HStack {
-            TimelineView(.animation(minimumInterval: 0.05, paused: reduceMotion)) { context in
-                let phase = context.date.timeIntervalSinceReferenceDate * 3
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { index in
-                        Circle()
-                            .fill(Color.white.opacity(0.7))
-                            .frame(width: 7, height: 7)
-                            .scaleEffect(reduceMotion ? 1 : 0.7 + 0.3 * max(0, sin(phase - Double(index) * 0.7)))
-                    }
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.white.opacity(0.7))
+                        .frame(width: 7, height: 7)
+                        .scaleEffect(bouncing ? 1 : 0.7)
+                        .opacity(bouncing ? 1 : 0.6)
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: 0.42).repeatForever(autoreverses: true).delay(Double(index) * 0.14),
+                            value: bouncing
+                        )
                 }
             }
             .padding(.horizontal, 14)
@@ -966,6 +970,7 @@ struct TypingBubble: View {
             .accessibilityLabel("Печатает")
             Spacer(minLength: 60)
         }
+        .onAppear { bouncing = true }
     }
 }
 
@@ -1370,7 +1375,7 @@ struct VoiceMessageContent: View {
             .disabled(isLocal)
             .accessibilityLabel(playing ? "Пауза" : "Слушать голосовое, \(Int(voice.duration.rounded())) с")
 
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !playing)) { _ in
+            TimelineView(.animation(paused: !playing)) { _ in
                 VStack(alignment: .leading, spacing: 3) {
                     VoiceWaveform(levels: voice.levels, progress: scrub ?? player.progress(of: voice.id), fromMe: fromMe)
                         .frame(width: Self.waveWidth, height: 24)

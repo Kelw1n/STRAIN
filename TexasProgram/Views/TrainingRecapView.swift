@@ -73,8 +73,9 @@ struct TrainingRecapView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page = 0
-    @State private var progress: Double = 0
-    @State private var paused = false
+    /// Время слайда — в классе, а не в состоянии экрана: полоски читают его
+    /// каждый кадр, а сам слайд при этом не пересчитывается.
+    @State private var clock = RecapClock()
     @State private var forward = true
     @State private var pressStart: Date?
     @State private var shareImage: ShareImage?
@@ -136,13 +137,13 @@ struct TrainingRecapView: View {
                             .onChanged { _ in
                                 if pressStart == nil {
                                     pressStart = Date()
-                                    paused = true
+                                    clock.pause()
                                 }
                             }
                             .onEnded { value in
                                 let held = Date().timeIntervalSince(pressStart ?? Date())
                                 pressStart = nil
-                                paused = false
+                                clock.resume()
                                 if value.translation.height > 120 {
                                     dismiss()
                                 } else if held < 0.35 && abs(value.translation.width) < 20 && abs(value.translation.height) < 20 {
@@ -154,18 +155,21 @@ struct TrainingRecapView: View {
             .allowsHitTesting(slide != .summary)
 
             VStack(spacing: 12) {
-                HStack(spacing: 4) {
-                    ForEach(slides.indices, id: \.self) { index in
-                        GeometryReader { proxy in
-                            Capsule()
-                                .fill(Color.white.opacity(0.3))
-                                .overlay(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color.white)
-                                        .frame(width: proxy.size.width * fill(index))
-                                }
+                // Каждый кадр перерисовываются только полоски.
+                TimelineView(.animation(paused: slide == .summary)) { context in
+                    HStack(spacing: 4) {
+                        ForEach(slides.indices, id: \.self) { index in
+                            GeometryReader { proxy in
+                                Capsule()
+                                    .fill(Color.white.opacity(0.3))
+                                    .overlay(alignment: .leading) {
+                                        Capsule()
+                                            .fill(Color.white)
+                                            .frame(width: proxy.size.width * fill(index, now: context.date))
+                                    }
+                            }
+                            .frame(height: 3)
                         }
-                        .frame(height: 3)
                     }
                 }
                 HStack {
@@ -198,23 +202,21 @@ struct TrainingRecapView: View {
         .task(id: page) { await run() }
     }
 
-    private func fill(_ index: Int) -> Double {
+    private func fill(_ index: Int, now: Date) -> Double {
         if index < page { return 1 }
         if index > page { return 0 }
-        return progress
+        if slides[page] == .summary { return 1 }
+        return min(1, clock.elapsed(now) / Self.slideSeconds)
     }
 
-    /// Полоска текущего слайда заполняется сама; дошла — следующий. На последнем стоим.
+    /// Слайд листается сам, когда истекло его время; удержание его останавливает.
+    /// На последнем стоим.
     private func run() async {
-        progress = 0
-        guard slides[page] != .summary else {
-            progress = 1
-            return
-        }
-        let tick: Double = 1.0 / 30
-        while !Task.isCancelled && progress < 1 {
-            try? await Task.sleep(nanoseconds: UInt64(tick * 1_000_000_000))
-            if !paused && shareImage == nil { progress = min(1, progress + tick / Self.slideSeconds) }
+        clock.restart()
+        guard slides[page] != .summary else { return }
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if clock.elapsed() >= Self.slideSeconds { break }
         }
         if !Task.isCancelled { go(1) }
     }
@@ -222,7 +224,7 @@ struct TrainingRecapView: View {
     private func go(_ step: Int) {
         let next = page + step
         guard next >= 0 else {
-            progress = 0
+            clock.restart()
             return
         }
         guard next < slides.count else { return }
@@ -476,6 +478,33 @@ struct TrainingRecapView: View {
 
     /// «по понедельникам» — индекс как у `Calendar`: 1 — воскресенье.
     static let weekdayDative = ["", "воскресеньям", "понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам"]
+}
+
+/// Время слайда с учётом пауз.
+final class RecapClock {
+    private var start = Date()
+    private var pausedAt: Date?
+    private var pausedTotal: TimeInterval = 0
+
+    func restart() {
+        start = Date()
+        pausedAt = nil
+        pausedTotal = 0
+    }
+
+    func pause() {
+        if pausedAt == nil { pausedAt = Date() }
+    }
+
+    func resume() {
+        guard let pausedAt else { return }
+        pausedTotal += Date().timeIntervalSince(pausedAt)
+        self.pausedAt = nil
+    }
+
+    func elapsed(_ now: Date = Date()) -> TimeInterval {
+        max(0, (pausedAt ?? now).timeIntervalSince(start) - pausedTotal)
+    }
 }
 
 /// Число, которое при появлении набегает от нуля.

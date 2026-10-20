@@ -495,6 +495,9 @@ object SocialService {
     private val sentHandlers = mutableMapOf<String, (String, SocialMessage) -> Unit>()
     private var flushingMessages = false
     private var flushRequested = false
+    /// Удалённые из очереди, пока уже летели на сервер: дошедшее удаляем и там.
+    private val discardedWhileSending = mutableSetOf<String>()
+    private var sendingClientId: String? = null
 
     fun onMessageSent(username: String, handler: ((String, SocialMessage) -> Unit)?) {
         if (handler == null) sentHandlers.remove(username) else sentHandlers[username] = handler
@@ -536,6 +539,7 @@ object SocialService {
     }
 
     fun discardPending(clientId: String) {
+        if (sendingClientId == clientId) discardedWhileSending.add(clientId)
         ChatOutboxStore.remove(clientId)
         pendingMessages = pendingMessages.filter { it.clientId != clientId }
         pendingFailures = pendingFailures - clientId
@@ -558,11 +562,17 @@ object SocialService {
                     if (item.clientId in pendingFailures) continue
                     // Пока отправляли предыдущие, это сообщение могли удалить.
                     if (pendingMessages.none { it.clientId == item.clientId }) continue
+                    sendingClientId = item.clientId
                     try {
                         val sent = deliver(item)
+                        chatOffline = false
+                        // Пока сообщение летело, его отменили — убираем и с сервера.
+                        if (discardedWhileSending.remove(item.clientId)) {
+                            runCatching { deleteMessage(sent.id) }
+                            continue
+                        }
                         withContext(Dispatchers.IO) { ChatOutboxStore.remove(item.clientId) }
                         pendingMessages = pendingMessages.filter { it.clientId != item.clientId }
-                        chatOffline = false
                         sentHandlers[item.username]?.invoke(item.clientId, sent)
                     } catch (e: CancellationException) {
                         throw e
@@ -572,9 +582,15 @@ object SocialService {
                             stalled = true
                             break
                         }
-                        pendingFailures = pendingFailures + (item.clientId to (e.message ?: "Не отправлено"))
+                        if (!discardedWhileSending.remove(item.clientId)) {
+                            pendingFailures = pendingFailures + (item.clientId to (e.message ?: "Не отправлено"))
+                        }
                     } catch (e: Exception) {
-                        pendingFailures = pendingFailures + (item.clientId to "Не отправлено")
+                        if (!discardedWhileSending.remove(item.clientId)) {
+                            pendingFailures = pendingFailures + (item.clientId to "Не отправлено")
+                        }
+                    } finally {
+                        sendingClientId = null
                     }
                 }
             } finally {

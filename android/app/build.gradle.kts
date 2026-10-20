@@ -6,6 +6,13 @@ plugins {
 }
 
 android {
+    // Анализ кода: отчёт текстом в лог CI, сборку он не останавливает.
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+        textReport = true
+        textOutput = file("build/reports/lint.txt")
+    }
     namespace = "com.texasprogram.app"
     compileSdk = 35
 

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- ProMotion: без этого ключа iPhone держит анимации приложения на 60 кадрах
+	     в секунду, даже если экран умеет 120. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<!-- Экран запуска: чёрный фон и оранжевый знак по центру. Анимация
 	     открытия (LaunchReveal) начинается с того же кадра, поэтому стыка не видно. -->
 	<key>UILaunchScreen</key>

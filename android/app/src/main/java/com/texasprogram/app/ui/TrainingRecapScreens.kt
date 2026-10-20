@@ -61,6 +61,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -185,9 +186,12 @@ fun TrainingRecapDialog(recap: TrainingRecap, onDismiss: () -> Unit) {
             progress.floatValue = 1f
             return@LaunchedEffect
         }
+        // Каждый кадр экрана — плавно и при 120 Гц; пауза просто не прибавляет время.
+        var last = withFrameNanos { it }
         while (progress.floatValue < 1f) {
-            delay(33)
-            if (!paused) progress.floatValue = (progress.floatValue + 0.033f / 6f).coerceAtMost(1f)
+            val now = withFrameNanos { it }
+            if (!paused) progress.floatValue = (progress.floatValue + (now - last) / 6_000_000_000f).coerceAtMost(1f)
+            last = now
         }
         go(1)
     }

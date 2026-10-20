@@ -130,11 +130,27 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    /// Самая высокая частота экрана при том же разрешении. Без этой просьбы часть
+    /// телефонов (Xiaomi, Samsung в адаптивном режиме) держит приложение на 60 Гц,
+    /// даже если экран умеет 90 или 120.
+    private fun requestHighestRefreshRate() {
+        runCatching {
+            val display = if (android.os.Build.VERSION.SDK_INT >= 30) display else @Suppress("DEPRECATION") windowManager.defaultDisplay
+            val current = display?.mode ?: return
+            val best = display.supportedModes
+                .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
+                .maxByOrNull { it.refreshRate } ?: return
+            if (best.modeId == window.attributes.preferredDisplayModeId) return
+            window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // До super: системный экран запуска (чёрный фон и знак) живёт до первого кадра.
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        requestHighestRefreshRate()
         ThemeManager.init(applicationContext)
         WorkoutSessionManager.attach(filesDir)
         SocialService.init(applicationContext)

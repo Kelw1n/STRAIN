@@ -36,6 +36,17 @@ jobs:
         working-directory: android
         run: gradle testDebugUnitTest --stacktrace
 
+      # Android Lint: вызовы API новее minSdk, утечки, ошибки разрешений.
+      # Только отчёт в лог — сборку не останавливает.
+      - name: Lint
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        working-directory: android
+        run: |
+          gradle lintDebug --stacktrace > /dev/null || true
+          grep -E "Error:|Warning:" app/build/reports/lint.txt | grep -v "GradleDependency\|NewerVersionAvailable\|AndroidGradlePluginVersion" | head -200 || true
+          tail -3 app/build/reports/lint.txt || true
+
       # Постоянный ключ подписи из секретов репозитория: с ним новая версия
       # ставится поверх старой и профили остаются. Секрета нет — отладочный ключ.
       - name: Restore signing key

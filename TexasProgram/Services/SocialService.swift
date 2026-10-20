@@ -501,6 +501,9 @@ final class SocialService {
     @ObservationIgnored private var sentHandlers: [String: (String, SocialMessage) -> Void] = [:]
     @ObservationIgnored private var flushingMessages = false
     @ObservationIgnored private var flushRequested = false
+    /// Удалённые из очереди, пока уже летели на сервер: дошедшее удаляем и там.
+    @ObservationIgnored private var discardedWhileSending: Set<String> = []
+    @ObservationIgnored private var sendingClientId: String?
 
     func onMessageSent(in username: String, _ handler: ((String, SocialMessage) -> Void)?) {
         sentHandlers[username] = handler
@@ -523,6 +526,7 @@ final class SocialService {
     }
 
     func discardPending(_ clientId: String) {
+        if sendingClientId == clientId { discardedWhileSending.insert(clientId) }
         ChatOutboxStore.remove(clientId)
         pendingMessages.removeAll { $0.clientId == clientId }
         pendingFailures[clientId] = nil
@@ -543,11 +547,18 @@ final class SocialService {
             delivery: for item in pendingMessages.sorted(by: { $0.createdAt < $1.createdAt }) where pendingFailures[item.clientId] == nil {
                 // Пока отправляли предыдущие, это сообщение могли удалить.
                 guard pendingMessages.contains(where: { $0.clientId == item.clientId }) else { continue }
+                sendingClientId = item.clientId
+                defer { sendingClientId = nil }
                 do {
                     let sent = try await deliver(item)
+                    chatOffline = false
+                    // Пока сообщение летело, его отменили — убираем и с сервера.
+                    if discardedWhileSending.remove(item.clientId) != nil {
+                        try? await deleteMessage(sent.id)
+                        continue
+                    }
                     ChatOutboxStore.remove(item.clientId)
                     pendingMessages.removeAll { $0.clientId == item.clientId }
-                    chatOffline = false
                     sentHandlers[item.username]?(item.clientId, sent)
                 } catch let error as SocialError where error.isRetryable {
                     chatOffline = true
@@ -557,7 +568,9 @@ final class SocialService {
                     stalled = true
                     break delivery
                 } catch {
-                    pendingFailures[item.clientId] = error.socialMessage ?? "Не отправлено"
+                    if discardedWhileSending.remove(item.clientId) == nil {
+                        pendingFailures[item.clientId] = error.socialMessage ?? "Не отправлено"
+                    }
                 }
             }
             flushingMessages = false

@@ -1059,11 +1059,13 @@ internal fun TypingBubble() {
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             repeat(3) { index ->
-                val lift = maxOf(0f, sin(phase - index * 0.7f))
                 Box(
                     Modifier
                         .size(7.dp)
+                        // Фаза читается только при отрисовке слоя: каждый кадр
+                        // перерисовываются точки, а не пузырь целиком.
                         .graphicsLayer {
+                            val lift = maxOf(0f, sin(phase - index * 0.7f))
                             scaleX = 0.7f + 0.3f * lift
                             scaleY = 0.7f + 0.3f * lift
                         }
