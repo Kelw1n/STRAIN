@@ -1,5 +1,17 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.automirrored.filled.Forward
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.texasprogram.app.model.ChatPending
+import com.texasprogram.app.model.SocialChatWorkout
+import com.texasprogram.app.model.SocialForward
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.composed
 import androidx.compose.ui.semantics.semantics
@@ -150,7 +162,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.UUID
 
 // MARK: - Список переписок
 
@@ -286,9 +297,10 @@ internal fun ChatRow(chat: SocialChat, onOpen: () -> Unit) {
 
 // MARK: - Переписка
 
-/// Переписка с одним человеком. Новое — сообщения, реакции, прочтение и
-/// удаление — подтягивается каждые несколько секунд, пока экран открыт;
-/// панель вкладок на это время прячется.
+/// Переписка с одним человеком. Новое — сообщения, реакции, прочтение,
+/// правки и удаление — подтягивается каждые несколько секунд, пока экран
+/// открыт; панель вкладок на это время прячется. Своё сообщение сначала
+/// ложится в очередь на телефоне: без связи оно ждёт с часиками и уходит само.
 @Composable
 fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: SocialNavigator) {
     val scope = rememberCoroutineScope()
@@ -299,18 +311,24 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     var older by remember { mutableStateOf<Double?>(null) }
     var loading by remember { mutableStateOf(true) }
     var draft by remember { mutableStateOf("") }
-    var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     /// Фото, выбранное к отправке, — показывается над полем ввода.
     var attachment by rememberSaveable { mutableStateOf<Uri?>(null) }
     var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var attachMenu by remember { mutableStateOf(false) }
     /// Фото ещё не ушедших сообщений: пока идёт загрузка, видно их.
-    val localImages = remember { mutableStateMapOf<String, Uri>() }
+    val localImages = remember { mutableStateMapOf<String, Any>() }
     var viewing by remember { mutableStateOf<String?>(null) }
     var barHeight by remember { mutableIntStateOf(0) }
     /// На какое сообщение отвечаем — цитата над полем ввода.
     var replyingTo by remember { mutableStateOf<SocialMessage?>(null) }
+    /// Какое своё сообщение правим — его текст в поле ввода.
+    var editing by remember { mutableStateOf<SocialMessage?>(null) }
+    /// Какое сообщение пересылаем — открыт выбор, кому.
+    var forwarding by remember { mutableStateOf<SocialMessage?>(null) }
+    /// Не ушедшее сообщение, по которому нажали: повторить или удалить.
+    var failed by remember { mutableStateOf<SocialMessage?>(null) }
+    var openedWorkout by remember { mutableStateOf<Pair<SocialChatWorkout, String?>?>(null) }
     /// Сообщение, к которому прокрутили по цитате, — коротко подсвечено.
     var highlighted by remember { mutableStateOf<String?>(null) }
     /// С этого времени сервера спрашиваем изменения.
@@ -345,15 +363,6 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         else error = "Без доступа к микрофону голосовое не записать"
     }
 
-    DisposableEffect(Unit) {
-        SocialService.hidesTabBar = true
-        onDispose {
-            SocialService.hidesTabBar = false
-            recorder.cancel()
-            VoicePlayer.stop()
-        }
-    }
-
     /// Новое добавляется, изменённое заменяется, удалённое пропадает.
     /// Сервер отдаёт новые первыми, на экране — старые сверху.
     fun applyChanges(incoming: List<SocialMessage>) {
@@ -363,12 +372,58 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         messages.addAll(updated)
     }
 
-    /// Сервер принял своё сообщение: та же строка, только часики сменились
+    /// Очередь отправила сообщение: та же строка, только часики сменились
     /// галочкой. Пузырь не пересоздаётся — ничего не мигает и не прыгает.
-    fun confirm(local: SocialMessage, sent: SocialMessage) {
-        val updated = SocialMessage.merged(messages.filter { it.id != local.id }, listOf(sent.copy(rowKey = local.key)))
+    fun confirm(clientId: String, sent: SocialMessage) {
+        val updated = SocialMessage.merged(messages.filter { it.id != "local-$clientId" }, listOf(sent.copy(rowKey = "local-$clientId")))
         messages.clear()
         messages.addAll(updated)
+    }
+
+    /// Чужое голосовое включили — точка гаснет у обоих.
+    fun listened(message: SocialMessage) {
+        if (message.fromMe || message.heard || message.isLocal) return
+        val index = messages.indexOfFirst { it.id == message.id }
+        if (index < 0) return
+        messages[index] = messages[index].copy(heard = true)
+        SocialService.markHeard(message.id)
+    }
+
+    /// Следующее голосовое ниже по переписке включается само, как в Telegram.
+    fun playNext(voiceId: String) {
+        val index = messages.indexOfFirst { it.voice?.id == voiceId }
+        if (index < 0) return
+        val next = messages.drop(index + 1).firstOrNull { it.voice != null && !it.isLocal } ?: return
+        val voice = next.voice ?: return
+        listened(next)
+        VoicePlayer.play(context, voice)
+    }
+
+    /// Сообщения, которые ждали отправки, когда переписку закрыли, — снова на месте.
+    fun restorePending() {
+        val known = messages.map { it.key }.toSet()
+        val waiting = SocialService.pending(username).filter { it.message.key !in known }
+        if (waiting.isEmpty()) return
+        waiting.filter { it.hasPhotoFile }.forEach { item ->
+            SocialService.pendingPhoto(item.clientId)?.let { localImages[item.message.key] = it }
+        }
+        applyChanges(waiting.map { it.message })
+    }
+
+    DisposableEffect(username) {
+        SocialService.hidesTabBar = true
+        // Ушло из очереди — пузырь с часиками становится обычным на том же месте.
+        SocialService.onMessageSent(username) { clientId, sent -> confirm(clientId, sent) }
+        // Доиграло голосовое — следующее включается само.
+        VoicePlayer.onFinish = { id -> playNext(id) }
+        restorePending()
+        onDispose {
+            SocialService.hidesTabBar = false
+            SocialService.onMessageSent(username, null)
+            VoicePlayer.onFinish = null
+            recorder.cancel()
+            VoicePlayer.stop()
+        }
     }
 
     /// Что пришло, пока переписка открыта, — вылетает; старое — сразу на месте.
@@ -402,14 +457,17 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         SocialService.refreshUnread()
         while (true) {
             delay(3_000)
+            // Связь вернулась — то, что ждало в очереди, уходит.
+            if (SocialService.pending(username).isNotEmpty()) SocialService.flushMessages()
             val since = serverTime
             if (since == null) {
                 loadLatest()
                 continue
             }
-            // Всё, что поменялось с прошлого раза: новые сообщения, реакции, прочтение, удаление.
+            // Всё, что поменялось с прошлого раза: новые сообщения, реакции, прочтение, правки, удаление.
             runCatching { SocialService.messages(username, since = since) }.onSuccess { page ->
                 absorb(page)
+                if (error != null && SocialService.chatOffline.not()) error = null
                 val known = messages.map { it.id }.toSet()
                 val incoming = page.messages.any { !it.fromMe && !it.deleted && it.id !in known }
                 applyChanges(page.messages)
@@ -419,7 +477,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     }
 
     LaunchedEffect(draft) {
-        if (draft.isNotBlank()) SocialService.sendTyping(username)
+        if (draft.isNotBlank() && editing == null) SocialService.sendTyping(username)
     }
 
     // Новое сообщение или «печатает» — список доезжает до низа.
@@ -430,6 +488,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
 
     fun reply(message: SocialMessage) {
         if (message.isLocal) return
+        editing = null
         replyingTo = message
     }
 
@@ -462,71 +521,117 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         }
     }
 
-    /// Сообщение сразу на экране; фото сначала грузится на сервер.
-    /// Не ушло — текст, фото и цитата возвращаются в поле.
-    fun send() {
-        val text = draft.trim()
-        val photo = attachment
-        val quoted = replyingTo
-        if ((text.isEmpty() && photo == null) || sending) return
-        val clientId = UUID.randomUUID().toString().lowercase()
-        val local = SocialMessage(
-            id = "local-$clientId",
-            text = text,
-            fromMe = true,
-            createdAt = System.currentTimeMillis().toDouble(),
-            image = if (photo != null) "local" else null,
-            replyTo = quoted?.quote
-        )
-        if (photo != null) localImages[local.key] = photo
+    fun cancelEditing() {
+        editing = null
         draft = ""
-        attachment = null
+    }
+
+    fun startEditing(message: SocialMessage) {
+        if (!message.canEdit) return
+        haptics.light()
         replyingTo = null
-        sending = true
-        messages.add(local)
+        attachment = null
+        editing = message
+        draft = message.text
+    }
+
+    /// Новый текст виден сразу; не вышло — возвращается прежний.
+    fun saveEdit() {
+        val original = editing ?: return
+        val index = messages.indexOfFirst { it.id == original.id }
+        val text = draft.trim()
+        if (index < 0 || text == original.text) {
+            cancelEditing()
+            return
+        }
+        if (text.isEmpty() && original.image == null) return
+        messages[index] = messages[index].copy(text = text, edited = true)
+        cancelEditing()
         scope.launch {
             try {
-                val imageId = photo?.let { SocialService.uploadImage(context, it, maxSide = 1600) }
-                val sent = SocialService.sendMessage(username, text, clientId, image = imageId, replyTo = quoted?.id)
-                confirm(local, sent)
+                applyChanges(listOf(SocialService.editMessage(original.id, text)))
                 error = null
             } catch (e: SocialException) {
-                messages.remove(local)
-                localImages.remove(local.key)
-                if (draft.isEmpty()) draft = text
-                if (attachment == null) attachment = photo
-                if (replyingTo == null) replyingTo = quoted
+                applyChanges(listOf(original))
                 error = e.message
-            } finally {
-                sending = false
             }
         }
     }
 
-    /// Голосовое сразу в переписке; звук уходит на сервер, потом само сообщение.
+    /// Сообщение сразу на экране и в очереди на телефоне; фото сначала
+    /// загружается на сервер. Нет связи — пузырь ждёт с часиками и уходит сам.
+    fun send() {
+        if (editing != null) {
+            saveEdit()
+            return
+        }
+        val text = draft.trim()
+        val photo = attachment
+        if (text.isEmpty() && photo == null) return
+        val item = ChatPending(
+            clientId = SocialService.newClientId(),
+            username = username,
+            text = text,
+            replyTo = replyingTo?.quote,
+            image = if (photo != null) "local" else null
+        )
+        val local = item.message
+        if (photo != null) localImages[local.key] = photo
+        draft = ""
+        attachment = null
+        replyingTo = null
+        messages.add(local)
+        if (photo != null) SocialService.queue(context, item, photo) else SocialService.queue(item)
+        error = null
+    }
+
+    /// Голосовое сразу в переписке, звук — в очередь вместе с сообщением.
     /// В тексте — подпись для старых версий приложения, которые голосовые не играют.
     fun sendVoice(recording: VoiceRecording) {
-        val quoted = replyingTo
-        val clientId = UUID.randomUUID().toString().lowercase()
-        val local = SocialMessage(
-            id = "local-$clientId",
+        val clientId = SocialService.newClientId()
+        val item = ChatPending(
+            clientId = clientId,
+            username = username,
             text = SocialVoice.PREVIEW,
-            fromMe = true,
-            createdAt = System.currentTimeMillis().toDouble(),
-            replyTo = quoted?.quote,
+            replyTo = replyingTo?.quote,
             voice = SocialVoice("local-$clientId", recording.durationMs, recording.waveform)
         )
         replyingTo = null
-        messages.add(local)
+        messages.add(item.message)
+        SocialService.queue(item, voice = recording.data)
+        error = null
+    }
+
+    /// Пересланное уходит той же очередью; переслали сюда же — появляется и здесь.
+    fun forward(message: SocialMessage, target: SocialUserShort) {
+        val item = ChatPending(
+            clientId = SocialService.newClientId(),
+            username = target.username,
+            text = message.text,
+            image = message.image,
+            voice = message.voice,
+            workout = message.workout,
+            forward = message.id,
+            forwarded = message.forwarded ?: SocialForward(if (message.fromMe) SocialService.me?.username else username)
+        )
+        SocialService.queue(item)
+        haptics.light()
+        if (target.username == username) messages.add(item.message) else showHint("Переслано @${target.username}")
+    }
+
+    fun delete(message: SocialMessage) {
+        // Не ушедшее — просто убираем из очереди.
+        if (message.isLocal) {
+            message.clientId?.let { SocialService.discardPending(it) }
+            messages.removeAll { it.id == message.id }
+            localImages.remove(message.key)
+            return
+        }
         scope.launch {
             try {
-                val uploaded = SocialService.uploadVoice(recording.data, recording.durationMs, recording.waveform)
-                val sent = SocialService.sendMessage(username, SocialVoice.PREVIEW, clientId, replyTo = quoted?.id, voice = uploaded.id)
-                confirm(local, sent)
-                error = null
+                SocialService.deleteMessage(message.id)
+                messages.removeAll { it.id == message.id }
             } catch (e: SocialException) {
-                messages.remove(local)
-                if (replyingTo == null) replyingTo = quoted
                 error = e.message
             }
         }
@@ -563,6 +668,9 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
 
     // Дошли до минуты — голосовое уходит само.
     SideEffect { recorder.onLimit = { finishRecording() } }
+
+    val failures = SocialService.pendingFailures
+    val waitingForNetwork = SocialService.chatOffline && SocialService.pending(username).any { it.clientId !in failures }
 
     Box(
         Modifier
@@ -641,6 +749,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                             username = username,
                             localImage = localImages[message.key],
                             highlighted = highlighted == message.id,
+                            failure = if (message.isLocal) message.clientId?.let { failures[it] } else null,
                             onOpenImage = { viewing = it },
                             onReply = { reply(message) },
                             onReact = { react(message, it) },
@@ -649,16 +758,14 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("Сообщение", message.text))
                             },
-                            onDelete = {
-                                scope.launch {
-                                    try {
-                                        SocialService.deleteMessage(message.id)
-                                        messages.removeAll { it.id == message.id }
-                                    } catch (e: SocialException) {
-                                        error = e.message
-                                    }
-                                }
-                            }
+                            onEdit = { startEditing(message) },
+                            onForward = { forwarding = message },
+                            onOpenWorkout = { workout ->
+                                openedWorkout = workout to (message.forwarded?.username ?: if (message.fromMe) null else username)
+                            },
+                            onListen = { listened(message) },
+                            onFailedTap = { failed = message },
+                            onDelete = { delete(message) }
                         )
                     }
                 }
@@ -679,8 +786,20 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            error?.let {
-                Text(it, color = Theme.warning, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
+            val currentError = error
+            if (currentError != null) {
+                Text(currentError, color = Theme.warning, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
+            }
+            AnimatedVisibility(
+                visible = currentError == null && waitingForNetwork,
+                enter = fadeIn(tween(180)) + slideInVertically(Motion.snappy()) { it / 2 },
+                exit = fadeOut(tween(160))
+            ) {
+                Row(Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.CloudOff, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Нет связи — сообщения уйдут сами, когда она появится", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
             AnimatedVisibility(
                 visible = hint != null,
@@ -689,24 +808,17 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
             ) {
                 Text(hint.orEmpty(), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
             }
-            replyingTo?.let { quoted ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .chatGlass(RoundedCornerShape(18.dp))
-                        .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(if (quoted.fromMe) "Ответ себе" else "Ответ @$username", color = Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text(quoted.quote.preview, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Box(Modifier.size(32.dp).pressable { replyingTo = null }.clip(CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Close, contentDescription = "Не отвечать", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                    }
-                }
+            val edited = editing
+            val quoted = replyingTo
+            if (edited != null) {
+                ComposerBanner(Icons.Filled.Edit, "Изменить сообщение", edited.text.ifEmpty { "📷 Фото" }, "Не изменять") { cancelEditing() }
+            } else if (quoted != null) {
+                ComposerBanner(
+                    Icons.AutoMirrored.Filled.Reply,
+                    if (quoted.fromMe) "Ответ себе" else "Ответ @$username",
+                    quoted.quote.preview,
+                    "Не отвечать"
+                ) { replyingTo = null }
             }
             attachment?.let { uri ->
                 Box(Modifier.chatGlass(RoundedCornerShape(20.dp)).padding(6.dp)) {
@@ -730,7 +842,11 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 } else {
                 Box {
                     Box(
-                        Modifier.size(44.dp).chatGlass(CircleShape).pressable { attachMenu = true },
+                        Modifier
+                            .size(44.dp)
+                            .graphicsLayer { alpha = if (edited == null) 1f else 0.4f }
+                            .chatGlass(CircleShape)
+                            .pressable(enabled = edited == null) { attachMenu = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Filled.AttachFile, contentDescription = "Прикрепить фото", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -764,7 +880,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         .padding(horizontal = 16.dp, vertical = 11.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    if (draft.isEmpty()) Text("Сообщение", color = Color.White.copy(alpha = 0.45f), fontSize = 16.sp)
+                    if (draft.isEmpty()) Text(if (edited == null) "Сообщение" else "Новый текст", color = Color.White.copy(alpha = 0.45f), fontSize = 16.sp)
                     BasicTextField(
                         value = draft,
                         onValueChange = { draft = it.take(2000) },
@@ -775,9 +891,9 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                     )
                 }
                 }
-                val canSend = !sending && (draft.isNotBlank() || attachment != null)
+                val canSend = if (edited != null) draft.isNotBlank() || edited.image != null else draft.isNotBlank() || attachment != null
                 // Поле пустое и фото нет — вместо «Отправить» микрофон, как в Telegram.
-                val showsMic = recorder.isRecording || (!sending && attachment == null && draft.isBlank())
+                val showsMic = edited == null && (recorder.isRecording || (attachment == null && draft.isBlank()))
                 if (showsMic) {
                     MicButton(
                         recording = recorder.isRecording,
@@ -804,8 +920,11 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         .pressable(enabled = canSend) { send() },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (sending) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                    else Icon(Icons.Filled.ArrowUpward, contentDescription = "Отправить", tint = if (canSend) Color.Black else Color.White.copy(alpha = 0.5f))
+                    Icon(
+                        if (edited != null) Icons.Filled.Done else Icons.Filled.ArrowUpward,
+                        contentDescription = if (edited != null) "Сохранить" else "Отправить",
+                        tint = if (canSend) Color.Black else Color.White.copy(alpha = 0.5f)
+                    )
                 }
                 }
             }
@@ -813,6 +932,55 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     }
 
     viewing?.let { id -> ImageViewer(id) { viewing = null } }
+    forwarding?.let { message ->
+        ChatTargetSheet("Переслать", onDismiss = { forwarding = null }) { target -> forward(message, target) }
+    }
+    openedWorkout?.let { (workout, author) ->
+        ChatWorkoutSheet(workout, author, navigator) { openedWorkout = null }
+    }
+    failed?.let { message ->
+        AlertDialog(
+            modifier = Modifier.popIn(),
+            onDismissRequest = { failed = null },
+            containerColor = Theme.dialog,
+            title = { Text("Сообщение не отправлено", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text(message.clientId?.let { failures[it] } ?: "Попробуй ещё раз.", color = Theme.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    failed = null
+                    message.clientId?.let { SocialService.retryPending(it) }
+                }) { Text("Повторить", color = Theme.accent) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    failed = null
+                    delete(message)
+                }) { Text("Удалить", color = Theme.record) }
+            }
+        )
+    }
+}
+
+/// Плашка над полем ввода: на что отвечаем или что правим.
+@Composable
+private fun ComposerBanner(icon: ImageVector, title: String, text: String, close: String, onClose: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .chatGlass(RoundedCornerShape(18.dp))
+            .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(text, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(Modifier.size(32.dp).pressable(onClick = onClose).clip(CircleShape), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Close, contentDescription = close, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+        }
+    }
 }
 
 /// В сети — если заходил последние две минуты.
@@ -919,8 +1087,8 @@ fun Modifier.chatGlass(shape: Shape): Modifier = this
 
 /// Фото с телефона — ещё не загруженное на сервер.
 @Composable
-private fun LocalImage(uri: Uri, modifier: Modifier) {
-    coil.compose.AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier)
+private fun LocalImage(model: Any, modifier: Modifier) {
+    coil.compose.AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier)
 }
 
 private fun dayTitle(day: LocalDate): String {
@@ -937,13 +1105,20 @@ private fun dayTitle(day: LocalDate): String {
 internal fun MessageBubble(
     message: SocialMessage,
     username: String = "",
-    localImage: Uri? = null,
+    localImage: Any? = null,
     highlighted: Boolean = false,
+    /// Почему своё сообщение не ушло: сервер отказал.
+    failure: String? = null,
     onOpenImage: (String) -> Unit = {},
     onReply: () -> Unit = {},
     onReact: (String) -> Unit = {},
     onOpenQuote: (String) -> Unit = {},
     onCopy: () -> Unit,
+    onEdit: () -> Unit = {},
+    onForward: () -> Unit = {},
+    onOpenWorkout: (SocialChatWorkout) -> Unit = {},
+    onListen: () -> Unit = {},
+    onFailedTap: () -> Unit = {},
     onDelete: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -958,6 +1133,8 @@ internal fun MessageBubble(
     val swipe = remember { Animatable(0f) }
     val replyDistance = with(density) { 64.dp.toPx() }
     val pulled = (-swipe.value / replyDistance).coerceIn(0f, 1f)
+    // Пока голосовое играет, палец по волне перематывает, а не отвечает.
+    val voicePlaying = message.voice?.let { VoicePlayer.playingId == it.id } == true
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (message.fromMe) Arrangement.End else Arrangement.Start) {
         Box {
@@ -966,7 +1143,7 @@ internal fun MessageBubble(
                     .offset { IntOffset(swipe.value.roundToInt(), 0) }
                     .draggable(
                         orientation = Orientation.Horizontal,
-                        enabled = !message.isLocal,
+                        enabled = !message.isLocal && !voicePlaying,
                         state = rememberDraggableState { delta ->
                             // Дальше порога — с сопротивлением.
                             val next = (swipe.value + delta * if (swipe.value < -replyDistance) 0.25f else 1f).coerceIn(-replyDistance * 1.5f, 0f)
@@ -990,12 +1167,17 @@ internal fun MessageBubble(
                     Modifier
                         .widthIn(max = 290.dp)
                         .clip(RoundedCornerShape(18.dp))
-                        .background(if (message.fromMe) Theme.accent.copy(alpha = 0.9f) else Color(0xFF292929))
+                        .background(if (message.fromMe) Theme.accent.copy(alpha = if (failure == null) 0.9f else 0.5f) else Color(0xFF292929))
                         .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0f))
                         .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = { if (hasImage && !message.isLocal) message.image?.let(onOpenImage) },
+                            onClick = {
+                                when {
+                                    failure != null -> onFailedTap()
+                                    hasImage && !message.isLocal -> message.image?.let(onOpenImage)
+                                }
+                            },
                             // Двойное нажатие — 🔥, как сердечко в Telegram.
                             onDoubleClick = { onReact("🔥") },
                             onLongClick = { menu = true }
@@ -1003,6 +1185,17 @@ internal fun MessageBubble(
                         .padding(horizontal = if (hasImage) 4.dp else 13.dp, vertical = if (hasImage) 4.dp else 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    message.forwarded?.let { forwarded ->
+                        Row(
+                            Modifier.padding(start = if (hasImage) 9.dp else 0.dp, top = if (hasImage) 5.dp else 0.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val tint = if (message.fromMe) Color.White.copy(alpha = 0.8f) else Theme.accent
+                            Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(forwarded.title, color = tint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                     message.replyTo?.let { quote ->
                         QuoteBlock(
                             quote = quote,
@@ -1017,15 +1210,18 @@ internal fun MessageBubble(
                         Box(Modifier.size(width = 230.dp, height = 270.dp).clip(RoundedCornerShape(15.dp)), contentAlignment = Alignment.Center) {
                             if (localImage != null) {
                                 LocalImage(localImage, Modifier.fillMaxSize())
-                                if (message.isLocal) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                                if (message.isLocal && failure == null) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                             } else {
                                 RemoteImage(message.image, Modifier.fillMaxSize())
                             }
                         }
                     }
                     val voice = message.voice
+                    val workout = message.workout
                     if (voice != null) {
-                        VoiceMessageContent(voice, fromMe = message.fromMe, isLocal = message.isLocal)
+                        VoiceMessageContent(voice, fromMe = message.fromMe, isLocal = message.isLocal, heard = message.heard, onListen = onListen)
+                    } else if (workout != null) {
+                        ChatWorkoutCard(workout, message.fromMe) { onOpenWorkout(workout) }
                     } else if (message.text.isNotEmpty()) {
                         Text(message.text, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(horizontal = if (hasImage) 9.dp else 0.dp))
                     }
@@ -1037,19 +1233,32 @@ internal fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        if (message.edited) Text("изменено", color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
                         Text(time, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
                         if (message.fromMe) {
                             Icon(
                                 when {
+                                    failure != null -> Icons.Filled.Error
                                     message.isLocal -> Icons.Filled.Schedule
                                     message.read -> Icons.Filled.DoneAll
                                     else -> Icons.Filled.Done
                                 },
-                                contentDescription = if (message.read) "Прочитано" else null,
-                                tint = Color.White.copy(alpha = 0.6f),
+                                contentDescription = when {
+                                    failure != null -> "Не отправлено"
+                                    message.read -> "Прочитано"
+                                    else -> null
+                                },
+                                tint = if (failure != null) Theme.record else Color.White.copy(alpha = 0.6f),
                                 modifier = Modifier.size(13.dp)
                             )
                         }
+                    }
+                }
+                if (failure != null) {
+                    Row(Modifier.pressable(onClick = onFailedTap), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Error, contentDescription = null, tint = Theme.record, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Не отправлено — нажми", color = Theme.record, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 if (message.reactions.isNotEmpty()) {
@@ -1123,14 +1332,44 @@ internal fun MessageBubble(
                         }
                     )
                 }
-                if (message.text.isNotEmpty() && message.voice == null) {
+                if (message.canForward) {
+                    DropdownMenuItem(
+                        text = { Text("Переслать") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = null) },
+                        onClick = {
+                            menu = false
+                            onForward()
+                        }
+                    )
+                }
+                if (message.canEdit) {
+                    DropdownMenuItem(
+                        text = { Text("Изменить") },
+                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                        onClick = {
+                            menu = false
+                            onEdit()
+                        }
+                    )
+                }
+                if (message.text.isNotEmpty() && message.voice == null && message.workout == null) {
                     DropdownMenuItem(text = { Text("Скопировать") }, onClick = {
                         menu = false
                         onCopy()
                     })
                 }
-                if (message.fromMe && !message.isLocal) {
-                    DropdownMenuItem(text = { Text("Удалить", color = Theme.record) }, onClick = {
+                if (failure != null) {
+                    DropdownMenuItem(
+                        text = { Text("Повторить") },
+                        leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                        onClick = {
+                            menu = false
+                            onFailedTap()
+                        }
+                    )
+                }
+                if (message.fromMe) {
+                    DropdownMenuItem(text = { Text(if (message.isLocal) "Не отправлять" else "Удалить", color = Theme.record) }, onClick = {
                         menu = false
                         onDelete()
                     })
@@ -1200,16 +1439,27 @@ private fun ImageViewer(id: String, onClose: () -> Unit) {
 
 // MARK: - Голосовые
 
-/// Пузырь голосового: ▶/❚❚, волна (проигранное — ярче) и время. Пока играет,
-/// прогресс обновляется каждый кадр, но читается только в отрисовке волны.
+/// Пузырь голосового: ▶/❚❚, волна (проигранное — ярче), время, скорость
+/// и точка, пока его не прослушали. Нажатие на волну включает с этого места,
+/// а пока играет — палец по волне перематывает. Прогресс обновляется каждый
+/// кадр, но читается только в отрисовке волны.
 @Composable
-internal fun VoiceMessageContent(voice: SocialVoice, fromMe: Boolean, isLocal: Boolean) {
+internal fun VoiceMessageContent(
+    voice: SocialVoice,
+    fromMe: Boolean,
+    isLocal: Boolean,
+    heard: Boolean = true,
+    onListen: () -> Unit = {}
+) {
     val context = LocalContext.current
     val playing = VoicePlayer.playingId == voice.id
     val loading = VoicePlayer.loadingId == voice.id
     val failed = VoicePlayer.failedId == voice.id
     val progress = remember { mutableFloatStateOf(0f) }
     var positionMs by remember { mutableLongStateOf(0L) }
+    /// Куда тянут пальцем по волне, от 0 до 1.
+    var scrub by remember { mutableStateOf<Float?>(null) }
+    val currentListen by rememberUpdatedState(onListen)
     LaunchedEffect(playing) {
         if (!playing) {
             progress.floatValue = 0f
@@ -1227,7 +1477,10 @@ internal fun VoiceMessageContent(voice: SocialVoice, fromMe: Boolean, isLocal: B
         Box(
             Modifier
                 .size(38.dp)
-                .pressable(enabled = !isLocal) { VoicePlayer.toggle(context, voice) }
+                .pressable(enabled = !isLocal) {
+                    if (!playing) onListen()
+                    VoicePlayer.toggle(context, voice)
+                }
                 .clip(CircleShape)
                 .background(if (fromMe) Color.White else Theme.accent),
             contentAlignment = Alignment.Center
@@ -1249,13 +1502,72 @@ internal fun VoiceMessageContent(voice: SocialVoice, fromMe: Boolean, isLocal: B
             }
         }
         Spacer(Modifier.width(10.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            VoiceWaveform(voice.levels, { progress.floatValue }, fromMe, Modifier.size(width = 150.dp, height = 24.dp))
-            Text(
-                SocialVoice.format(if (playing) positionMs else voice.durationMs.toLong()),
-                color = Color.White.copy(alpha = 0.7f),
-                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
+        Column(Modifier.width(150.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            VoiceWaveform(
+                voice.levels,
+                { scrub ?: progress.floatValue },
+                fromMe,
+                Modifier
+                    .size(width = 150.dp, height = 24.dp)
+                    .pointerInput(voice.id, isLocal) {
+                        if (isLocal) return@pointerInput
+                        detectTapGestures { offset ->
+                            val at = (offset.x / size.width).coerceIn(0f, 1f)
+                            if (VoicePlayer.playingId != voice.id) currentListen()
+                            VoicePlayer.seek(context, voice, at)
+                        }
+                    }
+                    .pointerInput(voice.id, playing) {
+                        if (!playing) return@pointerInput
+                        detectHorizontalDragGestures(
+                            onDragStart = { scrub = (it.x / size.width).coerceIn(0f, 1f) },
+                            onDragEnd = {
+                                scrub?.let { VoicePlayer.seek(context, voice, it) }
+                                scrub = null
+                            },
+                            onDragCancel = { scrub = null }
+                        ) { change, _ ->
+                            change.consume()
+                            scrub = (change.position.x / size.width).coerceIn(0f, 1f)
+                        }
+                    }
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val shown = scrub?.let { (it * voice.durationMs).toLong() } ?: if (playing) positionMs else voice.durationMs.toLong()
+                Text(
+                    SocialVoice.format(shown),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
+                )
+                if (!heard && !isLocal) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(if (fromMe) Color.White else Theme.accent).semantics { contentDescription = "Не прослушано" })
+                }
+                Spacer(Modifier.weight(1f))
+                if (playing) {
+                    val rate = VoicePlayer.rate
+                    Box(
+                        Modifier
+                            .height(18.dp)
+                            .pressable { VoicePlayer.cycleRate(context) }
+                            .clip(CircleShape)
+                            .background(if (fromMe) Color.White else Theme.accent.copy(alpha = 0.85f))
+                            .padding(horizontal = 6.dp)
+                            .popIn(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            when (rate) {
+                                1f -> "1×"
+                                2f -> "2×"
+                                else -> "1,5×"
+                            },
+                            color = if (fromMe) Theme.accent else Color.White,
+                            style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Black, fontFeatureSettings = "tnum")
+                        )
+                    }
+                }
+            }
         }
     }
 }

@@ -181,25 +181,47 @@ data class SocialMessage(
     val invite: SocialInvite? = null,
     /// Голосовое сообщение.
     val voice: SocialVoice? = null,
+    /// Свой clientId: по нему сообщение из очереди неотправленных узнаётся
+    /// в ответе сервера, даже если ответ на саму отправку потерялся.
+    val clientId: String? = null,
+    /// Голосовое прослушано получателем.
+    val heard: Boolean = false,
+    /// Текст поправили после отправки.
+    val edited: Boolean = false,
+    /// Переслано — от кого изначально.
+    val forwarded: SocialForward? = null,
+    /// Тренировка карточкой.
+    val workout: SocialChatWorkout? = null,
     /// Ключ строки на экране. У своего сообщения — тот, что был до ответа сервера:
     /// подтверждённое сообщение не пересоздаётся и не мигает в переписке.
     @kotlinx.serialization.Transient val rowKey: String? = null
 ) {
-    val key: String get() = rowKey ?: id
+    /// У своего сообщения ключ строки — от clientId: им же помечен пузырь,
+    /// пока сообщение ждало отправки, и строка остаётся той же.
+    val key: String get() = rowKey ?: clientId?.let { "local-$it" } ?: id
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
     val isLocal: Boolean get() = id.startsWith("local-")
     /// Подпись в списке переписок: фото без текста — «Фото», голосовое — «Голосовое».
     val preview: String get() = when {
         voice != null -> SocialVoice.PREVIEW
+        workout != null -> workout.previewText
         text.isEmpty() && image != null -> "📷 Фото"
         else -> text
     }
 
-    val quote: SocialMessageQuote get() = SocialMessageQuote(id, text, image, voice != null, fromMe)
+    /// Свой текст или подпись к фото можно поправить; голосовое, приглашение,
+    /// тренировку и пересланное — нет, как и на сервере.
+    val canEdit: Boolean get() = fromMe && !isLocal && voice == null && invite == null && workout == null && forwarded == null
+
+    /// Пересылают всё, кроме приглашения на совместную тренировку.
+    val canForward: Boolean get() = !isLocal && invite == null
+
+    val quote: SocialMessageQuote get() = SocialMessageQuote(id, workout?.previewText ?: text, image, voice != null, fromMe)
 
     companion object {
         /// Переписка после обновления с сервера: новое добавлено, изменённое
-        /// (реакции, прочтение) заменено, удалённое убрано. Старые — сверху.
+        /// (реакции, прочтение, правка) заменено, удалённое убрано. Своё сообщение
+        /// из очереди уступает место пришедшему с тем же clientId. Старые — сверху.
         fun merged(current: List<SocialMessage>, incoming: List<SocialMessage>): List<SocialMessage> {
             val byId = LinkedHashMap<String, SocialMessage>()
             for (message in current) byId[message.id] = message
@@ -208,13 +230,86 @@ data class SocialMessage(
                     byId.remove(message.id)
                     continue
                 }
+                var updated = message
+                val local = message.clientId?.let { byId.remove("local-$it") }
+                if (local != null) updated = updated.copy(rowKey = local.key)
                 // Ключ строки остаётся прежним, что бы ни пришло с сервера.
                 val old = byId[message.id]
-                byId[message.id] = if (old != null) message.copy(rowKey = old.rowKey ?: message.rowKey) else message
+                if (old != null) updated = updated.copy(rowKey = old.rowKey ?: message.rowKey ?: updated.rowKey)
+                byId[message.id] = updated
             }
             return byId.values.sortedWith(compareBy({ it.createdAt }, { it.id }))
         }
     }
+}
+
+/// От кого переслано. Имени нет — автор удалил профиль.
+@Serializable
+data class SocialForward(val username: String? = null) {
+    val title: String get() = username?.let { "Переслано от @$it" } ?: "Пересланное сообщение"
+}
+
+/// Тренировка, отправленная в переписку карточкой: то же, что в посте ленты,
+/// но без лайков и комментариев.
+@Serializable
+data class SocialChatWorkout(
+    val title: String = "Тренировка",
+    val durationSeconds: Int = 0,
+    val volumeKg: Double = 0.0,
+    val sets: Int = 0,
+    val effort: Int? = null,
+    val workout: SocialWorkout = SocialWorkout()
+) {
+    val records: Int get() = workout.exercises.sumOf { exercise -> exercise.sets.count { it.record } }
+
+    /// Подпись в списке переписок и текст для старых версий приложения.
+    val previewText: String get() = "🏋️ $title"
+
+    companion object {
+        fun from(post: SocialPost) = SocialChatWorkout(post.title, post.durationSeconds, post.volumeKg, post.sets, post.effort, post.workout)
+    }
+}
+
+/// Сообщение, которое ещё не ушло: лежит на телефоне вместе с фото или звуком
+/// и уходит само, как только появится связь. Пока ждёт — видно в переписке
+/// пузырём с часиками.
+@Serializable
+data class ChatPending(
+    val clientId: String,
+    /// Кому.
+    val username: String,
+    val createdAt: Double = System.currentTimeMillis().toDouble(),
+    val text: String = "",
+    val replyTo: SocialMessageQuote? = null,
+    /// Что показать в пузыре: «local» — своё фото ещё на телефоне, иначе id на сервере.
+    val image: String? = null,
+    /// Своё голосовое ещё на телефоне — с id «local-…».
+    val voice: SocialVoice? = null,
+    val workout: SocialChatWorkout? = null,
+    /// Пересылка: какое сообщение и от кого оно изначально.
+    val forward: String? = null,
+    val forwarded: SocialForward? = null,
+    /// Уже загруженные фото и звук: после обрыва связи второй раз их не грузим.
+    val uploadedImage: String? = null,
+    val uploadedVoice: String? = null
+) {
+    /// Своё фото или голосовое, которое ещё надо загрузить на сервер.
+    val hasPhotoFile: Boolean get() = forward == null && image == "local"
+    val hasVoiceFile: Boolean get() = forward == null && voice?.id?.startsWith("local-") == true
+
+    /// Пузырь, пока сообщение в пути.
+    val message: SocialMessage get() = SocialMessage(
+        id = "local-$clientId",
+        clientId = clientId,
+        text = text,
+        fromMe = true,
+        createdAt = createdAt,
+        image = image,
+        replyTo = replyTo,
+        voice = voice,
+        workout = workout,
+        forwarded = forwarded
+    )
 }
 
 @Serializable

@@ -11,6 +11,7 @@ import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialProgramBuilder
 import com.texasprogram.app.model.SocialUser
 import com.texasprogram.app.service.SocialService
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonObject
@@ -383,5 +384,68 @@ class SocialTest {
         assertTrue(updated.first().read)
         assertEquals("x", com.texasprogram.app.model.SocialMessage("x").key)
     }
-}
 
+    // MARK: Очередь, правка, пересылка, тренировка
+
+    /// Сообщение из очереди уступает место пришедшему с сервера с тем же
+    /// clientId — на той же строке, даже если ответ на отправку потерялся.
+    @Test
+    fun pendingReplacedByServerCopy() {
+        val pending = com.texasprogram.app.model.ChatPending(clientId = "c1", username = "bro", createdAt = 5.0, text = "Го")
+        val local = pending.message
+        assertTrue(local.isLocal)
+        assertEquals("local-c1", local.key)
+        val server = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"srv","clientId":"c1","text":"Го","fromMe":true,"createdAt":6,"edited":true}"""
+        )
+        assertEquals("local-c1", server.key)
+        val merged = com.texasprogram.app.model.SocialMessage.merged(listOf(local), listOf(server))
+        assertEquals(listOf("srv"), merged.map { it.id })
+        assertEquals("local-c1", merged.first().key)
+        assertTrue(merged.first().edited)
+    }
+
+    @Test
+    fun forwardAndWorkoutDecode() {
+        val message = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"m","text":"🏋️ День 1","fromMe":false,"createdAt":1,"forwarded":{"username":"tim"},
+               "workout":{"title":"День 1","durationSeconds":3600,"volumeKg":5200,"sets":15,
+                          "workout":{"exercises":[{"name":"Присед","sets":[{"reps":5,"weight":100,"record":true},{"reps":5,"weight":100}]}]}}}"""
+        )
+        assertEquals("Переслано от @tim", message.forwarded?.title)
+        assertEquals(1, message.workout?.records)
+        assertEquals("🏋️ День 1", message.preview)
+        assertFalse(message.canEdit)
+        assertTrue(message.canForward)
+        assertEquals("🏋️ День 1", message.quote.text)
+        assertEquals("Пересланное сообщение", com.texasprogram.app.model.SocialForward(null).title)
+    }
+
+    @Test
+    fun onlyOwnPlainMessagesAreEditable() {
+        val own = com.texasprogram.app.model.SocialMessage("a", "Жму 100", fromMe = true)
+        assertTrue(own.canEdit)
+        val voice = own.copy(id = "b", voice = com.texasprogram.app.model.SocialVoice("v", 1000))
+        assertFalse(voice.canEdit)
+        val forwarded = own.copy(id = "c", forwarded = com.texasprogram.app.model.SocialForward("tim"))
+        assertFalse(forwarded.canEdit)
+        assertFalse(com.texasprogram.app.model.ChatPending(clientId = "p", username = "bro", text = "в пути").message.canEdit)
+    }
+
+    /// Своё фото и голосовое грузятся из очереди; у пересланного они уже на сервере.
+    @Test
+    fun pendingKnowsWhatToUpload() {
+        val photo = com.texasprogram.app.model.ChatPending(clientId = "a", username = "bro", image = "local")
+        assertTrue(photo.hasPhotoFile)
+        val voice = com.texasprogram.app.model.ChatPending(clientId = "c", username = "bro", voice = com.texasprogram.app.model.SocialVoice("local-c", 900))
+        assertTrue(voice.hasVoiceFile)
+        val forwarded = com.texasprogram.app.model.ChatPending(clientId = "f", username = "bro", image = "0123456789abcdef01234567", forward = "m")
+        assertFalse(forwarded.hasPhotoFile)
+        assertFalse(forwarded.hasVoiceFile)
+        // Очередь на диске переживает перезапуск: запись и чтение без потерь.
+        val restored = SocialService.json.decodeFromString<com.texasprogram.app.model.ChatPending>(SocialService.json.encodeToString(voice))
+        assertEquals(voice, restored)
+        assertTrue(com.texasprogram.app.service.SocialException("Нет связи").isRetryable)
+        assertFalse(com.texasprogram.app.service.SocialException("Фото не найдено", 400).isRetryable)
+    }
+}

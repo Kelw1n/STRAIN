@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ChatBubbleOutline
@@ -84,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.SocialComment
 import com.texasprogram.app.model.SocialFormat
+import com.texasprogram.app.model.SocialChatWorkout
 import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialWorkout
 import com.texasprogram.app.service.RuPlural
@@ -153,6 +155,7 @@ fun PostCard(
 fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit)?) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
     val mine = SocialService.me?.id == post.author.id
     Row(verticalAlignment = Alignment.CenterVertically) {
         Row(
@@ -189,6 +192,16 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
                 Icon(Icons.Filled.MoreHoriz, contentDescription = "Действия с постом", tint = Color.White.copy(alpha = 0.55f))
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (SocialService.isSignedIn) {
+                    DropdownMenuItem(
+                        text = { Text("Отправить другу") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null) },
+                        onClick = {
+                            menu = false
+                            sharing = true
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Поделиться текстом") },
                     leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
@@ -212,6 +225,11 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
                     )
                 }
             }
+        }
+    }
+    if (sharing) {
+        ChatTargetSheet("Отправить другу", onDismiss = { sharing = false }) { friend ->
+            SocialService.send(SocialChatWorkout.from(post), friend.username)
         }
     }
 }
@@ -782,7 +800,7 @@ fun PostWorkoutSlide(workout: SocialWorkout, limit: Int = 4) {
 
 /// Все подходы упражнения — в листе, который открывается по нажатию на слайд.
 @Composable
-private fun WorkoutSetsCard(exercise: SocialWorkout.Exercise) {
+internal fun WorkoutSetsCard(exercise: SocialWorkout.Exercise) {
     Column(
         Modifier
             .fillMaxWidth()

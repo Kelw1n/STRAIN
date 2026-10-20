@@ -9,6 +9,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -161,8 +162,11 @@ class VoiceRecorder(private val context: Context) {
 }
 
 /// Проигрывание голосовых: одновременно звучит одно. Звук скачивается один
-/// раз в кэш приложения и дальше играет оттуда.
+/// раз в кэш приложения и дальше играет оттуда. Скорость — 1×, 1,5× или 2×,
+/// как в Telegram, и запоминается; доигравшее голосовое передаёт ход следующему.
 object VoicePlayer {
+    val rates = listOf(1f, 1.5f, 2f)
+
     /// Какое голосовое играет, какое скачивается и какое не удалось открыть.
     var playingId by mutableStateOf<String?>(null)
         private set
@@ -170,12 +174,18 @@ object VoicePlayer {
         private set
     var failedId by mutableStateOf<String?>(null)
         private set
+    var rate by mutableFloatStateOf(1f)
+        private set
+
+    /// Голосовое доиграло до конца — переписка включает следующее.
+    var onFinish: ((String) -> Unit)? = null
 
     private val scope = MainScope()
     private var player: MediaPlayer? = null
     private var job: Job? = null
     private var focus: AudioFocusRequest? = null
     private var appContext: Context? = null
+    private var rateLoaded = false
 
     /// Сколько проиграно, от 0 до 1. Читается каждый кадр, пока играет.
     fun progress(id: String): Float {
@@ -192,14 +202,46 @@ object VoicePlayer {
     }
 
     fun toggle(context: Context, voice: SocialVoice) {
-        if (playingId == voice.id) {
-            stop()
-            return
+        if (playingId == voice.id) stop() else play(context, voice)
+    }
+
+    /// Перемотка пальцем по волне: играет — сразу туда, не играет — с этого места.
+    fun seek(context: Context, voice: SocialVoice, fraction: Float) {
+        val at = fraction.coerceIn(0f, 1f)
+        val player = player
+        if (playingId == voice.id && player != null) {
+            runCatching { player.seekTo((player.duration * at).toInt()) }
+        } else {
+            play(context, voice, at)
         }
+    }
+
+    /// 1× → 1,5× → 2× → 1×.
+    fun cycleRate(context: Context) {
+        loadRate(context)
+        rate = rates.firstOrNull { it > rate + 0.01f } ?: rates.first()
+        context.getSharedPreferences("voice", Context.MODE_PRIVATE).edit().putFloat("rate", rate).apply()
+        player?.let { applyRate(it) }
+    }
+
+    private fun loadRate(context: Context) {
+        if (rateLoaded) return
+        rateLoaded = true
+        val saved = context.getSharedPreferences("voice", Context.MODE_PRIVATE).getFloat("rate", 1f)
+        rate = if (saved in rates) saved else 1f
+    }
+
+    private fun applyRate(player: MediaPlayer) {
+        runCatching { player.playbackParams = player.playbackParams.setSpeed(rate) }
+    }
+
+    /// С начала или с места на волне, от 0 до 1.
+    fun play(context: Context, voice: SocialVoice, from: Float = 0f) {
         stop()
         failedId = null
         val app = context.applicationContext
         appContext = app
+        loadRate(app)
         job = scope.launch {
             val file = File(File(app.cacheDir, "voices"), "${voice.id}.m4a")
             if (!file.exists()) {
@@ -221,9 +263,17 @@ object VoicePlayer {
                 )
                 player.setDataSource(file.path)
                 player.prepare()
-                player.setOnCompletionListener { if (this@VoicePlayer.player === it) stop() }
+                player.setOnCompletionListener {
+                    if (this@VoicePlayer.player === it) {
+                        val id = playingId
+                        stop()
+                        if (id != null) onFinish?.invoke(id)
+                    }
+                }
+                if (from > 0f && from < 0.98f) player.seekTo((player.duration * from).toInt())
                 focus = requestFocus(app, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK, AudioAttributes.USAGE_MEDIA)
                 player.start()
+                applyRate(player)
                 this@VoicePlayer.player = player
                 playingId = voice.id
             } catch (e: Exception) {

@@ -1,6 +1,8 @@
 package com.texasprogram.app.service
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -13,6 +15,8 @@ import androidx.exifinterface.media.ExifInterface
 import com.texasprogram.app.model.SocialVoice
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.ChatPending
+import com.texasprogram.app.model.SocialChatWorkout
 import com.texasprogram.app.model.SocialActivityPage
 import com.texasprogram.app.model.SocialBadge
 import com.texasprogram.app.model.SocialChatList
@@ -63,7 +67,10 @@ import java.net.URLEncoder
 import java.util.UUID
 
 /// Ошибка ленты с понятным текстом: показываем её человеку как есть.
-class SocialException(message: String, val status: Int = 0) : Exception(message)
+class SocialException(message: String, val status: Int = 0) : Exception(message) {
+    /// Нет связи, сервер просыпается или занят — стоит попробовать ещё раз позже.
+    val isRetryable: Boolean get() = status == 0 || status == 429 || status >= 500
+}
 
 /// Лента STRAIN: профиль, подписки, посты, лайки и комментарии.
 ///
@@ -112,6 +119,15 @@ object SocialService {
         private set
     /// Переписка прячет панель вкладок: внизу экрана живёт поле ввода.
     var hidesTabBar by mutableStateOf(false)
+    /// Сообщения, которые ещё не ушли: лежат на телефоне и отправляются сами.
+    var pendingMessages by mutableStateOf<List<ChatPending>>(emptyList())
+        private set
+    /// Сервер отказал — такое сообщение само больше не уйдёт: его повторяют или удаляют.
+    var pendingFailures by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+    /// Последняя попытка отправить упёрлась в отсутствие связи.
+    var chatOffline by mutableStateOf(false)
+        private set
     /// Видно ли друзьям, что идёт тренировка.
     var sharesLive by mutableStateOf(true)
         private set
@@ -134,6 +150,17 @@ object SocialService {
         token = prefs().getString("token", null)
         sharesLive = prefs().getBoolean("share_live", true)
         outbox = OutboxStore.loadAll()
+        pendingMessages = ChatOutboxStore.loadAll()
+        // Связь вернулась — неотправленное уходит само.
+        runCatching {
+            appContext.getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(
+                object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        scope.launch { flushOutbox() }
+                    }
+                }
+            )
+        }
     }
 
     private fun prefs() = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -234,6 +261,10 @@ object SocialService {
     }
 
     fun signOut() {
+        // Неотправленные сообщения не должны уйти от имени следующего профиля.
+        pendingMessages.forEach { ChatOutboxStore.remove(it.clientId) }
+        pendingMessages = emptyList()
+        pendingFailures = emptyMap()
         storeToken(null)
         me = null
         unreadMessages = 0
@@ -446,23 +477,161 @@ object SocialService {
         return decode(call("GET", "/chats/${q(username)}/messages$tail", requiresAuth = true))
     }
 
-    /// `image` — id фото, уже загруженного через `uploadImage`; `replyTo` — сообщение, на которое отвечаем.
-    suspend fun sendMessage(
-        username: String,
-        text: String,
-        clientId: String = newClientId(),
-        image: String? = null,
-        replyTo: String? = null,
-        voice: String? = null
-    ): SocialMessage {
+    /// Новый текст своего сообщения или подписи к фото.
+    suspend fun editMessage(id: String, text: String): SocialMessage {
+        val body = buildJsonObject { put("text", text) }.toString()
+        return decode(call("PATCH", "/messages/$id", body = body, requiresAuth = true))
+    }
+
+    /// Голосовое прослушано — точка гаснет и у отправителя.
+    fun markHeard(id: String) {
+        if (token == null) return
+        scope.launch { runCatching { call("POST", "/messages/$id/heard", requiresAuth = true) } }
+    }
+
+    // MARK: Очередь сообщений
+
+    /// Открытые переписки: ушедшее сообщение сразу встаёт на место своего пузыря.
+    private val sentHandlers = mutableMapOf<String, (String, SocialMessage) -> Unit>()
+    private var flushingMessages = false
+    private var flushRequested = false
+
+    fun onMessageSent(username: String, handler: ((String, SocialMessage) -> Unit)?) {
+        if (handler == null) sentHandlers.remove(username) else sentHandlers[username] = handler
+    }
+
+    fun pending(username: String): List<ChatPending> = pendingMessages.filter { it.username == username }
+
+    /// Сообщение — сначала на диск, потом в путь. Нет связи — дождётся её.
+    fun queue(item: ChatPending, photo: ByteArray? = null, voice: ByteArray? = null) {
+        runCatching { ChatOutboxStore.save(item, photo, voice) }
+        pendingMessages = pendingMessages + item
+        flushMessages()
+    }
+
+    /// Фото с телефона сжимается в фоне, потом сообщение встаёт в очередь.
+    fun queue(context: Context, item: ChatPending, photo: Uri) {
+        scope.launch {
+            val data = withContext(Dispatchers.IO) { jpeg(context, photo, maxSide = 1600) }
+            if (data == null) {
+                pendingMessages = pendingMessages + item
+                pendingFailures = pendingFailures + (item.clientId to "Не удалось открыть фото")
+                return@launch
+            }
+            withContext(Dispatchers.IO) { runCatching { ChatOutboxStore.save(item, data, null) } }
+            pendingMessages = pendingMessages + item
+            flushMessages()
+        }
+    }
+
+    /// Тренировка карточкой — тому, кого выбрали. Уходит той же очередью, что
+    /// и сообщения: без связи дождётся её.
+    fun send(workout: SocialChatWorkout, username: String) {
+        queue(ChatPending(clientId = newClientId(), username = username, text = workout.previewText, workout = workout))
+    }
+
+    fun retryPending(clientId: String) {
+        pendingFailures = pendingFailures - clientId
+        flushMessages()
+    }
+
+    fun discardPending(clientId: String) {
+        ChatOutboxStore.remove(clientId)
+        pendingMessages = pendingMessages.filter { it.clientId != clientId }
+        pendingFailures = pendingFailures - clientId
+    }
+
+    /// Отправляет очередь по порядку. Нет связи — останавливается до следующего
+    /// раза; сервер отказал — сообщение помечается и не мешает остальным.
+    fun flushMessages() {
+        if (!::appContext.isInitialized || token == null) return
+        if (flushingMessages) {
+            flushRequested = true
+            return
+        }
+        if (pendingMessages.none { it.clientId !in pendingFailures }) return
+        flushingMessages = true
+        scope.launch {
+            var stalled = false
+            try {
+                for (item in pendingMessages.sortedBy { it.createdAt }) {
+                    if (item.clientId in pendingFailures) continue
+                    // Пока отправляли предыдущие, это сообщение могли удалить.
+                    if (pendingMessages.none { it.clientId == item.clientId }) continue
+                    try {
+                        val sent = deliver(item)
+                        withContext(Dispatchers.IO) { ChatOutboxStore.remove(item.clientId) }
+                        pendingMessages = pendingMessages.filter { it.clientId != item.clientId }
+                        chatOffline = false
+                        sentHandlers[item.username]?.invoke(item.clientId, sent)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: SocialException) {
+                        if (e.isRetryable) {
+                            chatOffline = true
+                            stalled = true
+                            break
+                        }
+                        pendingFailures = pendingFailures + (item.clientId to (e.message ?: "Не отправлено"))
+                    } catch (e: Exception) {
+                        pendingFailures = pendingFailures + (item.clientId to "Не отправлено")
+                    }
+                }
+            } finally {
+                flushingMessages = false
+                val again = flushRequested && !stalled
+                flushRequested = false
+                if (again) flushMessages()
+            }
+        }
+    }
+
+    private fun savePending(item: ChatPending) {
+        runCatching { ChatOutboxStore.update(item) }
+        pendingMessages = pendingMessages.map { if (it.clientId == item.clientId) item else it }
+    }
+
+    /// Фото и звук грузятся один раз, потом уходит само сообщение. Повтор с тем же
+    /// clientId сервер не дублирует, поэтому оборванную отправку можно повторять.
+    private suspend fun deliver(pending: ChatPending): SocialMessage {
+        var item = pending
+        if (item.hasPhotoFile && item.uploadedImage == null) {
+            val data = withContext(Dispatchers.IO) { ChatOutboxStore.photo(item.clientId) }
+                ?: throw SocialException("Фото потерялось — отправь его заново", 400)
+            item = item.copy(uploadedImage = uploadImage(data))
+            savePending(item)
+        }
+        val voice = item.voice
+        if (item.hasVoiceFile && item.uploadedVoice == null && voice != null) {
+            val data = withContext(Dispatchers.IO) { ChatOutboxStore.voice(item.clientId) }
+                ?: throw SocialException("Запись потерялась — запиши заново", 400)
+            item = item.copy(uploadedVoice = uploadVoice(data, voice.durationMs, voice.waveform).id)
+            savePending(item)
+        }
+        val ready = item
         val body = buildJsonObject {
-            put("text", text)
-            put("clientId", clientId)
-            if (image != null) put("image", image)
-            if (voice != null) put("voice", voice)
-            if (replyTo != null) put("replyTo", replyTo)
+            put("text", ready.text)
+            put("clientId", ready.clientId)
+            val forward = ready.forward
+            if (forward != null) {
+                put("forward", forward)
+            } else {
+                (if (ready.hasPhotoFile) ready.uploadedImage else ready.image)?.let { put("image", it) }
+                if (ready.hasVoiceFile) ready.uploadedVoice?.let { put("voice", it) }
+                ready.replyTo?.let { put("replyTo", it.id) }
+                ready.workout?.let { put("workout", json.encodeToJsonElement(SocialChatWorkout.serializer(), it)) }
+            }
         }.toString()
-        return decode(call("POST", "/chats/${q(username)}/messages", body = body, requiresAuth = true))
+        return try {
+            decode(call("POST", "/chats/${q(ready.username)}/messages", body = body, requiresAuth = true))
+        } catch (e: SocialException) {
+            // Сообщение, на которое отвечали, удалили, пока ждали связи, — уходим без цитаты.
+            if (e.status == 404 && ready.replyTo != null && e.message == "Сообщение удалено") {
+                val plain = ready.copy(replyTo = null)
+                savePending(plain)
+                deliver(plain)
+            } else throw e
+        }
     }
 
     /// Реакция на сообщение; та же ещё раз — снимает её.
@@ -654,6 +823,7 @@ object SocialService {
     )
 
     fun flushOutbox() {
+        flushMessages()
         if (!::appContext.isInitialized || token == null || isFlushing || outbox.isEmpty()) return
         isFlushing = true
         outboxError = null
@@ -741,4 +911,43 @@ object SocialService {
                 }
                 .sortedBy { it.createdAtMillis }
     }
+
+    /// Каждое неотправленное сообщение — папка с pending.json, рядом photo.jpg
+    /// или voice.m4a, если они ещё не загружены.
+    private object ChatOutboxStore {
+        private val root: File get() = File(appContext.filesDir, "chat_outbox")
+        private fun folder(id: String) = File(root, id)
+
+        fun save(item: ChatPending, photo: ByteArray?, voice: ByteArray?) {
+            val dir = folder(item.clientId).apply { mkdirs() }
+            photo?.let { File(dir, "photo.jpg").writeBytes(it) }
+            voice?.let { File(dir, "voice.m4a").writeBytes(it) }
+            update(item)
+        }
+
+        fun update(item: ChatPending) {
+            val dir = folder(item.clientId).apply { mkdirs() }
+            val temp = File(dir, "pending.json.tmp")
+            temp.writeText(json.encodeToString(item))
+            temp.renameTo(File(dir, "pending.json"))
+        }
+
+        fun photo(id: String): ByteArray? = File(folder(id), "photo.jpg").takeIf { it.exists() }?.readBytes()
+
+        fun voice(id: String): ByteArray? = File(folder(id), "voice.m4a").takeIf { it.exists() }?.readBytes()
+
+        fun remove(id: String) {
+            folder(id).deleteRecursively()
+        }
+
+        fun loadAll(): List<ChatPending> =
+            (root.listFiles() ?: emptyArray())
+                .mapNotNull { dir ->
+                    runCatching { json.decodeFromString<ChatPending>(File(dir, "pending.json").readText()) }.getOrNull()
+                }
+                .sortedBy { it.createdAt }
+    }
+
+    /// Фото сообщения из очереди — показать в пузыре, пока оно не ушло.
+    fun pendingPhoto(clientId: String): ByteArray? = runCatching { ChatOutboxStore.photo(clientId) }.getOrNull()
 }

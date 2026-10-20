@@ -75,6 +75,7 @@ import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.service.ScheduledWorkout
 import com.texasprogram.app.service.WorkoutSessionManager
 import com.texasprogram.app.model.SocialPostDraft
+import com.texasprogram.app.model.SocialChatWorkout
 import com.texasprogram.app.model.SocialWorkout
 import com.texasprogram.app.service.SocialService
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -131,6 +132,8 @@ fun WorkoutCompletionSummaryScreen(
     }
     /// Публиковать ли тренировку в ленту — по умолчанию да, если есть профиль.
     var publishToFeed by remember { mutableStateOf(true) }
+    /// Кому из друзей отправить тренировку карточкой в переписку.
+    var recipients by remember { mutableStateOf(setOf<String>()) }
 
     Box(
         modifier = Modifier
@@ -440,6 +443,11 @@ fun WorkoutCompletionSummaryScreen(
             // ЛЕНТА STRAIN
             PublishSection(publishToFeed) { publishToFeed = it }
 
+            // ДРУЗЬЯМ В ПЕРЕПИСКУ
+            if (SocialService.isSignedIn) {
+                FriendsSection(recipients) { name -> recipients = if (name in recipients) recipients - name else recipients + name }
+            }
+
             // КАРТОЧКА ДЛЯ СТОРИС
             ShareCardSection(
                 title = workoutTitle.ifBlank { workout.fullTitle },
@@ -474,19 +482,18 @@ fun WorkoutCompletionSummaryScreen(
                             profile.setNote(workoutDescription, workout.week, workout.day.number)
                         } else profile
 
-                        // Пост в ленту — до завершения: потом подходы сессии уже сброшены.
-                        if (publishToFeed && SocialService.isSignedIn) {
-                            SocialService.enqueue(
-                                context,
-                                feedDraft(
-                                    title = workoutTitle.ifBlank { workout.fullTitle },
-                                    description = workoutDescription.trim(),
-                                    durationSeconds = durationSeconds,
-                                    effort = effortScore,
-                                    program = profile.programKind.title
-                                ),
-                                selectedImages.toList()
+                        // Пост в ленту и карточки друзьям — до завершения: потом подходы сессии уже сброшены.
+                        if (SocialService.isSignedIn && (publishToFeed || recipients.isNotEmpty())) {
+                            val draft = feedDraft(
+                                title = workoutTitle.ifBlank { workout.fullTitle },
+                                description = workoutDescription.trim(),
+                                durationSeconds = durationSeconds,
+                                effort = effortScore,
+                                program = profile.programKind.title
                             )
+                            if (publishToFeed) SocialService.enqueue(context, draft, selectedImages.toList())
+                            val card = SocialChatWorkout(draft.title, draft.durationSeconds, draft.volumeKg, draft.sets, draft.effort, draft.workout)
+                            recipients.sorted().forEach { SocialService.send(card, it) }
                         }
                         WorkoutSessionManager.finishWorkout(
                             profile = updatedProfile,
@@ -647,6 +654,36 @@ private fun PublishSection(checked: Boolean, onChange: (Boolean) -> Unit) {
                     fontSize = 13.sp
                 )
             }
+        }
+    }
+}
+
+/// Друзья, которым тренировка уйдёт карточкой в личные сообщения.
+@Composable
+private fun FriendsSection(selected: Set<String>, onToggle: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = if (selected.isEmpty()) "ОТПРАВИТЬ ДРУГУ" else "ОТПРАВИТЬ ДРУГУ · ${selected.size}",
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF161616))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Отметь друзей — тренировка уйдёт им в переписку карточкой со всеми подходами.",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 12.sp
+            )
+            WorkoutRecipientsPicker(selected, onToggle)
         }
     }
 }
