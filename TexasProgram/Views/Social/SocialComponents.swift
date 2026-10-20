@@ -32,21 +32,20 @@ final class ImagePipeline: @unchecked Sendable {
     func image(_ url: URL, maxPixel: Int) async -> UIImage? {
         let cacheKey = key(url, maxPixel)
         if let hit = cache.object(forKey: cacheKey) { return hit }
-        lock.lock()
-        if let running = tasks[cacheKey as String] {
-            lock.unlock()
-            return await running.value
+        // Проверка «уже грузится?» и запись новой загрузки — одним шагом под замком:
+        // два одинаковых фото в ленте качаются один раз.
+        let (task, created): (Task<UIImage?, Never>, Bool) = lock.withLock {
+            if let running = tasks[cacheKey as String] { return (running, false) }
+            let task = Task<UIImage?, Never>.detached(priority: .userInitiated) { [session] in
+                guard let (data, _) = try? await session.data(from: url) else { return nil }
+                return Self.decode(data, maxPixel: maxPixel)
+            }
+            tasks[cacheKey as String] = task
+            return (task, true)
         }
-        let task = Task<UIImage?, Never>.detached(priority: .userInitiated) { [session] in
-            guard let (data, _) = try? await session.data(from: url) else { return nil }
-            return Self.decode(data, maxPixel: maxPixel)
-        }
-        tasks[cacheKey as String] = task
-        lock.unlock()
         let image = await task.value
-        lock.lock()
-        tasks[cacheKey as String] = nil
-        lock.unlock()
+        guard created else { return image }
+        lock.withLock { tasks[cacheKey as String] = nil }
         if let image {
             let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
             cache.setObject(image, forKey: cacheKey, cost: cost)

@@ -787,7 +787,8 @@ struct ChatView: View {
         guard !message.isLocal else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(Motion.snappy) {
-            editing = nil
+            // Правку бросили ради ответа — её текст не должен уйти новым сообщением.
+            if editing != nil { cancelEditing() }
             replyingTo = message
         }
         typing = true
@@ -1570,6 +1571,14 @@ struct ImageViewer: View {
 }
 
 extension View {
+    /// Плашка поверх экрана: плотная, с тенью и тонкой кромкой. Под ней бывает
+    /// крупный заголовок — сквозь стекло он проступал, и текст было не прочитать.
+    func bannerSurface<S: Shape>(_ shape: S) -> some View {
+        background(Color(white: 0.11), in: shape)
+            .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
+            .shadow(color: .black.opacity(0.5), radius: 16, y: 8)
+    }
+
     /// Жидкое стекло iOS 26 там, где оно есть; на старых iOS — матовое стекло с тонкой кромкой.
     @ViewBuilder
     func chatGlass<S: Shape>(_ shape: S, enabled: Bool = true) -> some View {

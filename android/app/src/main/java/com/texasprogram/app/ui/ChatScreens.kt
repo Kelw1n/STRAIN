@@ -488,7 +488,11 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
 
     fun reply(message: SocialMessage) {
         if (message.isLocal) return
-        editing = null
+        // Правку бросили ради ответа — её текст не должен уйти новым сообщением.
+        if (editing != null) {
+            editing = null
+            draft = ""
+        }
         replyingTo = message
     }
 
@@ -1076,6 +1080,23 @@ internal fun TypingBubble() {
         }
     }
 }
+
+/// Плашка поверх экрана (обновление, приглашение): непрозрачная, с тенью и
+/// кромкой. Под ней бывает крупный заголовок — сквозь полупрозрачное стекло
+/// он проступал, и текст плашки было не прочитать.
+fun Modifier.bannerSurface(shape: Shape): Modifier = this
+    .graphicsLayer {
+        this.shape = shape
+        shadowElevation = 16.dp.toPx()
+        clip = false
+    }
+    .clip(shape)
+    .background(Color(0xFF1C1C21), shape)
+    .border(
+        1.dp,
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.05f))),
+        shape
+    )
 
 /// Стеклянная капсула: полупрозрачная тёмная заливка с кромкой-бликом, как у панели вкладок.
 fun Modifier.chatGlass(shape: Shape): Modifier = this

@@ -270,7 +270,9 @@ class RestTimer private constructor(context: Context) {
                 .addAction(0, "Пропустить", actionIntent(ACTION_SKIP, 13))
             exerciseName?.let { ExerciseArt.cached(it) }?.let { builder.setLargeIcon(it) }
             val notification: Notification = builder.build()
-            NotificationManagerCompat.from(context).notify(LIVE_ID, notification)
+            // Уведомления запрещены — часть прошивок бросает исключение; отдых
+            // при этом идёт дальше на экране, приложение не падает.
+            runCatching { NotificationManagerCompat.from(context).notify(LIVE_ID, notification) }
         }
     }
 

@@ -69,7 +69,7 @@ fun TogetherInviteBanner(invite: SocialTogether, modifier: Modifier = Modifier) 
         modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .chatGlass(RoundedCornerShape(22.dp))
+            .bannerSurface(RoundedCornerShape(22.dp))
             .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -44,7 +44,7 @@ struct TogetherInviteBanner: View {
         .padding(.leading, 12)
         .padding(.trailing, 10)
         .padding(.vertical, 10)
-        .chatGlass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .bannerSurface(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .padding(.horizontal, 12)
     }
 

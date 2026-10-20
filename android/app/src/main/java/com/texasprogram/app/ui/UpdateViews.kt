@@ -74,7 +74,7 @@ fun AppUpdateBanner(modifier: Modifier = Modifier) {
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
-                .chatGlass(shape)
+                .bannerSurface(shape)
                 // Полоска загрузки по нижнему краю плашки.
                 .drawBehind {
                     if (progress == null) return@drawBehind
