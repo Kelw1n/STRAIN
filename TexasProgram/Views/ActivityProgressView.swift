@@ -15,6 +15,9 @@ struct ActivityProgressView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    // Итоги месяца и года историями
+                    TrainingRecapEntryCard(profile: profile)
+
                     // Карточка 1: Время, объём и тренировки
                     volumeAndWorkoutsCard
 
