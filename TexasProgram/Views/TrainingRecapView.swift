@@ -598,7 +598,12 @@ struct TrainingRecapCard: View {
                 tile("\(recap.workouts)", RuPlural.word(recap.workouts, "тренировка", "тренировки", "тренировок"))
                 tile("\(recap.hours) ч \(recap.minutes) м", "в зале")
                 tile(String(format: "%.1f т", recap.volumeKg / 1000).replacingOccurrences(of: ".", with: ","), "поднято")
-                tile("\(recap.records)", RuPlural.word(recap.records, "рекорд", "рекорда", "рекордов"))
+                // Без рекордов ноль не показываем — показываем, сколько подходов сделано.
+                if recap.records > 0 {
+                    tile("\(recap.records)", RuPlural.word(recap.records, "рекорд", "рекорда", "рекордов"))
+                } else {
+                    tile("\(recap.sets)", RuPlural.word(recap.sets, "подход", "подхода", "подходов"))
+                }
             }
             if let favorite = recap.favorite {
                 row("Любимое", favorite.name)

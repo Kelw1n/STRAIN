@@ -99,12 +99,13 @@ fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.sta
                         is State.NeedsPermission -> "Разреши установку"
                         is State.Ready -> "Обновление скачано"
                         is State.Failed -> "Не получилось"
-                        else -> "Вышла новая версия"
+                        else -> "Новая версия"
                     },
                     color = Color.White,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     when (current) {

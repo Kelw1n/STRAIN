@@ -536,7 +536,9 @@ object TrainingRecapCard {
             "${recap.workouts}" to RuPlural.word(recap.workouts, "тренировка", "тренировки", "тренировок"),
             "${recap.hours} ч ${recap.minutes} м" to "в зале",
             String.format(java.util.Locale.US, "%.1f т", recap.volumeKg / 1000).replace('.', ',') to "поднято",
-            "${recap.records}" to RuPlural.word(recap.records, "рекорд", "рекорда", "рекордов")
+            // Без рекордов ноль не показываем — показываем, сколько подходов сделано.
+            if (recap.records > 0) "${recap.records}" to RuPlural.word(recap.records, "рекорд", "рекорда", "рекордов")
+            else "${recap.sets}" to RuPlural.word(recap.sets, "подход", "подхода", "подходов")
         )
         val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.Black.copy(alpha = 0.22f).toArgb() }
         tiles.forEachIndexed { index, (value, title) ->

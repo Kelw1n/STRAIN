@@ -269,7 +269,7 @@ class SnapshotTest {
     /// непрослушанное голосовое, сообщение в очереди и не ушедшее; плашка обновления.
     @Test
     fun chatExtras() {
-        tall(3000)
+        tall(4400)
         val now = System.currentTimeMillis().toDouble()
         val messages = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialMessage>>(
             """[{"id":"1","text":"Смотри, как надо","fromMe":false,"createdAt":${now - 3_600_000},"forwarded":{"username":"heavy.anna"}},
