@@ -640,6 +640,7 @@ struct WorkoutCompletionSummaryView: View {
                 SocialService.shared.send(card, to: username)
             }
         }
+        if !publishToFeed { SocialService.shared.finishTogether() }
 
         // Завершаем тренировку в WorkoutSessionManager
         sessionManager.finishWorkout(

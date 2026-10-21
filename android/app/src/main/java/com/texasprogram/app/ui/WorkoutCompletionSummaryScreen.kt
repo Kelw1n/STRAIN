@@ -487,6 +487,7 @@ fun WorkoutCompletionSummaryScreen(
                             val card = SocialChatWorkout(draft.title, draft.durationSeconds, draft.volumeKg, draft.sets, draft.effort, draft.workout)
                             recipients.sorted().forEach { SocialService.send(card, it) }
                         }
+                        if (!publishToFeed) SocialService.finishTogether()
                         WorkoutSessionManager.finishWorkout(
                             profile = updatedProfile,
                             customDuration = durationSeconds,

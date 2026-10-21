@@ -97,6 +97,10 @@ object ReminderScheduler {
         )
 
     fun dayOf(intent: Intent): Int = intent.getIntExtra(EXTRA_DAY, 0)
+
+    /// Утром уже потренировался — вечернее «Сегодня тренировка» ни к чему.
+    fun trainedOn(profile: ProgramProfile, date: LocalDate = LocalDate.now()): Boolean =
+        profile.completionLog.any { it.epochDay == date.toEpochDay() }
 }
 
 /// После перезагрузки телефона и обновления приложения будильники пропадают.
@@ -113,6 +117,8 @@ class ReminderBootReceiver : BroadcastReceiver() {
 /// Срабатывает в назначенное время и показывает напоминание.
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val profile = com.texasprogram.app.data.AppStore.get(context).active
+        if (profile != null && ReminderScheduler.trainedOn(profile)) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         manager.createNotificationChannel(
             NotificationChannel(

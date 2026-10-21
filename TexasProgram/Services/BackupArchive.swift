@@ -119,7 +119,7 @@ enum BackupEnum {
             let rest = segment.dropFirst(prefix.count)
             let code = rest.prefix { $0 != "-" }
             guard let pattern = value(EuthanasiaPattern.self, String(code)) else { return segment }
-            return prefix + pattern.rawValue + rest.dropFirst(code.count)
+            return prefix + pattern.rawValue + String(rest.dropFirst(code.count))
         }
         return segment
     }

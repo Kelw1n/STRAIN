@@ -320,6 +320,38 @@ final class HistoryAndExtrasTests: XCTestCase {
         XCTAssertTrue(trigger?.repeats ?? false)
     }
 
+    /// Утром потренировался — вечером «Сегодня тренировка» уже не приходит,
+    /// а в следующие недели этот день напоминает как обычно.
+    func testNoReminderTonightAfterMorningWorkout() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Moscow"))
+        let monday = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 9)))
+        let profile = texas()
+        profile.reminderEnabled = true
+        profile.reminderHour = 19
+        profile.reminderMinute = 0
+        profile.scheduleWeekdays = [2, 4, 6]
+        profile.completionLog = [CompletionRecord(key: "1-1", date: monday, week: 1, day: 1)]
+
+        let requests = ReminderScheduler.plan(for: profile, now: monday, calendar: calendar)
+        let mondays = requests.filter { $0.identifier.hasPrefix("strain-workout-2-") }
+        XCTAssertEqual(mondays.count, 4)
+        for request in mondays {
+            let trigger = try XCTUnwrap(request.trigger as? UNCalendarNotificationTrigger)
+            XCTAssertFalse(trigger.repeats)
+            let date = try XCTUnwrap(calendar.date(from: trigger.dateComponents))
+            XCTAssertEqual(calendar.component(.weekday, from: date), 2)
+            XCTAssertEqual(calendar.component(.hour, from: date), 19)
+            XCTAssertGreaterThan(date, monday.addingTimeInterval(86_400))
+        }
+        // Среда и пятница — как обычно.
+        XCTAssertEqual(requests.filter { ($0.trigger as? UNCalendarNotificationTrigger)?.repeats == true }.count, 2)
+
+        // На следующий день понедельник снова повторяющийся.
+        let tuesday = monday.addingTimeInterval(86_400)
+        XCTAssertEqual(ReminderScheduler.plan(for: profile, now: tuesday, calendar: calendar).count, 3)
+    }
+
     /// «Здоровье» доступно, только если профиль подписи выдаёт право на HealthKit.
     /// Сайдлоад с бесплатным Apple ID такого права не даёт.
     func testHealthEntitlementReadFromProvisioningProfile() {

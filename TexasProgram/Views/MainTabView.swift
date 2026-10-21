@@ -210,7 +210,11 @@ struct MainTabView: View {
         }
         // Друзья видят, что идёт тренировка и какой подход.
         .onChange(of: sessionManager.liveStatus) { _, live in SocialService.shared.reportLive(live) }
-        .onChange(of: profile.completionLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
+        .onChange(of: profile.completionLog) { _, _ in
+            SocialService.shared.scheduleSync(from: profile)
+            // Сегодняшняя тренировка сделана — вечернее напоминание уже ни к чему.
+            ReminderScheduler.reschedule(for: profile)
+        }
         .onChange(of: profile.bodyWeightLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         // Расписание напоминаний собирается заново на каждое изменение
         .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }

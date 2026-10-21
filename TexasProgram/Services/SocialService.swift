@@ -456,10 +456,18 @@ final class SocialService {
         await refreshTogether()
     }
 
-    /// `decline`, `cancel` или `leave`.
+    /// `decline`, `cancel`, `leave` или `done`.
     func respondTogether(_ id: String, _ action: String) async throws {
         let _: Empty = try await request("POST", "/together/\(id)/\(action)", requiresAuth: true)
         await refreshTogether()
+    }
+
+    /// Тренировка закончена без поста. Пост сам отмечает напарника закончившим,
+    /// а без него совместная висела бы ещё шесть часов — и следующий пост
+    /// вышел бы «вместе с» напарником.
+    func finishTogether() {
+        guard let id = together.active?.id else { return }
+        Task { try? await respondTogether(id, "done") }
     }
 
     /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,

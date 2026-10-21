@@ -459,10 +459,18 @@ object SocialService {
         refreshTogether()
     }
 
-    /// `decline`, `cancel` или `leave`.
+    /// `decline`, `cancel`, `leave` или `done`.
     suspend fun respondTogether(id: String, action: String) {
         call("POST", "/together/$id/$action", requiresAuth = true)
         refreshTogether()
+    }
+
+    /// Тренировка закончена без поста. Пост сам отмечает напарника закончившим,
+    /// а без него совместная висела бы ещё шесть часов — и следующий пост
+    /// вышел бы «вместе с» напарником.
+    fun finishTogether() {
+        val id = together.active?.id ?: return
+        scope.launch { runCatching { respondTogether(id, "done") } }
     }
 
     /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,
