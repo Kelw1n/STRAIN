@@ -9,6 +9,7 @@ import com.texasprogram.app.model.MainLift
 import com.texasprogram.app.model.PlanEdit
 import com.texasprogram.app.model.SetEntry
 import com.texasprogram.app.service.EuthanasiaInput
+import com.texasprogram.app.service.EuthanasiaPattern
 import com.texasprogram.app.service.FullBodyLevel
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.ScheduleMode
@@ -227,8 +228,10 @@ object BackupService {
                 it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort
             )
         },
-        planEdits = snapshot.planEdits,
-        setLog = snapshot.setLog,
+        planEdits = snapshot.planEdits.map { edit ->
+            edit.copy(targetKey = edit.targetKey?.let(::exerciseKey), order = edit.order?.map(::exerciseKey))
+        },
+        setLog = snapshot.setLog.mapKeys { exerciseKey(it.key) },
         skipped = snapshot.skipped.mapNotNull { entry ->
             val day = entry.epochDay ?: entry.date?.let(::epochDayOf) ?: return@mapNotNull null
             SkippedWorkout(entry.id ?: java.util.UUID.randomUUID().toString(), entry.week, entry.day, entry.isPeaking, day, entry.holdsProgression)
@@ -262,6 +265,20 @@ object BackupService {
         peakBench5RM = snapshot.peakBench5RM,
         peakDeadlift5RM = snapshot.peakDeadlift5RM
     )
+
+    /// «Эвтаназия» собирает ключи упражнений из движения: Android пишет его
+    /// именем константы («test-max-PULL»), iOS — подписью («test-max-Тяга»).
+    /// Подходы и правки дня лежат под этими ключами, поэтому переводим их
+    /// в здешний вид — иначе после переноса с iPhone история программы пропадает.
+    fun exerciseKey(key: String): String = key.split("|").joinToString("|") { segment ->
+        val prefix = patternPrefixes.firstOrNull(segment::startsWith) ?: return@joinToString segment
+        val rest = segment.removePrefix(prefix)
+        val code = rest.substringBefore("-")
+        val pattern = EuthanasiaPattern.entries.firstOrNull { it.title == code } ?: return@joinToString segment
+        prefix + pattern.name + rest.removePrefix(code)
+    }
+
+    private val patternPrefixes = listOf("test-max-", "test-time-", "density-", "main-")
 
     /// Дата для iOS: начало дня в местном часовом поясе.
     private fun isoDate(epochDay: Long): String =

@@ -47,6 +47,14 @@ final class CrossPlatformBackupTests: XCTestCase {
         XCTAssertEqual(restored["Эвтаназия"]?.euthanasiaInput?.level, .medium)
         XCTAssertEqual(restored["Своя"]?.customProgram?.template, .upperLower)
         XCTAssertEqual(restored["Своя"]?.customProgram?.days.first?.exercises.first?.weeklyIncrement, 5)
+
+        // Подходы и правки «Эвтаназии» переходят на здешние ключи и находят свои упражнения.
+        let euthanasia = try XCTUnwrap(restored["Эвтаназия"])
+        XCTAssertEqual(euthanasia.setLog["1-1|test-max-Тяга|0"]?.weight, 87.5)
+        XCTAssertEqual(euthanasia.setLog["2-3|main-Жим-0|2"]?.reps, 5)
+        XCTAssertEqual(euthanasia.planEdits.first { $0.kind == .hide }?.targetID, "main-Присед-1")
+        let firstDay = euthanasia.workoutPlan.weeks.first?.days.first?.exercises.map(\.id) ?? []
+        XCTAssertEqual(Array(firstDay.prefix(2)), ["test-time-Тяга", "test-max-Тяга"])
     }
 
     func testOwnBackupStillOpens() throws {
@@ -57,7 +65,17 @@ final class CrossPlatformBackupTests: XCTestCase {
         XCTAssertEqual(texas.skipped.first?.week, 4)
         XCTAssertEqual(restored["Фулбади"]?.fullBodyLevel, .underYear)
         XCTAssertEqual(restored["Эвтаназия"]?.euthanasiaInput?.level, .medium)
+        XCTAssertEqual(restored["Эвтаназия"].map { Set($0.setLog.keys) }, ["1-1|test-max-Тяга|0", "2-3|main-Жим-0|2"])
         XCTAssertEqual(restored["Своя"]?.customProgram?.template, .upperLower)
+    }
+
+    func testEuthanasiaKeysFromAndroid() {
+        XCTAssertEqual(BackupEnum.exerciseKey("1-1|main-PULL-0|2"), "1-1|main-Тяга-0|2")
+        XCTAssertEqual(BackupEnum.exerciseKey("density-PRESS"), "density-Жим")
+        XCTAssertEqual(BackupEnum.exerciseKey("3-2|test-time-SQUAT|0"), "3-2|test-time-Присед|0")
+        XCTAssertEqual(BackupEnum.exerciseKey("1-1|test-max-Тяга|0"), "1-1|test-max-Тяга|0")
+        XCTAssertEqual(BackupEnum.exerciseKey("1-1|Приседания|0"), "1-1|Приседания|0")
+        XCTAssertEqual(BackupEnum.exerciseKey("main-Становая-0"), "main-Становая-0")
     }
 
     /// Новая копия несёт и дату, и номер дня — её прочтёт и старая, и новая версия Android.
@@ -227,6 +245,39 @@ final class CrossPlatformBackupTests: XCTestCase {
       "programKind": "EUTHANASIA",
       "scheduleMode": "QUEUE",
       "scheduleWeekdays": [],
+      "planEdits": [
+        {
+          "day": 1,
+          "id": "order-1",
+          "isPeaking": false,
+          "kind": "order",
+          "name": "",
+          "order": ["test-time-Тяга", "test-max-Тяга"],
+          "reps": "8–12",
+          "sets": 3
+        },
+        {
+          "day": 3,
+          "id": "hide-1",
+          "isPeaking": false,
+          "kind": "hide",
+          "name": "",
+          "reps": "8–12",
+          "sets": 3,
+          "targetID": "main-Присед-1",
+          "week": 2
+        }
+      ],
+      "setLog": {
+        "1-1|test-max-Тяга|0": {
+          "reps": 1,
+          "weight": 87.5
+        },
+        "2-3|main-Жим-0|2": {
+          "reps": 5,
+          "weight": 55
+        }
+      },
       "squat5RM": 100
     },
     {
@@ -451,6 +502,39 @@ final class CrossPlatformBackupTests: XCTestCase {
       "pull": null,
       "scheduleMode": "QUEUE",
       "scheduleWeekdays": [],
+      "planEdits": [
+        {
+          "day": 1,
+          "id": "order-1",
+          "isPeaking": false,
+          "kind": "order",
+          "name": "",
+          "order": ["test-time-PULL", "test-max-PULL"],
+          "reps": "8–12",
+          "sets": 3
+        },
+        {
+          "day": 3,
+          "id": "hide-1",
+          "isPeaking": false,
+          "kind": "hide",
+          "name": "",
+          "reps": "8–12",
+          "sets": 3,
+          "targetID": "main-SQUAT-1",
+          "week": 2
+        }
+      ],
+      "setLog": {
+        "1-1|test-max-PULL|0": {
+          "reps": 1,
+          "weight": 87.5
+        },
+        "2-3|main-PRESS-0|2": {
+          "reps": 5,
+          "weight": 55
+        }
+      },
       "squat5RM": 100
     },
     {

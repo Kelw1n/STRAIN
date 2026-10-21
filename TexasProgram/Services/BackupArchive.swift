@@ -105,6 +105,24 @@ enum BackupEnum {
         }
         return result
     }
+
+    /// «Эвтаназия» собирает ключи упражнений из движения: iOS пишет его
+    /// подписью («test-max-Тяга»), Android — именем константы («test-max-PULL»).
+    /// Подходы и правки дня лежат под этими ключами, поэтому переводим их
+    /// в здешний вид — иначе после переноса с Android история программы пропадает.
+    static func exerciseKey(_ key: String) -> String {
+        key.components(separatedBy: "|").map(localSegment).joined(separator: "|")
+    }
+
+    private static func localSegment(_ segment: String) -> String {
+        for prefix in ["test-max-", "test-time-", "density-", "main-"] where segment.hasPrefix(prefix) {
+            let rest = segment.dropFirst(prefix.count)
+            let code = rest.prefix { $0 != "-" }
+            guard let pattern = value(EuthanasiaPattern.self, String(code)) else { return segment }
+            return prefix + pattern.rawValue + rest.dropFirst(code.count)
+        }
+        return segment
+    }
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -311,8 +329,13 @@ enum BackupService {
                 effort: $0.effort
             )
         }
-        result.planEdits = snapshot.planEdits ?? []
-        result.setLog = snapshot.setLog ?? [:]
+        result.planEdits = (snapshot.planEdits ?? []).map { edit in
+            var edit = edit
+            edit.targetID = edit.targetID.map(BackupEnum.exerciseKey)
+            edit.order = edit.order?.map(BackupEnum.exerciseKey)
+            return edit
+        }
+        result.setLog = Dictionary((snapshot.setLog ?? [:]).map { (BackupEnum.exerciseKey($0.key), $0.value) }, uniquingKeysWith: { $1 })
         result.skipped = (snapshot.skipped ?? []).map {
             SkippedWorkout(id: $0.id ?? UUID().uuidString, week: $0.week, day: $0.day, isPeaking: $0.isPeaking ?? false,
                            date: $0.date ?? $0.epochDay.map(date) ?? .now, holdsProgression: $0.holdsProgression)

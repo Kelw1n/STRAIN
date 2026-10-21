@@ -53,6 +53,24 @@ class CrossPlatformBackupTest {
         val custom = restored.getValue("Своя").customProgram!!
         assertEquals(SplitTemplate.UPPER_LOWER, custom.template)
         assertEquals(5.0, custom.days.single().exercises.single().weeklyIncrement, 0.0)
+
+        // Подходы и правки «Эвтаназии» переходят на здешние ключи и находят свои упражнения.
+        val euthanasia = restored.getValue("Эвтаназия")
+        assertEquals(87.5, euthanasia.setLog.getValue("1-1|test-max-PULL|0").weight, 0.0)
+        assertEquals(5, euthanasia.setLog.getValue("2-3|main-PRESS-0|2").reps)
+        assertEquals("main-SQUAT-1", euthanasia.planEdits.single { it.kind == PlanEditKind.HIDE }.targetKey)
+        val firstDay = euthanasia.workoutPlan.weeks.first().days.first().exercises.map { it.key }
+        assertEquals(listOf("test-time-PULL", "test-max-PULL"), firstDay.take(2))
+    }
+
+    @Test
+    fun euthanasiaKeysFromIphone() {
+        assertEquals("1-1|main-PULL-0|2", BackupService.exerciseKey("1-1|main-Тяга-0|2"))
+        assertEquals("density-PRESS", BackupService.exerciseKey("density-Жим"))
+        assertEquals("3-2|test-time-SQUAT|0", BackupService.exerciseKey("3-2|test-time-Присед|0"))
+        assertEquals("1-1|test-max-PULL|0", BackupService.exerciseKey("1-1|test-max-PULL|0"))
+        assertEquals("1-1|Приседания|0", BackupService.exerciseKey("1-1|Приседания|0"))
+        assertEquals("main-Становая-0", BackupService.exerciseKey("main-Становая-0"))
     }
 
     @Test
@@ -64,6 +82,7 @@ class CrossPlatformBackupTest {
         assertEquals(20741L, texas.skipped.single().epochDay)
         assertEquals(FullBodyLevel.UNDER_YEAR, restored.getValue("Фулбади").fullBodyLevel)
         assertEquals(EuthanasiaLevel.MEDIUM, restored.getValue("Эвтаназия").euthanasiaInput?.level)
+        assertEquals(setOf("1-1|test-max-PULL|0", "2-3|main-PRESS-0|2"), restored.getValue("Эвтаназия").setLog.keys)
         assertEquals(SplitTemplate.UPPER_LOWER, restored.getValue("Своя").customProgram!!.template)
     }
 
@@ -226,6 +245,39 @@ class CrossPlatformBackupTest {
       "programKind": "EUTHANASIA",
       "scheduleMode": "QUEUE",
       "scheduleWeekdays": [],
+      "planEdits": [
+        {
+          "day": 1,
+          "id": "order-1",
+          "isPeaking": false,
+          "kind": "order",
+          "name": "",
+          "order": ["test-time-Тяга", "test-max-Тяга"],
+          "reps": "8–12",
+          "sets": 3
+        },
+        {
+          "day": 3,
+          "id": "hide-1",
+          "isPeaking": false,
+          "kind": "hide",
+          "name": "",
+          "reps": "8–12",
+          "sets": 3,
+          "targetID": "main-Присед-1",
+          "week": 2
+        }
+      ],
+      "setLog": {
+        "1-1|test-max-Тяга|0": {
+          "reps": 1,
+          "weight": 87.5
+        },
+        "2-3|main-Жим-0|2": {
+          "reps": 5,
+          "weight": 55
+        }
+      },
       "squat5RM": 100
     },
     {
@@ -448,6 +500,39 @@ class CrossPlatformBackupTest {
       "pull": null,
       "scheduleMode": "QUEUE",
       "scheduleWeekdays": [],
+      "planEdits": [
+        {
+          "day": 1,
+          "id": "order-1",
+          "isPeaking": false,
+          "kind": "order",
+          "name": "",
+          "order": ["test-time-PULL", "test-max-PULL"],
+          "reps": "8–12",
+          "sets": 3
+        },
+        {
+          "day": 3,
+          "id": "hide-1",
+          "isPeaking": false,
+          "kind": "hide",
+          "name": "",
+          "reps": "8–12",
+          "sets": 3,
+          "targetID": "main-SQUAT-1",
+          "week": 2
+        }
+      ],
+      "setLog": {
+        "1-1|test-max-PULL|0": {
+          "reps": 1,
+          "weight": 87.5
+        },
+        "2-3|main-PRESS-0|2": {
+          "reps": 5,
+          "weight": 55
+        }
+      },
       "squat5RM": 100
     },
     {
