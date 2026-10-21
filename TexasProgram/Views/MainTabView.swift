@@ -218,7 +218,11 @@ struct MainTabView: View {
         .onChange(of: profile.reminderMinute) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.scheduleWeekdays) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.completedDayKeys) { _, _ in WidgetBridge.publish(profile) }
-        .onChange(of: profile.scheduleModeRaw) { _, _ in WidgetBridge.publish(profile) }
+        .onChange(of: profile.scheduleModeRaw) { _, _ in
+            WidgetBridge.publish(profile)
+            // В очереди текст напоминания другой: день заранее неизвестен.
+            ReminderScheduler.reschedule(for: profile)
+        }
         .onChange(of: profile.scheduleWeekdays) { _, _ in WidgetBridge.publish(profile) }
         .onChange(of: profile.peakingActive) { _, _ in WidgetBridge.publish(profile) }
     }

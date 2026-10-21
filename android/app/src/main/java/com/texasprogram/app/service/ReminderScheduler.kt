@@ -44,12 +44,15 @@ object ReminderScheduler {
 
         profile.weekdays.forEachIndexed { index, weekday ->
             val at = nextOccurrence(weekday, profile.reminderHour, profile.reminderMinute)
+            // В очереди тип дня заранее неизвестен: номер 0 даёт общий текст.
+            // Раньше и в очереди обещали «по расписанию день 2», как на iOS — нет.
+            val day = if (profile.scheduleMode == ScheduleMode.WEEKDAY) index + 1 else 0
             runCatching {
                 manager.setRepeating(
                     AlarmManager.RTC_WAKEUP,
                     at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
                     WEEK_MILLIS,
-                    intent(context, weekday, index + 1)
+                    intent(context, weekday, day)
                 )
             }
         }
@@ -94,6 +97,17 @@ object ReminderScheduler {
         )
 
     fun dayOf(intent: Intent): Int = intent.getIntExtra(EXTRA_DAY, 0)
+}
+
+/// После перезагрузки телефона и обновления приложения будильники пропадают.
+/// Раньше их ставили заново только при запуске STRAIN: перезагрузил телефон
+/// и не открывал приложение — напоминаний нет.
+class ReminderBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        val profile = com.texasprogram.app.data.AppStore.get(context).active ?: return
+        ReminderScheduler.reschedule(context, profile)
+    }
 }
 
 /// Срабатывает в назначенное время и показывает напоминание.

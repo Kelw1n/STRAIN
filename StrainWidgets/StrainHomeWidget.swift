@@ -1,10 +1,11 @@
 import SwiftUI
 import WidgetKit
 
+/// Цвета REBRN, как в приложении: раньше здесь оставалась бирюза старой темы.
 private enum HomePalette {
-    static let accent = Color(red: 0.16, green: 0.84, blue: 0.76)
-    static let accentDeep = Color(red: 0.35, green: 0.47, blue: 0.98)
-    static let record = Color(red: 1.00, green: 0.42, blue: 0.52)
+    static let accent = Color(red: 1.0, green: 0.38, blue: 0.16)
+    static let accentDeep = Color(red: 0.88, green: 0.28, blue: 0.10)
+    static let record = Color(red: 1.0, green: 0.32, blue: 0.32)
 
     static var gradient: LinearGradient {
         LinearGradient(colors: [accent, accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -15,7 +16,7 @@ private enum HomePalette {
 struct StrainHomeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "StrainHomeWidget", provider: StrainProvider()) { entry in
-            StrainWidgetView(snapshot: entry.snapshot)
+            StrainWidgetView(snapshot: entry.snapshot, date: entry.date)
         }
         .configurationDisplayName("STRAIN")
         .description("Следующая тренировка и номер жима.")
@@ -38,16 +39,25 @@ private struct StrainProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<StrainEntry>) -> Void) {
-        // Данные меняются только когда приложение их перезаписывает и само просит
-        // обновиться, поэтому расписание редкое — раз в час, чтобы освежать «Завтра».
-        let entry = StrainEntry(date: .now, snapshot: WidgetStore.load())
-        completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(3600))))
+        // Данные меняются, только когда приложение их перезаписывает и само просит
+        // обновиться. Подпись дня считается от даты записи, поэтому записи —
+        // на каждую ближайшую полночь: «Завтра» само становится «Сегодня».
+        let snapshot = WidgetStore.load()
+        let calendar = Calendar.current
+        var entries = [StrainEntry(date: .now, snapshot: snapshot)]
+        var day = calendar.startOfDay(for: .now)
+        for _ in 0..<3 {
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
+            entries.append(StrainEntry(date: day, snapshot: snapshot))
+        }
+        completion(Timeline(entries: entries, policy: .atEnd))
     }
 }
 
 private struct StrainWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let snapshot: WidgetSnapshot?
+    let date: Date
 
     var body: some View {
         switch family {
@@ -125,10 +135,10 @@ private struct StrainWidgetView: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Image(systemName: snapshot?.isRestToday == true ? "moon.zzz.fill" : "figure.strengthtraining.traditional")
+            Image(systemName: snapshot?.isRest(on: date) == true ? "moon.zzz.fill" : "figure.strengthtraining.traditional")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(HomePalette.accent)
-            Text(snapshot.map { "\($0.relative) · \($0.dateText)" } ?? "STRAIN")
+            Text(snapshot.map { "\($0.relative(on: date)) · \($0.dateText)" } ?? "STRAIN")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(HomePalette.accent)
                 .lineLimit(1)
@@ -169,7 +179,7 @@ private struct StrainWidgetView: View {
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 1) {
             if let snapshot {
-                Text("\(snapshot.relative) · \(snapshot.dateText)")
+                Text("\(snapshot.relative(on: date)) · \(snapshot.dateText)")
                     .font(.system(size: 11, weight: .bold))
                 Text(snapshot.weekText)
                     .font(.system(size: 13, weight: .semibold))

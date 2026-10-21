@@ -888,11 +888,15 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
     // Напоминания пересобираем при запуске и на каждое изменение настроек:
     // будильники не переживают перезагрузку телефона.
+    // Профиль и режим расписания — тоже ключи: сменил профиль или очередь
+    // на дни недели — напоминания должны встать по новым дням и с новым текстом.
     LaunchedEffect(
+        profile.id,
         profile.reminderEnabled,
         profile.reminderHour,
         profile.reminderMinute,
-        profile.scheduleWeekdays
+        profile.weekdays,
+        profile.scheduleMode
     ) {
         ReminderScheduler.reschedule(context, profile)
         // Будильник без разрешения на уведомления срабатывает молча: на Android 13+

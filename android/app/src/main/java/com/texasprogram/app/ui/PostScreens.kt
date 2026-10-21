@@ -62,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -447,6 +448,14 @@ fun PostDetailScreen(
     /// На какой комментарий отвечаем; `null` — обычный комментарий к посту.
     var replyingTo by remember { mutableStateOf<SocialComment?>(null) }
     val me = SocialService.me
+    // Карусель фото собирается кадром позже: первый кадр въезда экрана —
+    // самый тяжёлый, и делить его с фото и слайдом тренировки незачем.
+    // Подложка того же размера стоит сразу, поэтому ничего не прыгает.
+    var mediaReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        mediaReady = true
+    }
 
     fun update(value: SocialPost) {
         post = value
@@ -480,7 +489,11 @@ fun PostDetailScreen(
         item { PostStatsRow(post) }
         // Тренировка — последним слайдом, как в REBRN; все подходы — по нажатию.
         item {
-            PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showingSets = true })
+            if (mediaReady || post.photos.isEmpty()) {
+                PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showingSets = true })
+            } else {
+                Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF1F1F22)))
+            }
         }
         item {
             PostActions(post, onComments = {

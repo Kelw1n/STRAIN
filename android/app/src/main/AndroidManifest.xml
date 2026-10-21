@@ -22,6 +22,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Вибрация при таймере и тапах -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Напоминания о тренировке заново после перезагрузки телефона. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Своя камера в приложении: селфи сохраняется зеркальным, как в превью.
          Спрашивается при первом снимке; без камеры приложение ставится тоже. -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -70,6 +72,16 @@
         <receiver
             android:name=".service.ReminderReceiver"
             android:exported="false" />
+
+        <!-- Будильники не переживают перезагрузку и обновление — ставим их заново. -->
+        <receiver
+            android:name=".service.ReminderBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Кнопки отсчёта отдыха в шторке: −30 с, +30 с, «Пропустить». -->
         <receiver

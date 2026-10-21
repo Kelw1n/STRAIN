@@ -38,7 +38,8 @@ enum WidgetBridge {
             doneDays: profile.completedDayCount,
             totalDays: profile.totalDays,
             isRestToday: schedule.isRestDay,
-            updatedAt: now
+            updatedAt: now,
+            focusDate: focus.date
         ))
         WidgetCenter.shared.reloadAllTimelines()
     }
