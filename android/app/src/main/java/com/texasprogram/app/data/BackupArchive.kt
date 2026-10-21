@@ -3,7 +3,9 @@ package com.texasprogram.app.data
 import com.texasprogram.app.model.CompletionRecord
 import com.texasprogram.app.model.CustomProgram
 import com.texasprogram.app.model.SkippedWorkout
+import com.texasprogram.app.model.LiftOutcome
 import com.texasprogram.app.model.LiftReport
+import com.texasprogram.app.model.MainLift
 import com.texasprogram.app.model.PlanEdit
 import com.texasprogram.app.model.SetEntry
 import com.texasprogram.app.service.EuthanasiaInput
@@ -52,14 +54,14 @@ data class ProfileSnapshot(
     /// Факт подходов, откаты, цикл и своя программа. Значения по умолчанию нужны
     /// для копий, снятых до появления этих полей, и для файлов со старых версий.
     val setLog: Map<String, SetEntry> = emptyMap(),
-    val skipped: List<SkippedWorkout> = emptyList(),
+    val skipped: List<SkippedSnapshot> = emptyList(),
     val keepScreenOn: Boolean = true,
     val cycleNumber: Int = 1,
     val customProgram: CustomProgram? = null,
     val fullBodyLevel: String? = null,
     val euthanasiaInput: EuthanasiaInput? = null,
     val autoregulationEnabled: Boolean = false,
-    val liftReports: List<LiftReport> = emptyList(),
+    val liftReports: List<LiftReportSnapshot> = emptyList(),
     val workoutNotes: Map<String, String> = emptyMap(),
     /// Замеры веса тела. Дата — ISO-строка, как пишет iOS: раньше вес тела
     /// в копию не попадал вовсе и терялся при восстановлении.
@@ -68,6 +70,30 @@ data class ProfileSnapshot(
     val weightSteps: Map<String, Double> = emptyMap(),
     val defaultWeightStep: Double = 2.5,
     val stallDismissed: Map<String, Double> = emptyMap()
+)
+
+/// Отчёт авторегуляции в копии. Android хранит номер дня `epochDay`, iOS —
+/// дату `date`. Пишем оба и читаем любое: раньше без нужного поля копия
+/// с другой платформы не открывалась целиком.
+@Serializable
+data class LiftReportSnapshot(
+    val key: String,
+    val lift: MainLift,
+    val outcome: LiftOutcome,
+    val epochDay: Long? = null,
+    val date: String? = null
+)
+
+/// Пропущенная тренировка в копии — с той же парой дат, что и отчёт.
+@Serializable
+data class SkippedSnapshot(
+    val id: String? = null,
+    val week: Int,
+    val day: Int,
+    val isPeaking: Boolean = false,
+    val epochDay: Long? = null,
+    val date: String? = null,
+    val holdsProgression: Boolean
 )
 
 @Serializable
@@ -157,21 +183,20 @@ object BackupService {
         },
         planEdits = profile.planEdits,
         setLog = profile.setLog,
-        skipped = profile.skipped,
+        skipped = profile.skipped.map {
+            SkippedSnapshot(it.id, it.week, it.day, it.isPeaking, it.epochDay, isoDate(it.epochDay), it.holdsProgression)
+        },
         keepScreenOn = profile.keepScreenOn,
         cycleNumber = profile.cycleNumber,
         customProgram = profile.customProgram,
         fullBodyLevel = profile.fullBodyLevel.name,
         euthanasiaInput = profile.euthanasiaInput,
         autoregulationEnabled = profile.autoregulationEnabled,
-        liftReports = profile.liftReports,
-        workoutNotes = profile.workoutNotes,
-        bodyWeightLog = profile.bodyWeightLog.map {
-            BodyWeightSnapshot(
-                java.time.LocalDate.ofEpochDay(it.epochDay).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toString(),
-                it.weight
-            )
+        liftReports = profile.liftReports.map {
+            LiftReportSnapshot(it.key, it.lift, it.outcome, it.epochDay, isoDate(it.epochDay))
         },
+        workoutNotes = profile.workoutNotes,
+        bodyWeightLog = profile.bodyWeightLog.map { BodyWeightSnapshot(isoDate(it.epochDay), it.weight) },
         weightSteps = profile.weightSteps,
         defaultWeightStep = profile.defaultWeightStep,
         stallDismissed = profile.stallDismissed
@@ -204,22 +229,26 @@ object BackupService {
         },
         planEdits = snapshot.planEdits,
         setLog = snapshot.setLog,
-        skipped = snapshot.skipped,
+        skipped = snapshot.skipped.mapNotNull { entry ->
+            val day = entry.epochDay ?: entry.date?.let(::epochDayOf) ?: return@mapNotNull null
+            SkippedWorkout(entry.id ?: java.util.UUID.randomUUID().toString(), entry.week, entry.day, entry.isPeaking, day, entry.holdsProgression)
+        },
         keepScreenOn = snapshot.keepScreenOn,
         cycleNumber = snapshot.cycleNumber,
         customProgram = snapshot.customProgram,
+        // С iPhone стаж приходит подписью («Меньше года»), а не именем константы.
         fullBodyLevel = snapshot.fullBodyLevel
-            ?.let { name -> FullBodyLevel.entries.firstOrNull { it.name == name } }
+            ?.let { raw -> FullBodyLevel.entries.firstOrNull { it.name == raw || it.title == raw } }
             ?: FullBodyLevel.ABOUT_YEAR,
         euthanasiaInput = snapshot.euthanasiaInput,
         autoregulationEnabled = snapshot.autoregulationEnabled,
-        liftReports = snapshot.liftReports,
+        liftReports = snapshot.liftReports.mapNotNull { entry ->
+            val day = entry.epochDay ?: entry.date?.let(::epochDayOf) ?: return@mapNotNull null
+            LiftReport(entry.key, entry.lift, entry.outcome, day)
+        },
         workoutNotes = snapshot.workoutNotes,
         bodyWeightLog = snapshot.bodyWeightLog.mapNotNull { entry ->
-            // iOS пишет начало дня в своём часовом поясе — переводим обратно в дату.
-            runCatching {
-                java.time.Instant.parse(entry.date).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
-            }.getOrNull()?.let { com.texasprogram.app.model.BodyWeightEntry(it, entry.weight) }
+            epochDayOf(entry.date)?.let { com.texasprogram.app.model.BodyWeightEntry(it, entry.weight) }
         },
         weightSteps = snapshot.weightSteps,
         defaultWeightStep = snapshot.defaultWeightStep,
@@ -233,4 +262,13 @@ object BackupService {
         peakBench5RM = snapshot.peakBench5RM,
         peakDeadlift5RM = snapshot.peakDeadlift5RM
     )
+
+    /// Дата для iOS: начало дня в местном часовом поясе.
+    private fun isoDate(epochDay: Long): String =
+        java.time.LocalDate.ofEpochDay(epochDay).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toString()
+
+    /// Дата из копии iOS обратно в номер дня — в местном часовом поясе.
+    private fun epochDayOf(iso: String): Long? = runCatching {
+        java.time.Instant.parse(iso).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
+    }.getOrNull()
 }

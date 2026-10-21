@@ -37,7 +37,7 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     /// Фактически выполненные подходы и откаты. Тоже необязательные: в копиях,
     /// снятых раньше, этих полей нет.
     var setLog: [String: SetEntry]?
-    var skipped: [SkippedWorkout]?
+    var skipped: [SkippedSnapshot]?
     var keepScreenOn: Bool?
     /// Номер цикла и своя программа. Необязательные — в старых копиях их нет.
     var cycleNumber: Int?
@@ -45,13 +45,66 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var fullBodyLevel: String?
     var euthanasiaInput: EuthanasiaInput?
     var autoregulationEnabled: Bool?
-    var liftReports: [LiftReport]?
+    var liftReports: [LiftReportSnapshot]?
     var workoutNotes: [String: String]?
     var bodyWeightLog: [BodyWeightEntry]?
     /// Шаг прибавки по упражнениям. Необязательное: в старых копиях его нет.
     var weightSteps: [String: Double]?
     var defaultWeightStep: Double?
     var stallDismissed: [String: Double]?
+}
+
+/// Отчёт авторегуляции в копии. iOS хранит дату полем `date`, Android — номером
+/// дня `epochDay`. Пишем оба и читаем любое: раньше без нужного поля копия
+/// с другой платформы не открывалась целиком.
+struct LiftReportSnapshot: Codable, Equatable, Sendable {
+    var key: String
+    var lift: MainLift
+    var outcome: LiftOutcome
+    var date: Date?
+    var epochDay: Int?
+}
+
+/// Пропущенная тренировка в копии — с той же парой дат, что и отчёт.
+struct SkippedSnapshot: Codable, Equatable, Sendable {
+    var id: String?
+    var week: Int
+    var day: Int
+    var isPeaking: Bool?
+    var date: Date?
+    var epochDay: Int?
+    var holdsProgression: Bool
+}
+
+/// Значения перечислений в копии: iOS пишет русскую подпись («Средний»),
+/// Android — имя константы («MEDIUM»). Читаем оба вида: одно такое поле
+/// с другой платформы раньше роняло разбор всей копии.
+enum BackupEnum {
+    /// «fullBodyEOD» → «FULL_BODY_EOD» — так называются константы в Kotlin.
+    static func androidCode(_ caseName: String) -> String {
+        var result = ""
+        var previous: Character?
+        for character in caseName {
+            if character.isUppercase, let previous, previous.isLowercase || previous.isNumber {
+                result.append("_")
+            }
+            result.append(character)
+            previous = character
+        }
+        return result.uppercased()
+    }
+
+    static func value<T: RawRepresentable & CaseIterable>(_ type: T.Type, _ raw: String) -> T? where T.RawValue == String {
+        T(rawValue: raw) ?? T.allCases.first { androidCode(String(describing: $0)) == raw }
+    }
+
+    static func decode<T: RawRepresentable & CaseIterable>(_ decoder: Decoder) throws -> T where T.RawValue == String {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        guard let result = value(T.self, raw) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Неизвестное значение «\(raw)»"))
+        }
+        return result
+    }
 }
 
 struct CompletionSnapshot: Codable, Equatable, Sendable {
@@ -171,14 +224,19 @@ enum BackupService {
             },
             planEdits: profile.planEdits,
             setLog: profile.setLog,
-            skipped: profile.skipped,
+            skipped: profile.skipped.map {
+                SkippedSnapshot(id: $0.id, week: $0.week, day: $0.day, isPeaking: $0.isPeaking,
+                                date: $0.date, epochDay: epochDay($0.date), holdsProgression: $0.holdsProgression)
+            },
             keepScreenOn: profile.keepScreenOn,
             cycleNumber: profile.cycleNumber,
             customProgram: profile.customProgram,
             fullBodyLevel: profile.fullBodyLevelRaw,
             euthanasiaInput: profile.euthanasiaInput,
             autoregulationEnabled: profile.autoregulationEnabled,
-            liftReports: profile.liftReports,
+            liftReports: profile.liftReports.map {
+                LiftReportSnapshot(key: $0.key, lift: $0.lift, outcome: $0.outcome, date: $0.date, epochDay: epochDay($0.date))
+            },
             workoutNotes: profile.workoutNotes,
             bodyWeightLog: profile.bodyWeightLog,
             weightSteps: profile.weightSteps,
@@ -255,14 +313,21 @@ enum BackupService {
         }
         result.planEdits = snapshot.planEdits ?? []
         result.setLog = snapshot.setLog ?? [:]
-        result.skipped = snapshot.skipped ?? []
+        result.skipped = (snapshot.skipped ?? []).map {
+            SkippedWorkout(id: $0.id ?? UUID().uuidString, week: $0.week, day: $0.day, isPeaking: $0.isPeaking ?? false,
+                           date: $0.date ?? $0.epochDay.map(date) ?? .now, holdsProgression: $0.holdsProgression)
+        }
         result.keepScreenOn = snapshot.keepScreenOn ?? true
         result.cycleNumber = snapshot.cycleNumber ?? 1
         result.customProgram = snapshot.customProgram
-        result.fullBodyLevelRaw = snapshot.fullBodyLevel ?? FullBodyLevel.aboutYear.rawValue
+        // С Android стаж приходит именем константы («UNDER_YEAR»).
+        result.fullBodyLevelRaw = snapshot.fullBodyLevel.flatMap { BackupEnum.value(FullBodyLevel.self, $0) }?.rawValue
+            ?? FullBodyLevel.aboutYear.rawValue
         result.euthanasiaInput = snapshot.euthanasiaInput
         result.autoregulationEnabled = snapshot.autoregulationEnabled ?? false
-        result.liftReports = snapshot.liftReports ?? []
+        result.liftReports = (snapshot.liftReports ?? []).map {
+            LiftReport(key: $0.key, lift: $0.lift, outcome: $0.outcome, date: $0.date ?? $0.epochDay.map(date) ?? .now)
+        }
         result.workoutNotes = snapshot.workoutNotes ?? [:]
         result.bodyWeightLog = snapshot.bodyWeightLog ?? []
         result.weightSteps = snapshot.weightSteps ?? [:]

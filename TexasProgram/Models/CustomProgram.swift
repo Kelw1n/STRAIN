@@ -11,6 +11,9 @@ enum SplitTemplate: String, CaseIterable, Identifiable, Codable, Sendable {
     case pushPullLegs = "Жим / Тяга / Ноги"
     case custom = "Свой"
 
+    /// В копии с Android здесь имя константы, а не подпись.
+    init(from decoder: Decoder) throws { self = try BackupEnum.decode(decoder) }
+
     var id: String { rawValue }
 
     /// Названия дней. Их количество и есть число тренировок в неделю.

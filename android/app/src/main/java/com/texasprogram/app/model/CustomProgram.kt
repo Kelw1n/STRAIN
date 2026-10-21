@@ -8,6 +8,7 @@ import java.util.UUID
 ///
 /// Схема задаёт только каркас — сколько дней в неделю и как они называются.
 /// Упражнения в них вписывает пользователь.
+@Serializable(with = SplitTemplateSerializer::class)
 enum class SplitTemplate(val title: String) {
     FULL_BODY("Фулбади"),
     FULL_BODY_EOD("Фулбади через день"),

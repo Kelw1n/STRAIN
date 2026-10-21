@@ -36,6 +36,12 @@ jobs:
         working-directory: android
         run: gradle testDebugUnitTest --stacktrace
 
+      # Эталонная распечатка планов всех программ: та же есть в тестах iOS,
+      # их сверяют построчно — одни максимумы должны давать одни веса.
+      - name: Golden plans
+        if: always()
+        run: sed 's/^/GOLDEN|/' android/app/build/golden/plans.txt || true
+
       # Android Lint: вызовы API новее minSdk, утечки, ошибки разрешений.
       # Только отчёт в лог — сборку не останавливает.
       - name: Lint

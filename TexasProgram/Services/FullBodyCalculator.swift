@@ -27,6 +27,9 @@ enum FullBodyLevel: String, CaseIterable, Identifiable, Codable, Sendable {
     case overYear = "Больше года"
     case twoYears = "Два года и больше"
 
+    /// В копии с Android здесь имя константы, а не подпись.
+    init(from decoder: Decoder) throws { self = try BackupEnum.decode(decoder) }
+
     var id: String { rawValue }
 
     /// Растёт ли вес от тренировки к тренировке, а не от недели к неделе.
