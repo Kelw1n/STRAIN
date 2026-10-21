@@ -57,9 +57,17 @@ struct RootView: View {
 
     private func delete(_ profile: ProgramProfile) {
         let fallback = profiles.first { $0.profileID != profile.profileID }
+        // Начатая тренировка удаляемого профиля уходит вместе с ним.
+        WorkoutSessionManager.shared.forgetProfile(profile.profileID)
         modelContext.delete(profile)
         try? modelContext.save()
         activeProfileID = fallback?.profileID.uuidString ?? ""
+        if fallback == nil {
+            // Профилей не осталось: раньше напоминания приходили и дальше,
+            // а виджет показывал тренировку удалённого профиля.
+            ReminderScheduler.cancel()
+            WidgetBridge.clear()
+        }
     }
 }
 

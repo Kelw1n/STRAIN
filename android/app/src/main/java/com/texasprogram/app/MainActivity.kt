@@ -610,7 +610,11 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         onUpdate = { updated -> store.update(updated.id) { updated } },
                         onSwitchProfile = { id -> store.setActive(id) },
                         onAddProfile = { onAddProfile() },
-                        onDeleteProfile = { store.delete(profile.id) },
+                        onDeleteProfile = {
+                            // Начатая тренировка удаляемого профиля уходит вместе с ним.
+                            WorkoutSessionManager.forgetProfile(profile.id)
+                            store.delete(profile.id)
+                        },
                         onExportBackup = { exportLauncher.launch(BackupService.FILE_NAME) },
                         onImportBackup = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
                         onExportCsv = { csvLauncher.launch(CSVExport.FILE_NAME) },

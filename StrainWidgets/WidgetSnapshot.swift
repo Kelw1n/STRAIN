@@ -72,6 +72,12 @@ enum WidgetStore {
         }
     }
 
+    /// Профилей не осталось — виджет возвращается к приглашению открыть приложение.
+    static func clear() {
+        defaults?.removeObject(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
     static func load() -> WidgetSnapshot? {
         if let defaults, let data = defaults.data(forKey: key),
            let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data) {

@@ -11,7 +11,8 @@ jobs:
   test:
     # Тесты и сборка на Xcode 16: проверяют, что запасной путь без iOS 26 SDK компилируется.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    continue-on-error: true
+    # Упавшие тесты должны краснить проверку: раньше сборка с ошибкой
+    # компиляции выглядела зелёной.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4

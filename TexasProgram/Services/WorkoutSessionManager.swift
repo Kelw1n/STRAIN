@@ -541,6 +541,18 @@ final class WorkoutSessionManager {
         try? FileManager.default.removeItem(at: Self.saveURL)
     }
 
+    /// Профиль удалён: его тренировка — и идущая, и отложенная при смене
+    /// профиля — больше никогда не продолжится.
+    func forgetProfile(_ id: UUID) {
+        if activeWorkout != nil, profileID == id {
+            reset()
+        } else if let data = try? Data(contentsOf: Self.saveURL),
+                  let session = try? JSONDecoder().decode(SavedSession.self, from: data),
+                  session.profileID == id {
+            clearSaved()
+        }
+    }
+
     /// Для тестов: забыть тренировку в памяти, не трогая файл, — как после выгрузки.
     func forgetForTesting() {
         startSnapshot = nil

@@ -561,6 +561,18 @@ object WorkoutSessionManager {
         storeFile?.let { runCatching { it.delete() } }
     }
 
+    /// Профиль удалён: его тренировка — и идущая, и отложенная при смене
+    /// профиля — больше никогда не продолжится.
+    fun forgetProfile(id: String) {
+        if (activeWorkout != null && profileId == id) {
+            reset()
+            return
+        }
+        val file = storeFile?.takeIf { it.exists() } ?: return
+        val session = runCatching { json.decodeFromString(SavedSession.serializer(), file.readText()) }.getOrNull()
+        if (session?.profileId == id) clearSaved()
+    }
+
     /// Для тестов: забыть тренировку в памяти, не трогая файл, — как после выгрузки.
     fun forgetForTesting() {
         saveJob?.cancel()

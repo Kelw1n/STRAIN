@@ -117,8 +117,10 @@ class ReminderBootReceiver : BroadcastReceiver() {
 /// Срабатывает в назначенное время и показывает напоминание.
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val profile = com.texasprogram.app.data.AppStore.get(context).active
-        if (profile != null && ReminderScheduler.trainedOn(profile)) return
+        // Профилей не осталось — напоминать не о чем: раньше будильник удалённого
+        // профиля звенел и дальше.
+        val profile = com.texasprogram.app.data.AppStore.get(context).active ?: return
+        if (ReminderScheduler.trainedOn(profile)) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         manager.createNotificationChannel(
             NotificationChannel(
