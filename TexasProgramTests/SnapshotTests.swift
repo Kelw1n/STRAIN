@@ -143,8 +143,9 @@ final class SnapshotTests: XCTestCase {
 
     @MainActor func testProgress() throws {
         let profile = ProgramProfile(input: .demo)
-        try snap("13-progress") {
-            ActivityProgressView(profile: profile, onStartWorkout: {})
+        // Во всю высоту: внизу разделы «История упражнений», «Заметки» и «Жим 14».
+        try snap("13-progress", height: 2400) {
+            ActivityProgressView(profile: profile, onStartWorkout: {}, onOpenBench: {})
         }
     }
 
