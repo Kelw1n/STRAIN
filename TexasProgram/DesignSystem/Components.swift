@@ -43,17 +43,13 @@ struct HighlightCard<Content: View>: View {
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 26, style: .continuous) }
 
-    /// У REBRN «следующее» не подсвечивают рамкой и свечением — карточка
-    /// такая же, как все, выделяет её содержимое.
-    private var plain: Bool { Theme.style.isRebrn }
-
+    /// «Следующее» не подсвечивают рамкой и свечением — карточка такая же,
+    /// как все, выделяет её содержимое.
     var body: some View {
         VStack(alignment: .leading, spacing: 14) { content }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface(scheme), in: shape)
-            .overlay(shape.strokeBorder(gradient, lineWidth: 1.6).opacity(plain ? 0 : 1))
-            .shadow(color: glow.opacity(plain ? 0 : (scheme == .dark ? 0.28 : 0.16)), radius: plain ? 0 : 14, y: plain ? 0 : 6)
     }
 }
 

@@ -329,7 +329,7 @@ struct DayCustomizeView: View {
 
     private func weightText(of exercise: ExercisePrescription) -> String {
         guard case .kilograms(let value) = exercise.load else { return "" }
-        return WeightFormat.kilogramsPrecise(value).replacingOccurrences(of: " кг", with: "").replacingOccurrences(of: " lbs", with: "")
+        return WeightFormat.kilogramsPrecise(value).replacingOccurrences(of: " кг", with: "")
     }
 
     private func subtitle(of exercise: ExercisePrescription) -> String {

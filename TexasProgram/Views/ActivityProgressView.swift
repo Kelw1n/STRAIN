@@ -4,6 +4,8 @@ import Charts
 struct ActivityProgressView: View {
     @Bindable var profile: ProgramProfile
     let onStartWorkout: () -> Void
+    /// Есть у программ с волной «Жим 14».
+    var onOpenBench: (() -> Void)?
 
     @State private var selectedPeriod = "3 месяца"
     @State private var showingWeightSheet = false
@@ -29,6 +31,11 @@ struct ActivityProgressView: View {
 
                     // Карточка: Сила и Рекорды
                     strengthRecordsCard
+
+                    // История упражнений, заметки и «Жим 14»
+                    linksCard
+
+                    HistoryCard(records: profile.completionLog)
 
                     Spacer(minLength: 90)
                 }
@@ -68,6 +75,79 @@ struct ActivityProgressView: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    // MARK: - Разделы
+
+    /// Входы в разделы, которые копят данные. Они были на прежнем экране
+    /// «Прогресс» и пропали вместе с ним: до истории упражнений и заметок
+    /// на iPhone стало не добраться.
+    private var linksCard: some View {
+        VStack(spacing: 0) {
+            // Низ списка не прячется под плавающей панелью вкладок.
+            NavigationLink { ExerciseHistoryList(profile: profile).safeAreaPadding(.bottom, 90) } label: {
+                // Пока история пустая, а отметки есть, зовём именно достроить её:
+                // иначе про такую возможность никто не узнает.
+                let pending = profile.backfillableWorkouts
+                linkRow("История упражнений",
+                        subtitle: pending > 0
+                        ? "можно заполнить по отметкам"
+                        : Self.countText(profile.loggedExerciseNames.count, "движение", "движения", "движений"),
+                        symbol: "chart.xyaxis.line")
+            }
+            .buttonStyle(.pressable)
+            linkDivider
+            NavigationLink { NotesListView(profile: profile).safeAreaPadding(.bottom, 90) } label: {
+                linkRow("Заметки",
+                        subtitle: Self.countText(profile.workoutNotes.filter { profile.isOwnKey($0.key) }.count,
+                                                 "запись", "записи", "записей"),
+                        symbol: "note.text")
+            }
+            .buttonStyle(.pressable)
+            if let onOpenBench {
+                linkDivider
+                Button(action: onOpenBench) {
+                    let total = UpperLowerCalculator.benchSessionCount
+                    linkRow("Волна «Жим 14»",
+                            subtitle: profile.nextBenchSession.map { "следующая — №\($0), пройдено \(profile.completedBenchCount) из \(total)" }
+                            ?? "волна пройдена — пора тестировать 1ПМ",
+                            symbol: "waveform.path.ecg")
+                }
+                .buttonStyle(.pressable)
+            }
+        }
+        .padding(6)
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var linkDivider: some View {
+        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.horizontal, 12)
+    }
+
+    private func linkRow(_ title: String, subtitle: String, symbol: String) -> some View {
+        HStack(spacing: 13) {
+            Image(systemName: symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                Text(subtitle).font(.system(size: 12)).foregroundStyle(Color.white.opacity(0.45))
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.3))
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .contentShape(Rectangle())
+    }
+
+    /// «1 запись», «2 записи», «5 записей»; ноль — «пока пусто».
+    static func countText(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
+        count > 0 ? "\(count) " + RuPlural.word(count, one, few, many) : "пока пусто"
     }
 
     // MARK: - Карточка «Время, объём и тренировки»

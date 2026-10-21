@@ -12,6 +12,7 @@ struct MainTabView: View {
     @State private var selectedTab: MainTabItem = .today
     @State private var showingSettings = false
     @State private var benchFocus: Int?
+    @State private var showingBench = false
     @Bindable var sessionManager = WorkoutSessionManager.shared
     let onAddProfile: () -> Void
     let onDeleteProfile: () -> Void
@@ -19,12 +20,13 @@ struct MainTabView: View {
     /// Вкладка «Жим 14» есть у всех программ с волной жима.
     private var isUpperLower: Bool { profile.programKind.hasBenchWave }
 
-    /// Переход в раздел «Жим 14» на конкретную тренировку волны.
+    /// Раздел «Жим 14» на конкретной тренировке волны. Раньше это была вкладка;
+    /// когда её убрали, кнопки запоминали тренировку, но ничего не открывали.
     private var benchHandler: ((Int) -> Void)? {
         guard isUpperLower else { return nil }
         return { session in
             benchFocus = session
-            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.workout) }
+            showingBench = true
         }
     }
 
@@ -81,7 +83,8 @@ struct MainTabView: View {
                     if let focus = profile.schedule.focus {
                         sessionManager.requestStart(workout: focus, profile: profile)
                     }
-                }
+                },
+                onOpenBench: isUpperLower ? { benchFocus = nil; showingBench = true } : nil
             )
         case .community:
             CommunityView(onCreateProfile: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.profile) } })
@@ -167,6 +170,9 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
+        }
+        .sheet(isPresented: $showingBench) {
+            BenchWaveView(profile: profile, focused: $benchFocus, onClose: { showingBench = false })
         }
         // Виджет живёт в другой песочнице и сам данные не достанет — публикуем слепок.
         .onAppear {

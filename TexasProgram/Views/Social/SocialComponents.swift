@@ -206,27 +206,6 @@ private extension Shape {
     }
 }
 
-// MARK: - Карусель фото поста
-
-struct PhotoCarousel: View {
-    let ids: [String]
-    @State private var page = 0
-
-    var body: some View {
-        TabView(selection: $page) {
-            ForEach(Array(ids.enumerated()), id: \.offset) { index, id in
-                RemoteImage(id: id)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .tag(index)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: ids.count > 1 ? .always : .never))
-        .aspectRatio(4.0 / 5.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-}
-
 // MARK: - Камера
 
 extension UIImage {

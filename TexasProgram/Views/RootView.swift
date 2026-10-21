@@ -6,7 +6,6 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\ProgramProfile.createdAt)]) private var profiles: [ProgramProfile]
     @AppStorage("activeProfileID") private var activeProfileID = ""
-    @AppStorage("app_theme_style") private var themeStyle = AppThemeStyle.rebrnBlack.rawValue
     @State private var isAddingProfile = false
 
     private var activeProfile: ProgramProfile? {
@@ -40,7 +39,7 @@ struct RootView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: activeProfile?.profileID)
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: isAddingProfile)
         .tint(Theme.accent)
-        .preferredColorScheme(ThemeManager.shared.current.preferredColorScheme)
+        .preferredColorScheme(.dark)
     }
 
     /// Восстановление с первого экрана: после переустановки профилей нет,

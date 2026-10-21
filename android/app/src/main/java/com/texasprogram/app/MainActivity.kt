@@ -58,8 +58,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.foundation.border
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import com.texasprogram.app.ui.ThemeManager
 import androidx.compose.runtime.Composable
 import com.texasprogram.app.ui.TogetherInviteBanner
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -151,7 +149,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         requestHighestRefreshRate()
-        ThemeManager.init(applicationContext)
         WorkoutSessionManager.attach(filesDir)
         SocialService.init(applicationContext)
         handleDeepLink(intent)
@@ -167,29 +164,22 @@ class MainActivity : ComponentActivity() {
                     delay(if (phase < 20) 1000L else phase + 5)
                 }
             }
-            val isDark = Theme.isDark
+            // Тема одна и тёмная: светлые значки строки состояния на чёрном.
             val view = LocalView.current
             if (!view.isInEditMode) {
                 SideEffect {
                     val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
                     WindowCompat.getInsetsController(window, window.decorView).apply {
-                        isAppearanceLightStatusBars = !isDark
-                        isAppearanceLightNavigationBars = !isDark
+                        isAppearanceLightStatusBars = false
+                        isAppearanceLightNavigationBars = false
                     }
                 }
             }
-            val colorScheme = if (isDark) {
+            val colorScheme = remember {
                 darkColorScheme(
                     primary = Theme.accent,
                     // Белое на акценте: иначе у включённых переключателей тёмно-фиолетовый кружок.
                     onPrimary = Color.White,
-                    background = Theme.base,
-                    surface = Theme.surface,
-                    onSurface = Theme.textPrimary
-                )
-            } else {
-                lightColorScheme(
-                    primary = Theme.accent,
                     background = Theme.base,
                     surface = Theme.surface,
                     onSurface = Theme.textPrimary
@@ -319,6 +309,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     // Прежний экран «Сегодня» — из «Тренировки»; настройки — за шестерёнкой в профиле.
     var showToday by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showGuide by remember { mutableStateOf(false) }
 
     val isUpperLower = profile.programKind == TrainingProgramKind.UPPER_LOWER
 
@@ -424,7 +415,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     BackHandler(
         enabled = WorkoutSessionManager.isPresented || showPlan || benchFocus != null ||
             dayDetail != null || customizing != null || showHistoryList || historyFor != null || showNotes ||
-            showBodyWeight || showToday || showSettings
+            showBodyWeight || showToday || showSettings || showGuide
     ) {
         when {
             WorkoutSessionManager.isPresented -> WorkoutSessionManager.minimize()
@@ -437,6 +428,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             showHistoryList -> showHistoryList = false
             showNotes -> showNotes = false
             showBodyWeight -> showBodyWeight = false
+            showGuide -> showGuide = false
             showSettings -> showSettings = false
             showToday -> showToday = false
         }
@@ -452,7 +444,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // не пересчитываем — её не видно, а отметки подходов идут часто.
         val covered = WorkoutSessionManager.isPresented || showPlan || dayDetail != null || customizing != null ||
             benchFocus != null || showHistoryList || historyFor != null || showNotes || showBodyWeight ||
-            showToday || showSettings
+            showToday || showSettings || showGuide
         // Вкладка передаётся лямбдой: её смена перестраивает только KeepAliveTabs,
         // а не весь этот экран — и открываемая вкладка не пересобирается заново.
         KeepAliveTabs(selectedTab = { tab }, frozen = covered) { current ->
@@ -624,9 +616,24 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         onExportCsv = { csvLauncher.launch(CSVExport.FILE_NAME) },
                         backupMessage = backupMessage,
                         onClose = { showSettings = false },
+                        onOpenGuide = { showGuide = true },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
                     CloseButton(Modifier.align(Alignment.TopEnd)) { showSettings = false }
+                }
+            }
+        }
+
+        // Инструкция — поверх настроек, из которых её открыли.
+        AnimatedContent(
+            targetState = showGuide,
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            label = "guide"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    GuideScreen(programKind = profile.programKind, contentPadding = screenPadding(bottomExtra = 32.dp))
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showGuide = false }
                 }
             }
         }

@@ -10,14 +10,10 @@ struct TexasProgramApp: App {
     @State private var showsLaunchReveal = true
 
     init() {
-        // Крупные заголовки экранов у REBRN плотные и тяжёлые. Внешний вид
-        // навигации задаётся один раз при запуске — смена темы подхватится
-        // со следующего запуска.
-        if ThemeManager.shared.current.isRebrn {
-            let bar = UINavigationBar.appearance()
-            bar.largeTitleTextAttributes = [.font: UIFont.systemFont(ofSize: 34, weight: .heavy)]
-            bar.titleTextAttributes = [.font: UIFont.systemFont(ofSize: 17, weight: .bold)]
-        }
+        // Крупные заголовки экранов плотные и тяжёлые, как у REBRN.
+        let bar = UINavigationBar.appearance()
+        bar.largeTitleTextAttributes = [.font: UIFont.systemFont(ofSize: 34, weight: .heavy)]
+        bar.titleTextAttributes = [.font: UIFont.systemFont(ofSize: 17, weight: .bold)]
         // Фото ленты по одному адресу не меняются: пусть лежат в кэше,
         // а не качаются заново при каждой прокрутке.
         URLCache.shared = URLCache(memoryCapacity: 40 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)

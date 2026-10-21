@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -77,6 +78,7 @@ fun SettingsScreen(
     onExportCsv: () -> Unit,
     backupMessage: String?,
     onClose: () -> Unit,
+    onOpenGuide: () -> Unit,
     contentPadding: PaddingValues
 ) {
     var showDelete by remember { mutableStateOf(false) }
@@ -98,54 +100,6 @@ fun SettingsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = "Готово", tint = Theme.textPrimary, modifier = Modifier.size(20.dp))
-                }
-            }
-        }
-
-        item(key = "theme") {
-            CardView(Modifier.appearIn(0)) {
-                SectionLabel("Тема оформления")
-                AppThemeStyle.entries.forEach { themeStyle ->
-                    val isSelected = ThemeManager.style == themeStyle
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .pressable { ThemeManager.set(themeStyle) }
-                            .clip(RoundedCornerShape(12.dp))
-                            .selectionFill(isSelected, Theme.accent.copy(alpha = 0.12f), Color.Transparent, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 10.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    when (themeStyle) {
-                                        AppThemeStyle.REBRN_BLACK -> Color(0xFF000000)
-                                        AppThemeStyle.CLAUDE_LIGHT -> Color(0xFFFBF8F3)
-                                        AppThemeStyle.CLAUDE_DARK -> Color(0xFF1B1917)
-                                        AppThemeStyle.STRAIN_DARK -> Color(0xFF0B0E13)
-                                        AppThemeStyle.SYSTEM -> Theme.accent
-                                    }
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isSelected) Theme.accent else Theme.hairline,
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isSelected) {
-                                Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(themeStyle.displayName, color = Theme.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text(themeStyle.description, color = Theme.textSecondary, fontSize = 11.sp)
-                        }
-                    }
                 }
             }
         }
@@ -206,6 +160,18 @@ fun SettingsScreen(
             }
         }
 
+        // Инструкция была отдельной вкладкой и пропала вместе со старой панелью.
+        item(key = "guide") {
+            CardView(Modifier.appearIn(1)) {
+                SecondaryButton("Как устроена программа", icon = Icons.Filled.Book, onClick = onOpenGuide)
+                Text(
+                    "С чего начать, сколько отдыхать, что такое RPE и особенности твоей программы.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
         item(key = "order") {
             CardView(Modifier.appearIn(2)) {
                 SectionLabel("Порядок тренировок")
@@ -248,8 +214,11 @@ fun SettingsScreen(
                     ) { onUpdate(profile.copy(level = TrainingLevel.entries[it])) }
                 }
             }
+        }
 
-            item(key = "cycle") {
+        // Новый цикл, подсобка, блины, напоминания и остальное — для любой программы,
+        // как на iOS. Раньше блок «только Техас» закрывался ниже и прятал их всех.
+        item(key = "cycle") {
             CardView(Modifier.appearIn(5)) {
                 SectionLabel("Цикл ${profile.cycleNumber}")
                 SecondaryButton("Начать новый цикл", icon = Icons.Filled.Refresh) { showNewCycle = true }
@@ -388,6 +357,15 @@ fun SettingsScreen(
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
+                SegmentedControl(
+                    options = listOf("Звук отдыха", "Без звука"),
+                    selectedIndex = if (restTimer.soundEnabled) 0 else 1
+                ) { restTimer.updateSound(it == 0) }
+                Text(
+                    "Короткий отсчёт за 3, 2, 1 секунды до конца отдыха и сигнал завершения.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
             }
         }
 
@@ -452,7 +430,8 @@ fun SettingsScreen(
             }
         }
 
-        item(key = "extra") {
+        if (profile.programKind == TrainingProgramKind.TEXAS) {
+            item(key = "extra") {
                 CardView(Modifier.appearIn(5)) {
                     SectionLabel("Дополнительные упражнения")
                     AdditionalExerciseCategory.entries.forEach { category ->

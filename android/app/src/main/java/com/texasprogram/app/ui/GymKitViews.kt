@@ -267,8 +267,8 @@ private fun StepSquare(
 /// Плашка обратного отсчёта над нижней панелью.
 @Composable
 fun RestTimerBar(timer: RestTimer, modifier: Modifier = Modifier) {
-    val pillBackground = if (Theme.isDark) Color(0xF01A1F27) else Theme.dialog.copy(alpha = 0.96f)
-    val pillBorder = if (Theme.isDark) Theme.accent.copy(alpha = 0.35f) else Theme.hairline
+    val pillBackground = Color(0xF01A1F27)
+    val pillBorder = Theme.accent.copy(alpha = 0.35f)
 
     Row(
         modifier

@@ -78,6 +78,10 @@ class RestTimer private constructor(context: Context) {
     var liveNotification by mutableStateOf(prefs.getBoolean("live", true))
         private set
 
+    /// Отсчёт 3-2-1 и сигнал конца отдыха. Выключается в настройках, как на iOS.
+    var soundEnabled by mutableStateOf(prefs.getBoolean("sound", true))
+        private set
+
     private var toneGenerator: android.media.ToneGenerator? = null
     private var lastBeepSecond: Long = -1L
 
@@ -156,6 +160,11 @@ class RestTimer private constructor(context: Context) {
         cancelAlarm()
         persist()
         cancelLive()
+    }
+
+    fun updateSound(enabled: Boolean) {
+        soundEnabled = enabled
+        runCatching { prefs.edit().putBoolean("sound", enabled).apply() }
     }
 
     fun updateLiveNotification(enabled: Boolean) {
@@ -281,6 +290,7 @@ class RestTimer private constructor(context: Context) {
     }
 
     private fun playCountdownBeep() {
+        if (!soundEnabled) return
         try {
             if (toneGenerator == null) {
                 toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80)
@@ -290,6 +300,7 @@ class RestTimer private constructor(context: Context) {
     }
 
     private fun playFinishTone() {
+        if (!soundEnabled) return
         try {
             if (toneGenerator == null) {
                 toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 90)

@@ -6,6 +6,8 @@ struct BenchWaveView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var profile: ProgramProfile
     @Binding var focused: Int?
+    /// Открыт поверх вкладок — сверху кнопка «Готово».
+    var onClose: (() -> Void)?
 
     @State private var expanded: Int?
     @State private var pulsing: Int?
@@ -68,6 +70,13 @@ struct BenchWaveView: View {
             }
             .screenBackground()
             .navigationTitle("Жим 14")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    if let onClose {
+                        Button("Готово", action: onClose).font(.body.weight(.semibold))
+                    }
+                }
+            }
             .confirmationDialog(
                 pendingStart.map { "Начать с тренировки \($0.id)?" } ?? "",
                 isPresented: Binding(get: { pendingStart != nil }, set: { if !$0 { pendingStart = nil } }),

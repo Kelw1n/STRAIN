@@ -3,11 +3,8 @@ package com.texasprogram.app
 import androidx.compose.ui.graphics.Color
 import com.texasprogram.app.model.ProgramInput
 import com.texasprogram.app.model.ProgramProfile
-import com.texasprogram.app.ui.AppThemeStyle
 import com.texasprogram.app.ui.Theme
-import com.texasprogram.app.ui.ThemeManager
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,60 +12,14 @@ import java.time.LocalDate
 
 class ThemeAndPerformanceTest {
 
+    /// Тема одна — REBRN: чёрный OLED-фон, графитовые карточки, оранжевый акцент.
     @Test
-    fun testClaudeLightThemePalette() {
-        ThemeManager.style = AppThemeStyle.CLAUDE_LIGHT
-
-        assertFalse("Claude Light theme should not be dark", Theme.isDark)
-        assertTrue("Claude Light theme should be Claude style", Theme.isClaude)
-
+    fun testRebrnPalette() {
         assertEquals("Theme.card must match Theme.surface", Theme.surface, Theme.card)
-        assertEquals("Theme.surface must be white in light theme", Color(0xFFFFFFFF), Theme.surface)
-        assertEquals("Theme.base must be cream in light theme", Color(0xFFFBF8F3), Theme.base)
-        assertEquals("Theme.surfaceSoft must be soft beige", Color(0xFFF3EEE7), Theme.surfaceSoft)
-        assertEquals("Theme.dialog must be white", Color(0xFFFFFFFF), Theme.dialog)
-        assertEquals("Theme.hairline must have dark alpha", Color(0x14000000), Theme.hairline)
-        assertEquals("Theme.textPrimary must be high-contrast dark brown", Color(0xFF1E1D1B), Theme.textPrimary)
-    }
-
-    @Test
-    fun testClaudeDarkThemePalette() {
-        ThemeManager.style = AppThemeStyle.CLAUDE_DARK
-
-        assertTrue("Claude Dark theme must be dark", Theme.isDark)
-        assertTrue("Claude Dark theme must be Claude style", Theme.isClaude)
-
-        assertEquals("Theme.card must match Theme.surface", Theme.surface, Theme.card)
-        assertEquals("Theme.base must be dark graphite", Color(0xFF1B1917), Theme.base)
-        assertEquals("Theme.surface must be dark surface", Color(0xFF262422), Theme.surface)
-        assertEquals("Theme.surfaceSoft must be dark slate", Color(0xFF32302D), Theme.surfaceSoft)
-        assertEquals("Theme.hairline must have white alpha", Color(0x28FFFFFF), Theme.hairline)
-    }
-
-    @Test
-    fun testRebrnBlackThemePalette() {
-        ThemeManager.style = AppThemeStyle.REBRN_BLACK
-
-        assertTrue("REBRN Black theme must be dark", Theme.isDark)
-        assertTrue("REBRN Black theme must be REBRN style", Theme.isRebrn)
-        assertFalse("REBRN Black theme must not be Claude style", Theme.isClaude)
-
         assertEquals("Theme.base must be OLED black", Color(0xFF000000), Theme.base)
         assertEquals("Theme.surface must be dark graphite", Color(0xFF161617), Theme.surface)
         assertEquals("Theme.accent must be REBRN orange", Color(0xFFFF6029), Theme.accent)
         assertEquals("Theme.textPrimary must be pure white", Color(0xFFFFFFFF), Theme.textPrimary)
-    }
-
-    @Test
-    fun testStrainDarkThemePalette() {
-        ThemeManager.style = AppThemeStyle.STRAIN_DARK
-
-        assertTrue("Strain Dark theme must be dark", Theme.isDark)
-        assertFalse("Strain Dark theme must not be Claude style", Theme.isClaude)
-
-        assertEquals("Theme.card must match Theme.surface", Theme.surface, Theme.card)
-        assertEquals("Theme.base must be deep black/navy", Color(0xFF0B0E13), Theme.base)
-        assertEquals("Theme.accent must be cyan neon", Color(0xFF29D6C2), Theme.accent)
     }
 
     @Test

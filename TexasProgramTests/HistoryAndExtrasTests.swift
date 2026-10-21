@@ -319,4 +319,29 @@ final class HistoryAndExtrasTests: XCTestCase {
         XCTAssertEqual(trigger?.dateComponents.minute, 30)
         XCTAssertTrue(trigger?.repeats ?? false)
     }
+
+    /// «Здоровье» доступно, только если профиль подписи выдаёт право на HealthKit.
+    /// Сайдлоад с бесплатным Apple ID такого права не даёт.
+    func testHealthEntitlementReadFromProvisioningProfile() {
+        func provision(_ entitlements: String) -> Data {
+            var data = Data([0x30, 0x82, 0x10, 0x00, 0x06, 0x09])
+            data.append(Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0"><dict>
+            <key>Name</key><string>Команда</string>
+            <key>Entitlements</key><dict>\(entitlements)</dict>
+            </dict></plist>
+            """.utf8))
+            data.append(Data([0xA0, 0x82, 0x0B]))
+            return data
+        }
+        XCTAssertTrue(HealthKitService.provisionGrantsHealth(provision(
+            "<key>application-identifier</key><string>ABC.com.texasprogram.app</string><key>com.apple.developer.healthkit</key><true/>"
+        )))
+        XCTAssertFalse(HealthKitService.provisionGrantsHealth(provision(
+            "<key>application-identifier</key><string>ABC.com.texasprogram.app</string>"
+        )))
+        XCTAssertFalse(HealthKitService.provisionGrantsHealth(Data("не профиль".utf8)))
+    }
 }
