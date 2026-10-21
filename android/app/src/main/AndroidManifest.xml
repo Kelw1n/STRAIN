@@ -22,9 +22,11 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Вибрация при таймере и тапах -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Фото к тренировке снимает системная камера: своего разрешения на камеру
-         не нужно, а объявленное, но не выданное, роняло бы её запуск. -->
+    <!-- Своя камера в приложении: селфи сохраняется зеркальным, как в превью.
+         Спрашивается при первом снимке; без камеры приложение ставится тоже. -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
 
     <application
         android:name=".StrainApp"

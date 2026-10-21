@@ -314,7 +314,6 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     var error by remember { mutableStateOf<String?>(null) }
     /// Фото, выбранное к отправке, — показывается над полем ввода.
     var attachment by rememberSaveable { mutableStateOf<Uri?>(null) }
-    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var attachMenu by remember { mutableStateOf(false) }
     /// Фото ещё не ушедших сообщений: пока идёт загрузка, видно их.
     val localImages = remember { mutableStateMapOf<String, Any>() }
@@ -345,10 +344,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     val cancelPx = with(density) { 110.dp.toPx() }
 
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) attachment = uri }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val uri = cameraUri
-        if (ok && uri != null) attachment = uri
-    }
+    val camera = rememberCameraLauncher { attachment = it }
 
     fun showHint(text: String) {
         hint = text
@@ -861,9 +857,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                             leadingIcon = { Icon(Icons.Filled.CameraAlt, contentDescription = null) },
                             onClick = {
                                 attachMenu = false
-                                val uri = cameraFileUri(context)
-                                cameraUri = uri
-                                runCatching { camera.launch(uri) }.onFailure { error = "Камера недоступна" }
+                                camera.launch()
                             }
                         )
                         DropdownMenuItem(

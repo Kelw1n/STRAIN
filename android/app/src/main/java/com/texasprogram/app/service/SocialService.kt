@@ -766,7 +766,7 @@ object SocialService {
         return uploadImage(jpeg)
     }
 
-    /// Фото уменьшается до 1280 px по длинной стороне и поворачивается по EXIF:
+    /// Фото уменьшается до 1280 px по длинной стороне, поворачивается и отражается по EXIF:
     /// так пост грузится быстро, а в бесплатную базу помещаются тысячи тренировок.
     fun jpeg(context: Context, uri: Uri, maxSide: Int = 1280, quality: Int = 72): ByteArray? = runCatching {
         val resolver = context.contentResolver
@@ -778,20 +778,19 @@ object SocialService {
         val decoded = resolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
         } ?: return null
-        val rotation = resolver.openInputStream(uri)?.use {
-            when (ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-                else -> 0f
-            }
-        } ?: 0f
+        // Поворот и отражение: камеры часто пишут селфи «зеркально» отметкой в EXIF,
+        // а не самими пикселями — без неё фото ушло бы неотражённым.
+        val exif = resolver.openInputStream(uri)?.use { ExifInterface(it) }
+        val rotation = exif?.rotationDegrees?.toFloat() ?: 0f
+        val flipped = exif?.isFlipped == true
         val scale = minOf(1f, maxSide.toFloat() / maxOf(decoded.width, decoded.height))
         val matrix = Matrix().apply {
             if (scale < 1f) postScale(scale, scale)
+            // ExifInterface считает поворот для уже отражённого кадра: сначала отражение.
+            if (flipped) postScale(-1f, 1f)
             if (rotation != 0f) postRotate(rotation)
         }
-        val bitmap = if (scale < 1f || rotation != 0f) {
+        val bitmap = if (scale < 1f || rotation != 0f || flipped) {
             Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
         } else decoded
         ByteArrayOutputStream().use { out ->

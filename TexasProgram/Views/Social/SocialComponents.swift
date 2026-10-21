@@ -243,6 +243,24 @@ extension UIImage {
             draw(in: CGRect(origin: .zero, size: target))
         }
     }
+
+    /// Уменьшенная и отражённая по горизонтали копия — селфи таким, каким его
+    /// видно в камере. Уже отражённый кадр второй раз не переворачиваем.
+    func mirroredSelfie(maxSide: CGFloat = 2048) -> UIImage {
+        switch imageOrientation {
+        case .upMirrored, .downMirrored, .leftMirrored, .rightMirrored: return downscaled(maxSide: maxSide)
+        default: break
+        }
+        let ratio = min(1, maxSide / max(size.width, size.height))
+        let target = CGSize(width: (size.width * ratio).rounded(), height: (size.height * ratio).rounded())
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: target, format: format).image { context in
+            context.cgContext.translateBy(x: target.width, y: 0)
+            context.cgContext.scaleBy(x: -1, y: 1)
+            draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
 }
 
 /// Съёмка прямо из приложения: не нужно уходить в «Камеру» и потом искать фото в галерее.
@@ -274,7 +292,13 @@ struct CameraPicker: UIViewControllerRepresentable {
         }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let image = info[.originalImage] as? UIImage { onImage(image) }
+            if let image = info[.originalImage] as? UIImage {
+                // Фронталка отдаёт кадр не зеркальным, и лицо выглядит непривычно
+                // перекошенным. Сохраняем, как было в превью, — как «Зеркальная
+                // фронтальная камера» в настройках iPhone, только для всех сразу.
+                let selfie = picker.sourceType == .camera && picker.cameraDevice == .front
+                onImage(selfie ? image.mirroredSelfie() : image)
+            }
             isPresented.wrappedValue = false
         }
 

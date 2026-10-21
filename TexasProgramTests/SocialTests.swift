@@ -154,6 +154,48 @@ final class SocialTests: XCTestCase {
         XCTAssertTrue(tiny.downscaled() === tiny, "маленькое фото не перерисовывается")
     }
 
+    /// Селфи отражается, как в превью камеры: левая половина кадра уходит вправо.
+    func testSelfieIsMirroredLikePreview() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 20), format: format).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 20, height: 20))
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 20, y: 0, width: 20, height: 20))
+        }
+        let selfie = image.mirroredSelfie()
+        XCTAssertEqual(selfie.size, image.size)
+        let left = try XCTUnwrap(pixel(selfie, x: 5, y: 10))
+        let right = try XCTUnwrap(pixel(selfie, x: 35, y: 10))
+        XCTAssertGreaterThan(left.blue, 200)
+        XCTAssertLessThan(left.red, 50)
+        XCTAssertGreaterThan(right.red, 200)
+        XCTAssertLessThan(right.blue, 50)
+
+        let alreadyMirrored = UIImage(cgImage: try XCTUnwrap(image.cgImage), scale: 1, orientation: .upMirrored)
+        let kept = try XCTUnwrap(pixel(alreadyMirrored.mirroredSelfie(), x: 5, y: 10))
+        XCTAssertGreaterThan(kept.blue, 200, "уже отражённый кадр второй раз не переворачивается")
+    }
+
+    /// Цвет точки так, как картинку видно на экране — с учётом её ориентации.
+    private func pixel(_ image: UIImage, x: Int, y: Int) -> (red: UInt8, blue: UInt8)? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let shown = UIGraphicsImageRenderer(size: image.size, format: format).image { _ in image.draw(at: .zero) }
+        guard let cg = shown.cgImage else { return nil }
+        var data = [UInt8](repeating: 0, count: 4)
+        let drawn = data.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(
+                data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(cg, in: CGRect(x: -x, y: y - cg.height + 1, width: cg.width, height: cg.height))
+            return true
+        }
+        return drawn ? (data[0], data[2]) : nil
+    }
+
     // MARK: Копирование и ответы
 
     func testCopyWorkoutTakesWorkingWeight() throws {

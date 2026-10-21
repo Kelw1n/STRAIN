@@ -91,6 +91,11 @@ dependencies {
     // Фото ленты: загрузка с кэшем на диске; поворот снимков по EXIF перед отправкой.
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // Своя камера: селфи сохраняется зеркальным, как в превью, на любом телефоне.
+    val cameraX = "1.4.1"
+    implementation("androidx.camera:camera-camera2:$cameraX")
+    implementation("androidx.camera:camera-lifecycle:$cameraX")
+    implementation("androidx.camera:camera-view:$cameraX")
     // Готовые профили Compose компилируются при установке APK, а не во время
     // первых прокруток — иначе первые минуты интерфейс подтормаживает.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")

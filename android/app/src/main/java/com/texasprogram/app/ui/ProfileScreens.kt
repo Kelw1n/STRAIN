@@ -86,7 +86,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.AchievementGroup
 import com.texasprogram.app.model.AchievementKind
@@ -103,7 +102,6 @@ import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.SocialException
 import com.texasprogram.app.service.SocialService
 import kotlinx.coroutines.launch
-import java.io.File
 
 // MARK: - Вкладка «Профиль»
 
@@ -722,8 +720,6 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
     var showingCode by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    // Камера — другое приложение: пока оно открыто, наш экран могут пересоздать.
-    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     fun upload(uri: Uri, avatar: Boolean) {
         uploading = true
@@ -742,10 +738,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
 
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { upload(it, avatar = true) } }
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { upload(it, avatar = false) } }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val uri = cameraUri
-        if (ok && uri != null) upload(uri, avatar = true)
-    }
+    val camera = rememberCameraLauncher { upload(it, avatar = true) }
 
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
@@ -838,9 +831,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                             leadingIcon = { Icon(Icons.Filled.CameraAlt, contentDescription = null) },
                             onClick = {
                                 avatarMenu = false
-                                val uri = cameraFileUri(context)
-                                cameraUri = uri
-                                runCatching { camera.launch(uri) }.onFailure { error = "Камера недоступна" }
+                                camera.launch()
                             }
                         )
                         DropdownMenuItem(
@@ -1013,13 +1004,6 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена", color = Theme.textSecondary) } }
         )
     }
-}
-
-/// Файл для снимка камеры: камера пишет в него сама, а мы потом читаем и сжимаем.
-fun cameraFileUri(context: Context): Uri {
-    val dir = File(context.cacheDir, "camera").apply { mkdirs() }
-    val file = File(dir, "photo-${System.currentTimeMillis()}.jpg")
-    return FileProvider.getUriForFile(context, "${context.packageName}.files", file)
 }
 
 @Composable

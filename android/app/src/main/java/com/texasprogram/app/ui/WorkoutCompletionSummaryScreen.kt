@@ -117,16 +117,8 @@ fun WorkoutCompletionSummaryScreen(
     }
     val context = LocalContext.current
     // Снимок сразу из экрана итогов: не надо выходить в «Камеру» и искать фото в галерее.
-    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val uri = cameraUri
-        if (ok && uri != null && selectedImages.size < 5) selectedImages.add(uri)
-    }
-    fun openCamera() {
-        val uri = cameraFileUri(context)
-        cameraUri = uri
-        runCatching { cameraLauncher.launch(uri) }
-    }
+    val camera = rememberCameraLauncher { if (selectedImages.size < 5) selectedImages.add(it) }
+    fun openCamera() = camera.launch()
     fun openGallery() {
         photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
