@@ -368,9 +368,10 @@ final class ExerciseReorder {
         guard draggingID != nil, !ending else { return }
         ending = true
         let from = startIndex, to = target
-        withAnimation(Motion.reorder) {
-            translation = CGFloat(to - from) * step
-        } completion: {
+        var finished = false
+        let finish = {
+            guard !finished else { return }
+            finished = true
             var still = Transaction()
             still.disablesAnimations = true
             withTransaction(still) {
@@ -383,6 +384,14 @@ final class ExerciseReorder {
             withAnimation(Motion.sheet) { self.draggingID = nil }
             self.ending = false
         }
+        withAnimation(Motion.reorder) {
+            translation = CGFloat(to - from) * step
+        } completion: {
+            finish()
+        }
+        // Конец анимации может не прийти — телефон заблокировали, экран свернули.
+        // Тогда доводим сами: иначе лента так и осталась бы без прокрутки.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { finish() }
     }
 
     /// Смещение карточки: схваченная едет за пальцем, соседи уступают место.
@@ -473,7 +482,13 @@ private struct ExerciseSessionCard: View {
                 Spacer(minLength: 4)
             }
             .contentShape(Rectangle())
-            .gesture(reorderGesture)
+            .reorderHold(fallback: reorderGesture) {
+                if !reorder.isActive { reorder.begin(id: exercise.id, index: index) }
+            } onChange: { dy in
+                reorder.update(translation: dy, count: count)
+            } onEnd: {
+                reorder.end()
+            }
             .accessibilityElement(children: .combine)
             .accessibilityHint("Удерживайте, чтобы переставить")
             .accessibilityActions {
@@ -493,6 +508,7 @@ private struct ExerciseSessionCard: View {
     }
 
     /// Удержание 0,3 с, потом ведение. Короткое касание и прокрутка проходят мимо.
+    /// Жест SwiftUI — только для iOS 17; с iOS 18 то же делает жест UIKit.
     private var reorderGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.3)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
@@ -694,7 +710,7 @@ private struct SetRowView: View {
             .offset(x: swipe)
             // Полоса стоит на месте, строка уезжает с неё влево.
             .background(alignment: .trailing) { deleteStrip }
-            .simultaneousGesture(swipeGesture, including: canDelete ? .all : .subviews)
+            .rowSwipe(enabled: canDelete, fallback: swipeGesture, onChange: swipeChanged, onEnd: swipeEnded)
             .sensoryFeedback(.impact(weight: .medium), trigger: armed) { _, isArmed in isArmed }
             .accessibilityAction(named: "Удалить подход") {
                 if canDelete { delete() }
@@ -773,22 +789,29 @@ private struct SetRowView: View {
     }
 
     /// Только горизонтальное движение влево: вертикальное — это прокрутка.
+    /// Жест SwiftUI — только для iOS 17; с iOS 18 то же делает жест UIKit.
     private var swipeGesture: some Gesture {
         DragGesture(minimumDistance: 16, coordinateSpace: .local)
             .onChanged { value in
                 let dx = value.translation.width
                 let dy = value.translation.height
                 guard swipe != 0 || (dx < 0 && abs(dx) > abs(dy) * 1.4) else { return }
-                swipe = min(0, dx)
-                armed = -swipe > threshold
+                swipeChanged(dx)
             }
-            .onEnded { _ in
-                if armed {
-                    delete()
-                } else {
-                    withAnimation(Motion.bouncy) { swipe = 0 }
-                }
-            }
+            .onEnded { _ in swipeEnded() }
+    }
+
+    private func swipeChanged(_ dx: CGFloat) {
+        swipe = min(0, dx)
+        armed = -swipe > threshold
+    }
+
+    private func swipeEnded() {
+        if armed {
+            delete()
+        } else {
+            withAnimation(Motion.bouncy) { swipe = 0 }
+        }
     }
 
     private func delete() {
@@ -1076,5 +1099,123 @@ private struct SetNumberField: View {
         let cleaned = text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
         guard !cleaned.isEmpty, let number = Double(cleaned), number.isFinite, number >= 0 else { return nil }
         return decimal ? min(number, 1000) : min(number.rounded(.down), 999)
+    }
+}
+
+// MARK: - Жесты строк и шапок
+
+private extension View {
+    /// Удержание шапки — переставить упражнение. С iOS 18 — жест UIKit: он ждёт
+    /// неподвижного пальца и не забирает касание у прокрутки. Жест SwiftUI на
+    /// iOS 18 и новее перехватывал касание, и лента листалась не с первого раза.
+    @ViewBuilder
+    func reorderHold<G: Gesture>(
+        fallback: G,
+        onBegin: @escaping () -> Void,
+        onChange: @escaping (CGFloat) -> Void,
+        onEnd: @escaping () -> Void
+    ) -> some View {
+        if #available(iOS 18.0, *) {
+            gesture(HoldToDragGesture(onBegin: onBegin, onChange: onChange, onEnd: onEnd))
+        } else {
+            gesture(fallback)
+        }
+    }
+
+    /// Смахивание подхода влево. С iOS 18 — жест UIKit, который начинается,
+    /// только если палец пошёл влево: движение вверх-вниз целиком достаётся прокрутке.
+    @ViewBuilder
+    func rowSwipe<G: Gesture>(
+        enabled: Bool,
+        fallback: G,
+        onChange: @escaping (CGFloat) -> Void,
+        onEnd: @escaping () -> Void
+    ) -> some View {
+        if #available(iOS 18.0, *) {
+            gesture(LeftSwipeGesture(isEnabled: enabled, onChange: onChange, onEnd: onEnd))
+        } else {
+            simultaneousGesture(fallback, including: enabled ? .all : .subviews)
+        }
+    }
+}
+
+/// Горизонтальный свайп влево по строке. Пока он идёт, лента не прокручивается;
+/// вертикальное движение он не берёт вовсе.
+@available(iOS 18.0, *)
+private struct LeftSwipeGesture: UIGestureRecognizerRepresentable {
+    var isEnabled: Bool
+    var onChange: (CGFloat) -> Void
+    var onEnd: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        pan.isEnabled = isEnabled
+        return pan
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        // Отключаем, а не убираем жест: иначе строка пересобиралась бы, и поле
+        // ввода теряло фокус, когда у упражнения появляется второй подход.
+        recognizer.isEnabled = isEnabled
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed:
+            onChange(recognizer.translation(in: recognizer.view).x)
+        case .ended, .cancelled, .failed:
+            onEnd()
+        default:
+            break
+        }
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return velocity.x < 0 && abs(velocity.x) > abs(velocity.y) * 1.4
+        }
+    }
+}
+
+/// Удержание 0,3 с и ведение — перестановка упражнений. Повёл палец раньше —
+/// это прокрутка, и жест сразу уступает. Отмену системой (звонок, блокировка)
+/// UIKit присылает сам, и перестановка не зависает на полпути.
+@available(iOS 18.0, *)
+private struct HoldToDragGesture: UIGestureRecognizerRepresentable {
+    var onBegin: () -> Void
+    var onChange: (CGFloat) -> Void
+    var onEnd: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let press = UILongPressGestureRecognizer()
+        press.minimumPressDuration = 0.3
+        return press
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
+        // В координатах окна: карточки сворачиваются, и шапка под пальцем уезжает.
+        let y = recognizer.location(in: nil).y
+        switch recognizer.state {
+        case .began:
+            context.coordinator.startY = y
+            onBegin()
+        case .changed:
+            onChange(y - context.coordinator.startY)
+        case .ended, .cancelled, .failed:
+            onEnd()
+        default:
+            break
+        }
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var startY: CGFloat = 0
     }
 }
