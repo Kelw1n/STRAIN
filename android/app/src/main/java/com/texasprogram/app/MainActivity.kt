@@ -86,6 +86,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import com.texasprogram.app.data.AppStore
 import com.texasprogram.app.data.BackupService
+import com.texasprogram.app.data.NutritionStore
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.ui.AppBackground
@@ -251,6 +252,8 @@ private fun rememberBackupImport(store: AppStore, onResult: (String) -> Unit) =
                     "В файле нет профилей"
                 } else {
                     store.restoreAll(restored)
+                    BackupService.restoreNutrition(archive, NutritionStore.directory(context))
+                    NutritionStore.get(context).reload()
                     "Восстановлено профилей: ${restored.size}. Открыт «${restored.first().name}»."
                 }
             } catch (e: Exception) {
@@ -336,7 +339,8 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         if (uri == null) return@rememberLauncherForActivityResult
         backupMessage = try {
             context.contentResolver.openOutputStream(uri)?.use {
-                it.write(BackupService.export(store.profiles, SocialService.token).toByteArray())
+                val nutrition = NutritionStore.directory(context)
+                it.write(BackupService.export(store.profiles, SocialService.token) { id -> NutritionStore.read(nutrition, id) }.toByteArray())
             }
             "Копия сохранена"
         } catch (e: Exception) {
@@ -469,6 +473,11 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onOpenHistory = { showHistoryList = true },
                     onOpenNotes = { showNotes = true },
                     onOpenBodyWeight = { showBodyWeight = true },
+                    onUpdate = { updated -> store.update(updated.id) { updated } }
+                )
+                MainTabItem.NUTRITION -> com.texasprogram.app.ui.NutritionScreen(
+                    profile = profile,
+                    contentPadding = contentPadding,
                     onUpdate = { updated -> store.update(updated.id) { updated } }
                 )
                 MainTabItem.COMMUNITY -> CommunityScreen(

@@ -101,6 +101,8 @@ class AppStore private constructor(val context: Context) {
         profiles = profiles.filterNot { it.id == id }
         if (activeId == id) activeId = profiles.firstOrNull()?.id.orEmpty()
         persist()
+        // Дневник питания удалённого профиля больше никому не нужен.
+        NutritionStore.delete(NutritionStore.directory(context), id)
         // Профилей не осталось: раньше будильник удалённого профиля звенел и дальше.
         if (profiles.isEmpty()) com.texasprogram.app.service.ReminderScheduler.cancel(context)
     }

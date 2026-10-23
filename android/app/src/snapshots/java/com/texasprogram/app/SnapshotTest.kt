@@ -32,6 +32,12 @@ import androidx.lifecycle.Lifecycle
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.texasprogram.app.model.AchievementCalculator
+import com.texasprogram.app.model.BodyWeightEntry
+import com.texasprogram.app.model.FoodEntry
+import com.texasprogram.app.model.Nutrients
+import com.texasprogram.app.model.NutritionData
+import com.texasprogram.app.model.NutritionGoal
+import com.texasprogram.app.model.NutritionPlan
 import com.texasprogram.app.model.ProgramInput
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.SocialBadge
@@ -44,6 +50,11 @@ import com.texasprogram.app.ui.CommunityScreen
 import com.texasprogram.app.ui.EditProfileScreen
 import com.texasprogram.app.ui.FeedScreen
 import com.texasprogram.app.ui.FollowButton
+import com.texasprogram.app.ui.FoodEntrySheet
+import com.texasprogram.app.ui.LocalNutritionSheetInline
+import com.texasprogram.app.ui.NutritionActions
+import com.texasprogram.app.ui.NutritionContent
+import com.texasprogram.app.ui.NutritionGuideSheet
 import com.texasprogram.app.ui.LiquidGlassTabBar
 import com.texasprogram.app.ui.MainTabItem
 import com.texasprogram.app.ui.PostCard
@@ -331,6 +342,53 @@ class SnapshotTest {
                 val context = androidx.compose.ui.platform.LocalContext.current
                 val bitmap = remember { com.texasprogram.app.ui.TrainingRecapCard.render(context, recap) }
                 androidx.compose.foundation.Image(bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
+            }
+        }
+    }
+
+    /// «Питание»: неделя наблюдения, цель с недельной проверкой (и на узком
+    /// экране), справка по методу и запись еды вручную.
+    @Test
+    fun nutrition() {
+        val today = LocalDate.now()
+        val zone = java.time.ZoneId.systemDefault()
+        fun at(daysAgo: Long, hour: Int) = today.minusDays(daysAgo).atTime(hour, 0).atZone(zone).toInstant()
+        fun midnight(daysAgo: Long) = today.minusDays(daysAgo).atStartOfDay(zone).toInstant()
+        val food = listOf(
+            FoodEntry(date = at(0, 9), name = "Овсянка с бананом", grams = 350.0, nutrients = Nutrients(420.0, 14.0, 9.0, 72.0)),
+            FoodEntry(date = at(0, 14), name = "Куриная грудка", grams = 150.0, nutrients = Nutrients(248.0, 46.5, 5.4, 0.0), fromPhoto = true),
+            FoodEntry(date = at(0, 14), name = "Рис", grams = 200.0, nutrients = Nutrients(260.0, 5.4, 0.6, 57.0), fromPhoto = true)
+        ) + (1L..3L).map { FoodEntry(date = at(it, 13), name = "Обед", nutrients = Nutrients(2400.0, 140.0, 80.0, 280.0)) }
+        // Вес за две недели чуть снижается — на наборе это совет добавить углеводов.
+        val weighed = profile.copy(bodyWeightLog = (0L..13L).map { BodyWeightEntry(today.minusDays(it).toEpochDay(), 82.0 + it * 0.02) })
+        val observe = NutritionData(food, NutritionPlan(observationStart = midnight(3)))
+        val goal = NutritionData(
+            food,
+            NutritionPlan(
+                observationStart = midnight(21),
+                maintenance = Nutrients(2800.0, 150.0, 90.0, 340.0),
+                goal = NutritionGoal.BULK,
+                target = Nutrients(2920.0, 150.0, 90.0, 370.0),
+                stepStart = midnight(7)
+            )
+        )
+        val tab: @Composable (NutritionData) -> Unit = { data ->
+            NutritionContent(weighed, data, padding, NutritionActions(null), hasKey = { true }, onUpdate = {})
+        }
+        tall(2600)
+        paparazzi.snapshot("22-nutrition-observe") { Screen { tab(observe) } }
+        paparazzi.snapshot("23-nutrition-goal") { Screen { tab(goal) } }
+        paparazzi.unsafeUpdateConfig(deviceConfig = DeviceConfig.NEXUS_5.copy(screenHeight = 2600))
+        paparazzi.snapshot("23b-nutrition-goal-narrow") { Screen { tab(goal) } }
+        tall(2600)
+        paparazzi.snapshot("24-nutrition-guide") {
+            Screen { CompositionLocalProvider(LocalNutritionSheetInline provides true) { NutritionGuideSheet {} } }
+        }
+        paparazzi.snapshot("25-nutrition-entry") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    FoodEntrySheet(original = null, day = today, recent = food.take(3), onSave = {}, onDismiss = {})
+                }
             }
         }
     }

@@ -6,6 +6,7 @@ import com.texasprogram.app.model.SkippedWorkout
 import com.texasprogram.app.model.LiftOutcome
 import com.texasprogram.app.model.LiftReport
 import com.texasprogram.app.model.MainLift
+import com.texasprogram.app.model.NutritionData
 import com.texasprogram.app.model.PlanEdit
 import com.texasprogram.app.model.SetEntry
 import com.texasprogram.app.service.EuthanasiaInput
@@ -70,7 +71,10 @@ data class ProfileSnapshot(
     /// Шаг прибавки и отклонённые застои. В старых копиях их нет.
     val weightSteps: Map<String, Double> = emptyMap(),
     val defaultWeightStep: Double = 2.5,
-    val stallDismissed: Map<String, Double> = emptyMap()
+    val stallDismissed: Map<String, Double> = emptyMap(),
+    /// Дневник и метод питания — из отдельного файла профиля. В копиях,
+    /// снятых до вкладки «Питание», его нет, и тогда прежний дневник не трогаем.
+    val nutrition: NutritionData? = null
 )
 
 /// Отчёт авторегуляции в копии. Android хранит номер дня `epochDay`, iOS —
@@ -141,18 +145,30 @@ object BackupService {
         prettyPrint = true
     }
 
-    fun export(profiles: List<ProgramProfile>, socialToken: String? = null): String =
+    /// `nutrition` — питание профиля по его идентификатору: оно лежит не в профиле, а в файле.
+    fun export(
+        profiles: List<ProgramProfile>,
+        socialToken: String? = null,
+        nutrition: (String) -> NutritionData? = { null }
+    ): String =
         json.encodeToString(
             BackupArchive(
                 exportedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString(),
-                profiles = profiles.map(::snapshot),
+                profiles = profiles.map { snapshot(it, nutrition(it.id)) },
                 socialToken = socialToken
             )
         )
 
     fun parse(text: String): BackupArchive = json.decodeFromString(text)
 
-    private fun snapshot(profile: ProgramProfile) = ProfileSnapshot(
+    /// Питание из копии — в файлы профилей. В старой копии его нет — прежнее остаётся.
+    fun restoreNutrition(archive: BackupArchive, directory: java.io.File) {
+        archive.profiles.forEach { snapshot ->
+            snapshot.nutrition?.let { NutritionStore.write(directory, snapshot.id, it) }
+        }
+    }
+
+    private fun snapshot(profile: ProgramProfile, nutrition: NutritionData?) = ProfileSnapshot(
         id = profile.id,
         name = profile.name,
         createdAtEpochDay = profile.createdAtEpochDay,
@@ -200,7 +216,8 @@ object BackupService {
         bodyWeightLog = profile.bodyWeightLog.map { BodyWeightSnapshot(isoDate(it.epochDay), it.weight) },
         weightSteps = profile.weightSteps,
         defaultWeightStep = profile.defaultWeightStep,
-        stallDismissed = profile.stallDismissed
+        stallDismissed = profile.stallDismissed,
+        nutrition = nutrition
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(

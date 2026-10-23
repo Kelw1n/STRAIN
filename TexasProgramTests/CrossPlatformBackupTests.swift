@@ -57,6 +57,31 @@ final class CrossPlatformBackupTests: XCTestCase {
         XCTAssertEqual(Array(firstDay.prefix(2)), ["test-time-Тяга", "test-max-Тяга"])
     }
 
+    /// Питание из копии Android: даты ISO без долей секунды, пустые поля — `null`,
+    /// числа с «.0». Раньше такого поля не было вовсе — дневник не переезжал.
+    func testNutritionFromAndroid() throws {
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(Self.fromAndroid.utf8)) as? [String: Any])
+        var profiles = try XCTUnwrap(root["profiles"] as? [[String: Any]])
+        let index = try XCTUnwrap(profiles.firstIndex { $0["name"] as? String == "Техас" })
+        profiles[index]["nutrition"] = try JSONSerialization.jsonObject(with: Data(Self.nutritionFromAndroid.utf8))
+        root["profiles"] = profiles
+        let json = String(decoding: try JSONSerialization.data(withJSONObject: root), as: UTF8.self)
+
+        let restored = try restore(json)
+        let id = try XCTUnwrap(restored["Техас"]?.profileID)
+        defer { NutritionStore.delete(id) }
+        let diary = try XCTUnwrap(NutritionStore.read(id))
+        XCTAssertEqual(diary.entries.count, 2)
+        XCTAssertEqual(diary.entries.first?.grams, 150)
+        XCTAssertEqual(diary.entries.first?.fromPhoto, true)
+        XCTAssertEqual(diary.entries.first?.nutrients.protein, 46.5)
+        XCTAssertNil(diary.entries.last?.grams)
+        XCTAssertEqual(diary.plan?.goal, .cut)
+        XCTAssertEqual(diary.plan?.target?.kcal, 2883)
+        XCTAssertEqual(diary.plan?.history.first?.note, "Сушка")
+        XCTAssertEqual(diary.plan?.observationStart, ISO8601DateFormatter().date(from: "2026-10-18T21:00:00Z"))
+    }
+
     func testOwnBackupStillOpens() throws {
         let restored = try restore(Self.fromIOS)
         XCTAssertEqual(restored.count, 4)
@@ -321,6 +346,44 @@ final class CrossPlatformBackupTests: XCTestCase {
     }
   ],
   "version": 1
+}
+"""#
+
+    /// Питание так, как его пишет Android: поля в порядке объявления, `null` явно.
+    static let nutritionFromAndroid = #"""
+{
+  "entries": [
+    {
+      "id": "6F9619FF-8B86-D011-B42D-00C04FC964FF",
+      "date": "2026-10-19T10:00:00Z",
+      "name": "Куриная грудка",
+      "grams": 150.0,
+      "nutrients": { "kcal": 248.0, "protein": 46.5, "fat": 5.4, "carbs": 0.0 },
+      "fromPhoto": true
+    },
+    {
+      "id": "0C1D2E3F-4A5B-4C6D-8E9F-A0B1C2D3E4F5",
+      "date": "2026-10-19T15:30:00Z",
+      "name": "Яблоко",
+      "grams": null,
+      "nutrients": { "kcal": 52.0, "protein": 0.0, "fat": 0.0, "carbs": 14.0 },
+      "fromPhoto": false
+    }
+  ],
+  "plan": {
+    "observationStart": "2026-10-18T21:00:00Z",
+    "maintenance": { "kcal": 3000.0, "protein": 150.0, "fat": 90.0, "carbs": 300.0 },
+    "goal": "cut",
+    "target": { "kcal": 2883.0, "protein": 150.0, "fat": 77.0, "carbs": 300.0 },
+    "stepStart": "2026-10-25T21:00:00Z",
+    "history": [
+      {
+        "date": "2026-10-25T21:00:00Z",
+        "norm": { "kcal": 2883.0, "protein": 150.0, "fat": 77.0, "carbs": 300.0 },
+        "note": "Сушка"
+      }
+    ]
+  }
 }
 """#
 

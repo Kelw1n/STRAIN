@@ -23,11 +23,13 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,6 +77,7 @@ enum class MainTabItem(val title: String, val icon: ImageVector, val outlinedIco
     TODAY("Главное", Icons.Filled.Home, Icons.Outlined.Home),
     WORKOUT("Тренировка", Icons.Filled.FitnessCenter, Icons.Outlined.FitnessCenter),
     PROGRESS("Активность", Icons.Filled.BarChart, Icons.Outlined.BarChart),
+    NUTRITION("Питание", Icons.Filled.Restaurant, Icons.Outlined.Restaurant),
     COMMUNITY("Друзья", Icons.Filled.Groups, Icons.Outlined.Groups),
     PROFILE("Профиль", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle)
 }
