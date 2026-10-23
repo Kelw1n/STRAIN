@@ -92,7 +92,7 @@ struct FoodEntrySheet: View {
                 AmountField(title: "Жиры", value: $fat)
                 AmountField(title: "Углеводы", value: $carbs)
             }
-            Text("Пустые калории посчитаются по Б/Ж/У: 4 ккал в грамме белка и углеводов, 9 — в грамме жира. Порцию можно не писать.")
+            Text("Не вписал калории — они посчитаются по Б/Ж/У: 4 ккал в грамме белка и углеводов, 9 — в грамме жира. Порцию можно не писать.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.white.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)

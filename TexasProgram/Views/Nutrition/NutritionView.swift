@@ -298,6 +298,7 @@ struct NutritionView: View {
 
     private func changeLine(_ change: Double?) -> String {
         guard let change else { return "Мало замеров веса — нужно хотя бы \(LimarMethod.minimumDays) за неделю" }
+        if abs(change) < 0.05 { return "Средний вес не изменился за неделю" }
         return "Средний вес \(NutritionFormat.change(change)) к прошлой неделе"
     }
 
@@ -498,16 +499,19 @@ struct NutritionView: View {
             Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.5))
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(NutritionFormat.grams(value))
-                    .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-                Text(goal.map { "/\(NutritionFormat.grams($0)) г" } ?? "г")
+            // Норма — строкой ниже: на узком iPhone рядом с числом она не влезала,
+            // и «100» переносилось на две строки.
+            Text(NutritionFormat.grams(value) + (goal == nil ? " г" : ""))
+                .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let goal {
+                Text("из \(NutritionFormat.grams(goal)) г")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.4))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
             if let goal, goal > 0 {
                 LineMeter(value: value / goal, height: 4)
@@ -695,8 +699,7 @@ struct NutritionView: View {
         var parts: [String] = []
         if let grams = entry.grams { parts.append("\(NutritionFormat.grams(grams)) г") }
         if entry.fromPhoto { parts.append("по фото") }
-        let time = entry.date.formatted(date: .omitted, time: .shortened)
-        parts.append(time)
+        parts.append(NutritionFormat.time(entry.date))
         return parts.joined(separator: " · ")
     }
 

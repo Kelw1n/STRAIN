@@ -27,6 +27,16 @@ enum NutritionFormat {
         return calendar.date(byAdding: .hour, value: 12, to: calendar.startOfDay(for: day)) ?? day
     }
 
+    /// «14:05» — по-русски и в 24 часа, даже если на телефоне английский регион.
+    static func time(_ date: Date) -> String { timeFormatter.string(from: date) }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
     static func dayTitle(_ day: Date, calendar: Calendar = .current) -> String {
         if calendar.isDateInToday(day) { return "Сегодня" }
         if calendar.isDateInYesterday(day) { return "Вчера" }
