@@ -142,7 +142,7 @@ fun FoodEntrySheet(
                 AmountField("Углеводы", carbs, { carbs = it }, Modifier.weight(1f))
             }
             Text(
-                "Не вписал калории — они посчитаются по Б/Ж/У: 4 ккал в грамме белка и углеводов, 9 — в грамме жира. Порцию можно не писать.",
+                NutritionFormat.nbsp("Не вписал калории — они посчитаются по Б/Ж/У: 4 ккал в грамме белка и углеводов, 9 — в грамме жира. Порцию можно не писать."),
                 color = Color.White.copy(alpha = 0.4f),
                 fontSize = 12.sp
             )
@@ -521,7 +521,7 @@ private fun GuideStep(number: Int, title: String, text: String) {
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Text(text, color = Color.White.copy(alpha = 0.65f), fontSize = 14.sp)
+            Text(NutritionFormat.nbsp(text), color = Color.White.copy(alpha = 0.65f), fontSize = 14.sp)
         }
     }
 }
@@ -533,7 +533,7 @@ private fun GuideSection(title: String, lines: List<String>) {
         lines.forEach { line ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.padding(top = 8.dp).size(5.dp).clip(CircleShape).background(Theme.accent))
-                Text(line, color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(NutritionFormat.nbsp(line), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
             }
         }
     }

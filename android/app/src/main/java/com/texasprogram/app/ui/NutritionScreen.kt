@@ -350,7 +350,7 @@ private fun MaintenanceCard(state: LimarMethod.Observation.Done, actions: Nutrit
         }
         state.shift?.let { shift ->
             Text(
-                "За неделю вес сдвинулся на ${NutritionFormat.change(shift)} — значит, это ещё не совсем поддержка. Можно понаблюдать ещё неделю или начать так: недельные проверки поправят норму.",
+                NutritionFormat.nbsp("За неделю вес сдвинулся на ${NutritionFormat.change(shift)} — значит, это ещё не совсем поддержка. Можно понаблюдать ещё неделю или начать так: недельные проверки поправят норму."),
                 color = Theme.warning,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
@@ -433,10 +433,10 @@ private fun CheckBlock(check: LimarMethod.Check, goal: NutritionGoal, plan: Nutr
     ) {
         NutritionCaption("Неделя прошла")
         Text(changeLine(check.change), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        Text(adviceLine(check, goal), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp)
+        Text(NutritionFormat.nbsp(adviceLine(check, goal)), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp)
         if (check.lowFat) {
             Text(
-                "Жиров станет ${NutritionFormat.grams(check.proposed.fat)} г — меньше ${NutritionFormat.decimal(LimarMethod.FAT_FLOOR_PER_KG)} г на кило веса. Ниже лучше не опускаться.",
+                NutritionFormat.nbsp("Жиров станет ${NutritionFormat.grams(check.proposed.fat)} г — меньше ${NutritionFormat.decimal(LimarMethod.FAT_FLOOR_PER_KG)} г на кило веса. Ниже лучше не опускаться."),
                 color = Theme.warning,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold

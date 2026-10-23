@@ -83,6 +83,11 @@ object NutritionFormat {
 
     fun kilograms(value: Double): String = decimal(value) + " кг"
 
+    /// Число и единица — на одной строке: «30 г» не разъезжается на «30» и «г».
+    fun nbsp(text: String): String = unitGap.replace(text, "$1\u00A0")
+
+    private val unitGap = Regex("(\\d) (?=(?:г|ккал|кг|дн\\.)(?![а-яё]))")
+
     /// Момент записи для выбранного дня: сегодня — сейчас, прошлый день — полдень.
     fun moment(day: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Instant =
         if (day == LocalDate.now(zone)) Instant.now().truncatedTo(ChronoUnit.SECONDS)
