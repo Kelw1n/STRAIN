@@ -4,6 +4,7 @@ enum MainTabItem: String, CaseIterable, Identifiable {
     case today = "Главное"
     case workout = "Тренировка"
     case progress = "Активность"
+    case nutrition = "Питание"
     case community = "Друзья"
     case profile = "Профиль"
 
@@ -15,13 +16,15 @@ enum MainTabItem: String, CaseIterable, Identifiable {
         case .today: return "house"
         case .workout: return "dumbbell"
         case .progress: return "chart.bar"
+        case .nutrition: return "fork.knife"
         case .community: return "person.3"
         case .profile: return "person.crop.circle"
         }
     }
 
     /// Залитая — то, что видно сквозь линзу.
-    var selectedIcon: String { icon + ".fill" }
+    /// У вилки с ножом залитого варианта нет — она и так сплошная.
+    var selectedIcon: String { self == .nutrition ? icon : icon + ".fill" }
 
     var index: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 }

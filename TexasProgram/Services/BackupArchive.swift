@@ -52,6 +52,9 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var weightSteps: [String: Double]?
     var defaultWeightStep: Double?
     var stallDismissed: [String: Double]?
+    /// Дневник питания и метод Лимара. Есть только в копиях с iPhone: Android
+    /// такое поле пропускает, а копия без него питание на телефоне не трогает.
+    var nutrition: NutritionData?
 }
 
 /// Отчёт авторегуляции в копии. iOS хранит дату полем `date`, Android — номером
@@ -259,7 +262,8 @@ enum BackupService {
             bodyWeightLog: profile.bodyWeightLog,
             weightSteps: profile.weightSteps,
             defaultWeightStep: profile.defaultWeightStep,
-            stallDismissed: profile.stallDismissed
+            stallDismissed: profile.stallDismissed,
+            nutrition: NutritionStore.read(profile.profileID)
         )
     }
 
@@ -356,6 +360,9 @@ enum BackupService {
         result.weightSteps = snapshot.weightSteps ?? [:]
         result.defaultWeightStep = snapshot.defaultWeightStep ?? AccessoryHint.step
         result.stallDismissed = snapshot.stallDismissed ?? [:]
+        if let nutrition = snapshot.nutrition {
+            NutritionStore.write(nutrition, for: result.profileID)
+        }
     }
 
     // MARK: - Даты

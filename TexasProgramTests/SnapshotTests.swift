@@ -327,6 +327,67 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    // MARK: Питание
+
+    private func meal(_ name: String, daysAgo: Int, hour: Int, grams: Double?, _ nutrients: Nutrients, photo: Bool = false) -> FoodEntry {
+        let calendar = Calendar.current
+        let date = calendar.date(byAdding: DateComponents(day: -daysAgo, hour: hour), to: calendar.startOfDay(for: Date()))!
+        return FoodEntry(date: date, name: name, grams: grams, nutrients: nutrients, fromPhoto: photo)
+    }
+
+    private func dayOfMeals(_ daysAgo: Int) -> [FoodEntry] {
+        [
+            meal("Овсянка с бананом", daysAgo: daysAgo, hour: 9, grams: 320, Nutrients(kcal: 430, protein: 14, fat: 9, carbs: 74)),
+            meal("Куриная грудка с рисом", daysAgo: daysAgo, hour: 14, grams: 350, Nutrients(kcal: 560, protein: 52, fat: 7, carbs: 70), photo: true),
+            meal("Творог 5%", daysAgo: daysAgo, hour: 18, grams: 200, Nutrients(kcal: 242, protein: 34, fat: 10, carbs: 6))
+        ]
+    }
+
+    /// Неделя наблюдения на четвёртом дне: точки дней, еда и вес за сегодня.
+    @MainActor func testNutritionObservation() throws {
+        let profile = ProgramProfile(input: .demo)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var diary = NutritionData(entries: (0...3).flatMap { dayOfMeals($0) })
+        diary.plan = NutritionPlan(observationStart: calendar.date(byAdding: .day, value: -3, to: today)!)
+        for daysAgo in 1...3 {
+            profile.recordBodyWeight(82.4 + Double(daysAgo) * 0.1, on: calendar.date(byAdding: .day, value: -daysAgo, to: today)!)
+        }
+        NutritionStore.write(diary, for: profile.profileID)
+        defer { NutritionStore.delete(profile.profileID) }
+        try snap("20-nutrition-observe", height: 2000) { NutritionView(profile: profile) }
+    }
+
+    /// Набор: норма на день и недельная проверка с советом «+30 г углеводов».
+    @MainActor func testNutritionGoal() throws {
+        let profile = ProgramProfile(input: .demo)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let maintenance = Nutrients(kcal: 2600, protein: 160, fat: 85, carbs: 300)
+        var plan = NutritionPlan(observationStart: calendar.date(byAdding: .day, value: -14, to: today)!)
+        plan.goal = .bulk
+        plan.maintenance = maintenance
+        plan.target = LimarMethod.startingNorm(for: .bulk, maintenance: maintenance)
+        plan.stepStart = calendar.date(byAdding: .day, value: -7, to: today)
+        for daysAgo in 1...14 {
+            profile.recordBodyWeight(82 + (daysAgo % 2 == 0 ? 0.1 : 0), on: calendar.date(byAdding: .day, value: -daysAgo, to: today)!)
+        }
+        NutritionStore.write(NutritionData(entries: dayOfMeals(0), plan: plan), for: profile.profileID)
+        defer { NutritionStore.delete(profile.profileID) }
+        try snap("21-nutrition-goal", height: 2000) { NutritionView(profile: profile) }
+    }
+
+    @MainActor func testNutritionGuide() throws {
+        try snap("22-nutrition-guide", height: 2000) { NutritionGuideView() }
+    }
+
+    @MainActor func testNutritionEntry() throws {
+        let entry = dayOfMeals(0)[1]
+        try snap("23-nutrition-entry") {
+            FoodEntrySheet(original: entry, day: Date(), onSave: { _ in }, onDelete: {})
+        }
+    }
+
     // MARK: Съёмка
 
     /// Экран рисуется в настоящем окне — так работают прокрутка, навигация и

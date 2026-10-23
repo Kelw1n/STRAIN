@@ -86,6 +86,8 @@ struct MainTabView: View {
                 },
                 onOpenBench: isUpperLower ? { benchFocus = nil; showingBench = true } : nil
             )
+        case .nutrition:
+            NutritionView(profile: profile)
         case .community:
             CommunityView(onCreateProfile: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.profile) } })
         case .profile:

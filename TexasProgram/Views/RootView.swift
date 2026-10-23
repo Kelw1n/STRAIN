@@ -46,6 +46,7 @@ struct RootView: View {
     /// и до настроек без новой программы не добраться.
     private func restore(_ archive: BackupArchive) {
         BackupService.restore(archive, into: modelContext, existing: profiles)
+        NutritionStore.shared.reload()
         SocialService.shared.adoptBackupToken(archive.socialToken)
         if let first = archive.profiles.first { activeProfileID = first.id }
         isAddingProfile = false
@@ -59,6 +60,7 @@ struct RootView: View {
         let fallback = profiles.first { $0.profileID != profile.profileID }
         // Начатая тренировка удаляемого профиля уходит вместе с ним.
         WorkoutSessionManager.shared.forgetProfile(profile.profileID)
+        NutritionStore.delete(profile.profileID)
         modelContext.delete(profile)
         try? modelContext.save()
         activeProfileID = fallback?.profileID.uuidString ?? ""

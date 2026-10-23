@@ -562,6 +562,7 @@ struct SettingsView: View {
                 return
             }
             let count = BackupService.restore(archive, into: modelContext, existing: profiles)
+            NutritionStore.shared.reload()
             SocialService.shared.adoptBackupToken(archive.socialToken)
             // Сразу открываем восстановленный профиль: иначе после переустановки
             // на экране остаётся новый пустой, и кажется, что копия не применилась.
