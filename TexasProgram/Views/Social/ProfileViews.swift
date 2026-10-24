@@ -48,6 +48,7 @@ struct ProfileTabView: View {
                             onLoadMore: { Task { await loadMore(me.username) } },
                             onPostChange: replace
                         )
+                        .tabScrollAnchor(.profile)
                     }
                     .refreshable {
                         await social.refreshMe()
@@ -99,6 +100,9 @@ struct ProfileTabView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear { social.scheduleSync(from: profile) }
+        .onTabReselect(.profile) {
+            if path.isEmpty { TabReselection.shared.scrollToTop(.profile) } else { path = NavigationPath() }
+        }
     }
 
     private func replace(_ id: String, _ value: SocialPost?) {

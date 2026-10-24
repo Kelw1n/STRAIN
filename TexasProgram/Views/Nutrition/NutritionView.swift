@@ -28,7 +28,7 @@ struct NutritionView: View {
         let image: UIImage
     }
 
-    private var dayEntries: [FoodEntry] { LimarMethod.entries(store.data.entries, on: day) }
+    private var dayEntries: [FoodEntry] { store.entries(on: day) }
     private var eaten: Nutrients { LimarMethod.total(dayEntries) }
     private var target: Nutrients? { store.data.plan?.target }
     private var dayWeight: BodyWeightEntry? { profile.bodyWeightLog.first { calendar.isDate($0.date, inSameDayAs: day) } }
@@ -48,6 +48,7 @@ struct NutritionView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                .tabScrollAnchor(.nutrition)
                 .animation(Motion.card, value: store.data.plan)
                 .animation(Motion.card, value: dayEntries)
             }
@@ -79,6 +80,16 @@ struct NutritionView: View {
             if day > today { day = today }
         }
         .onChange(of: profile.profileID) { _, id in store.open(id) }
+        // Повторное нажатие на «Питание»: открыт прошлый день — назад к сегодня,
+        // сегодня — наверх.
+        .onTabReselect(.nutrition) {
+            let today = calendar.startOfDay(for: Date())
+            if day != today {
+                withAnimation(Motion.snappy) { day = today }
+                weightInput = ""
+            }
+            TabReselection.shared.scrollToTop(.nutrition)
+        }
         // Лист с результатом открываем, только когда камера уже закрылась:
         // во время её ухода новый лист не показывается.
         .fullScreenCover(isPresented: $showingCamera, onDismiss: {
@@ -392,13 +403,19 @@ struct NutritionView: View {
         }
     }
 
+    /// Дни с замером веса — один проход по замерам, а не по проходу на каждый день.
+    private var weighedDays: Set<Date> {
+        Set(profile.bodyWeightLog.map { calendar.startOfDay(for: $0.date) })
+    }
+
     /// Семь дней недели наблюдения: кружок — еда записана, полоска — вес.
     private func weekDots(_ start: Date) -> some View {
-        HStack(spacing: 0) {
+        let weighedDays = self.weighedDays
+        return HStack(spacing: 0) {
             ForEach(0..<LimarMethod.weekLength, id: \.self) { offset in
                 let date = calendar.date(byAdding: .day, value: offset, to: start) ?? start
-                let food = !LimarMethod.entries(store.data.entries, on: date).isEmpty
-                let weight = profile.bodyWeightLog.contains { calendar.isDate($0.date, inSameDayAs: date) }
+                let food = !store.entries(on: date).isEmpty
+                let weight = weighedDays.contains(calendar.startOfDay(for: date))
                 let isToday = calendar.isDateInToday(date)
                 VStack(spacing: 6) {
                     Text(RuDate.short(weekday: calendar.component(.weekday, from: date)))
@@ -525,7 +542,8 @@ struct NutritionView: View {
     // MARK: - Вес натощак
 
     private var weightCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let dayWeight = self.dayWeight
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 NutritionCaption(text: "Вес натощак")
                 Spacer()

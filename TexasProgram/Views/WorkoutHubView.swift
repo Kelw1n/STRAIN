@@ -59,6 +59,7 @@ struct WorkoutHubView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                    .tabScrollAnchor(.workout)
                 }
                 .scrollIndicators(.hidden)
                 .screenBackground()

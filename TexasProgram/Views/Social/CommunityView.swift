@@ -41,6 +41,7 @@ struct CommunityView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                .tabScrollAnchor(.community)
             }
             .scrollDismissesKeyboard(.interactively)
             .refreshable {
@@ -55,6 +56,9 @@ struct CommunityView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onTabReselect(.community) {
+            if path.isEmpty { TabReselection.shared.scrollToTop(.community) } else { path = NavigationPath() }
+        }
         .task(id: query) {
             // Небольшая пауза: не дёргаем сервер на каждую букву.
             try? await Task.sleep(nanoseconds: query.isEmpty ? 0 : 350_000_000)

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -66,10 +67,13 @@ fun WorkoutHubScreen(
     val schedule = remember(profile, today) { profile.schedule(today) }
     val focus = schedule.focus
     val isRunning = WorkoutSessionManager.isRunning
+    val listState = rememberLazyListState()
+    OnTabReselect(MainTabItem.WORKOUT) { listState.scrollToTop() }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
+            state = listState,
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {

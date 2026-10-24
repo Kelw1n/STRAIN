@@ -204,9 +204,7 @@ struct ExerciseHistoryList: View {
                     .appearIn(0)
                 }
                 ForEach(Array(names.enumerated()), id: \.element) { index, name in
-                    NavigationLink {
-                        ExerciseHistoryView(profile: profile, name: name)
-                    } label: {
+                    NavigationLink(value: HistoryExercise(name: name)) {
                         CardView(padding: 15, spacing: 6) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -232,6 +230,14 @@ struct ExerciseHistoryList: View {
         .screenBackground()
         .navigationTitle("История")
         .navigationBarTitleDisplayMode(.inline)
+        // Переход по значению: так вкладка может вернуться к началу, сбросив путь.
+        .navigationDestination(for: HistoryExercise.self) { item in
+            ExerciseHistoryView(profile: profile, name: item.name)
+        }
+    }
+
+    private struct HistoryExercise: Hashable {
+        let name: String
     }
 
     private func subtitle(for name: String) -> String {

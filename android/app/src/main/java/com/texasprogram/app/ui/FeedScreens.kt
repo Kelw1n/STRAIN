@@ -114,6 +114,8 @@ fun FeedScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var scopeMenu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    /// Обновление по повторному нажатию на «Главное» — с крутилкой сверху.
+    var tabRefreshing by remember { mutableStateOf(false) }
 
     fun cache() {
         SocialService.feedCache[feedScope] = SocialFeedPage(posts.toList(), next)
@@ -166,6 +168,24 @@ fun FeedScreen(
         while (true) {
             delay(60_000)
             SocialService.refreshLive()
+        }
+    }
+
+    // Повторное нажатие на «Главное»: из поста или профиля — назад к ленте,
+    // в самой ленте — наверх и свежие тренировки.
+    OnTabReselect(MainTabItem.TODAY) {
+        if (navigator.stack.isNotEmpty()) {
+            navigator.stack.clear()
+            return@OnTabReselect
+        }
+        listState.scrollToTop()
+        if (!loading) {
+            tabRefreshing = true
+            try {
+                reload()
+            } finally {
+                tabRefreshing = false
+            }
         }
     }
 
@@ -242,6 +262,13 @@ fun FeedScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Filled.Search, contentDescription = "Найти людей", tint = Color.White)
+                    }
+                }
+            }
+            if (tabRefreshing) {
+                item(key = "refreshing") {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -448,9 +475,15 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
         search()
     }
 
+    val listState = rememberLazyListState()
+    OnTabReselect(MainTabItem.COMMUNITY) {
+        if (navigator.stack.isNotEmpty()) navigator.stack.clear() else listState.scrollToTop()
+    }
+
     SocialHost(navigator, screen = { route -> SocialRouteScreen(route, navigator, contentPadding, profile) }) {
         LazyColumn(
             Modifier.fillMaxSize().background(Color.Black),
+            state = listState,
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {

@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -82,6 +83,39 @@ enum class MainTabItem(val title: String, val icon: ImageVector, val outlinedIco
     PROFILE("Профиль", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle)
 }
 
+/// Повторное нажатие на открытую вкладку, как в iOS-версии: открытый внутри
+/// экран закрывается, а начальный экран едет наверх. Вкладки слушают свой
+/// счётчик и сами решают, что для них «начало».
+object TabReselect {
+    private val counts = mutableStateMapOf<MainTabItem, Int>()
+
+    fun fire(tab: MainTabItem) {
+        counts[tab] = (counts[tab] ?: 0) + 1
+    }
+
+    fun count(tab: MainTabItem): Int = counts[tab] ?: 0
+}
+
+/// Повторное нажатие на эту вкладку. Первый показ экрана — не нажатие.
+@Composable
+fun OnTabReselect(tab: MainTabItem, action: suspend () -> Unit) {
+    val count = TabReselect.count(tab)
+    val handled = remember { intArrayOf(count) }
+    val current by rememberUpdatedState(action)
+    LaunchedEffect(count) {
+        if (count == handled[0]) return@LaunchedEffect
+        handled[0] = count
+        current()
+    }
+}
+
+/// Наверх даже из глубины ленты: прыжок поближе, а последние экраны — плавно.
+/// Иначе прокрутка с сотого поста собирала бы по пути все промежуточные.
+suspend fun androidx.compose.foundation.lazy.LazyListState.scrollToTop() {
+    if (firstVisibleItemIndex > 4) scrollToItem(4)
+    animateScrollToItem(0)
+}
+
 private val BAR_HEIGHT = 62.dp
 private val REST_LENS_HEIGHT = 48.dp
 /// На сколько поднятая линза выходит за верх и низ панели.
@@ -114,7 +148,9 @@ fun LiquidGlassTabBar(
     onTabSelected: (MainTabItem) -> Unit,
     modifier: Modifier = Modifier,
     /// Вкладки с красной точкой: например, «Друзья» с непрочитанными сообщениями.
-    badges: Set<MainTabItem> = emptySet()
+    badges: Set<MainTabItem> = emptySet(),
+    /// Нажали на уже открытую вкладку — вернуть её к началу.
+    onReselect: (MainTabItem) -> Unit = {}
 ) {
     val haptics = rememberHapticEngine()
     val scope = rememberCoroutineScope()
@@ -123,6 +159,7 @@ fun LiquidGlassTabBar(
     val selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0)
     val currentSelected by rememberUpdatedState(selectedIndex)
     val currentOnSelect by rememberUpdatedState(onTabSelected)
+    val currentOnReselect by rememberUpdatedState(onReselect)
 
     val lensX = remember { Animatable(Float.NaN) }
     val lift = remember { Animatable(0f) }
@@ -196,6 +233,11 @@ fun LiquidGlassTabBar(
                         val tracker = VelocityTracker()
                         tracker.addPosition(down.uptimeMillis, down.position)
                         var index = indexAt(down.position.x)
+                        // Нажали на открытую вкладку и не уводили палец — это «к началу».
+                        val startIndex = index
+                        val startedOnSelected = startIndex == currentSelected
+                        var wandered = false
+                        var released = false
                         var lastX = down.position.x
                         // Какую вкладку уже открыли этим жестом: ведёшь пальцем —
                         // вкладки листаются сразу, а не после того, как отпустишь.
@@ -212,6 +254,7 @@ fun LiquidGlassTabBar(
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                 if (!change.pressed) {
                                     lastX = change.position.x
+                                    released = true
                                     break
                                 }
                                 change.consume()
@@ -225,6 +268,7 @@ fun LiquidGlassTabBar(
                                 val next = indexAt(lastX)
                                 if (next != index) {
                                     index = next
+                                    wandered = true
                                     haptics.selection()
                                     if (next != shown) {
                                         shown = next
@@ -242,6 +286,9 @@ fun LiquidGlassTabBar(
                             scope.launch { lensX.animateTo(center(target), settleSpring) }
                             scope.launch { lift.animateTo(0f, settleSpring) }
                             scope.launch { stretch.animateTo(0f, settleSpring) }
+                            if (released && startedOnSelected && !wandered && target == startIndex) {
+                                currentOnReselect(tabs[target])
+                            }
                         }
                     }
                 }
@@ -251,7 +298,7 @@ fun LiquidGlassTabBar(
                 tabs = tabs,
                 filled = false,
                 selectedIndex = selectedIndex,
-                onSelect = { currentOnSelect(it) },
+                onSelect = { if (it == tabs[currentSelected]) currentOnReselect(it) else currentOnSelect(it) },
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }

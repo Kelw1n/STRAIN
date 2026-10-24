@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -137,6 +138,12 @@ fun NutritionContent(
     var keySaved by remember { mutableStateOf(hasKey()) }
 
     LaunchedEffect(Unit) { if (dayNumber > today.toEpochDay()) dayNumber = today.toEpochDay() }
+    val listState = rememberLazyListState()
+    // Повторное нажатие на «Питание»: открыт прошлый день — назад к сегодня, сегодня — наверх.
+    OnTabReselect(MainTabItem.NUTRITION) {
+        if (dayNumber != today.toEpochDay()) dayNumber = today.toEpochDay()
+        listState.scrollToTop()
+    }
 
     val camera = rememberCameraLauncher { photo = it }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) photo = uri }
@@ -157,6 +164,7 @@ fun NutritionContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
+        state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -270,7 +278,11 @@ private fun StageCard(profile: ProgramProfile, data: com.texasprogram.app.model.
             actions.startObservation()
         }
         plan.goal != null -> GoalCard(plan, profile.bodyWeightLog, today, actions, haptics)
-        else -> when (val state = LimarMethod.observation(plan, data.entries, profile.bodyWeightLog, today)) {
+        else -> when (
+            val state = remember(plan, data.entries, profile.bodyWeightLog, today) {
+                LimarMethod.observation(plan, data.entries, profile.bodyWeightLog, today)
+            }
+        ) {
             is LimarMethod.Observation.Collecting -> CollectingCard(state, data.entries, profile.bodyWeightLog, today, actions)
             is LimarMethod.Observation.NotEnough -> NutritionCard {
                 NutritionCaption("Неделя прошла", color = Theme.warning)
@@ -401,7 +413,7 @@ private fun GoalCard(plan: NutritionPlan, weights: List<BodyWeightEntry>, today:
             KcalHeadline(target.kcal)
             Text(NutritionFormat.macros(target), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
-        val check = LimarMethod.check(plan, weights, today)
+        val check = remember(plan, weights, today) { LimarMethod.check(plan, weights, today) }
         if (check != null) {
             CheckBlock(check, goal, plan, actions, haptics)
         } else {
@@ -519,11 +531,14 @@ private fun StageMenu(items: List<MenuAction>) {
 /// Семь дней недели наблюдения: кружок — еда записана, полоска — вес.
 @Composable
 private fun WeekDots(start: LocalDate, entries: List<FoodEntry>, weights: List<BodyWeightEntry>, today: LocalDate) {
+    // Дни с едой и с весом — один проход по дневнику, а не семь.
+    val foodDays = remember(entries) { entries.mapTo(HashSet()) { LimarMethod.day(it.date).toEpochDay() } }
+    val weighedDays = remember(weights) { weights.mapTo(HashSet()) { it.epochDay } }
     Row(Modifier.fillMaxWidth()) {
         repeat(LimarMethod.WEEK_LENGTH) { offset ->
             val date = start.plusDays(offset.toLong())
-            val food = LimarMethod.entries(entries, date).isNotEmpty()
-            val weight = weights.any { it.epochDay == date.toEpochDay() }
+            val food = date.toEpochDay() in foodDays
+            val weight = date.toEpochDay() in weighedDays
             val isToday = date == today
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(

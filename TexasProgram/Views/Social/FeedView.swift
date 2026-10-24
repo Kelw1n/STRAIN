@@ -13,6 +13,8 @@ struct FeedView: View {
     @State private var error: String?
     @State private var path = NavigationPath()
     @State private var confirmDiscard = false
+    /// Обновление по повторному нажатию на «Главное» — с крутилкой сверху.
+    @State private var tabRefreshing = false
 
     private var social: SocialService { .shared }
 
@@ -20,6 +22,12 @@ struct FeedView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    if tabRefreshing {
+                        ProgressView().tint(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .transition(.opacity)
+                    }
                     if !social.isSignedIn {
                         signUpTeaser.padding(.bottom, 8)
                     }
@@ -55,6 +63,7 @@ struct FeedView: View {
                     Spacer(minLength: 110)
                 }
                 .padding(.horizontal, 16)
+                .tabScrollAnchor(.today)
             }
             .scrollIndicators(.hidden)
             .refreshable { await reload() }
@@ -94,6 +103,21 @@ struct FeedView: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Повторное нажатие на «Главное»: из поста или профиля — назад к ленте,
+        // в самой ленте — наверх и свежие тренировки.
+        .onTabReselect(.today) {
+            guard path.isEmpty else {
+                path = NavigationPath()
+                return
+            }
+            TabReselection.shared.scrollToTop(.today)
+            guard !loading else { return }
+            Task {
+                withAnimation(Motion.snappy) { tabRefreshing = true }
+                await reload()
+                withAnimation(Motion.snappy) { tabRefreshing = false }
+            }
+        }
         .task(id: "\(scope.rawValue)-\(social.feedVersion)") { await reload() }
         // Кто в зале — раз в минуту, пока лента на экране.
         .task {

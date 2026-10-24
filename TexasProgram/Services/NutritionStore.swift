@@ -16,6 +16,12 @@ final class NutritionStore {
     private(set) var data = NutritionData()
     private let directory: URL
 
+    /// Записи по дням. Экран спрашивает день по многу раз за перерисовку —
+    /// раскладываем дневник один раз на изменение, а не на каждый вопрос.
+    @ObservationIgnored private var dayIndex: [Date: [FoodEntry]] = [:]
+    @ObservationIgnored private var indexStale = true
+    @ObservationIgnored private var indexTimeZone: TimeZone?
+
     init(directory: URL = NutritionStore.defaultDirectory) {
         self.directory = directory
     }
@@ -30,15 +36,31 @@ final class NutritionStore {
         guard self.profileID != profileID else { return }
         self.profileID = profileID
         data = Self.read(profileID, in: directory) ?? NutritionData()
+        indexStale = true
     }
 
     /// После восстановления из копии файл мог смениться под открытым профилем.
     func reload() {
         guard let profileID else { return }
         data = Self.read(profileID, in: directory) ?? NutritionData()
+        indexStale = true
     }
 
     // MARK: Записи
+
+    /// Записи одного дня по порядку — то же, что `LimarMethod.entries`, но без
+    /// прохода по всему дневнику.
+    func entries(on day: Date, calendar: Calendar = .current) -> [FoodEntry] {
+        // Читаем дневник здесь же: экран, спросивший день, следит за его изменениями.
+        let all = data.entries
+        if indexStale || indexTimeZone != calendar.timeZone {
+            dayIndex = Dictionary(grouping: all) { calendar.startOfDay(for: $0.date) }
+                .mapValues { $0.sorted { $0.date < $1.date } }
+            indexTimeZone = calendar.timeZone
+            indexStale = false
+        }
+        return dayIndex[calendar.startOfDay(for: day)] ?? []
+    }
 
     func add(_ entries: [FoodEntry]) {
         guard !entries.isEmpty else { return }
@@ -110,6 +132,7 @@ final class NutritionStore {
     // MARK: Файлы
 
     private func save() {
+        indexStale = true
         guard let profileID else { return }
         Self.write(data, for: profileID, in: directory)
     }

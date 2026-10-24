@@ -5,6 +5,24 @@ enum AppTab: Hashable {
     case today, plan, bench, progress, guide
 }
 
+/// Экран вкладки пересчитывается сам — по своим данным, а не на каждое нажатие
+/// по панели. На входе у экранов замыкания, а их SwiftUI сравнить не умеет:
+/// без этой обёртки смена вкладки заново считала все открытые вкладки разом —
+/// медали, расписание, историю упражнений — и переход подтормаживал.
+private struct TabScreen<Content: View>: View, Equatable {
+    let tab: MainTabItem
+    let profileID: ObjectIdentifier
+    /// От программы зависит, есть ли кнопки «Жим 14»: сменили — экран заново.
+    let programKind: TrainingProgramKind
+    @ViewBuilder let content: () -> Content
+
+    var body: some View { content() }
+
+    static func == (lhs: TabScreen, rhs: TabScreen) -> Bool {
+        lhs.tab == rhs.tab && lhs.profileID == rhs.profileID && lhs.programKind == rhs.programKind
+    }
+}
+
 struct MainTabView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(RestTimer.self) private var restTimer
@@ -106,7 +124,10 @@ struct MainTabView: View {
                 ForEach(MainTabItem.allCases) { tab in
                     if visitedTabs.contains(tab) || tab == selectedTab {
                         let active = tab == selectedTab
-                        screen(for: tab)
+                        TabScreen(tab: tab, profileID: ObjectIdentifier(profile), programKind: profile.programKind) {
+                            screen(for: tab)
+                        }
+                        .equatable()
                             .opacity(active ? 1 : 0)
                             .offset(x: tabOffset(tab))
                             .allowsHitTesting(active)
@@ -135,7 +156,9 @@ struct MainTabView: View {
                 }
 
                 if !AppChrome.shared.hidesTabBar {
-                    LiquidGlassTabBar(selectedTab: tabSelection, badges: tabBadges)
+                    LiquidGlassTabBar(selectedTab: tabSelection, badges: tabBadges) { tab in
+                        TabReselection.shared.fire(tab)
+                    }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }

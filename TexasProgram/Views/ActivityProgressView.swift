@@ -10,11 +10,15 @@ struct ActivityProgressView: View {
     @State private var selectedPeriod = "3 месяца"
     @State private var showingWeightSheet = false
     @State private var showingMuscleSheet = false
+    /// Путь разделов: повторное нажатие на вкладку возвращает к началу.
+    @State private var path = NavigationPath()
+
+    private enum Route: Hashable { case history, notes }
 
     private let periods = ["1 месяц", "3 месяца", "6 месяцев", "Всё время"]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 16) {
                     // Итоги месяца и года историями
@@ -41,6 +45,7 @@ struct ActivityProgressView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
+                .tabScrollAnchor(.progress)
             }
             .scrollIndicators(.hidden)
             .background(Color.black.ignoresSafeArea())
@@ -73,8 +78,18 @@ struct ActivityProgressView: View {
             .sheet(isPresented: $showingMuscleSheet) {
                 MuscleGroupsDetailSheet(profile: profile)
             }
+            .navigationDestination(for: Route.self) { route in
+                // Низ списка не прячется под плавающей панелью вкладок.
+                switch route {
+                case .history: ExerciseHistoryList(profile: profile).safeAreaPadding(.bottom, 90)
+                case .notes: NotesListView(profile: profile).safeAreaPadding(.bottom, 90)
+                }
+            }
         }
         .preferredColorScheme(.dark)
+        .onTabReselect(.progress) {
+            if path.isEmpty { TabReselection.shared.scrollToTop(.progress) } else { path = NavigationPath() }
+        }
     }
 
     // MARK: - Разделы
@@ -84,8 +99,7 @@ struct ActivityProgressView: View {
     /// на iPhone стало не добраться.
     private var linksCard: some View {
         VStack(spacing: 0) {
-            // Низ списка не прячется под плавающей панелью вкладок.
-            NavigationLink { ExerciseHistoryList(profile: profile).safeAreaPadding(.bottom, 90) } label: {
+            NavigationLink(value: Route.history) {
                 // Пока история пустая, а отметки есть, зовём именно достроить её:
                 // иначе про такую возможность никто не узнает.
                 let pending = profile.backfillableWorkouts
@@ -97,7 +111,7 @@ struct ActivityProgressView: View {
             }
             .buttonStyle(.pressable)
             linkDivider
-            NavigationLink { NotesListView(profile: profile).safeAreaPadding(.bottom, 90) } label: {
+            NavigationLink(value: Route.notes) {
                 linkRow("Заметки",
                         subtitle: Self.countText(profile.workoutNotes.filter { profile.isOwnKey($0.key) }.count,
                                                  "запись", "записи", "записей"),

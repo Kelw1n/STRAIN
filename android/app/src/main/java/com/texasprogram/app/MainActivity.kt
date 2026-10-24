@@ -538,6 +538,8 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                 LiquidGlassTabBar(
                     selectedTab = tab,
                     onTabSelected = { tab = it },
+                    // Повторное нажатие: из вложенного экрана — к началу вкладки, на нём — наверх.
+                    onReselect = { com.texasprogram.app.ui.TabReselect.fire(it) },
                     // Новые сообщения — на «Друзьях», новая активность — на «Главном».
                     badges = buildSet {
                         if (SocialService.unreadMessages > 0) add(MainTabItem.COMMUNITY)

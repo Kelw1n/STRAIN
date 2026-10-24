@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -144,6 +146,10 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
 
     val progress = remember(profile) { AchievementCalculator.progress(profile) }
     val programs = remember(profile) { SocialProgramBuilder.days(profile) }
+    val listState = rememberLazyListState()
+    OnTabReselect(MainTabItem.PROFILE) {
+        if (navigator.stack.isNotEmpty()) navigator.stack.clear() else listState.scrollToTop()
+    }
 
     SocialHost(navigator, screen = { route ->
         SocialRouteScreen(route, navigator, contentPadding, profile, onPostChange = ::replace)
@@ -160,6 +166,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                     postsError = postsError,
                     navigator = navigator,
                     contentPadding = contentPadding,
+                    listState = listState,
                     onAchievements = { navigator.push(SocialRoute.Achievements) },
                     onLoadMore = {
                         val cursor = next
@@ -362,6 +369,7 @@ fun ProfileContent(
     postsError: String?,
     navigator: SocialNavigator,
     contentPadding: PaddingValues,
+    listState: LazyListState = rememberLazyListState(),
     onAchievements: () -> Unit,
     onLoadMore: () -> Unit,
     onPostChange: (String, SocialPost?) -> Unit,
@@ -370,6 +378,7 @@ fun ProfileContent(
     var tab by rememberSaveable { mutableIntStateOf(0) }
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = contentPadding.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
