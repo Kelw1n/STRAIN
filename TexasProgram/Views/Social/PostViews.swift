@@ -4,15 +4,18 @@ import UIKit
 // MARK: - Пост в ленте
 
 /// Пост как в REBRN: кто и когда, название, заметка, время, объём и плотность,
-/// фото и под ними лайк с комментариями. Без фото вместо них — упражнения.
+/// карусель «фото → тренировка» и под ней лайк с комментариями.
 struct PostCardView: View {
     let post: SocialPost
     var onOpen: () -> Void
     var onOpenAuthor: () -> Void
     var onChange: (SocialPost?) -> Void
+    /// Упражнения с весами и под фото — в списке тренировок профиля.
+    var showsWorkout = false
 
     @State private var confirmDelete = false
     @State private var error: String?
+    @State private var sharing = false
 
     private var social: SocialService { .shared }
     private var isMine: Bool { social.me?.id == post.author.id }
@@ -25,6 +28,11 @@ struct PostCardView: View {
                         Label("Удалить пост", systemImage: "trash")
                     }
                 }
+                if social.isSignedIn {
+                    Button { sharing = true } label: {
+                        Label("Отправить другу", systemImage: "paperplane")
+                    }
+                }
                 ShareLink(item: shareText) {
                     Label("Поделиться текстом", systemImage: "square.and.arrow.up")
                 }
@@ -33,19 +41,21 @@ struct PostCardView: View {
             VStack(alignment: .leading, spacing: 14) {
                 PostTitleBlock(post: post)
                 PostStatsRow(post: post)
-                if post.photos.isEmpty {
-                    PostWorkoutSummary(workout: post.workout, limit: 4)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
             .accessibilityAddTraits(.isButton)
 
+            // Карусель не внутри кнопки: кнопка перехватывала свайп между фото.
+            PostMedia(post: post, onTap: onOpen)
+
             if !post.photos.isEmpty {
-                // Карусель не внутри кнопки: кнопка перехватывала свайп между фото.
-                PhotoCarousel(ids: post.photos)
-                    .onTapGesture(perform: onOpen)
+                if showsWorkout {
+                    PostWorkoutSummary(workout: post.workout, limit: 4)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onOpen)
+                }
             }
 
             PostActions(post: post, onComments: onOpen, onChange: { onChange($0) })
@@ -57,6 +67,11 @@ struct PostCardView: View {
             }
         }
         .padding(.vertical, 18)
+        .sheet(isPresented: $sharing) {
+            ChatTargetSheet(title: "Отправить другу") { friend in
+                social.send(SocialChatWorkout(post: post), to: friend.username)
+            }
+        }
         .confirmationDialog("Удалить тренировку из ленты?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Удалить", role: .destructive) {
                 Task {
@@ -93,17 +108,26 @@ struct PostHeader<MenuContent: View>: View {
             Button(action: onOpenAuthor) {
                 HStack(spacing: 12) {
                     AvatarView(imageId: post.author.avatar, username: post.author.username, size: 46)
+                        .overlay(alignment: .bottomTrailing) {
+                            // Тренировались вместе — аватар напарника рядом.
+                            if let partner = post.partner {
+                                AvatarView(imageId: partner.avatar, username: partner.username, size: 24)
+                                    .overlay(Circle().strokeBorder(Color.black, lineWidth: 2))
+                                    .offset(x: 6, y: 4)
+                            }
+                        }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("@\(post.author.username)")
+                        Text(post.partner.map { "@\(post.author.username) и @\($0.username)" } ?? "@\(post.author.username)")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                         Text(SocialFormat.ago(post.date))
                             .font(.system(size: 13))
                             .foregroundStyle(Color.white.opacity(0.5))
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             Spacer()
             Menu(content: menu) {
                 Image(systemName: "ellipsis")
@@ -262,7 +286,7 @@ struct PostActions: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityLabel(post.liked ? "Убрать лайк" : "Лайк")
 
             Button(action: onComments) {
@@ -274,10 +298,11 @@ struct PostActions: View {
                         Text("\(post.comments)")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(.white)
+                            .contentTransition(.numericText())
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityLabel("Комментарии")
             Spacer()
         }
@@ -304,6 +329,178 @@ struct PostActions: View {
     }
 }
 
+// MARK: - Фото и тренировка
+
+/// Карусель поста: сначала фото, последним слайдом — сама тренировка.
+/// Без фото — только тренировка.
+///
+/// Лёгкая горизонтальная прокрутка постранично, а не TabView: тот на каждый
+/// пост держал отдельный системный пейджер, и лента прокручивалась тяжелее.
+struct PostMedia: View {
+    let post: SocialPost
+    var onTap: () -> Void = {}
+
+    @State private var page: Int? = 0
+
+    private var hasWorkout: Bool { !post.workout.exercises.isEmpty }
+
+    var body: some View {
+        if post.photos.isEmpty {
+            PostWorkoutSlide(workout: post.workout)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTap)
+        } else {
+            let count = post.photos.count + (hasWorkout ? 1 : 0)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(0..<count, id: \.self) { index in
+                        Group {
+                            if index < post.photos.count {
+                                RemoteImage(id: post.photos[index])
+                            } else {
+                                PostWorkoutSlide(workout: post.workout)
+                                    .padding(.horizontal, 4)
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 34)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                    .background(Color.black)
+                            }
+                        }
+                        .containerRelativeFrame([.horizontal, .vertical])
+                        .clipped()
+                        .id(index)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: $page)
+            .aspectRatio(4.0 / 5.0, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(alignment: .bottom) {
+                if count > 1 {
+                    // Активная точка вытягивается в капсулу и с пружиной
+                    // перетекает к новой странице.
+                    HStack(spacing: 6) {
+                        ForEach(0..<count, id: \.self) { index in
+                            let active = index == (page ?? 0)
+                            Capsule()
+                                .fill(Color.white.opacity(active ? 1 : 0.45))
+                                .frame(width: active ? 16 : 7, height: 7)
+                        }
+                    }
+                    .padding(.bottom, 12)
+                    .animation(Motion.snappy, value: page)
+                    .allowsHitTesting(false)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
+        }
+    }
+}
+
+/// Слайд тренировки как в REBRN: картинка упражнения, название и подходы.
+struct PostWorkoutSlide: View {
+    let workout: SocialWorkout
+    var limit = 4
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if workout.exercises.isEmpty {
+                Text("Без записанных подходов")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.white.opacity(0.5))
+            }
+            ForEach(Array(workout.exercises.prefix(limit).enumerated()), id: \.offset) { _, exercise in
+                HStack(spacing: 14) {
+                    ExerciseThumb(name: exercise.name, size: 54)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(exercise.name)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+                            if exercise.hasRecord {
+                                Image(systemName: "trophy.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(Theme.warning)
+                            }
+                        }
+                        Text(subtitle(exercise))
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.white.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            if workout.exercises.count > limit {
+                let rest = workout.exercises.count - limit
+                Text("ещё \(rest) \(RuPlural.word(rest, "упражнение", "упражнения", "упражнений"))")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+            }
+        }
+    }
+
+    /// «4 подхода · 80 кг × 5» — лучший подход виден сразу.
+    private func subtitle(_ exercise: SocialWorkout.Exercise) -> String {
+        let sets = "\(exercise.sets.count) \(RuPlural.word(exercise.sets.count, "подход", "подхода", "подходов"))"
+        guard let best = exercise.best else { return sets }
+        return "\(sets) · \(best.text)"
+    }
+}
+
+/// Все подходы тренировки — открываются по нажатию на слайд в посте.
+struct PostWorkoutSets: View {
+    let workout: SocialWorkout
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(workout.program.map { "ТРЕНИРОВКА · \($0.uppercased())" } ?? "ТРЕНИРОВКА")
+                .font(.system(size: 12, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(Color.white.opacity(0.45))
+            ForEach(Array(workout.exercises.enumerated()), id: \.offset) { _, exercise in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        ExerciseThumb(name: exercise.name, size: 40)
+                        Text(exercise.name)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
+                        HStack {
+                            Text("\(index + 1)")
+                                .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
+                                .foregroundStyle(Color.white.opacity(0.4))
+                                .frame(width: 22, alignment: .leading)
+                            Text(set.text)
+                                .font(.system(size: 15, weight: .semibold, design: Theme.fontDesign))
+                                .foregroundStyle(.white)
+                                .monospacedDigit()
+                            if set.record {
+                                Label("рекорд", systemImage: "trophy.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(Theme.warning)
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+        }
+    }
+}
+
 // MARK: - Пост целиком с комментариями
 
 struct PostDetailView: View {
@@ -319,6 +516,10 @@ struct PostDetailView: View {
     @State private var error: String?
     @State private var composing = false
     @State private var confirmDelete = false
+    @State private var showingSets = false
+    @State private var sharing = false
+    /// На какой комментарий отвечаем; `nil` — обычный комментарий к посту.
+    @State private var replyingTo: SocialComment?
     @FocusState private var typing: Bool
 
     private var social: SocialService { .shared }
@@ -332,13 +533,27 @@ struct PostDetailView: View {
                             Label("Удалить пост", systemImage: "trash")
                         }
                     }
+                    if social.isSignedIn {
+                        Button { sharing = true } label: {
+                            Label("Отправить другу", systemImage: "paperplane")
+                        }
+                    }
                 }
                 PostTitleBlock(post: post)
                 PostStatsRow(post: post)
-                if !post.photos.isEmpty { PhotoCarousel(ids: post.photos) }
-                PostActions(post: post, onComments: { if social.isSignedIn { composing = true } }, onChange: update)
+                // Тренировка — последним слайдом, как в REBRN; все подходы — по нажатию.
+                PostMedia(post: post, onTap: { showingSets = true })
+                PostActions(post: post, onComments: { compose(replyTo: nil) }, onChange: update)
 
-                exercises
+                // Чужую тренировку можно взять себе: её саму или программу автора.
+                if social.me?.id != post.author.id && !post.workout.exercises.isEmpty {
+                    CopyProgramButton(
+                        days: [],
+                        author: post.author.username,
+                        workout: (title: post.title, workout: post.workout),
+                        loadsAuthorProgram: true
+                    )
+                }
 
                 commentsSection
                 composeButton
@@ -349,6 +564,24 @@ struct PostDetailView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(isPresented: $composing) { composer }
+        .sheet(isPresented: $sharing) {
+            ChatTargetSheet(title: "Отправить другу") { friend in
+                social.send(SocialChatWorkout(post: post), to: friend.username)
+            }
+        }
+        .sheet(isPresented: $showingSets) {
+            NavigationStack {
+                ScrollView { PostWorkoutSets(workout: post.workout).padding(16) }
+                    .background(Color.black.ignoresSafeArea())
+                    .navigationTitle(post.title)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) { Button("Готово") { showingSets = false } }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .preferredColorScheme(.dark)
+        }
         .confirmationDialog("Удалить тренировку из ленты?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Удалить", role: .destructive) {
                 Task {
@@ -378,48 +611,6 @@ struct PostDetailView: View {
         onChange(value)
     }
 
-    @ViewBuilder
-    private var exercises: some View {
-        if !post.workout.exercises.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(post.workout.program.map { "ТРЕНИРОВКА · \($0.uppercased())" } ?? "ТРЕНИРОВКА")
-                    .font(.system(size: 12, weight: .bold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.white.opacity(0.45))
-                VStack(spacing: 10) {
-                    ForEach(Array(post.workout.exercises.enumerated()), id: \.offset) { _, exercise in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(exercise.name)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
-                            ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
-                                HStack {
-                                    Text("\(index + 1)")
-                                        .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
-                                        .foregroundStyle(Color.white.opacity(0.4))
-                                        .frame(width: 22, alignment: .leading)
-                                    Text(set.text)
-                                        .font(.system(size: 15, weight: .semibold, design: Theme.fontDesign))
-                                        .foregroundStyle(.white)
-                                        .monospacedDigit()
-                                    if set.record {
-                                        Label("рекорд", systemImage: "trophy.fill")
-                                            .font(.system(size: 11, weight: .bold))
-                                            .foregroundStyle(Theme.warning)
-                                    }
-                                    Spacer()
-                                }
-                            }
-                        }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    }
-                }
-            }
-        }
-    }
-
     private var commentsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(comments.isEmpty ? "КОММЕНТАРИИ" : "КОММЕНТАРИИ · \(comments.count)")
@@ -433,35 +624,11 @@ struct PostDetailView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(Color.white.opacity(0.5))
             }
-            ForEach(comments) { comment in
-                HStack(alignment: .top, spacing: 10) {
-                    Button { openAuthor?(comment.author.username) } label: {
-                        AvatarView(imageId: comment.author.avatar, username: comment.author.username, size: 34)
-                    }
-                    .buttonStyle(.plain)
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text("@\(comment.author.username)")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                            Text(SocialFormat.ago(comment.date))
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.white.opacity(0.4))
-                        }
-                        Text(comment.text)
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color.white.opacity(0.88))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .textSelection(.enabled)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .contextMenu {
-                    if canDelete(comment) {
-                        Button(role: .destructive) { delete(comment) } label: {
-                            Label("Удалить комментарий", systemImage: "trash")
-                        }
-                    }
+            ForEach(SocialComment.threads(comments)) { thread in
+                commentRow(thread.root)
+                ForEach(thread.replies) { reply in
+                    commentRow(reply)
+                        .padding(.leading, 44)
                 }
             }
             if let error {
@@ -471,12 +638,59 @@ struct PostDetailView: View {
         .padding(.top, 6)
     }
 
+    private func commentRow(_ comment: SocialComment) -> some View {
+        let small = comment.isReply
+        return HStack(alignment: .top, spacing: 10) {
+            Button { openAuthor?(comment.author.username) } label: {
+                AvatarView(imageId: comment.author.avatar, username: comment.author.username, size: small ? 28 : 34)
+            }
+            .buttonStyle(.pressable)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("@\(comment.author.username)")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(SocialFormat.ago(comment.date))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.4))
+                }
+                (comment.replyToUsername.map { Text("@\($0) ").foregroundColor(Theme.accent) } ?? Text(""))
+                    + Text(comment.text).foregroundColor(Color.white.opacity(0.88))
+                if social.isSignedIn {
+                    Button("Ответить") { compose(replyTo: comment) }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .padding(.top, 2)
+                }
+            }
+            .font(.system(size: 15))
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = comment.text
+            } label: { Label("Скопировать", systemImage: "doc.on.doc") }
+            if canDelete(comment) {
+                Button(role: .destructive) { delete(comment) } label: {
+                    Label(comment.isReply ? "Удалить ответ" : "Удалить комментарий", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func compose(replyTo comment: SocialComment?) {
+        guard social.isSignedIn else { return }
+        replyingTo = comment
+        composing = true
+    }
+
     /// Кнопка «Написать комментарий»: само поле — в листе снизу. Лист перекрывает
     /// плавающую панель вкладок, а поле внизу экрана оказалось бы под ней.
     @ViewBuilder
     private var composeButton: some View {
         if social.isSignedIn {
-            Button { composing = true } label: {
+            Button { compose(replyTo: nil) } label: {
                 HStack(spacing: 10) {
                     AvatarView(imageId: social.me?.avatar, username: social.me?.username ?? "s", size: 32)
                     Text("Написать комментарий…")
@@ -500,11 +714,29 @@ struct PostDetailView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Комментарий")
-                .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+            HStack {
+                Text(replyingTo.map { "Ответ @\($0.author.username)" } ?? "Комментарий")
+                    .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Spacer()
+                if replyingTo != nil {
+                    Button { replyingTo = nil } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(Color.white.opacity(0.4))
+                    }
+                    .accessibilityLabel("Не отвечать, а написать к посту")
+                }
+            }
+            if let replyingTo {
+                Text(replyingTo.text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .lineLimit(1)
+            }
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Поддержи или спроси про технику", text: $draft, axis: .vertical)
+                TextField(replyingTo == nil ? "Поддержи или спроси про технику" : "Твой ответ", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($typing)
                     .font(.system(size: 16))
@@ -530,7 +762,7 @@ struct PostDetailView: View {
             Spacer(minLength: 0)
         }
         .padding(20)
-        .presentationDetents([.height(230)])
+        .presentationDetents([.height(replyingTo == nil ? 230 : 260)])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color(white: 0.07))
         .preferredColorScheme(.dark)
@@ -562,9 +794,10 @@ struct PostDetailView: View {
         Task {
             defer { sending = false }
             do {
-                let comment = try await social.addComment(post.id, text: text)
+                let comment = try await social.addComment(post.id, text: text, replyTo: replyingTo?.id)
                 withAnimation(Motion.snappy) { comments.append(comment) }
                 draft = ""
+                replyingTo = nil
                 var updated = post
                 updated.comments += 1
                 update(updated)
@@ -581,9 +814,11 @@ struct PostDetailView: View {
         Task {
             do {
                 try await social.deleteComment(comment.id)
-                withAnimation(Motion.snappy) { comments.removeAll { $0.id == comment.id } }
+                // С корнем ветки на сервере уходят и ответы на него.
+                let removed = comments.filter { $0.id == comment.id || $0.replyTo == comment.id }.count
+                withAnimation(Motion.snappy) { comments.removeAll { $0.id == comment.id || $0.replyTo == comment.id } }
                 var updated = post
-                updated.comments = max(0, updated.comments - 1)
+                updated.comments = max(0, updated.comments - removed)
                 update(updated)
             } catch {
                 self.error = error.socialMessage

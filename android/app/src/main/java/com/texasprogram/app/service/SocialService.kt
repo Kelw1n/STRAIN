@@ -1,6 +1,8 @@
 package com.texasprogram.app.service
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -10,19 +12,33 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.exifinterface.media.ExifInterface
+import com.texasprogram.app.model.SocialVoice
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.ChatPending
+import com.texasprogram.app.model.SocialChatWorkout
+import com.texasprogram.app.model.SocialActivityPage
 import com.texasprogram.app.model.SocialBadge
+import com.texasprogram.app.model.SocialChatList
+import com.texasprogram.app.model.SocialChatPage
 import com.texasprogram.app.model.SocialComment
 import com.texasprogram.app.model.SocialFeedPage
 import com.texasprogram.app.model.SocialFormat
+import com.texasprogram.app.model.SocialLeaderboardEntry
+import com.texasprogram.app.model.SocialLive
+import com.texasprogram.app.model.SocialLiveFriend
+import com.texasprogram.app.model.SocialMessage
 import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialPostDraft
 import com.texasprogram.app.model.SocialProgramBuilder
 import com.texasprogram.app.model.SocialProgramDay
+import com.texasprogram.app.model.SocialTogether
+import com.texasprogram.app.model.SocialTogetherState
 import com.texasprogram.app.model.SocialUser
 import com.texasprogram.app.model.SocialUserShort
+import com.texasprogram.app.model.SocialWeekStats
 import com.texasprogram.app.model.SocialWorkout
+import com.texasprogram.app.model.WeeklyStatsBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +67,10 @@ import java.net.URLEncoder
 import java.util.UUID
 
 /// Ошибка ленты с понятным текстом: показываем её человеку как есть.
-class SocialException(message: String, val status: Int = 0) : Exception(message)
+class SocialException(message: String, val status: Int = 0) : Exception(message) {
+    /// Нет связи, сервер просыпается или занят — стоит попробовать ещё раз позже.
+    val isRetryable: Boolean get() = status == 0 || status == 429 || status >= 500
+}
 
 /// Лента STRAIN: профиль, подписки, посты, лайки и комментарии.
 ///
@@ -86,6 +105,32 @@ object SocialService {
     /// Меняется после каждой публикации или удаления: ленты по нему перезагружаются.
     var feedVersion by mutableIntStateOf(0)
         private set
+    /// Непрочитанные личные сообщения — точка на вкладке «Друзья».
+    var unreadMessages by mutableIntStateOf(0)
+        private set
+    /// Новые лайки, комментарии и подписчики — точка на колокольчике и вкладке «Главное».
+    var unseenActivity by mutableIntStateOf(0)
+        private set
+    /// Подписки, которые тренируются прямо сейчас.
+    var liveFriends by mutableStateOf<List<SocialLiveFriend>>(emptyList())
+        private set
+    /// Приглашения на совместную тренировку и идущая совместная тренировка.
+    var together by mutableStateOf(SocialTogetherState())
+        private set
+    /// Переписка прячет панель вкладок: внизу экрана живёт поле ввода.
+    var hidesTabBar by mutableStateOf(false)
+    /// Сообщения, которые ещё не ушли: лежат на телефоне и отправляются сами.
+    var pendingMessages by mutableStateOf<List<ChatPending>>(emptyList())
+        private set
+    /// Сервер отказал — такое сообщение само больше не уйдёт: его повторяют или удаляют.
+    var pendingFailures by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+    /// Последняя попытка отправить упёрлась в отсутствие связи.
+    var chatOffline by mutableStateOf(false)
+        private set
+    /// Видно ли друзьям, что идёт тренировка.
+    var sharesLive by mutableStateOf(true)
+        private set
 
     /// Последняя загруженная лента: при переходе между вкладками она видна сразу,
     /// а свежая подгружается без пустого экрана со спиннером.
@@ -103,7 +148,19 @@ object SocialService {
         if (::appContext.isInitialized) return
         appContext = context.applicationContext
         token = prefs().getString("token", null)
+        sharesLive = prefs().getBoolean("share_live", true)
         outbox = OutboxStore.loadAll()
+        pendingMessages = ChatOutboxStore.loadAll()
+        // Связь вернулась — неотправленное уходит само.
+        runCatching {
+            appContext.getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(
+                object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        scope.launch { flushOutbox() }
+                    }
+                }
+            )
+        }
     }
 
     private fun prefs() = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -204,8 +261,17 @@ object SocialService {
     }
 
     fun signOut() {
+        // Неотправленные сообщения не должны уйти от имени следующего профиля.
+        pendingMessages.forEach { ChatOutboxStore.remove(it.clientId) }
+        pendingMessages = emptyList()
+        pendingFailures = emptyMap()
         storeToken(null)
         me = null
+        unreadMessages = 0
+        unseenActivity = 0
+        liveFriends = emptyList()
+        together = SocialTogetherState()
+        lastLive = null
     }
 
     suspend fun deleteAccount() {
@@ -247,7 +313,8 @@ object SocialService {
         val avatar: String? = null,
         val cover: String? = null,
         val programs: List<SocialProgramDay>? = null,
-        val achievements: List<SocialBadge>? = null
+        val achievements: List<SocialBadge>? = null,
+        val stats: SocialWeekStats? = null
     ) {
         fun toJson(): String {
             val map = mutableMapOf<String, JsonElement>()
@@ -260,6 +327,7 @@ object SocialService {
             cover?.let { map["cover"] = JsonPrimitive(it) }
             programs?.let { map["programs"] = json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(SocialProgramDay.serializer()), it) }
             achievements?.let { map["achievements"] = json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(SocialBadge.serializer()), it) }
+            stats?.let { map["stats"] = json.encodeToJsonElement(SocialWeekStats.serializer(), it) }
             return JsonObject(map).toString()
         }
     }
@@ -270,7 +338,7 @@ object SocialService {
         return user
     }
 
-    /// Программа, медали и вес — в профиль. Шлём, только если что-то поменялось.
+    /// Программа, медали, вес и сводка недели — в профиль. Шлём, только если что-то поменялось.
     fun scheduleSync(profile: ProgramProfile) {
         if (token == null || !::appContext.isInitialized) return
         syncJob?.cancel()
@@ -280,7 +348,8 @@ object SocialService {
                 ProfilePatch(
                     weightKg = profile.latestBodyWeight,
                     programs = SocialProgramBuilder.days(profile),
-                    achievements = AchievementCalculator.badges(AchievementCalculator.progress(profile))
+                    achievements = AchievementCalculator.badges(AchievementCalculator.progress(profile)),
+                    stats = WeeklyStatsBuilder.stats(profile)
                 )
             }
             val fingerprint = patch.toJson()
@@ -334,9 +403,350 @@ object SocialService {
 
     suspend fun comments(postId: String): List<SocialComment> = decode(call("GET", "/posts/$postId/comments"))
 
-    suspend fun addComment(postId: String, text: String): SocialComment {
-        val body = buildJsonObject { put("text", text) }.toString()
+    /// `replyTo` — комментарий, на который отвечаем: ответ встанет в его ветку.
+    suspend fun addComment(postId: String, text: String, replyTo: String? = null): SocialComment {
+        val body = buildJsonObject {
+            put("text", text)
+            if (replyTo != null) put("replyTo", replyTo)
+        }.toString()
         return decode(call("POST", "/posts/$postId/comments", body = body, requiresAuth = true))
+    }
+
+    // MARK: Личные сообщения
+
+    suspend fun chats(): SocialChatList {
+        val list = decode<SocialChatList>(call("GET", "/chats", requiresAuth = true))
+        unreadMessages = list.unread
+        return list
+    }
+
+    /// Сколько непрочитанных сообщений и новой активности — для точек на вкладках.
+    suspend fun refreshUnread() {
+        if (token == null) {
+            unreadMessages = 0
+            unseenActivity = 0
+            return
+        }
+        runCatching { decode<JsonObject>(call("GET", "/badges")) }
+            .onSuccess {
+                unreadMessages = it["messages"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                unseenActivity = it["activity"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                // Приглашения и совместную тренировку спрашиваем, только когда они есть.
+                val invites = it["invites"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                if (invites > 0 || together.active != null || together.outgoing.isNotEmpty() || together.incoming.isNotEmpty()) refreshTogether()
+            }
+    }
+
+    // MARK: Совместная тренировка
+
+    suspend fun refreshTogether() {
+        if (token == null) {
+            together = SocialTogetherState()
+            return
+        }
+        runCatching { decode<SocialTogetherState>(call("GET", "/together", requiresAuth = true)) }.onSuccess { together = it }
+    }
+
+    /// Позвать друга: приглашение придёт ему и появится карточкой в переписке.
+    suspend fun invite(username: String): SocialTogether {
+        val invite = decode<SocialTogether>(call("POST", "/users/${q(username)}/together", requiresAuth = true))
+        refreshTogether()
+        return invite
+    }
+
+    suspend fun acceptTogether(id: String) {
+        call("POST", "/together/$id/accept", requiresAuth = true)
+        refreshTogether()
+    }
+
+    /// `decline`, `cancel`, `leave` или `done`.
+    suspend fun respondTogether(id: String, action: String) {
+        call("POST", "/together/$id/$action", requiresAuth = true)
+        refreshTogether()
+    }
+
+    /// Тренировка закончена без поста. Пост сам отмечает напарника закончившим,
+    /// а без него совместная висела бы ещё шесть часов — и следующий пост
+    /// вышел бы «вместе с» напарником.
+    fun finishTogether() {
+        val id = together.active?.id ?: return
+        scope.launch { runCatching { respondTogether(id, "done") } }
+    }
+
+    /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,
+    /// `since` — всё, что появилось или поменялось с `serverTime` прошлого ответа.
+    suspend fun messages(username: String, before: Double? = null, after: Double? = null, since: Double? = null): SocialChatPage {
+        val query = listOfNotNull(
+            before?.let { "before=${it.toLong()}" },
+            after?.let { "after=${it.toLong()}" },
+            since?.let { "since=${it.toLong()}" }
+        )
+        val tail = if (query.isEmpty()) "" else "?" + query.joinToString("&")
+        return decode(call("GET", "/chats/${q(username)}/messages$tail", requiresAuth = true))
+    }
+
+    /// Новый текст своего сообщения или подписи к фото.
+    suspend fun editMessage(id: String, text: String): SocialMessage {
+        val body = buildJsonObject { put("text", text) }.toString()
+        return decode(call("PATCH", "/messages/$id", body = body, requiresAuth = true))
+    }
+
+    /// Голосовое прослушано — точка гаснет и у отправителя.
+    fun markHeard(id: String) {
+        if (token == null) return
+        scope.launch { runCatching { call("POST", "/messages/$id/heard", requiresAuth = true) } }
+    }
+
+    // MARK: Очередь сообщений
+
+    /// Открытые переписки: ушедшее сообщение сразу встаёт на место своего пузыря.
+    private val sentHandlers = mutableMapOf<String, (String, SocialMessage) -> Unit>()
+    private var flushingMessages = false
+    private var flushRequested = false
+    /// Удалённые из очереди, пока уже летели на сервер: дошедшее удаляем и там.
+    private val discardedWhileSending = mutableSetOf<String>()
+    private var sendingClientId: String? = null
+
+    fun onMessageSent(username: String, handler: ((String, SocialMessage) -> Unit)?) {
+        if (handler == null) sentHandlers.remove(username) else sentHandlers[username] = handler
+    }
+
+    fun pending(username: String): List<ChatPending> = pendingMessages.filter { it.username == username }
+
+    /// Сообщение — сначала на диск, потом в путь. Нет связи — дождётся её.
+    fun queue(item: ChatPending, photo: ByteArray? = null, voice: ByteArray? = null) {
+        runCatching { ChatOutboxStore.save(item, photo, voice) }
+        pendingMessages = pendingMessages + item
+        flushMessages()
+    }
+
+    /// Фото с телефона сжимается в фоне, потом сообщение встаёт в очередь.
+    fun queue(context: Context, item: ChatPending, photo: Uri) {
+        scope.launch {
+            val data = withContext(Dispatchers.IO) { jpeg(context, photo, maxSide = 1600) }
+            if (data == null) {
+                pendingMessages = pendingMessages + item
+                pendingFailures = pendingFailures + (item.clientId to "Не удалось открыть фото")
+                return@launch
+            }
+            withContext(Dispatchers.IO) { runCatching { ChatOutboxStore.save(item, data, null) } }
+            pendingMessages = pendingMessages + item
+            flushMessages()
+        }
+    }
+
+    /// Тренировка карточкой — тому, кого выбрали. Уходит той же очередью, что
+    /// и сообщения: без связи дождётся её.
+    fun send(workout: SocialChatWorkout, username: String) {
+        queue(ChatPending(clientId = newClientId(), username = username, text = workout.previewText, workout = workout))
+    }
+
+    fun retryPending(clientId: String) {
+        pendingFailures = pendingFailures - clientId
+        flushMessages()
+    }
+
+    fun discardPending(clientId: String) {
+        if (sendingClientId == clientId) discardedWhileSending.add(clientId)
+        ChatOutboxStore.remove(clientId)
+        pendingMessages = pendingMessages.filter { it.clientId != clientId }
+        pendingFailures = pendingFailures - clientId
+    }
+
+    /// Отправляет очередь по порядку. Нет связи — останавливается до следующего
+    /// раза; сервер отказал — сообщение помечается и не мешает остальным.
+    fun flushMessages() {
+        if (!::appContext.isInitialized || token == null) return
+        if (flushingMessages) {
+            flushRequested = true
+            return
+        }
+        if (pendingMessages.none { it.clientId !in pendingFailures }) return
+        flushingMessages = true
+        scope.launch {
+            var stalled = false
+            try {
+                for (item in pendingMessages.sortedBy { it.createdAt }) {
+                    if (item.clientId in pendingFailures) continue
+                    // Пока отправляли предыдущие, это сообщение могли удалить.
+                    if (pendingMessages.none { it.clientId == item.clientId }) continue
+                    sendingClientId = item.clientId
+                    try {
+                        val sent = deliver(item)
+                        chatOffline = false
+                        // Пока сообщение летело, его отменили — убираем и с сервера.
+                        if (discardedWhileSending.remove(item.clientId)) {
+                            runCatching { deleteMessage(sent.id) }
+                            continue
+                        }
+                        withContext(Dispatchers.IO) { ChatOutboxStore.remove(item.clientId) }
+                        pendingMessages = pendingMessages.filter { it.clientId != item.clientId }
+                        sentHandlers[item.username]?.invoke(item.clientId, sent)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: SocialException) {
+                        if (e.isRetryable) {
+                            chatOffline = true
+                            stalled = true
+                            break
+                        }
+                        if (!discardedWhileSending.remove(item.clientId)) {
+                            pendingFailures = pendingFailures + (item.clientId to (e.message ?: "Не отправлено"))
+                        }
+                    } catch (e: Exception) {
+                        if (!discardedWhileSending.remove(item.clientId)) {
+                            pendingFailures = pendingFailures + (item.clientId to "Не отправлено")
+                        }
+                    } finally {
+                        sendingClientId = null
+                    }
+                }
+            } finally {
+                flushingMessages = false
+                val again = flushRequested && !stalled
+                flushRequested = false
+                if (again) flushMessages()
+            }
+        }
+    }
+
+    private fun savePending(item: ChatPending) {
+        runCatching { ChatOutboxStore.update(item) }
+        pendingMessages = pendingMessages.map { if (it.clientId == item.clientId) item else it }
+    }
+
+    /// Фото и звук грузятся один раз, потом уходит само сообщение. Повтор с тем же
+    /// clientId сервер не дублирует, поэтому оборванную отправку можно повторять.
+    private suspend fun deliver(pending: ChatPending): SocialMessage {
+        var item = pending
+        if (item.hasPhotoFile && item.uploadedImage == null) {
+            val data = withContext(Dispatchers.IO) { ChatOutboxStore.photo(item.clientId) }
+                ?: throw SocialException("Фото потерялось — отправь его заново", 400)
+            item = item.copy(uploadedImage = uploadImage(data))
+            savePending(item)
+        }
+        val voice = item.voice
+        if (item.hasVoiceFile && item.uploadedVoice == null && voice != null) {
+            val data = withContext(Dispatchers.IO) { ChatOutboxStore.voice(item.clientId) }
+                ?: throw SocialException("Запись потерялась — запиши заново", 400)
+            item = item.copy(uploadedVoice = uploadVoice(data, voice.durationMs, voice.waveform).id)
+            savePending(item)
+        }
+        val ready = item
+        val body = buildJsonObject {
+            put("text", ready.text)
+            put("clientId", ready.clientId)
+            val forward = ready.forward
+            if (forward != null) {
+                put("forward", forward)
+            } else {
+                (if (ready.hasPhotoFile) ready.uploadedImage else ready.image)?.let { put("image", it) }
+                if (ready.hasVoiceFile) ready.uploadedVoice?.let { put("voice", it) }
+                ready.replyTo?.let { put("replyTo", it.id) }
+                ready.workout?.let { put("workout", json.encodeToJsonElement(SocialChatWorkout.serializer(), it)) }
+            }
+        }.toString()
+        return try {
+            decode(call("POST", "/chats/${q(ready.username)}/messages", body = body, requiresAuth = true))
+        } catch (e: SocialException) {
+            // Сообщение, на которое отвечали, удалили, пока ждали связи, — уходим без цитаты.
+            if (e.status == 404 && ready.replyTo != null && e.message == "Сообщение удалено") {
+                val plain = ready.copy(replyTo = null)
+                savePending(plain)
+                deliver(plain)
+            } else throw e
+        }
+    }
+
+    /// Реакция на сообщение; та же ещё раз — снимает её.
+    suspend fun react(messageId: String, emoji: String): SocialMessage {
+        val body = buildJsonObject { put("emoji", emoji) }.toString()
+        return decode(call("POST", "/messages/$messageId/react", body = body, requiresAuth = true))
+    }
+
+    private val typingSentAt = mutableMapOf<String, Long>()
+
+    /// «Печатает…» у собеседника: не чаще раза в три секунды.
+    fun sendTyping(username: String) {
+        if (token == null) return
+        val now = System.currentTimeMillis()
+        if (now - (typingSentAt[username] ?: 0L) < 3_000) return
+        typingSentAt[username] = now
+        scope.launch { runCatching { call("POST", "/chats/${q(username)}/typing", requiresAuth = true) } }
+    }
+
+    // MARK: Активность
+
+    suspend fun activity(): SocialActivityPage {
+        val page = decode<SocialActivityPage>(call("GET", "/activity", requiresAuth = true))
+        unseenActivity = page.unseen
+        return page
+    }
+
+    /// Всё в списке активности просмотрено — точка гаснет.
+    suspend fun markActivitySeen() {
+        if (token == null) return
+        unseenActivity = 0
+        runCatching { call("POST", "/activity/seen", requiresAuth = true) }
+    }
+
+    // MARK: Тренируется сейчас
+
+    suspend fun refreshLive(): List<SocialLiveFriend> {
+        if (token == null) {
+            liveFriends = emptyList()
+            return liveFriends
+        }
+        runCatching { decode<List<SocialLiveFriend>>(call("GET", "/live", requiresAuth = true)) }
+            .onSuccess { liveFriends = it }
+        return liveFriends
+    }
+
+    private var lastLive: Pair<SocialLive, Long>? = null
+    private var liveJob: Job? = null
+
+    /// Идущая тренировка — друзьям. Одинаковое не шлём чаще раза в пять минут:
+    /// этого хватает, чтобы статус на сервере не протух.
+    fun reportLive(live: SocialLive?) {
+        if (token == null) return
+        // Скрытая тренировка всё равно видна напарнику по совместной.
+        val partnerOnly = !sharesLive && together.active != null
+        if (live == null || !(sharesLive || partnerOnly)) {
+            if (lastLive != null) scope.launch { clearLive() }
+            return
+        }
+        val sent = if (partnerOnly) live.copy(partnerOnly = true) else live
+        val last = lastLive
+        val now = System.currentTimeMillis()
+        if (last != null && last.first == sent && now - last.second < 300_000) return
+        lastLive = sent to now
+        liveJob?.cancel()
+        liveJob = scope.launch {
+            // Несколько отметок подряд — один запрос.
+            delay(1_500)
+            runCatching { call("PUT", "/me/live", body = json.encodeToString(SocialLive.serializer(), sent), requiresAuth = true) }
+        }
+    }
+
+    suspend fun clearLive() {
+        liveJob?.cancel()
+        lastLive = null
+        if (token == null) return
+        runCatching { call("DELETE", "/me/live", requiresAuth = true) }
+    }
+
+    fun updateSharesLive(value: Boolean) {
+        sharesLive = value
+        if (::appContext.isInitialized) prefs().edit().putBoolean("share_live", value).apply()
+        if (!value) scope.launch { clearLive() }
+    }
+
+    // MARK: Рейтинг недели
+
+    suspend fun leaderboard(): List<SocialLeaderboardEntry> = decode(call("GET", "/leaderboard", requiresAuth = true))
+
+    suspend fun deleteMessage(id: String) {
+        call("DELETE", "/messages/$id", requiresAuth = true)
     }
 
     suspend fun deleteComment(id: String) {
@@ -348,6 +758,14 @@ object SocialService {
     @Serializable
     private data class ImageResponse(val id: String)
 
+    /// Звук голосового (AAC в m4a); длительность и волна — в адресе.
+    suspend fun uploadVoice(m4a: ByteArray, durationMs: Int, waveform: String): SocialVoice =
+        decode<SocialVoice>(
+            call("POST", "/voices?durationMs=$durationMs&waveform=$waveform", bytes = m4a, contentType = "audio/mp4", requiresAuth = true)
+        )
+
+    fun voiceUrl(id: String): String = "$serverUrl/v2/voices/$id"
+
     suspend fun uploadImage(jpeg: ByteArray): String =
         decode<ImageResponse>(call("POST", "/images", bytes = jpeg, contentType = "image/jpeg", requiresAuth = true)).id
 
@@ -356,7 +774,7 @@ object SocialService {
         return uploadImage(jpeg)
     }
 
-    /// Фото уменьшается до 1280 px по длинной стороне и поворачивается по EXIF:
+    /// Фото уменьшается до 1280 px по длинной стороне, поворачивается и отражается по EXIF:
     /// так пост грузится быстро, а в бесплатную базу помещаются тысячи тренировок.
     fun jpeg(context: Context, uri: Uri, maxSide: Int = 1280, quality: Int = 72): ByteArray? = runCatching {
         val resolver = context.contentResolver
@@ -368,20 +786,19 @@ object SocialService {
         val decoded = resolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
         } ?: return null
-        val rotation = resolver.openInputStream(uri)?.use {
-            when (ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-                else -> 0f
-            }
-        } ?: 0f
+        // Поворот и отражение: камеры часто пишут селфи «зеркально» отметкой в EXIF,
+        // а не самими пикселями — без неё фото ушло бы неотражённым.
+        val exif = resolver.openInputStream(uri)?.use { ExifInterface(it) }
+        val rotation = exif?.rotationDegrees?.toFloat() ?: 0f
+        val flipped = exif?.isFlipped == true
         val scale = minOf(1f, maxSide.toFloat() / maxOf(decoded.width, decoded.height))
         val matrix = Matrix().apply {
             if (scale < 1f) postScale(scale, scale)
+            // ExifInterface считает поворот для уже отражённого кадра: сначала отражение.
+            if (flipped) postScale(-1f, 1f)
             if (rotation != 0f) postRotate(rotation)
         }
-        val bitmap = if (scale < 1f || rotation != 0f) {
+        val bitmap = if (scale < 1f || rotation != 0f || flipped) {
             Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
         } else decoded
         ByteArrayOutputStream().use { out ->
@@ -424,10 +841,12 @@ object SocialService {
         val sets: Int,
         val effort: Int? = null,
         val photos: List<String>,
-        val workout: SocialWorkout
+        val workout: SocialWorkout,
+        val together: String? = null
     )
 
     fun flushOutbox() {
+        flushMessages()
         if (!::appContext.isInitialized || token == null || isFlushing || outbox.isEmpty()) return
         isFlushing = true
         outboxError = null
@@ -455,7 +874,8 @@ object SocialService {
                             sets = draft.sets,
                             effort = draft.effort,
                             photos = draft.uploadedPhotos.filterNotNull(),
-                            workout = draft.workout
+                            workout = draft.workout,
+                            together = draft.together
                         )
                         call("POST", "/posts", body = json.encodeToString(body), requiresAuth = true)
                         withContext(Dispatchers.IO) { OutboxStore.remove(draft.clientId) }
@@ -471,6 +891,8 @@ object SocialService {
                     }
                 }
                 refreshMe()
+                // Пост совместной тренировки отмечает её законченной.
+                if (together.active != null) refreshTogether()
             } finally {
                 isFlushing = false
             }
@@ -512,4 +934,43 @@ object SocialService {
                 }
                 .sortedBy { it.createdAtMillis }
     }
+
+    /// Каждое неотправленное сообщение — папка с pending.json, рядом photo.jpg
+    /// или voice.m4a, если они ещё не загружены.
+    private object ChatOutboxStore {
+        private val root: File get() = File(appContext.filesDir, "chat_outbox")
+        private fun folder(id: String) = File(root, id)
+
+        fun save(item: ChatPending, photo: ByteArray?, voice: ByteArray?) {
+            val dir = folder(item.clientId).apply { mkdirs() }
+            photo?.let { File(dir, "photo.jpg").writeBytes(it) }
+            voice?.let { File(dir, "voice.m4a").writeBytes(it) }
+            update(item)
+        }
+
+        fun update(item: ChatPending) {
+            val dir = folder(item.clientId).apply { mkdirs() }
+            val temp = File(dir, "pending.json.tmp")
+            temp.writeText(json.encodeToString(item))
+            temp.renameTo(File(dir, "pending.json"))
+        }
+
+        fun photo(id: String): ByteArray? = File(folder(id), "photo.jpg").takeIf { it.exists() }?.readBytes()
+
+        fun voice(id: String): ByteArray? = File(folder(id), "voice.m4a").takeIf { it.exists() }?.readBytes()
+
+        fun remove(id: String) {
+            folder(id).deleteRecursively()
+        }
+
+        fun loadAll(): List<ChatPending> =
+            (root.listFiles() ?: emptyArray())
+                .mapNotNull { dir ->
+                    runCatching { json.decodeFromString<ChatPending>(File(dir, "pending.json").readText()) }.getOrNull()
+                }
+                .sortedBy { it.createdAt }
+    }
+
+    /// Фото сообщения из очереди — показать в пузыре, пока оно не ушло.
+    fun pendingPhoto(clientId: String): ByteArray? = runCatching { ChatOutboxStore.photo(clientId) }.getOrNull()
 }

@@ -28,6 +28,12 @@ class Haptics(private val view: View) {
         else HapticFeedbackConstants.LONG_PRESS
     )
 
+    /// Не получилось — как `notificationOccurred(.error)` на iPhone.
+    fun error() = perform(
+        if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT
+        else HapticFeedbackConstants.LONG_PRESS
+    )
+
     private fun perform(constant: Int) {
         runCatching { view.performHapticFeedback(constant) }
     }

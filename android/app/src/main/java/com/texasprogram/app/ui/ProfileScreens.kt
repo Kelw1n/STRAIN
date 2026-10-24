@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,7 +88,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.AchievementGroup
 import com.texasprogram.app.model.AchievementKind
@@ -103,7 +104,6 @@ import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.SocialException
 import com.texasprogram.app.service.SocialService
 import kotlinx.coroutines.launch
-import java.io.File
 
 // MARK: - Вкладка «Профиль»
 
@@ -146,6 +146,10 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
 
     val progress = remember(profile) { AchievementCalculator.progress(profile) }
     val programs = remember(profile) { SocialProgramBuilder.days(profile) }
+    val listState = rememberLazyListState()
+    OnTabReselect(MainTabItem.PROFILE) {
+        if (navigator.stack.isNotEmpty()) navigator.stack.clear() else listState.scrollToTop()
+    }
 
     SocialHost(navigator, screen = { route ->
         SocialRouteScreen(route, navigator, contentPadding, profile, onPostChange = ::replace)
@@ -162,6 +166,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                     postsError = postsError,
                     navigator = navigator,
                     contentPadding = contentPadding,
+                    listState = listState,
                     onAchievements = { navigator.push(SocialRoute.Achievements) },
                     onLoadMore = {
                         val cursor = next
@@ -184,9 +189,9 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                             Modifier
                                 .fillMaxWidth()
                                 .height(50.dp)
+                                .pressable { navigator.push(SocialRoute.EditProfile) }
                                 .clip(RoundedCornerShape(18.dp))
-                                .background(Color(0xFF212121))
-                                .pressable { navigator.push(SocialRoute.EditProfile) },
+                                .background(Color(0xFF212121)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text("Редактировать", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -224,7 +229,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
 @Composable
 private fun RoundIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).pressable(onClick = onClick),
+        Modifier.size(40.dp).pressable(onClick = onClick).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -297,8 +302,9 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                     if (index >= 0) { if (value != null) posts[index] = value else posts.removeAt(index) }
                 },
                 primaryAction = {
-                    if (!current.isMe && SocialService.isSignedIn) {
-                        FollowButton(current.isFollowing) {
+                    if (!current.isMe && SocialService.isSignedIn) Column {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FollowButton(current.isFollowing, modifier = Modifier.weight(1f)) {
                             if (busy) return@FollowButton
                             busy = true
                             val optimistic = current.copy(
@@ -316,6 +322,21 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                                 }
                             }
                         }
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .pressable { navigator.push(SocialRoute.Chat(username)) }
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color(0xFF292929)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Написать", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        // Приглашение уходит карточкой в переписку — туда и переходим.
+                        InviteButton(username) { navigator.push(SocialRoute.Chat(username)) }
                     }
                 }
             )
@@ -348,6 +369,7 @@ fun ProfileContent(
     postsError: String?,
     navigator: SocialNavigator,
     contentPadding: PaddingValues,
+    listState: LazyListState = rememberLazyListState(),
     onAchievements: () -> Unit,
     onLoadMore: () -> Unit,
     onPostChange: (String, SocialPost?) -> Unit,
@@ -356,6 +378,7 @@ fun ProfileContent(
     var tab by rememberSaveable { mutableIntStateOf(0) }
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = contentPadding.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
@@ -391,7 +414,8 @@ fun ProfileContent(
                         post = post,
                         onOpen = { navigator.push(SocialRoute.Post(post)) },
                         onOpenAuthor = {},
-                        onChange = { onPostChange(post.id, it) }
+                        onChange = { onPostChange(post.id, it) },
+                        showsWorkout = true
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
                 }
@@ -413,9 +437,9 @@ fun ProfileContent(
                 Row(
                     Modifier
                         .fillMaxWidth()
+                        .pressable { navigator.push(SocialRoute.Program(day, programs, if (user.isMe) null else user.username)) }
                         .clip(RoundedCornerShape(22.dp))
                         .background(Color(0xFF161617))
-                        .pressable { navigator.push(SocialRoute.Program(day)) }
                         .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -457,6 +481,7 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
             )
         }
         Text("@${user.username}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+        user.live?.let { LiveBadge(it) }
         user.bodyLine?.let { Text(it, color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         if (user.bio.isNotBlank()) {
             Text(user.bio, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp, textAlign = TextAlign.Center)
@@ -513,9 +538,9 @@ private fun AchievementsCard(badges: List<SocialBadge>, achievedCount: Int, onCl
     Column(
         Modifier
             .fillMaxWidth()
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(22.dp))
             .background(Color(0xFF161617))
-            .pressable(onClick = onClick)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -608,8 +633,6 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                 Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .clip(CircleShape)
-                    .background(if (valid) Color.White else Color(0xFF666666))
                     .pressable(enabled = valid && !busy) {
                         busy = true
                         error = null
@@ -622,7 +645,9 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                                 busy = false
                             }
                         }
-                    },
+                    }
+                    .clip(CircleShape)
+                    .background(if (valid) Color.White else Color(0xFF666666)),
                 contentAlignment = Alignment.Center
             ) {
                 if (busy) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
@@ -704,8 +729,6 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
     var showingCode by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    // Камера — другое приложение: пока оно открыто, наш экран могут пересоздать.
-    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     fun upload(uri: Uri, avatar: Boolean) {
         uploading = true
@@ -724,10 +747,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
 
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { upload(it, avatar = true) } }
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { upload(it, avatar = false) } }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val uri = cameraUri
-        if (ok && uri != null) upload(uri, avatar = true)
-    }
+    val camera = rememberCameraLauncher { upload(it, avatar = true) }
 
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
@@ -788,9 +808,9 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(10.dp)
+                        .pressable { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.55f))
-                        .pressable { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -820,9 +840,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                             leadingIcon = { Icon(Icons.Filled.CameraAlt, contentDescription = null) },
                             onClick = {
                                 avatarMenu = false
-                                val uri = cameraFileUri(context)
-                                cameraUri = uri
-                                runCatching { camera.launch(uri) }.onFailure { error = "Камера недоступна" }
+                                camera.launch()
                             }
                         )
                         DropdownMenuItem(
@@ -882,6 +900,18 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                         Text("В шапке профиля. Сила к весу в достижениях видна всегда.", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
                     }
                     Switch(checked = showBody, onCheckedChange = { showBody = it }, colors = SwitchDefaults.colors(checkedTrackColor = Theme.accent))
+                }
+                EditDivider()
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Показывать, что я тренируюсь", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Подписчики увидят упражнение и подходы, пока идёт тренировка.", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = SocialService.sharesLive,
+                        onCheckedChange = { SocialService.updateSharesLive(it) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = Theme.accent)
+                    )
                 }
             }
         }
@@ -945,6 +975,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
 
     if (confirmSignOut) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmSignOut = false },
             containerColor = Theme.dialog,
             title = { Text("Выйти из профиля на этом телефоне?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -961,6 +992,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
     }
     if (confirmDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDelete = false },
             containerColor = Theme.dialog,
             title = { Text("Удалить профиль навсегда?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -981,13 +1013,6 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена", color = Theme.textSecondary) } }
         )
     }
-}
-
-/// Файл для снимка камеры: камера пишет в него сама, а мы потом читаем и сжимаем.
-fun cameraFileUri(context: Context): Uri {
-    val dir = File(context.cacheDir, "camera").apply { mkdirs() }
-    val file = File(dir, "photo-${System.currentTimeMillis()}.jpg")
-    return FileProvider.getUriForFile(context, "${context.packageName}.files", file)
 }
 
 @Composable
@@ -1122,7 +1147,14 @@ fun BadgeListScreen(badges: List<SocialBadge>, contentPadding: PaddingValues, na
 // MARK: - День программы
 
 @Composable
-fun ProgramDayScreen(day: SocialProgramDay, contentPadding: PaddingValues, navigator: SocialNavigator) {
+fun ProgramDayScreen(
+    day: SocialProgramDay,
+    contentPadding: PaddingValues,
+    navigator: SocialNavigator,
+    allDays: List<SocialProgramDay> = emptyList(),
+    /// Чья программа; `null` — своя, копировать нечего.
+    author: String? = null
+) {
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SocialTopBar(day.title, onBack = { navigator.pop() }) }
         if (day.groups.isNotEmpty()) item { Text(day.groups.joinToString(" · "), color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
@@ -1141,6 +1173,9 @@ fun ProgramDayScreen(day: SocialProgramDay, contentPadding: PaddingValues, navig
                     if (index < day.exercises.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 70.dp))
                 }
             }
+        }
+        if (author != null) {
+            item { CopyProgramButton(allDays.ifEmpty { listOf(day) }, author, navigator) }
         }
     }
 }

@@ -110,6 +110,21 @@ final class WorkoutSessionManager {
         exercises.reduce(0) { $0 + $1.sets.count }
     }
 
+    /// Что видят друзья: день, текущее упражнение и его подходы — «Присед · 3/5».
+    var liveStatus: SocialLive? {
+        guard let workout = activeWorkout else { return nil }
+        let current = exercises.first { $0.sets.contains { !$0.isDone } } ?? exercises.last
+        return SocialLive(
+            title: workout.day.title,
+            exercise: current?.prescription.name ?? "",
+            done: current?.sets.filter(\.isDone).count ?? 0,
+            total: current?.sets.count ?? 0,
+            setsDone: totalCompletedSets,
+            setsTotal: totalSetsCount,
+            startedAt: (startDate.timeIntervalSince1970 * 1000).rounded()
+        )
+    }
+
     var totalTonnage: Double {
         exercises.flatMap(\.sets)
             .filter(\.isDone)
@@ -524,6 +539,18 @@ final class WorkoutSessionManager {
 
     func clearSaved() {
         try? FileManager.default.removeItem(at: Self.saveURL)
+    }
+
+    /// Профиль удалён: его тренировка — и идущая, и отложенная при смене
+    /// профиля — больше никогда не продолжится.
+    func forgetProfile(_ id: UUID) {
+        if activeWorkout != nil, profileID == id {
+            reset()
+        } else if let data = try? Data(contentsOf: Self.saveURL),
+                  let session = try? JSONDecoder().decode(SavedSession.self, from: data),
+                  session.profileID == id {
+            clearSaved()
+        }
     }
 
     /// Для тестов: забыть тренировку в памяти, не трогая файл, — как после выгрузки.

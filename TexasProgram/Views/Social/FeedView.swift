@@ -13,6 +13,8 @@ struct FeedView: View {
     @State private var error: String?
     @State private var path = NavigationPath()
     @State private var confirmDiscard = false
+    /// Обновление по повторному нажатию на «Главное» — с крутилкой сверху.
+    @State private var tabRefreshing = false
 
     private var social: SocialService { .shared }
 
@@ -20,8 +22,23 @@ struct FeedView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    if tabRefreshing {
+                        ProgressView().tint(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .transition(.opacity)
+                    }
                     if !social.isSignedIn {
                         signUpTeaser.padding(.bottom, 8)
+                    }
+                    if let active = social.together.active {
+                        TogetherCard(together: active)
+                            .padding(.top, 8)
+                    }
+                    if social.isSignedIn && !social.liveFriends.isEmpty {
+                        LiveFriendsStrip(friends: social.liveFriends) { path.append(FeedRoute.user($0)) }
+                            .padding(.top, 8)
+                            .padding(.bottom, 6)
                     }
                     outbox
                     if let error, posts.isEmpty {
@@ -46,6 +63,7 @@ struct FeedView: View {
                     Spacer(minLength: 110)
                 }
                 .padding(.horizontal, 16)
+                .tabScrollAnchor(.today)
             }
             .scrollIndicators(.hidden)
             .refreshable { await reload() }
@@ -53,12 +71,30 @@ struct FeedView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { scopeMenu }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: onFindPeople) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
+                    HStack(spacing: 18) {
+                        if social.isSignedIn {
+                            Button { path.append(FeedRoute.activity) } label: {
+                                Image(systemName: "bell")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .overlay(alignment: .topTrailing) {
+                                        if social.unseenActivity > 0 {
+                                            Circle()
+                                                .fill(Theme.record)
+                                                .frame(width: 9, height: 9)
+                                                .offset(x: 3, y: -2)
+                                        }
+                                    }
+                            }
+                            .accessibilityLabel(social.unseenActivity > 0 ? "Активность, есть новое" : "Активность")
+                        }
+                        Button(action: onFindPeople) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                        .accessibilityLabel("Найти людей")
                     }
-                    .accessibilityLabel("Найти людей")
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -67,7 +103,29 @@ struct FeedView: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Повторное нажатие на «Главное»: из поста или профиля — назад к ленте,
+        // в самой ленте — наверх и свежие тренировки.
+        .onTabReselect(.today) {
+            guard path.isEmpty else {
+                path = NavigationPath()
+                return
+            }
+            TabReselection.shared.scrollToTop(.today)
+            guard !loading else { return }
+            Task {
+                withAnimation(Motion.snappy) { tabRefreshing = true }
+                await reload()
+                withAnimation(Motion.snappy) { tabRefreshing = false }
+            }
+        }
         .task(id: "\(scope.rawValue)-\(social.feedVersion)") { await reload() }
+        // Кто в зале — раз в минуту, пока лента на экране.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await social.refreshLive()
+            }
+        }
         .onChange(of: scope) { _, value in
             // Другая лента — сразу показываем её прошлую версию, если она была.
             posts = social.feedCache[value]?.posts ?? []
@@ -219,6 +277,10 @@ struct FeedView: View {
         loading = true
         defer { loading = false }
         social.flushOutbox()
+        Task {
+            await social.refreshLive()
+            await social.refreshTogether()
+        }
         do {
             let page = try await social.feed(scope)
             next = page.next
@@ -247,8 +309,13 @@ enum FeedRoute: Hashable {
     case user(String)
     case followers(String)
     case following(String)
-    case program(SocialProgramDay)
+    /// День программы; `all` и `author` — чтобы скопировать к себе один день или всю программу.
+    case program(SocialProgramDay, all: [SocialProgramDay], author: String?)
     case badges([SocialBadge])
+    case chat(String)
+    case activity
+    /// Пост, который ещё надо загрузить, — из активности.
+    case postId(String)
 
     @MainActor @ViewBuilder
     func destination(path: Binding<NavigationPath>, onPostChange: @escaping (String, SocialPost?) -> Void) -> some View {
@@ -265,10 +332,16 @@ enum FeedRoute: Hashable {
             PeopleListView(title: "Подписчики", load: { try await SocialService.shared.followers(of: username) }, path: path)
         case .following(let username):
             PeopleListView(title: "Подписки", load: { try await SocialService.shared.following(of: username) }, path: path)
-        case .program(let day):
-            ProgramDayView(day: day)
+        case .program(let day, let all, let author):
+            ProgramDayView(day: day, allDays: all, author: author)
         case .badges(let badges):
             BadgeListView(badges: badges)
+        case .chat(let username):
+            ChatView(username: username, path: path)
+        case .activity:
+            ActivityView(path: path)
+        case .postId(let id):
+            PostLoaderView(id: id, path: path)
         }
     }
 }

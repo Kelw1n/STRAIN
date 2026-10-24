@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -77,6 +78,7 @@ fun SettingsScreen(
     onExportCsv: () -> Unit,
     backupMessage: String?,
     onClose: () -> Unit,
+    onOpenGuide: () -> Unit,
     contentPadding: PaddingValues
 ) {
     var showDelete by remember { mutableStateOf(false) }
@@ -92,60 +94,12 @@ fun SettingsScreen(
                 Box(
                     Modifier
                         .size(40.dp)
+                        .pressable(onClick = onClose)
                         .clip(CircleShape)
-                        .background(Theme.surfaceSoft)
-                        .pressable(onClick = onClose),
+                        .background(Theme.surfaceSoft),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = "Готово", tint = Theme.textPrimary, modifier = Modifier.size(20.dp))
-                }
-            }
-        }
-
-        item(key = "theme") {
-            CardView(Modifier.appearIn(0)) {
-                SectionLabel("Тема оформления")
-                AppThemeStyle.entries.forEach { themeStyle ->
-                    val isSelected = ThemeManager.style == themeStyle
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) Theme.accent.copy(alpha = 0.12f) else Color.Transparent)
-                            .pressable { ThemeManager.set(themeStyle) }
-                            .padding(horizontal = 10.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    when (themeStyle) {
-                                        AppThemeStyle.REBRN_BLACK -> Color(0xFF000000)
-                                        AppThemeStyle.CLAUDE_LIGHT -> Color(0xFFFBF8F3)
-                                        AppThemeStyle.CLAUDE_DARK -> Color(0xFF1B1917)
-                                        AppThemeStyle.STRAIN_DARK -> Color(0xFF0B0E13)
-                                        AppThemeStyle.SYSTEM -> Theme.accent
-                                    }
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isSelected) Theme.accent else Theme.hairline,
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isSelected) {
-                                Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(themeStyle.displayName, color = Theme.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text(themeStyle.description, color = Theme.textSecondary, fontSize = 11.sp)
-                        }
-                    }
                 }
             }
         }
@@ -163,9 +117,9 @@ fun SettingsScreen(
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .pressable(enabled = !isActive) { onSwitchProfile(item.id) }
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isActive) Theme.accent.copy(alpha = 0.10f) else Color.Transparent)
-                            .pressable(enabled = !isActive) { onSwitchProfile(item.id) }
                             .padding(horizontal = 10.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -203,6 +157,18 @@ fun SettingsScreen(
                 NumberRow("Приседания", profile.squat5RM) { onUpdate(profile.copy(squat5RM = it)) }
                 NumberRow("Жим лёжа", profile.bench5RM) { onUpdate(profile.copy(bench5RM = it)) }
                 NumberRow("Становая тяга", profile.deadlift5RM) { onUpdate(profile.copy(deadlift5RM = it)) }
+            }
+        }
+
+        // Инструкция была отдельной вкладкой и пропала вместе со старой панелью.
+        item(key = "guide") {
+            CardView(Modifier.appearIn(1)) {
+                SecondaryButton("Как устроена программа", icon = Icons.Filled.Book, onClick = onOpenGuide)
+                Text(
+                    "С чего начать, сколько отдыхать, что такое RPE и особенности твоей программы.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
             }
         }
 
@@ -248,8 +214,11 @@ fun SettingsScreen(
                     ) { onUpdate(profile.copy(level = TrainingLevel.entries[it])) }
                 }
             }
+        }
 
-            item(key = "cycle") {
+        // Новый цикл, подсобка, блины, напоминания и остальное — для любой программы,
+        // как на iOS. Раньше блок «только Техас» закрывался ниже и прятал их всех.
+        item(key = "cycle") {
             CardView(Modifier.appearIn(5)) {
                 SectionLabel("Цикл ${profile.cycleNumber}")
                 SecondaryButton("Начать новый цикл", icon = Icons.Filled.Refresh) { showNewCycle = true }
@@ -388,6 +357,15 @@ fun SettingsScreen(
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
+                SegmentedControl(
+                    options = listOf("Звук отдыха", "Без звука"),
+                    selectedIndex = if (restTimer.soundEnabled) 0 else 1
+                ) { restTimer.updateSound(it == 0) }
+                Text(
+                    "Короткий отсчёт за 3, 2, 1 секунды до конца отдыха и сигнал завершения.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
             }
         }
 
@@ -452,7 +430,8 @@ fun SettingsScreen(
             }
         }
 
-        item(key = "extra") {
+        if (profile.programKind == TrainingProgramKind.TEXAS) {
+            item(key = "extra") {
                 CardView(Modifier.appearIn(5)) {
                     SectionLabel("Дополнительные упражнения")
                     AdditionalExerciseCategory.entries.forEach { category ->
@@ -555,8 +534,12 @@ fun SettingsScreen(
             }
         }
 
+        item(key = "version") {
+            AppVersionCard(Modifier.appearIn(8))
+        }
+
         item(key = "delete") {
-            CardView(Modifier.appearIn(8)) {
+            CardView(Modifier.appearIn(9)) {
                 SecondaryButton(
                     if (profiles.size > 1) "Удалить этот профиль" else "Сбросить профиль",
                     icon = Icons.Filled.Delete,
@@ -580,6 +563,7 @@ fun SettingsScreen(
 
     if (showDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { showDelete = false },
             title = { Text(if (profiles.size > 1) "Удалить профиль «${profile.name}»?" else "Полностью сбросить профиль?") },
             text = { Text("Действие нельзя отменить.") },
@@ -612,9 +596,9 @@ fun SectionLabel(text: String) {
 private fun ModeChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Theme.accentGradient else SolidColor(Theme.surfaceSoft))
             .pressable(onClick = onClick)
+            .clip(RoundedCornerShape(12.dp))
+            .selectionFill(selected, Theme.accentGradient, Theme.surfaceSoft, RoundedCornerShape(12.dp))
             .padding(vertical = 10.dp, horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -636,9 +620,9 @@ private fun WeekdayRow(label: String, weekday: Int, onSelect: (Int) -> Unit) {
         Row(
             Modifier
                 .fillMaxWidth()
+                .pressable { open = true }
                 .clip(RoundedCornerShape(12.dp))
                 .background(Theme.surfaceSoft)
-                .pressable { open = true }
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -678,9 +662,9 @@ fun ExercisePicker(category: AdditionalExerciseCategory, value: String?, onSelec
         Row(
             Modifier
                 .fillMaxWidth()
+                .pressable { open = true }
                 .clip(RoundedCornerShape(12.dp))
                 .background(Theme.surfaceSoft)
-                .pressable { open = true }
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -742,9 +726,9 @@ private fun StepButton(symbol: String, onClick: () -> Unit) {
     Box(
         Modifier
             .size(30.dp)
+            .pressable(onClick = onClick)
             .clip(CircleShape)
-            .background(Theme.accent.copy(alpha = 0.14f))
-            .pressable(onClick = onClick),
+            .background(Theme.accent.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center
     ) {
         Text(symbol, color = Theme.accent, fontSize = 15.sp, fontWeight = FontWeight.Black)

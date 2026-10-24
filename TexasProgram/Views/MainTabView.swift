@@ -5,6 +5,24 @@ enum AppTab: Hashable {
     case today, plan, bench, progress, guide
 }
 
+/// Экран вкладки пересчитывается сам — по своим данным, а не на каждое нажатие
+/// по панели. На входе у экранов замыкания, а их SwiftUI сравнить не умеет:
+/// без этой обёртки смена вкладки заново считала все открытые вкладки разом —
+/// медали, расписание, историю упражнений — и переход подтормаживал.
+private struct TabScreen<Content: View>: View, Equatable {
+    let tab: MainTabItem
+    let profileID: ObjectIdentifier
+    /// От программы зависит, есть ли кнопки «Жим 14»: сменили — экран заново.
+    let programKind: TrainingProgramKind
+    @ViewBuilder let content: () -> Content
+
+    var body: some View { content() }
+
+    static func == (lhs: TabScreen, rhs: TabScreen) -> Bool {
+        lhs.tab == rhs.tab && lhs.profileID == rhs.profileID && lhs.programKind == rhs.programKind
+    }
+}
+
 struct MainTabView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(RestTimer.self) private var restTimer
@@ -12,6 +30,7 @@ struct MainTabView: View {
     @State private var selectedTab: MainTabItem = .today
     @State private var showingSettings = false
     @State private var benchFocus: Int?
+    @State private var showingBench = false
     @Bindable var sessionManager = WorkoutSessionManager.shared
     let onAddProfile: () -> Void
     let onDeleteProfile: () -> Void
@@ -19,22 +38,22 @@ struct MainTabView: View {
     /// Вкладка «Жим 14» есть у всех программ с волной жима.
     private var isUpperLower: Bool { profile.programKind.hasBenchWave }
 
-    /// Переход в раздел «Жим 14» на конкретную тренировку волны.
+    /// Раздел «Жим 14» на конкретной тренировке волны. Раньше это была вкладка;
+    /// когда её убрали, кнопки запоминали тренировку, но ничего не открывали.
     private var benchHandler: ((Int) -> Void)? {
         guard isUpperLower else { return nil }
         return { session in
             benchFocus = session
-            withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.workout) }
+            showingBench = true
         }
     }
 
-    /// В какую сторону листаем: новый экран въезжает с той стороны, куда ушла линза.
-    @State private var movingForward = true
+    /// Открытые хотя бы раз вкладки живут дальше: при возврате экран не
+    /// собирается заново — без пустого кадра, перезагрузки ленты и рывка.
+    @State private var visitedTabs: Set<MainTabItem> = [.today]
 
-    /// Направление выставляется в той же транзакции, что и вкладка, —
-    /// через `onChange` оно опоздало бы на один переход.
     private func select(_ tab: MainTabItem) {
-        movingForward = tab.index >= selectedTab.index
+        visitedTabs.insert(tab)
         selectedTab = tab
     }
 
@@ -42,15 +61,19 @@ struct MainTabView: View {
         Binding(get: { selectedTab }, set: { select($0) })
     }
 
-    /// Уходящий экран просто гаснет и чуть уменьшается, направление важно только
-    /// входящему. Так переход не зависит от того, с каким направлением уходящий
-    /// экран был нарисован в последний раз.
-    private var tabTransition: AnyTransition {
-        if reduceMotion { return .opacity }
-        return .asymmetric(
-            insertion: .offset(x: movingForward ? 36 : -36).combined(with: .opacity),
-            removal: .scale(scale: 0.97).combined(with: .opacity)
-        )
+    /// Скрытая вкладка стоит чуть в стороне — со своей стороны от выбранной.
+    /// Поэтому новая въезжает оттуда, куда ушла линза, а старая уходит в свою сторону.
+    private func tabOffset(_ tab: MainTabItem) -> CGFloat {
+        guard tab != selectedTab, !reduceMotion else { return 0 }
+        return tab.index > selectedTab.index ? 28 : -28
+    }
+
+    /// Точки: новые сообщения — на «Друзьях», новая активность — на «Главном».
+    private var tabBadges: Set<MainTabItem> {
+        var badges: Set<MainTabItem> = []
+        if SocialService.shared.unreadMessages > 0 { badges.insert(.community) }
+        if SocialService.shared.unseenActivity > 0 { badges.insert(.today) }
+        return badges
     }
 
     @ViewBuilder
@@ -78,8 +101,11 @@ struct MainTabView: View {
                     if let focus = profile.schedule.focus {
                         sessionManager.requestStart(workout: focus, profile: profile)
                     }
-                }
+                },
+                onOpenBench: isUpperLower ? { benchFocus = nil; showingBench = true } : nil
             )
+        case .nutrition:
+            NutritionView(profile: profile)
         case .community:
             CommunityView(onCreateProfile: { withAnimation(Motion.maybe(Motion.snappy, reduce: reduceMotion)) { select(.profile) } })
         case .profile:
@@ -87,33 +113,68 @@ struct MainTabView: View {
         }
     }
 
+    private var showsMinimizedWorkout: Bool {
+        sessionManager.isRunning && !sessionManager.isPresented && !AppChrome.shared.hidesTabBar
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // Экраны контента
             ZStack {
-                screen(for: selectedTab)
-                    .id(selectedTab)
-                    .transition(tabTransition)
+                ForEach(MainTabItem.allCases) { tab in
+                    if visitedTabs.contains(tab) || tab == selectedTab {
+                        let active = tab == selectedTab
+                        TabScreen(tab: tab, profileID: ObjectIdentifier(profile), programKind: profile.programKind) {
+                            screen(for: tab)
+                        }
+                        .equatable()
+                            .opacity(active ? 1 : 0)
+                            .offset(x: tabOffset(tab))
+                            .allowsHitTesting(active)
+                            .accessibilityHidden(!active)
+                            .zIndex(active ? 1 : 0)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Короткий плавный переход без пружины: только прозрачность и сдвиг,
+            // экраны при этом не пересобираются.
+            .animation(Motion.maybe(Motion.tab, reduce: reduceMotion), value: selectedTab)
 
-            // Нижняя панель: свернутая тренировка + плашка отдыха + Liquid Glass Dock
+            // Нижняя панель: свернутая тренировка + плашка отдыха + Liquid Glass Dock.
+            // В переписке внизу поле ввода — вся панель уезжает вниз, чтобы его не
+            // закрывать. Отдых при этом идёт дальше и виден на Dynamic Island.
             VStack(spacing: 8) {
-                if sessionManager.isRunning && !sessionManager.isPresented {
+                if showsMinimizedWorkout {
                     MinimizedWorkoutBar(profile: profile)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                if restTimer.isRunning {
+                if restTimer.isRunning && !AppChrome.shared.hidesTabBar {
                     RebrnRestTimerCard()
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                LiquidGlassTabBar(selectedTab: tabSelection)
+                if !AppChrome.shared.hidesTabBar {
+                    LiquidGlassTabBar(selectedTab: tabSelection, badges: tabBadges) { tab in
+                        TabReselection.shared.fire(tab)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
-            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: sessionManager.isRunning && !sessionManager.isPresented)
+            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: AppChrome.shared.hidesTabBar)
+            .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: showsMinimizedWorkout)
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: restTimer.isRunning)
         }
+        // Друг зовёт тренироваться вместе — плашка сверху поверх любой вкладки.
+        .overlay(alignment: .top) {
+            if let invite = SocialService.shared.together.incoming.first {
+                TogetherInviteBanner(invite: invite)
+                    .padding(.top, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: SocialService.shared.together.incoming.first?.id)
         .confirmationDialog(
             sessionManager.replaceTitle,
             isPresented: $sessionManager.showingReplaceConfirm,
@@ -135,6 +196,9 @@ struct MainTabView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
         }
+        .sheet(isPresented: $showingBench) {
+            BenchWaveView(profile: profile, focused: $benchFocus, onClose: { showingBench = false })
+        }
         // Виджет живёт в другой песочнице и сам данные не достанет — публикуем слепок.
         .onAppear {
             WidgetBridge.publish(profile)
@@ -146,9 +210,36 @@ struct MainTabView: View {
             // Лента: неотправленные посты — в путь, программа и медали — в профиль.
             SocialService.shared.flushOutbox()
             SocialService.shared.scheduleSync(from: profile)
-            Task { await SocialService.shared.refreshMe() }
+            Task {
+                await SocialService.shared.refreshMe()
+                await SocialService.shared.refreshUnread()
+            }
         }
-        .onChange(of: profile.completionLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
+        // Остальные вкладки собираются заранее, по одной и в паузах: когда
+        // ведёшь пальцем по панели, они открываются мгновенно, без сборки на лету.
+        .task {
+            for tab in MainTabItem.allCases {
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                guard !Task.isCancelled else { return }
+                visitedTabs.insert(tab)
+            }
+        }
+        // Непрочитанные сообщения и активность — раз в минуту, пока приложение открыто.
+        // Идущая тренировка заодно напоминает о себе, чтобы статус у друзей не протух.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await SocialService.shared.refreshUnread()
+                SocialService.shared.reportLive(sessionManager.liveStatus)
+            }
+        }
+        // Друзья видят, что идёт тренировка и какой подход.
+        .onChange(of: sessionManager.liveStatus) { _, live in SocialService.shared.reportLive(live) }
+        .onChange(of: profile.completionLog) { _, _ in
+            SocialService.shared.scheduleSync(from: profile)
+            // Сегодняшняя тренировка сделана — вечернее напоминание уже ни к чему.
+            ReminderScheduler.reschedule(for: profile)
+        }
         .onChange(of: profile.bodyWeightLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         // Расписание напоминаний собирается заново на каждое изменение
         .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }
@@ -156,7 +247,11 @@ struct MainTabView: View {
         .onChange(of: profile.reminderMinute) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.scheduleWeekdays) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.completedDayKeys) { _, _ in WidgetBridge.publish(profile) }
-        .onChange(of: profile.scheduleModeRaw) { _, _ in WidgetBridge.publish(profile) }
+        .onChange(of: profile.scheduleModeRaw) { _, _ in
+            WidgetBridge.publish(profile)
+            // В очереди текст напоминания другой: день заранее неизвестен.
+            ReminderScheduler.reschedule(for: profile)
+        }
         .onChange(of: profile.scheduleWeekdays) { _, _ in WidgetBridge.publish(profile) }
         .onChange(of: profile.peakingActive) { _, _ in WidgetBridge.publish(profile) }
     }
@@ -853,7 +948,7 @@ struct DayDetailView: View {
                     .background(Color.white, in: Capsule())
                     .shadow(color: Color.white.opacity(0.18), radius: 12, y: 4)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.bottom, 4)
 
                 ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in

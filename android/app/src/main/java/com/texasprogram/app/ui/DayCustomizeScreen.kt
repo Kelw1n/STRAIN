@@ -190,7 +190,6 @@ fun DayCustomizeScreen(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
                             .pressable {
                                 draft = ExerciseDraft(
                                     existingEdit = edit,
@@ -201,6 +200,7 @@ fun DayCustomizeScreen(
                                     loadText = edit.loadText ?: ""
                                 )
                             }
+                            .clip(RoundedCornerShape(10.dp))
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -251,8 +251,8 @@ private fun ProgramExerciseRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
             .pressable(onClick = onClick)
+            .clip(RoundedCornerShape(10.dp))
             .padding(vertical = 8.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -373,8 +373,8 @@ private fun IconAction(
     Box(
         Modifier
             .size(34.dp)
-            .clip(CircleShape)
-            .pressable(onClick = onClick),
+            .pressable(onClick = onClick)
+            .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))

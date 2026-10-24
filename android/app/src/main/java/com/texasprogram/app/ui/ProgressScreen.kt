@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,9 +65,12 @@ fun ProgressScreen(
     val total = profile.totalDays
     val ratio = if (total > 0) done.toFloat() / total else 0f
     var showMuscleDialog by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    OnTabReselect(MainTabItem.PROGRESS) { listState.scrollToTop() }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
+        state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -92,6 +96,11 @@ fun ProgressScreen(
                     }
                 }
             }
+        }
+
+        // Итоги месяца и года историями.
+        item(key = "recap") {
+            TrainingRecapEntryCard(profile, Modifier.appearIn(1))
         }
 
         item(key = "streak") {
@@ -311,7 +320,7 @@ fun MuscleGroupsRadarCard(
     val result = remember(profile) { MuscleGroupAnalytics.calculate(profile) }
 
     CardView(
-        modifier = modifier.clickable { onClick() }
+        modifier = modifier.pressable { onClick() }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -441,6 +450,7 @@ fun MuscleGroupsDetailDialog(
     val result = remember(profile) { MuscleGroupAnalytics.calculate(profile) }
 
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF161616),
         title = {
@@ -460,7 +470,7 @@ fun MuscleGroupsDetailDialog(
                     color = Theme.accent,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onDismiss() }
+                    modifier = Modifier.pressable { onDismiss() }
                 )
             }
         },

@@ -4,9 +4,26 @@ import SwiftUI
 struct CustomProgramBuilderView: View {
     var onBack: () -> Void = {}
     let onSave: (CustomProgram) -> Void
+    var title = "Своя программа"
+    var saveTitle = "Запустить программу"
 
-    @State private var program = CustomProgram.skeleton(template: .fullBody, name: "Своя программа", weeks: 8)
+    @State private var program: CustomProgram
     @State private var editing: CustomExerciseDraft?
+
+    /// `initial` — готовая программа, например скопированная у друга из ленты.
+    init(
+        initial: CustomProgram? = nil,
+        title: String = "Своя программа",
+        saveTitle: String = "Запустить программу",
+        onBack: @escaping () -> Void = {},
+        onSave: @escaping (CustomProgram) -> Void
+    ) {
+        self.onBack = onBack
+        self.onSave = onSave
+        self.title = title
+        self.saveTitle = saveTitle
+        _program = State(initialValue: initial ?? CustomProgram.skeleton(template: .fullBody, name: "Своя программа", weeks: 8))
+    }
 
     var body: some View {
         NavigationStack {
@@ -63,7 +80,7 @@ struct CustomProgramBuilderView: View {
                     Button {
                         onSave(program)
                     } label: {
-                        Label("Запустить программу", systemImage: "play.circle.fill")
+                        Label(saveTitle, systemImage: "play.circle.fill")
                     }
                     .disabled(!program.isRunnable)
                 } footer: {
@@ -72,7 +89,7 @@ struct CustomProgramBuilderView: View {
                          : "Чтобы запустить, добавь хотя бы одно упражнение в каждый день.")
                 }
             }
-            .navigationTitle("Своя программа")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

@@ -1,6 +1,13 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.tween
 import android.content.Intent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -10,9 +17,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,9 +33,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
@@ -50,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,16 +72,21 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.SocialComment
 import com.texasprogram.app.model.SocialFormat
+import com.texasprogram.app.model.SocialChatWorkout
 import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialWorkout
 import com.texasprogram.app.service.RuPlural
@@ -79,13 +97,15 @@ import kotlinx.coroutines.launch
 // MARK: - Пост в ленте
 
 /// Пост как в REBRN: кто и когда, название, заметка, время, объём и плотность,
-/// фото и под ними лайк с комментариями. Без фото вместо них — упражнения.
+/// карусель «фото → тренировка» и под ней лайк с комментариями.
 @Composable
 fun PostCard(
     post: SocialPost,
     onOpen: () -> Unit,
     onOpenAuthor: () -> Unit,
-    onChange: (SocialPost?) -> Unit
+    onChange: (SocialPost?) -> Unit,
+    /// Упражнения с весами и под фото — в списке тренировок профиля.
+    showsWorkout: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
@@ -96,14 +116,13 @@ fun PostCard(
         Column(Modifier.fillMaxWidth().pressable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PostTitleBlock(post)
             PostStatsRow(post)
-            if (post.photos.isEmpty()) WorkoutSummary(post.workout, limit = 4)
         }
+        // Фото — без сжатия при нажатии: оно дёргало карточку на каждом свайпе.
+        PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen))
         if (post.photos.isNotEmpty()) {
-            // Фото — без сжатия при нажатии: оно дёргало карточку на каждом свайпе.
-            PhotoPager(
-                post.photos,
-                Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)
-            )
+            if (showsWorkout) {
+                Box(Modifier.pressable(onClick = onOpen)) { WorkoutSummary(post.workout, limit = 4) }
+            }
         }
         PostActions(post, onComments = onOpen, onChange = { onChange(it) })
         error?.let { Text(it, color = Theme.warning, fontSize = 12.sp) }
@@ -111,6 +130,7 @@ fun PostCard(
 
     if (confirmDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDelete = false },
             containerColor = Theme.dialog,
             title = { Text("Удалить тренировку из ленты?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -136,27 +156,53 @@ fun PostCard(
 fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit)?) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
     val mine = SocialService.me?.id == post.author.id
     Row(verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier.weight(1f).pressable(onClick = onOpenAuthor),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Avatar(post.author.avatar, post.author.username, 46.dp)
+            Box {
+                Avatar(post.author.avatar, post.author.username, 46.dp)
+                // Тренировались вместе — аватар напарника рядом.
+                post.partner?.let { partner ->
+                    Box(Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 4.dp).size(26.dp).clip(CircleShape).background(Color.Black).padding(2.dp)) {
+                        Avatar(partner.avatar, partner.username, 22.dp)
+                    }
+                }
+            }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("@${post.author.username}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    post.partner?.let { "@${post.author.username} и @${it.username}" } ?: "@${post.author.username}",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Text(SocialFormat.ago(post.instant), color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
             }
         }
         Box {
             Box(
-                Modifier.size(38.dp).clip(CircleShape).pressable { menu = true },
+                Modifier.size(38.dp).pressable { menu = true }.clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Filled.MoreHoriz, contentDescription = "Действия с постом", tint = Color.White.copy(alpha = 0.55f))
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (SocialService.isSignedIn) {
+                    DropdownMenuItem(
+                        text = { Text("Отправить другу") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null) },
+                        onClick = {
+                            menu = false
+                            sharing = true
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Поделиться текстом") },
                     leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
@@ -180,6 +226,11 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
                     )
                 }
             }
+        }
+    }
+    if (sharing) {
+        ChatTargetSheet("Отправить другу", onDismiss = { sharing = false }) { friend ->
+            SocialService.send(SocialChatWorkout.from(post), friend.username)
         }
     }
 }
@@ -301,6 +352,9 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
     val scope = rememberCoroutineScope()
     val haptics = rememberHapticEngine()
     var busy by remember { mutableStateOf(false) }
+    // Сердце при лайке сжимается и выпрыгивает с отскоком. Масштаб читается
+    // только в отрисовке — сам пост при этом не перекомпонуется.
+    val heart = remember { Animatable(1f) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
         Row(
             Modifier.pressable {
@@ -308,6 +362,12 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
                 haptics.light()
                 // Сразу показываем лайк, не дожидаясь сервера; ошибка вернёт как было.
                 val optimistic = post.copy(liked = !post.liked, likes = post.likes + if (post.liked) -1 else 1)
+                if (optimistic.liked) {
+                    scope.launch {
+                        heart.snapTo(0.55f)
+                        heart.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 520f))
+                    }
+                }
                 onChange(optimistic)
                 busy = true
                 scope.launch {
@@ -327,9 +387,9 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
                 if (post.liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                 contentDescription = if (post.liked) "Убрать лайк" else "Лайк",
                 tint = if (post.liked) Theme.record else Color.White,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(26.dp).graphicsLayer { scaleX = heart.value; scaleY = heart.value }
             )
-            if (post.likes > 0) Text("${post.likes}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (post.likes > 0) RollingNumber(post.likes, color = Color.White, fontSize = 16.sp)
         }
         Row(
             Modifier.pressable(onClick = onComments),
@@ -337,7 +397,7 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Комментарии", tint = Color.White, modifier = Modifier.size(24.dp))
-            if (post.comments > 0) Text("${post.comments}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (post.comments > 0) RollingNumber(post.comments, color = Color.White, fontSize = 16.sp)
         }
     }
 }
@@ -351,7 +411,7 @@ fun SocialTopBar(title: String, onBack: () -> Unit, trailing: @Composable (() ->
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)).pressable(onClick = onBack),
+            Modifier.size(40.dp).pressable(onClick = onBack).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -384,7 +444,18 @@ fun PostDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var composing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var showingSets by remember { mutableStateOf(false) }
+    /// На какой комментарий отвечаем; `null` — обычный комментарий к посту.
+    var replyingTo by remember { mutableStateOf<SocialComment?>(null) }
     val me = SocialService.me
+    // Карусель фото собирается кадром позже: первый кадр въезда экрана —
+    // самый тяжёлый, и делить его с фото и слайдом тренировки незачем.
+    // Подложка того же размера стоит сразу, поэтому ничего не прыгает.
+    var mediaReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        mediaReady = true
+    }
 
     fun update(value: SocialPost) {
         post = value
@@ -416,35 +487,32 @@ fun PostDetailScreen(
         }
         item { PostTitleBlock(post) }
         item { PostStatsRow(post) }
-        if (post.photos.isNotEmpty()) item { PhotoPager(post.photos) }
-        item { PostActions(post, onComments = { if (SocialService.isSignedIn) composing = true }, onChange = ::update) }
-        if (post.workout.exercises.isNotEmpty()) {
-            item {
-                SectionCaption(post.workout.program?.let { "ТРЕНИРОВКА · ${it.uppercase()}" } ?: "ТРЕНИРОВКА")
+        // Тренировка — последним слайдом, как в REBRN; все подходы — по нажатию.
+        item {
+            if (mediaReady || post.photos.isEmpty()) {
+                PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showingSets = true })
+            } else {
+                Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF1F1F22)))
             }
-            items(post.workout.exercises.size) { index ->
-                val exercise = post.workout.exercises[index]
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFF171717))
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(exercise.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    exercise.sets.forEachIndexed { setIndex, set ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${setIndex + 1}", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
-                            Text(set.text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            if (set.record) {
-                                Spacer(Modifier.width(8.dp))
-                                Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.warning, modifier = Modifier.size(13.dp))
-                                Text(" рекорд", color = Theme.warning, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
+        }
+        item {
+            PostActions(post, onComments = {
+                if (SocialService.isSignedIn) {
+                    replyingTo = null
+                    composing = true
                 }
+            }, onChange = ::update)
+        }
+        // Чужую тренировку можно взять себе: её саму или программу автора.
+        if (me?.id != post.author.id && post.workout.exercises.isNotEmpty()) {
+            item(key = "copy") {
+                CopyProgramButton(
+                    days = emptyList(),
+                    author = post.author.username,
+                    navigator = navigator,
+                    workout = post.title to post.workout,
+                    loadsAuthorProgram = true
+                )
             }
         }
         item {
@@ -455,17 +523,26 @@ fun PostDetailScreen(
         } else if (comments.isEmpty()) {
             item { Text("Пока тихо. Напиши первым — поддержи или спроси про технику.", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp) }
         }
-        items(comments, key = { it.id }) { comment ->
+        val ordered = SocialComment.threads(comments).flatMap { listOf(it.root) + it.replies }
+        items(ordered, key = { it.id }) { comment ->
             CommentRow(
                 comment,
+                modifier = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = Motion.snappy(), fadeOutSpec = tween(160)),
                 canDelete = me != null && (comment.author.id == me.id || post.author.id == me.id),
+                canReply = SocialService.isSignedIn,
                 onOpenAuthor = { navigator.push(SocialRoute.User(comment.author.username)) },
+                onReply = {
+                    replyingTo = comment
+                    composing = true
+                },
                 onDelete = {
                     scope.launch {
                         try {
                             SocialService.deleteComment(comment.id)
-                            comments.remove(comment)
-                            update(post.copy(comments = maxOf(0, post.comments - 1)))
+                            // С корнем ветки на сервере уходят и ответы на него.
+                            val removed = comments.count { it.id == comment.id || it.replyTo == comment.id }
+                            comments.removeAll { it.id == comment.id || it.replyTo == comment.id }
+                            update(post.copy(comments = maxOf(0, post.comments - removed)))
                         } catch (e: SocialException) {
                             error = e.message
                         }
@@ -480,9 +557,12 @@ fun PostDetailScreen(
                     Modifier
                         .fillMaxWidth()
                         .height(50.dp)
+                        .pressable {
+                            replyingTo = null
+                            composing = true
+                        }
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF1C1C1C))
-                        .pressable { composing = true }
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -498,6 +578,7 @@ fun PostDetailScreen(
 
     if (confirmDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDelete = false },
             containerColor = Theme.dialog,
             title = { Text("Удалить тренировку из ленты?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -519,11 +600,34 @@ fun PostDetailScreen(
         )
     }
 
+    if (showingSets) {
+        ModalBottomSheet(
+            onDismissRequest = { showingSets = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = Color(0xFF121212)
+        ) {
+            LazyColumn(
+                Modifier.fillMaxWidth().navigationBarsPadding(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item { Text(post.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black) }
+                item { SectionCaption(post.workout.program?.let { "ТРЕНИРОВКА · ${it.uppercase()}" } ?: "ТРЕНИРОВКА") }
+                items(post.workout.exercises.size) { index -> WorkoutSetsCard(post.workout.exercises[index]) }
+            }
+        }
+    }
+
     if (composing) {
         CommentSheet(
-            onDismiss = { composing = false },
+            replyingTo = replyingTo,
+            onCancelReply = { replyingTo = null },
+            onDismiss = {
+                composing = false
+                replyingTo = null
+            },
             onSend = { text ->
-                val comment = SocialService.addComment(post.id, text)
+                val comment = SocialService.addComment(post.id, text, replyingTo?.id)
                 comments.add(comment)
                 update(post.copy(comments = post.comments + 1))
             }
@@ -532,17 +636,42 @@ fun PostDetailScreen(
 }
 
 @Composable
-private fun CommentRow(comment: SocialComment, canDelete: Boolean, onOpenAuthor: () -> Unit, onDelete: () -> Unit) {
+private fun CommentRow(
+    comment: SocialComment,
+    canDelete: Boolean,
+    canReply: Boolean,
+    onOpenAuthor: () -> Unit,
+    onReply: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     var menu by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.Top) {
-        Box(Modifier.pressable(onClick = onOpenAuthor)) { Avatar(comment.author.avatar, comment.author.username, 34.dp) }
+    // Ответы — со сдвигом под своим комментарием, как в Instagram.
+    Row(modifier.padding(start = if (comment.isReply) 44.dp else 0.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.pressable(onClick = onOpenAuthor)) { Avatar(comment.author.avatar, comment.author.username, if (comment.isReply) 28.dp else 34.dp) }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("@${comment.author.username}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Text(SocialFormat.ago(comment.instant), color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
             }
-            Text(comment.text, color = Color.White.copy(alpha = 0.88f), fontSize = 15.sp)
+            Text(
+                buildAnnotatedString {
+                    comment.replyToUsername?.let { withStyle(SpanStyle(color = Theme.accent)) { append("@$it ") } }
+                    append(comment.text)
+                },
+                color = Color.White.copy(alpha = 0.88f),
+                fontSize = 15.sp
+            )
+            if (canReply) {
+                Text(
+                    "Ответить",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 2.dp).pressable(onClick = onReply)
+                )
+            }
         }
         if (canDelete) {
             Box {
@@ -565,9 +694,161 @@ private fun CommentRow(comment: SocialComment, canDelete: Boolean, onOpenAuthor:
 
 /// Лист с полем комментария: перекрывает панель вкладок, а клавиатура
 /// поднимает его целиком.
+// MARK: - Фото и тренировка
+
+/// Карусель поста: сначала фото, последним слайдом — сама тренировка.
+/// Без фото — только тренировка.
+@Composable
+fun PostMedia(post: SocialPost, modifier: Modifier = Modifier) {
+    val hasWorkout = post.workout.exercises.isNotEmpty()
+    if (post.photos.isEmpty()) {
+        Box(modifier.fillMaxWidth().padding(vertical = 6.dp)) { PostWorkoutSlide(post.workout) }
+        return
+    }
+    val count = post.photos.size + if (hasWorkout) 1 else 0
+    val pager = androidx.compose.foundation.pager.rememberPagerState { count }
+    Box(
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(4f / 5f)
+            .clip(RoundedCornerShape(22.dp))
+    ) {
+        androidx.compose.foundation.pager.HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+            if (page < post.photos.size) {
+                RemoteImage(post.photos[page], Modifier.fillMaxSize())
+            } else {
+                Box(Modifier.fillMaxSize().background(Color.Black).padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 34.dp)) {
+                    PostWorkoutSlide(post.workout)
+                }
+            }
+        }
+        if (count > 1) PageDots(pager, count, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
+    }
+}
+
+/// Точки страниц: активная вытягивается в капсулу и едет за пальцем прямо
+/// во время свайпа. Положение читается только в отрисовке — карточка поста
+/// при листании не перекомпонуется.
+@Composable
+internal fun PageDots(pager: androidx.compose.foundation.pager.PagerState, count: Int, modifier: Modifier) {
+    val dot = 7.dp
+    val gap = 6.dp
+    val stretch = 9.dp
+    Spacer(
+        modifier
+            .size(width = dot * count + gap * (count - 1) + stretch, height = dot)
+            .drawBehind {
+                val d = dot.toPx()
+                val g = gap.toPx()
+                val extra = stretch.toPx()
+                val position = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, (count - 1).toFloat())
+                var x = 0f
+                for (index in 0 until count) {
+                    val near = (1f - kotlin.math.abs(position - index)).coerceIn(0f, 1f)
+                    val width = d + extra * near
+                    drawRoundRect(
+                        Color.White.copy(alpha = 0.45f + 0.55f * near),
+                        topLeft = Offset(x, 0f),
+                        size = Size(width, d),
+                        cornerRadius = CornerRadius(d / 2)
+                    )
+                    x += width + g
+                }
+            }
+    )
+}
+
+/// Слайд тренировки как в REBRN: картинка упражнения, название и подходы.
+@Composable
+fun PostWorkoutSlide(workout: SocialWorkout, limit: Int = 4) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (workout.exercises.isEmpty()) {
+            Text("Без записанных подходов", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
+        }
+        workout.exercises.take(limit).forEach { exercise ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ExerciseThumb(exercise.name, 54.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            exercise.name,
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (exercise.hasRecord) {
+                            Spacer(Modifier.width(6.dp))
+                            Icon(Icons.Filled.EmojiEvents, contentDescription = "Рекорд", tint = Theme.warning, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    // «4 подхода · 80 кг × 5» — лучший подход виден сразу.
+                    val sets = "${exercise.sets.size} ${RuPlural.word(exercise.sets.size, "подход", "подхода", "подходов")}"
+                    Text(
+                        exercise.best?.let { "$sets · ${it.text}" } ?: sets,
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        if (workout.exercises.size > limit) {
+            val rest = workout.exercises.size - limit
+            Text(
+                "ещё $rest ${RuPlural.word(rest, "упражнение", "упражнения", "упражнений")}",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            )
+        }
+    }
+}
+
+/// Все подходы упражнения — в листе, который открывается по нажатию на слайд.
+@Composable
+internal fun WorkoutSetsCard(exercise: SocialWorkout.Exercise) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF171717))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ExerciseThumb(exercise.name, 40.dp)
+            Spacer(Modifier.width(12.dp))
+            Text(exercise.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+        exercise.sets.forEachIndexed { setIndex, set ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${setIndex + 1}", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
+                Text(set.text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                if (set.record) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.warning, modifier = Modifier.size(13.dp))
+                    Text(" рекорд", color = Theme.warning, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CommentSheet(onDismiss: () -> Unit, onSend: suspend (String) -> Unit) {
+private fun CommentSheet(
+    replyingTo: SocialComment?,
+    onCancelReply: () -> Unit,
+    onDismiss: () -> Unit,
+    onSend: suspend (String) -> Unit
+) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
@@ -586,7 +867,28 @@ private fun CommentSheet(onDismiss: () -> Unit, onSend: suspend (String) -> Unit
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Комментарий", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    replyingTo?.let { "Ответ @${it.author.username}" } ?: "Комментарий",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (replyingTo != null) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Не отвечать, а написать к посту",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(22.dp).pressable(onClick = onCancelReply)
+                    )
+                }
+            }
+            replyingTo?.let {
+                Text(it.text, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
                     Modifier
@@ -595,7 +897,7 @@ private fun CommentSheet(onDismiss: () -> Unit, onSend: suspend (String) -> Unit
                         .background(Color(0xFF222222))
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    if (text.isEmpty()) Text("Поддержи или спроси про технику", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
+                    if (text.isEmpty()) Text(if (replyingTo == null) "Поддержи или спроси про технику" else "Твой ответ", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
                     BasicTextField(
                         value = text,
                         onValueChange = { text = it.take(500) },
@@ -608,8 +910,6 @@ private fun CommentSheet(onDismiss: () -> Unit, onSend: suspend (String) -> Unit
                 Box(
                     Modifier
                         .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (canSend) Color.White else Color(0xFF4D4D4D))
                         .pressable(enabled = canSend) {
                             sending = true
                             scope.launch {
@@ -623,7 +923,9 @@ private fun CommentSheet(onDismiss: () -> Unit, onSend: suspend (String) -> Unit
                                     sending = false
                                 }
                             }
-                        },
+                        }
+                        .clip(CircleShape)
+                        .background(if (canSend) Color.White else Color(0xFF4D4D4D)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (sending) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))

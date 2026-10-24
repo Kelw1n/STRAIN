@@ -116,15 +116,15 @@ fun TodayScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(androidx.compose.ui.graphics.Color.White)
-                    .clickable {
+                    .pressable {
                         if (isRunning) {
                             com.texasprogram.app.service.WorkoutSessionManager.expand()
                         } else {
                             onStartWorkout(focus)
                         }
                     }
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(androidx.compose.ui.graphics.Color.White)
                     .padding(vertical = 15.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -294,9 +294,9 @@ private fun OverdueCard(
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .pressable { onOpenDay(item.week, item.day.number) }
                     .clip(RoundedCornerShape(11.dp))
                     .background(Theme.warning.copy(alpha = 0.09f))
-                    .pressable { onOpenDay(item.week, item.day.number) }
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

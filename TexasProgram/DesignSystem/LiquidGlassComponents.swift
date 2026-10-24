@@ -102,7 +102,7 @@ struct SlideToConfirmView: View {
                         .onEnded { value in
                             guard !isConfirmed else { return }
                             if dragOffset >= maxDrag * 0.75 {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                withAnimation(.spring(response: 0.26, dampingFraction: 0.88)) {
                                     dragOffset = maxDrag
                                     isConfirmed = true
                                 }
@@ -111,7 +111,7 @@ struct SlideToConfirmView: View {
                                     onConfirm()
                                 }
                             } else {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
                                     dragOffset = 0
                                 }
                             }

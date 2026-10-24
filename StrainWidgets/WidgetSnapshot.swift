@@ -16,6 +16,30 @@ struct WidgetSnapshot: Codable, Equatable {
     var totalDays: Int
     var isRestToday: Bool
     var updatedAt: Date
+    /// День следующей тренировки. Подпись «Сегодня / Завтра» считается от него
+    /// в момент показа: раньше виджет хранил готовую строку, и без запуска
+    /// приложения «Через 2 дн.» висело и назавтра. В старых слепках его нет.
+    var focusDate: Date? = nil
+
+    /// «Сегодня», «Завтра», «Через 3 дн.» на день показа — теми же словами,
+    /// что и в приложении.
+    func relative(on day: Date, calendar: Calendar = .current) -> String {
+        guard let focusDate else { return relative }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: day), to: calendar.startOfDay(for: focusDate)).day ?? 0
+        switch days {
+        case ..<0: return "Пропущено"
+        case 0: return "Сегодня"
+        case 1: return "Завтра"
+        case 2: return "Послезавтра"
+        default: return "Через \(days) дн."
+        }
+    }
+
+    /// Отдых — пока до тренировки ещё есть дни.
+    func isRest(on day: Date, calendar: Calendar = .current) -> Bool {
+        guard let focusDate else { return isRestToday }
+        return calendar.startOfDay(for: focusDate) > calendar.startOfDay(for: day)
+    }
 
     var progress: Double {
         guard totalDays > 0 else { return 0 }
@@ -46,6 +70,12 @@ enum WidgetStore {
         if let data = try? JSONEncoder().encode(snapshot) {
             UserDefaults.standard.set(data, forKey: key)
         }
+    }
+
+    /// Профилей не осталось — виджет возвращается к приглашению открыть приложение.
+    static func clear() {
+        defaults?.removeObject(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
     }
 
     static func load() -> WidgetSnapshot? {

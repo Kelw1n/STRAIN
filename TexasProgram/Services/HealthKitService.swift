@@ -17,9 +17,36 @@ public final class HealthKitService {
         set { UserDefaults.standard.set(newValue, forKey: "healthkit_sync_enabled") }
     }
 
-    /// Доступен ли HealthKit на текущем устройстве (например, доступен на iPhone, но не на iPad до iPadOS 17).
-    public var isAvailable: Bool {
+    /// Есть ли «Здоровье» на устройстве (на iPhone есть, на iPad до iPadOS 17 — нет).
+    public var deviceSupportsHealth: Bool {
         HKHealthStore.isHealthDataAvailable()
+    }
+
+    /// Можно ли пользоваться «Здоровьем» в этой сборке. Бесплатный Apple ID
+    /// при установке через сайдлоад не даёт права на HealthKit: запрос прав
+    /// молча падает, и переключатель с кнопкой веса ничего не делали.
+    public var isAvailable: Bool {
+        deviceSupportsHealth && Self.buildHasHealthEntitlement
+    }
+
+    /// Право берём из профиля подписи в пакете приложения. Его кладёт любая
+    /// установка не из App Store; в App Store профиля нет, и право выдаёт Apple.
+    static let buildHasHealthEntitlement: Bool = {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url) else { return true }
+        return provisionGrantsHealth(data)
+    }()
+
+    /// Профиль — подписанный контейнер, внутри которого лежит обычный plist.
+    static func provisionGrantsHealth(_ provision: Data) -> Bool {
+        guard let start = provision.range(of: Data("<?xml".utf8)),
+              let end = provision.range(of: Data("</plist>".utf8), in: start.lowerBound..<provision.endIndex),
+              let plist = try? PropertyListSerialization.propertyList(
+                  from: provision.subdata(in: start.lowerBound..<end.upperBound), format: nil
+              ) as? [String: Any],
+              let entitlements = plist["Entitlements"] as? [String: Any]
+        else { return false }
+        return entitlements["com.apple.developer.healthkit"] as? Bool == true
     }
 
     private init() {}

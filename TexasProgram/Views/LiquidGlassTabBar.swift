@@ -4,6 +4,7 @@ enum MainTabItem: String, CaseIterable, Identifiable {
     case today = "Главное"
     case workout = "Тренировка"
     case progress = "Активность"
+    case nutrition = "Питание"
     case community = "Друзья"
     case profile = "Профиль"
 
@@ -15,22 +16,101 @@ enum MainTabItem: String, CaseIterable, Identifiable {
         case .today: return "house"
         case .workout: return "dumbbell"
         case .progress: return "chart.bar"
+        case .nutrition: return "fork.knife"
         case .community: return "person.3"
         case .profile: return "person.crop.circle"
         }
     }
 
     /// Залитая — то, что видно сквозь линзу.
-    var selectedIcon: String { icon + ".fill" }
+    /// У вилки с ножом залитого варианта нет — она и так сплошная.
+    var selectedIcon: String { self == .nutrition ? icon : icon + ".fill" }
 
     var index: Int { Self.allCases.firstIndex(of: self) ?? 0 }
+}
+
+// MARK: - Повторное нажатие на вкладку
+
+/// Повторное нажатие на открытую вкладку, как в приложениях iPhone: открытый
+/// внутри экран закрывается, а начальный экран едет наверх. Вкладки слушают
+/// свой счётчик и сами решают, что для них «начало».
+@Observable
+@MainActor
+final class TabReselection {
+    static let shared = TabReselection()
+
+    private(set) var counts: [MainTabItem: Int] = [:]
+    @ObservationIgnored private var scrollViews: [MainTabItem: WeakScrollView] = [:]
+
+    private struct WeakScrollView { weak var view: UIScrollView? }
+
+    func fire(_ tab: MainTabItem) { counts[tab, default: 0] += 1 }
+
+    func count(of tab: MainTabItem) -> Int { counts[tab] ?? 0 }
+
+    func register(_ view: UIScrollView, for tab: MainTabItem) {
+        scrollViews[tab] = WeakScrollView(view: view)
+    }
+
+    /// Лента начального экрана — к самому верху, как по нажатию на часы:
+    /// крупный заголовок раскрывается обратно.
+    func scrollToTop(_ tab: MainTabItem) {
+        guard let view = scrollViews[tab]?.view else { return }
+        let top = CGPoint(x: -view.adjustedContentInset.left, y: -view.adjustedContentInset.top)
+        guard abs(view.contentOffset.y - top.y) > 0.5 else { return }
+        view.setContentOffset(top, animated: true)
+    }
+}
+
+extension View {
+    /// Метка начального экрана вкладки: по повторному нажатию его лента едет наверх.
+    /// Ставится на содержимое прокрутки, а не на саму прокрутку.
+    @MainActor
+    func tabScrollAnchor(_ tab: MainTabItem) -> some View {
+        background(TabScrollFinder(tab: tab).frame(width: 0, height: 0).allowsHitTesting(false))
+    }
+
+    /// Повторное нажатие на эту вкладку.
+    @MainActor
+    func onTabReselect(_ tab: MainTabItem, perform action: @escaping () -> Void) -> some View {
+        onChange(of: TabReselection.shared.count(of: tab)) { _, _ in action() }
+    }
+}
+
+/// Находит прокрутку, внутри которой лежит, и отдаёт её вкладке.
+private struct TabScrollFinder: UIViewRepresentable {
+    let tab: MainTabItem
+
+    func makeUIView(context: Context) -> FinderView { FinderView(tab: tab) }
+
+    func updateUIView(_ view: FinderView, context: Context) {}
+
+    final class FinderView: UIView {
+        let tab: MainTabItem
+
+        init(tab: MainTabItem) {
+            self.tab = tab
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) { return nil }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else { return }
+            var parent = superview
+            while let current = parent, !(current is UIScrollView) { parent = current.superview }
+            if let scroll = parent as? UIScrollView { TabReselection.shared.register(scroll, for: tab) }
+        }
+    }
 }
 
 /// Плавающая панель вкладок с линзой из жидкого стекла.
 ///
 /// Палец можно поставить и вести: линза поднимается над панелью, едет за ним,
-/// тянется по скорости и увеличивает иконки под собой. Отпустил — линза
-/// с пружиной садится на ближайшую вкладку, и та открывается.
+/// тянется по скорости и увеличивает иконки под собой. Вкладка под пальцем
+/// открывается сразу, пока ведёшь; отпустил — линза садится на неё.
 ///
 /// Иконки нарисованы дважды. Нижний слой — контурный, в линзе в нём дырка.
 /// Верхний — залитый, виден только сквозь линзу и увеличен вокруг её центра.
@@ -38,7 +118,22 @@ enum MainTabItem: String, CaseIterable, Identifiable {
 /// как у системной панели iOS 26.
 struct LiquidGlassTabBar: View {
     @Binding var selectedTab: MainTabItem
+    /// Вкладки с красной точкой: например, «Друзья» с непрочитанными сообщениями.
+    var badges: Set<MainTabItem> = []
+    /// Нажали на уже открытую вкладку — вернуть её к началу.
+    var onReselect: (MainTabItem) -> Void = { _ in }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// С чего началось касание: на какой вкладке, была ли она уже открыта и
+    /// уводил ли палец на соседние. Новое касание узнаём по точке начала.
+    @State private var press: Press?
+
+    private struct Press {
+        let start: CGPoint
+        let tab: MainTabItem
+        let wasSelected: Bool
+        var wandered = false
+    }
 
     /// Где палец и с какой скоростью едет. `GestureState` сбрасывается сам,
     /// даже если жест отменила система, — линза не залипнет поднятой.
@@ -51,10 +146,10 @@ struct LiquidGlassTabBar: View {
         var index: Int
     }
 
-    /// Посадка на вкладку: чуть недодемпфирована, чтобы линза качнулась, как капля.
-    static let settle = Animation.spring(response: 0.42, dampingFraction: 0.66)
+    /// Посадка на вкладку: быстро и мягко, с едва заметной каплей в конце.
+    static let settle = Animation.spring(response: 0.34, dampingFraction: 0.82)
     /// Подъём линзы в момент касания.
-    private static let lift = Animation.spring(response: 0.26, dampingFraction: 0.72)
+    private static let lift = Animation.spring(response: 0.22, dampingFraction: 0.88)
     /// Слежение за пальцем: почти без задержки, но не рывками.
     private static let follow = Animation.interactiveSpring(response: 0.18, dampingFraction: 0.86)
 
@@ -67,20 +162,33 @@ struct LiquidGlassTabBar: View {
 
     var body: some View {
         GeometryReader { proxy in
-            bar(Layout(width: proxy.size.width, count: tabs.count))
+            let layout = Layout(width: proxy.size.width, count: tabs.count)
+            bar(layout)
+                .overlay(alignment: .topLeading) {
+                    ForEach(tabs.filter { badges.contains($0) }) { tab in
+                        Circle()
+                            .fill(Theme.record)
+                            .overlay(Circle().strokeBorder(Color.black, lineWidth: 2))
+                            .frame(width: 11, height: 11)
+                            .position(x: layout.center(of: tab.index) + 14, y: barHeight / 2 - 12)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                    .allowsHitTesting(false)
+                }
         }
         .frame(height: barHeight)
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
-        // Щелчок на каждой пересечённой вкладке, лёгкий удар при касании.
+        // Лёгкий удар при касании, щелчок на каждой пересечённой вкладке и мягкая
+        // посадка, когда отпускаешь.
         .sensoryFeedback(trigger: touch?.index) { old, new in
             switch (old, new) {
             case (nil, .some): return .impact(weight: .light)
             case let (.some(a), .some(b)) where a != b: return .selection
+            case (.some, nil): return .impact(flexibility: .soft, intensity: 0.7)
             default: return nil
             }
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: selectedTab)
     }
 
     // MARK: - Раскладка
@@ -150,8 +258,10 @@ struct LiquidGlassTabBar: View {
         .accessibilityRepresentation {
             HStack {
                 ForEach(tabs) { tab in
-                    Button(tab.rawValue) { selectedTab = tab }
-                        .accessibilityAddTraits(tab == selectedTab ? .isSelected : [])
+                    Button(tab.rawValue) {
+                        if tab == selectedTab { onReselect(tab) } else { selectedTab = tab }
+                    }
+                    .accessibilityAddTraits(tab == selectedTab ? .isSelected : [])
                 }
             }
         }
@@ -167,9 +277,24 @@ struct LiquidGlassTabBar: View {
                     index: layout.index(at: value.location.x)
                 )
             }
+            // Вкладка под пальцем открывается сразу, пока ведёшь, — не после того,
+            // как отпустишь.
+            .onChanged { value in
+                let tab = tabs[layout.index(at: value.location.x)]
+                if press?.start != value.startLocation {
+                    let first = tabs[layout.index(at: value.startLocation.x)]
+                    press = Press(start: value.startLocation, tab: first, wasSelected: first == selectedTab)
+                }
+                if tab != press?.tab { press?.wandered = true }
+                if tab != selectedTab { selectedTab = tab }
+            }
             .onEnded { value in
                 let tab = tabs[layout.index(at: value.location.x)]
+                // Нажали на открытую вкладку и никуда не уводили палец — это «к началу».
+                let reselected = press.map { $0.wasSelected && !$0.wandered && $0.tab == tab } ?? false
+                press = nil
                 withAnimation(reduceMotion ? nil : Self.settle) { selectedTab = tab }
+                if reselected { onReselect(tab) }
             }
     }
 
@@ -297,7 +422,7 @@ struct LiquidGlassTabBar: View {
                 lineWidth: lens.lifted ? 1.2 : 1
             )
         }
-        .shadow(color: Color.black.opacity(lens.lifted ? 0.45 : 0), radius: 14, y: 8)
+        .shadow(color: Color.black.opacity(lens.lifted ? 0.45 : 0), radius: lens.lifted ? 14 : 0, y: lens.lifted ? 8 : 0)
         .frame(width: lens.width, height: lens.height)
         .position(x: lens.midX, y: barHeight / 2)
     }

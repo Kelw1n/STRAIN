@@ -1,5 +1,14 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -92,6 +101,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -210,6 +221,10 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
+            .pressable {
+                haptics.medium()
+                WorkoutSessionManager.expand()
+            }
             .graphicsLayer {
                 shadowElevation = 12.dp.toPx()
                 this.shape = shape
@@ -221,10 +236,6 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
                 Brush.linearGradient(listOf(Color.White.copy(alpha = 0.28f), Color.White.copy(alpha = 0.06f))),
                 shape
             )
-            .pressable {
-                haptics.medium()
-                WorkoutSessionManager.expand()
-            }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -579,6 +590,10 @@ fun ActiveWorkoutSessionScreen(
                 }
             )
 
+            // Совместная тренировка: что сейчас делает напарник. Над списком,
+            // чтобы не сбивать перетаскивание упражнений.
+            PartnerStrip(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+
             LazyColumn(
                 state = listState,
                 userScrollEnabled = !compact,
@@ -747,9 +762,9 @@ private fun SessionHeader(topInset: Dp, onMinimize: () -> Unit, onFinish: () -> 
         Box(
             Modifier
                 .height(36.dp)
+                .pressable(onClick = onFinish)
                 .background(Color.White, CircleShape)
                 .clip(CircleShape)
-                .pressable(onClick = onFinish)
                 .padding(horizontal = 18.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -763,9 +778,9 @@ private fun CircleIconButton(icon: ImageVector, description: String, onClick: ()
     Box(
         Modifier
             .size(36.dp)
+            .pressable(onClick = onClick)
             .background(Color.White.copy(alpha = 0.12f), CircleShape)
-            .clip(CircleShape)
-            .pressable(onClick = onClick),
+            .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -845,9 +860,9 @@ private fun ExerciseHeader(
                 // и длинные названия рвались посреди слова.
                 Row(
                     Modifier
+                        .pressable { actions.chooseRest(index) }
                         .background(Color.White.copy(alpha = 0.10f), CircleShape)
                         .clip(CircleShape)
-                        .pressable { actions.chooseRest(index) }
                         .padding(horizontal = 9.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -875,8 +890,7 @@ private fun ExerciseHeader(
                 Box(
                     Modifier
                         .size(30.dp)
-                        .clip(CircleShape)
-                        .clickable { menuExpanded = true },
+                        .pressable { menuExpanded = true },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.MoreHoriz, "Действия с упражнением", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
@@ -951,6 +965,18 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
             Spacer(Modifier.width(40.dp))
         }
 
+        // Только что добавленный подход: его номер пару секунд пульсирует, а под
+        // кнопкой — подсказка, как убрать лишний (первые три раза).
+        val context = LocalContext.current
+        var justAdded by remember { mutableStateOf<Long?>(null) }
+        var showsHint by remember { mutableStateOf(false) }
+        LaunchedEffect(justAdded) {
+            if (justAdded == null) return@LaunchedEffect
+            delay(3_000)
+            justAdded = null
+            showsHint = false
+        }
+
         val sets = exercise.sets
         sets.forEachIndexed { position, set ->
             androidx.compose.runtime.key(set.id) {
@@ -960,6 +986,7 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
                     exIndex = exIndex,
                     isCurrent = !set.isDone && (0 until position).all { sets[it].isDone },
                     canDelete = sets.size > 1,
+                    highlighted = set.id == justAdded,
                     actions = actions
                 )
             }
@@ -969,9 +996,18 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
             Modifier
                 .padding(top = 4.dp)
                 .fillMaxWidth()
+                .pressable {
+                    actions.addSet(exIndex)
+                    justAdded = WorkoutSessionManager.exercises.getOrNull(exIndex)?.sets?.lastOrNull()?.id
+                    val hints = context.getSharedPreferences(HINTS, Context.MODE_PRIVATE)
+                    val shown = hints.getInt(HINT_DELETE_SET, 0)
+                    if (shown < 3) {
+                        showsHint = true
+                        hints.edit().putInt(HINT_DELETE_SET, shown + 1).apply()
+                    }
+                }
                 .background(FieldColor, RoundedCornerShape(14.dp))
                 .clip(RoundedCornerShape(14.dp))
-                .pressable { actions.addSet(exIndex) }
                 .padding(vertical = 11.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
@@ -980,8 +1016,26 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
             Spacer(Modifier.width(6.dp))
             Text("Добавить подход", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
+
+        AnimatedVisibility(
+            visible = showsHint,
+            enter = fadeIn(tween(220)) + expandVertically(Motion.snappy()),
+            exit = fadeOut(tween(180)) + shrinkVertically(Motion.snappy())
+        ) {
+            Text(
+                "Лишний подход? Смахни его влево или нажми на номер",
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+            )
+        }
     }
 }
+
+private const val HINTS = "strain_hints"
+private const val HINT_DELETE_SET = "delete_set"
 
 @Composable
 private fun ColumnTitle(text: String, modifier: Modifier) {
@@ -1002,6 +1056,29 @@ private fun SetRow(
     exIndex: Int,
     isCurrent: Boolean,
     canDelete: Boolean,
+    highlighted: Boolean,
+    actions: SessionActions
+) {
+    SwipeToDelete(
+        enabled = canDelete,
+        onDelete = {
+            // По идентификатору: пока строка уезжала, номера могли сдвинуться.
+            val at = WorkoutSessionManager.exercises.getOrNull(exIndex)?.sets?.indexOfFirst { it.id == set.id } ?: -1
+            if (at >= 0) actions.delete(exIndex, at)
+        }
+    ) {
+        SetRowContent(set, position, exIndex, isCurrent, canDelete, highlighted, actions)
+    }
+}
+
+@Composable
+private fun SetRowContent(
+    set: ActiveSetState,
+    position: Int,
+    exIndex: Int,
+    isCurrent: Boolean,
+    canDelete: Boolean,
+    highlighted: Boolean,
     actions: SessionActions
 ) {
     Row(
@@ -1009,15 +1086,15 @@ private fun SetRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        SetNumber(set, position, exIndex, isCurrent, canDelete, actions)
+        SetNumber(set, position, exIndex, isCurrent, canDelete, highlighted, actions)
 
         // «БЫЛО»: нажал — подставилось то, что было в прошлый раз.
         Box(
             Modifier
                 .width(62.dp)
                 .height(44.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .pressable(enabled = set.previous != null) { actions.previous(exIndex, position) },
+                .pressable(enabled = set.previous != null) { actions.previous(exIndex, position) }
+                .clip(RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -1056,9 +1133,19 @@ private fun SetNumber(
     exIndex: Int,
     isCurrent: Boolean,
     canDelete: Boolean,
+    highlighted: Boolean,
     actions: SessionActions
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val fill by animateColorAsState(
+        when {
+            set.isRecord -> Theme.accent
+            highlighted -> Theme.accent.copy(alpha = 0.35f)
+            else -> Color(0xFF262626)
+        },
+        Motion.fade(220),
+        label = "setNumber"
+    )
     val currentAlpha by animateFloatAsState(if (isCurrent) 1f else 0f, Motion.snappy(), label = "current")
     val recordScale by animateFloatAsState(if (set.isRecord) 1f else 0f, Motion.bouncy(), label = "record")
     val hasMenu = set.previous != null || canDelete
@@ -1073,12 +1160,13 @@ private fun SetNumber(
                 .graphicsLayer { alpha = currentAlpha }
                 .background(Theme.accent, CircleShape)
         )
+        if (highlighted) NewSetRing()
         Box(
             Modifier
                 .size(34.dp)
-                .background(if (set.isRecord) Theme.accent else Color(0xFF262626), CircleShape)
-                .clip(CircleShape)
-                .pressable(enabled = hasMenu) { menuExpanded = true },
+                .pressable(enabled = hasMenu) { menuExpanded = true }
+                .background(fill, CircleShape)
+                .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -1126,6 +1214,126 @@ private fun SetNumber(
     }
 }
 
+/// Кольцо, что расходится от номера только что добавленного подхода: «вот он, новый».
+@Composable
+private fun NewSetRing() {
+    val pulse = rememberInfiniteTransition(label = "newSet")
+    val progress by pulse.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearOutSlowInEasing)),
+        label = "newSetRing"
+    )
+    Box(
+        Modifier
+            .size(34.dp)
+            .graphicsLayer {
+                val scale = 1f + 0.4f * progress
+                scaleX = scale
+                scaleY = scale
+                alpha = 1f - progress
+            }
+            .border(2.dp, Theme.accent, CircleShape)
+    )
+}
+
+/// Смахни подход влево — справа проступает красное «Удалить». Дотянул до
+/// порога — короткий щелчок, отпустил — подход уезжает и удаляется. Не
+/// дотянул — строка с пружиной возвращается. Прокрутку списка жест не трогает:
+/// он берёт только движение по горизонтали.
+@Composable
+private fun SwipeToDelete(
+    enabled: Boolean,
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val haptics = rememberHapticEngine()
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val offset = remember { Animatable(0f) }
+    var width by remember { mutableIntStateOf(0) }
+    var armed by remember { mutableStateOf(false) }
+    val currentOnDelete by rememberUpdatedState(onDelete)
+    val iconScale by animateFloatAsState(if (armed) 1.12f else 0.9f, Motion.bouncy(), label = "deleteIcon")
+    val red = Theme.record
+    val minThreshold = with(density) { 90.dp.toPx() }
+    val radius = with(density) { 12.dp.toPx() }
+    val labelStart = with(density) { 28.dp.toPx() }
+    val labelFade = with(density) { 40.dp.toPx() }
+
+    Box(Modifier.fillMaxWidth().onSizeChanged { width = it.width }) {
+        // Красная полоса — ровно на открытую часть, от правого края.
+        Box(
+            Modifier
+                .matchParentSize()
+                .drawBehind {
+                    val revealed = -offset.value
+                    if (revealed <= 0f) return@drawBehind
+                    drawRoundRect(
+                        red.copy(alpha = if (armed) 1f else 0.78f),
+                        topLeft = Offset(size.width - revealed, 0f),
+                        size = Size(revealed, size.height),
+                        cornerRadius = CornerRadius(radius)
+                    )
+                },
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Row(
+                Modifier
+                    .padding(end = 16.dp)
+                    .graphicsLayer {
+                        alpha = ((-offset.value - labelStart) / labelFade).coerceIn(0f, 1f)
+                        scaleX = iconScale
+                        scaleY = iconScale
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Delete, null, tint = Color.White, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Удалить", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Box(
+            Modifier
+                .graphicsLayer { translationX = offset.value }
+                .then(
+                    if (enabled) Modifier.pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (armed) {
+                                    scope.launch {
+                                        offset.animateTo(-width.toFloat(), tween(170))
+                                        currentOnDelete()
+                                        // Удалённая строка уйдёт вместе с этой корутиной; если
+                                        // подход почему-то остался — вернём строку на место.
+                                        delay(400)
+                                        armed = false
+                                        offset.animateTo(0f, Motion.bouncy())
+                                    }
+                                } else {
+                                    scope.launch { offset.animateTo(0f, Motion.bouncy()) }
+                                }
+                            },
+                            onDragCancel = {
+                                armed = false
+                                scope.launch { offset.animateTo(0f, Motion.bouncy()) }
+                            }
+                        ) { change, dragAmount ->
+                            val next = (offset.value + dragAmount).coerceIn(-width.toFloat(), 0f)
+                            change.consume()
+                            scope.launch { offset.snapTo(next) }
+                            val nowArmed = -next > maxOf(width * 0.38f, minThreshold)
+                            if (nowArmed != armed) {
+                                armed = nowArmed
+                                if (nowArmed) haptics.medium() else haptics.light()
+                            }
+                        }
+                    } else Modifier
+                )
+        ) { content() }
+    }
+}
+
 @Composable
 private fun CheckButton(done: Boolean, onClick: () -> Unit) {
     val progress by animateFloatAsState(if (done) 1f else 0f, Motion.bouncy(), label = "check")
@@ -1136,8 +1344,10 @@ private fun CheckButton(done: Boolean, onClick: () -> Unit) {
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                onClickLabel = if (done) "Снять отметку" else "Отметить подход",
                 onClick = onClick
-            ),
+            )
+            .semantics { contentDescription = if (done) "Подход сделан" else "Отметить подход" },
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -1272,6 +1482,7 @@ private fun RecordBanner(record: RecordNotice?, modifier: Modifier = Modifier) {
             Modifier
                 .padding(horizontal = 24.dp)
                 .fillMaxWidth()
+                .pressable { WorkoutSessionManager.lastRecord = null }
                 .graphicsLayer {
                     shadowElevation = 16.dp.toPx()
                     this.shape = shape
@@ -1281,7 +1492,6 @@ private fun RecordBanner(record: RecordNotice?, modifier: Modifier = Modifier) {
                 }
                 .background(Color(0xFF1F1F1F))
                 .border(1.dp, Theme.accent.copy(alpha = 0.6f), shape)
-                .clickable { WorkoutSessionManager.lastRecord = null }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1349,8 +1559,7 @@ private fun ZeroSetsAlertOverlay(onConfirm: () -> Unit, onDismiss: () -> Unit) {
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable { onDismiss() }
+                    .pressable { onDismiss() }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             )
         }
@@ -1415,6 +1624,7 @@ private fun SlideToConfirm(title: String, onConfirmed: () -> Unit) {
 @Composable
 private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1C1C1F),
         title = { Text("Время отдыха", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
@@ -1425,9 +1635,9 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
                     Box(
                         Modifier
                             .fillMaxWidth()
+                            .pressable { onSelect(seconds) }
                             .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
                             .clip(RoundedCornerShape(14.dp))
-                            .pressable { onSelect(seconds) }
                             .padding(vertical = 13.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1453,6 +1663,7 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
 private fun WorkoutNoteDialog(initialNote: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialNote) }
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1C1C1F),
         title = { Text("Заметка к тренировке", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },

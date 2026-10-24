@@ -3,6 +3,7 @@ package com.texasprogram.app.model
 import kotlinx.serialization.Serializable
 
 /// Основные движения, вокруг которых строится прогрессия.
+@Serializable(with = MainLiftSerializer::class)
 enum class MainLift(val title: String) {
     SQUAT("Приседания"),
     BENCH("Жим лёжа"),
@@ -20,6 +21,7 @@ enum class MainLift(val title: String) {
 ///
 /// Спрашиваем одним касанием, без клавиатуры: в зале после рабочего подхода
 /// заполнять форму никто не станет.
+@Serializable(with = LiftOutcomeSerializer::class)
 enum class LiftOutcome(val title: String) {
     EASY("Легко"),
     SOLID("Нормально"),

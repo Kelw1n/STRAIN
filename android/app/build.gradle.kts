@@ -6,6 +6,13 @@ plugins {
 }
 
 android {
+    // Анализ кода: отчёт текстом в лог CI, сборку он не останавливает.
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+        textReport = true
+        textOutput = file("build/reports/lint.txt")
+    }
     namespace = "com.texasprogram.app"
     compileSdk = 35
 
@@ -13,8 +20,10 @@ android {
         applicationId = "com.texasprogram.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "3.0.0"
+        // Номер сборки задаёт CI и увеличивает с каждой сборкой: по нему приложение
+        // понимает, что вышла новая версия, и предлагает обновиться. Локально — 25.
+        versionCode = System.getenv("STRAIN_VERSION_CODE")?.toIntOrNull() ?: 25
+        versionName = System.getenv("STRAIN_VERSION_NAME") ?: "3.0.0"
     }
 
     // Постоянный ключ подписи из секретов CI. Без одного и того же ключа Android
@@ -82,6 +91,11 @@ dependencies {
     // Фото ленты: загрузка с кэшем на диске; поворот снимков по EXIF перед отправкой.
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // Своя камера: селфи сохраняется зеркальным, как в превью, на любом телефоне.
+    val cameraX = "1.4.1"
+    implementation("androidx.camera:camera-camera2:$cameraX")
+    implementation("androidx.camera:camera-lifecycle:$cameraX")
+    implementation("androidx.camera:camera-view:$cameraX")
     // Готовые профили Compose компилируются при установке APK, а не во время
     // первых прокруток — иначе первые минуты интерфейс подтормаживает.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")

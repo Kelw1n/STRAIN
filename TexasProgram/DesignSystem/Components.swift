@@ -43,17 +43,13 @@ struct HighlightCard<Content: View>: View {
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 26, style: .continuous) }
 
-    /// У REBRN «следующее» не подсвечивают рамкой и свечением — карточка
-    /// такая же, как все, выделяет её содержимое.
-    private var plain: Bool { Theme.style.isRebrn }
-
+    /// «Следующее» не подсвечивают рамкой и свечением — карточка такая же,
+    /// как все, выделяет её содержимое.
     var body: some View {
         VStack(alignment: .leading, spacing: 14) { content }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface(scheme), in: shape)
-            .overlay(shape.strokeBorder(gradient, lineWidth: 1.6).opacity(plain ? 0 : 1))
-            .shadow(color: glow.opacity(plain ? 0 : (scheme == .dark ? 0.28 : 0.16)), radius: 14, y: 6)
     }
 }
 
@@ -65,8 +61,8 @@ struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+            .brightness(configuration.isPressed ? -0.04 : 0)
+            .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
     }
 }
 
@@ -87,7 +83,7 @@ struct GradientButtonStyle: ButtonStyle {
             .background(gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .shadow(color: glow.opacity(configuration.isPressed ? 0.15 : 0.35), radius: configuration.isPressed ? 6 : 16, y: 8)
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
     }
 }
 
@@ -231,14 +227,16 @@ private struct AppearIn: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 14)
+            .offset(y: shown ? 0 : 10)
             .onAppear {
                 guard !shown else { return }
-                if reduceMotion {
+                // Каскад — только для первого экрана; дальше при прокрутке
+                // карточки не проявляются заново, а просто есть.
+                if reduceMotion || index > 7 {
                     shown = true
                 } else {
-                    let delay = Double(min(index, 6)) * 0.045
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.86).delay(delay)) { shown = true }
+                    let delay = Double(min(index, 6)) * 0.03
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.95).delay(delay)) { shown = true }
                 }
             }
     }
@@ -256,8 +254,8 @@ private struct SoftScroll: ViewModifier {
         } else {
             content.scrollTransition(.interactive, axis: .vertical) { view, phase in
                 view
-                    .opacity(phase.isIdentity ? 1 : 0.35)
-                    .scaleEffect(phase.isIdentity ? 1 : 0.95)
+                    .opacity(phase.isIdentity ? 1 : 0.55)
+                    .scaleEffect(phase.isIdentity ? 1 : 0.98)
             }
         }
     }

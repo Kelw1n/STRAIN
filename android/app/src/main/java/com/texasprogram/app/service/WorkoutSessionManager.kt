@@ -10,6 +10,7 @@ import com.texasprogram.app.model.ExercisePrescription
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.SetEntry
+import com.texasprogram.app.model.SocialLive
 import com.texasprogram.app.model.formatWeight
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -154,6 +155,21 @@ object WorkoutSessionManager {
 
     val totalCompletedSets: Int get() = exercises.sumOf { it.doneCount }
     val totalSetsCount: Int get() = exercises.sumOf { it.sets.size }
+    /// Что видят друзья: день, текущее упражнение и его подходы — «Присед · 3/5».
+    val liveStatus: SocialLive?
+        get() {
+            val workout = activeWorkout ?: return null
+            val current = exercises.firstOrNull { exercise -> exercise.sets.any { !it.isDone } } ?: exercises.lastOrNull()
+            return SocialLive(
+                title = workout.day.title,
+                exercise = current?.prescription?.name.orEmpty(),
+                done = current?.doneCount ?: 0,
+                total = current?.sets?.size ?: 0,
+                setsDone = totalCompletedSets,
+                setsTotal = totalSetsCount,
+                startedAt = startMillis.toDouble()
+            )
+        }
     val totalTonnage: Double
         get() = exercises.sumOf { ex -> ex.sets.filter { it.isDone }.sumOf { it.weight * it.reps } }
     val density: Double
@@ -543,6 +559,18 @@ object WorkoutSessionManager {
     fun clearSaved() {
         saveJob?.cancel()
         storeFile?.let { runCatching { it.delete() } }
+    }
+
+    /// Профиль удалён: его тренировка — и идущая, и отложенная при смене
+    /// профиля — больше никогда не продолжится.
+    fun forgetProfile(id: String) {
+        if (activeWorkout != null && profileId == id) {
+            reset()
+            return
+        }
+        val file = storeFile?.takeIf { it.exists() } ?: return
+        val session = runCatching { json.decodeFromString(SavedSession.serializer(), file.readText()) }.getOrNull()
+        if (session?.profileId == id) clearSaved()
     }
 
     /// Для тестов: забыть тренировку в памяти, не трогая файл, — как после выгрузки.

@@ -16,7 +16,11 @@ struct ActiveWorkoutSessionView: View {
             ZStack(alignment: .bottom) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        exerciseList
+                        VStack(spacing: 16) {
+                            // Совместная тренировка: что сейчас делает напарник.
+                            PartnerStrip()
+                            exerciseList
+                        }
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
                             .padding(.bottom, restTimer.isRunning ? 200 : 60)
@@ -93,7 +97,9 @@ struct ActiveWorkoutSessionView: View {
                 .id(exercise.id)
                 .offset(y: reorder.offset(for: exercise.id, index: index))
                 .scaleEffect(dragged && !reduceMotion ? 1.03 : 1)
-                .shadow(color: .black.opacity(dragged ? 0.6 : 0), radius: 18, y: 10)
+                // Тень только у карточки, которую тащат: прозрачная тень всё равно
+                // размывалась бы на каждом кадре прокрутки.
+                .shadow(color: .black.opacity(dragged ? 0.6 : 0), radius: dragged ? 18 : 0, y: dragged ? 10 : 0)
                 .zIndex(dragged ? 1 : 0)
             }
         }
@@ -362,9 +368,10 @@ final class ExerciseReorder {
         guard draggingID != nil, !ending else { return }
         ending = true
         let from = startIndex, to = target
-        withAnimation(Motion.reorder) {
-            translation = CGFloat(to - from) * step
-        } completion: {
+        var finished = false
+        let finish = {
+            guard !finished else { return }
+            finished = true
             var still = Transaction()
             still.disablesAnimations = true
             withTransaction(still) {
@@ -377,6 +384,14 @@ final class ExerciseReorder {
             withAnimation(Motion.sheet) { self.draggingID = nil }
             self.ending = false
         }
+        withAnimation(Motion.reorder) {
+            translation = CGFloat(to - from) * step
+        } completion: {
+            finish()
+        }
+        // Конец анимации может не прийти — телефон заблокировали, экран свернули.
+        // Тогда доводим сами: иначе лента так и осталась бы без прокрутки.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { finish() }
     }
 
     /// Смещение карточки: схваченная едет за пальцем, соседи уступают место.
@@ -403,6 +418,11 @@ private struct ExerciseSessionCard: View {
     let reorder: ExerciseReorder
 
     @GestureState private var holding = false
+    /// Только что добавленный подход: его номер пару секунд пульсирует, а под
+    /// кнопкой — подсказка, как убрать лишний (первые три раза).
+    @State private var justAdded: UUID?
+    @State private var showsDeleteHint = false
+    @AppStorage("hint.deleteSet") private var deleteHintsShown = 0
 
     private var manager: WorkoutSessionManager { .shared }
     private var doneCount: Int { exercise.sets.filter(\.isDone).count }
@@ -462,7 +482,13 @@ private struct ExerciseSessionCard: View {
                 Spacer(minLength: 4)
             }
             .contentShape(Rectangle())
-            .gesture(reorderGesture)
+            .reorderHold(fallback: reorderGesture) {
+                if !reorder.isActive { reorder.begin(id: exercise.id, index: index) }
+            } onChange: { dy in
+                reorder.update(translation: dy, count: count)
+            } onEnd: {
+                reorder.end()
+            }
             .accessibilityElement(children: .combine)
             .accessibilityHint("Удерживайте, чтобы переставить")
             .accessibilityActions {
@@ -482,6 +508,7 @@ private struct ExerciseSessionCard: View {
     }
 
     /// Удержание 0,3 с, потом ведение. Короткое касание и прокрутка проходят мимо.
+    /// Жест SwiftUI — только для iOS 17; с iOS 18 то же делает жест UIKit.
     private var reorderGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.3)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
@@ -587,6 +614,7 @@ private struct ExerciseSessionCard: View {
                     exerciseIndex: index,
                     isCurrent: !set.isDone && exercise.sets.prefix(sIdx).allSatisfy(\.isDone),
                     canDelete: exercise.sets.count > 1,
+                    highlighted: set.id == justAdded,
                     profile: profile
                 )
                 .transition(.asymmetric(
@@ -597,6 +625,14 @@ private struct ExerciseSessionCard: View {
 
             Button {
                 withAnimation(Motion.reorder) { manager.addSet(to: index, profile: profile) }
+                let added = manager.exercises.indices.contains(index) ? manager.exercises[index].sets.last?.id : nil
+                withAnimation(Motion.snappy) {
+                    justAdded = added
+                    if deleteHintsShown < 3 {
+                        showsDeleteHint = true
+                        deleteHintsShown += 1
+                    }
+                }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")
@@ -611,6 +647,25 @@ private struct ExerciseSessionCard: View {
             }
             .buttonStyle(.pressable)
             .padding(.top, 4)
+
+            if showsDeleteHint {
+                Text("Лишний подход? Смахни его влево или нажми на номер")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        // Через три секунды подсветка и подсказка гаснут сами.
+        .task(id: justAdded) {
+            guard justAdded != nil else { return }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(Motion.snappy) {
+                justAdded = nil
+                showsDeleteHint = false
+            }
         }
     }
 
@@ -629,12 +684,40 @@ private struct SetRowView: View {
     let exerciseIndex: Int
     let isCurrent: Bool
     let canDelete: Bool
+    var highlighted = false
     let profile: ProgramProfile
 
     @Environment(RestTimer.self) private var restTimer
     private var manager: WorkoutSessionManager { .shared }
 
+    /// Насколько строку смахнули влево (≤ 0) и ширина строки.
+    @State private var swipe: CGFloat = 0
+    @State private var rowWidth: CGFloat = 0
+    /// Дотянули до порога: отпустишь — подход удалится.
+    @State private var armed = false
+
+    private var threshold: CGFloat { max(90, rowWidth * 0.38) }
+
     var body: some View {
+        rowContent
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { rowWidth = proxy.size.width }
+                        .onChange(of: proxy.size.width) { _, width in rowWidth = width }
+                }
+            }
+            .offset(x: swipe)
+            // Полоса стоит на месте, строка уезжает с неё влево.
+            .background(alignment: .trailing) { deleteStrip }
+            .rowSwipe(enabled: canDelete, fallback: swipeGesture, onChange: swipeChanged, onEnd: swipeEnded)
+            .sensoryFeedback(.impact(weight: .medium), trigger: armed) { _, isArmed in isArmed }
+            .accessibilityAction(named: "Удалить подход") {
+                if canDelete { delete() }
+            }
+    }
+
+    private var rowContent: some View {
         HStack(spacing: 8) {
             numberMenu
 
@@ -676,8 +759,77 @@ private struct SetRowView: View {
         }
     }
 
+    // MARK: Смахнуть, чтобы удалить
+
+    /// Красная полоса ровно на открытую часть, от правого края. Дотянул до
+    /// порога — она наливается и «Удалить» чуть подрастает.
+    private var deleteStrip: some View {
+        let revealed: CGFloat = max(0, -swipe)
+        let labelOpacity = Double(min(CGFloat(1), max(CGFloat(0), (revealed - 28) / 40)))
+        return ZStack(alignment: .trailing) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.record.opacity(armed ? 1 : 0.78))
+            HStack(spacing: 6) {
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 14, weight: .bold))
+                Text("Удалить")
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .foregroundStyle(.white)
+            .scaleEffect(armed ? 1.1 : 0.9)
+            .opacity(labelOpacity)
+            .padding(.trailing, 16)
+        }
+        .frame(width: revealed)
+        .opacity(revealed > 0 ? 1 : 0)
+        .animation(Motion.bouncy, value: armed)
+        .accessibilityHidden(true)
+    }
+
+    /// Только горизонтальное движение влево: вертикальное — это прокрутка.
+    /// Жест SwiftUI — только для iOS 17; с iOS 18 то же делает жест UIKit.
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 16, coordinateSpace: .local)
+            .onChanged { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard swipe != 0 || (dx < 0 && abs(dx) > abs(dy) * 1.4) else { return }
+                swipeChanged(dx)
+            }
+            .onEnded { _ in swipeEnded() }
+    }
+
+    private func swipeChanged(_ dx: CGFloat) {
+        swipe = min(0, dx)
+        armed = -swipe > threshold
+    }
+
+    private func swipeEnded() {
+        if armed {
+            delete()
+        } else {
+            withAnimation(Motion.bouncy) { swipe = 0 }
+        }
+    }
+
+    private func delete() {
+        withAnimation(.easeIn(duration: 0.17)) { swipe = -max(rowWidth, 400) }
+        let id = set.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.17) {
+            // По идентификатору: пока строка уезжала, номера могли сдвинуться.
+            guard manager.exercises.indices.contains(exerciseIndex),
+                  let at = manager.exercises[exerciseIndex].sets.firstIndex(where: { $0.id == id }) else { return }
+            withAnimation(Motion.reorder) { manager.deleteSet(exIdx: exerciseIndex, sIdx: at, profile: profile) }
+            // Если подход почему-то остался — строка возвращается на место.
+            armed = false
+            withAnimation(Motion.bouncy) { swipe = 0 }
+        }
+    }
+
     /// Номер подхода: оранжевая черта у текущего, кубок у рекорда.
-    /// Нажатие — меню подхода.
+    /// Нажатие — меню подхода. У только что добавленного — расходящееся кольцо.
     private var numberMenu: some View {
         Menu {
             if set.previous != nil {
@@ -700,7 +852,22 @@ private struct SetRowView: View {
                 .monospacedDigit()
                 .foregroundStyle(set.isRecord ? .black : .white)
                 .frame(width: 34, height: 34)
-                .background(set.isRecord ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color(white: 0.15)), in: Circle())
+                .background(numberFill, in: Circle())
+                .overlay {
+                    if highlighted {
+                        Circle()
+                            .strokeBorder(Theme.accent, lineWidth: 2)
+                            .phaseAnimator([false, true]) { ring, spread in
+                                ring
+                                    .scaleEffect(spread ? 1.4 : 1)
+                                    .opacity(spread ? 0 : 1)
+                            } animation: { spread in
+                                spread ? Animation.easeOut(duration: 0.9) : Animation.linear(duration: 0.01)
+                            }
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
                 .overlay(alignment: .topTrailing) {
                     if set.isRecord {
                         Image(systemName: "trophy.fill")
@@ -724,14 +891,21 @@ private struct SetRowView: View {
         }
         .animation(Motion.bouncy, value: set.isRecord)
         .animation(Motion.snappy, value: isCurrent)
+        .animation(Motion.snappy, value: highlighted)
         .accessibilityLabel("Подход \(position + 1)")
+    }
+
+    private var numberFill: AnyShapeStyle {
+        if set.isRecord { return AnyShapeStyle(Theme.accent) }
+        if highlighted { return AnyShapeStyle(Theme.accent.opacity(0.35)) }
+        return AnyShapeStyle(Color(white: 0.15))
     }
 
     private var checkButton: some View {
         Button {
-            withAnimation(Motion.bouncy) {
-                manager.toggleSetDone(exIdx: exerciseIndex, sIdx: position, profile: profile, restTimer: restTimer)
-            }
+            // Без общей анимации: иначе вслед за галочкой анимировалось бы всё,
+            // что меняет отметка, — профиль, графики, таймер. Галочка анимируется сама.
+            manager.toggleSetDone(exIdx: exerciseIndex, sIdx: position, profile: profile, restTimer: restTimer)
         } label: {
             ZStack {
                 Circle()
@@ -747,6 +921,7 @@ private struct SetRowView: View {
                     .scaleEffect(set.isDone ? 1 : 0.4)
                     .opacity(set.isDone ? 1 : 0)
             }
+            .animation(Motion.bouncy, value: set.isDone)
             .frame(width: 30, height: 30)
             .frame(width: 40, height: 44)
             .contentShape(Rectangle())
@@ -924,5 +1099,123 @@ private struct SetNumberField: View {
         let cleaned = text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
         guard !cleaned.isEmpty, let number = Double(cleaned), number.isFinite, number >= 0 else { return nil }
         return decimal ? min(number, 1000) : min(number.rounded(.down), 999)
+    }
+}
+
+// MARK: - Жесты строк и шапок
+
+private extension View {
+    /// Удержание шапки — переставить упражнение. С iOS 18 — жест UIKit: он ждёт
+    /// неподвижного пальца и не забирает касание у прокрутки. Жест SwiftUI на
+    /// iOS 18 и новее перехватывал касание, и лента листалась не с первого раза.
+    @ViewBuilder
+    func reorderHold<G: Gesture>(
+        fallback: G,
+        onBegin: @escaping () -> Void,
+        onChange: @escaping (CGFloat) -> Void,
+        onEnd: @escaping () -> Void
+    ) -> some View {
+        if #available(iOS 18.0, *) {
+            gesture(HoldToDragGesture(onBegin: onBegin, onChange: onChange, onEnd: onEnd))
+        } else {
+            gesture(fallback)
+        }
+    }
+
+    /// Смахивание подхода влево. С iOS 18 — жест UIKit, который начинается,
+    /// только если палец пошёл влево: движение вверх-вниз целиком достаётся прокрутке.
+    @ViewBuilder
+    func rowSwipe<G: Gesture>(
+        enabled: Bool,
+        fallback: G,
+        onChange: @escaping (CGFloat) -> Void,
+        onEnd: @escaping () -> Void
+    ) -> some View {
+        if #available(iOS 18.0, *) {
+            gesture(LeftSwipeGesture(isEnabled: enabled, onChange: onChange, onEnd: onEnd))
+        } else {
+            simultaneousGesture(fallback, including: enabled ? .all : .subviews)
+        }
+    }
+}
+
+/// Горизонтальный свайп влево по строке. Пока он идёт, лента не прокручивается;
+/// вертикальное движение он не берёт вовсе.
+@available(iOS 18.0, *)
+private struct LeftSwipeGesture: UIGestureRecognizerRepresentable {
+    var isEnabled: Bool
+    var onChange: (CGFloat) -> Void
+    var onEnd: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        pan.isEnabled = isEnabled
+        return pan
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        // Отключаем, а не убираем жест: иначе строка пересобиралась бы, и поле
+        // ввода теряло фокус, когда у упражнения появляется второй подход.
+        recognizer.isEnabled = isEnabled
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed:
+            onChange(recognizer.translation(in: recognizer.view).x)
+        case .ended, .cancelled, .failed:
+            onEnd()
+        default:
+            break
+        }
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return velocity.x < 0 && abs(velocity.x) > abs(velocity.y) * 1.4
+        }
+    }
+}
+
+/// Удержание 0,3 с и ведение — перестановка упражнений. Повёл палец раньше —
+/// это прокрутка, и жест сразу уступает. Отмену системой (звонок, блокировка)
+/// UIKit присылает сам, и перестановка не зависает на полпути.
+@available(iOS 18.0, *)
+private struct HoldToDragGesture: UIGestureRecognizerRepresentable {
+    var onBegin: () -> Void
+    var onChange: (CGFloat) -> Void
+    var onEnd: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let press = UILongPressGestureRecognizer()
+        press.minimumPressDuration = 0.3
+        return press
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
+        // В координатах окна: карточки сворачиваются, и шапка под пальцем уезжает.
+        let y = recognizer.location(in: nil).y
+        switch recognizer.state {
+        case .began:
+            context.coordinator.startY = y
+            onBegin()
+        case .changed:
+            onChange(y - context.coordinator.startY)
+        case .ended, .cancelled, .failed:
+            onEnd()
+        default:
+            break
+        }
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var startY: CGFloat = 0
     }
 }

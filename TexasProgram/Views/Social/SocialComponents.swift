@@ -1,31 +1,116 @@
+import ImageIO
 import SwiftUI
 import UIKit
 
 // MARK: - Фото с сервера
 
+/// Загрузчик фото: готовые картинки держит в памяти, распаковывает и уменьшает
+/// в фоне. Стандартный AsyncImage кэша в памяти не держит — при прокрутке назад
+/// фото грузилось заново, мигала заглушка, а распаковка шла на главном потоке.
+final class ImagePipeline: @unchecked Sendable {
+    static let shared = ImagePipeline()
+
+    private let cache = NSCache<NSString, UIImage>()
+    private let session: URLSession
+    private var tasks: [String: Task<UIImage?, Never>] = [:]
+    private let lock = NSLock()
+
+    private init() {
+        cache.totalCostLimit = 120 * 1024 * 1024
+        let configuration = URLSessionConfiguration.default
+        // Адрес фото никогда не меняется — диск хранит его надолго.
+        configuration.urlCache = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 250 * 1024 * 1024)
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        session = URLSession(configuration: configuration)
+    }
+
+    private func key(_ url: URL, _ maxPixel: Int) -> NSString { "\(url.absoluteString)#\(maxPixel)" as NSString }
+
+    /// Уже готовая картинка — сразу, без ожидания и без мигания.
+    func cached(_ url: URL, maxPixel: Int) -> UIImage? { cache.object(forKey: key(url, maxPixel)) }
+
+    func image(_ url: URL, maxPixel: Int) async -> UIImage? {
+        let cacheKey = key(url, maxPixel)
+        if let hit = cache.object(forKey: cacheKey) { return hit }
+        // Проверка «уже грузится?» и запись новой загрузки — одним шагом под замком:
+        // два одинаковых фото в ленте качаются один раз.
+        let (task, created): (Task<UIImage?, Never>, Bool) = lock.withLock {
+            if let running = tasks[cacheKey as String] { return (running, false) }
+            let task = Task<UIImage?, Never>.detached(priority: .userInitiated) { [session] in
+                guard let (data, _) = try? await session.data(from: url) else { return nil }
+                return Self.decode(data, maxPixel: maxPixel)
+            }
+            tasks[cacheKey as String] = task
+            return (task, true)
+        }
+        let image = await task.value
+        guard created else { return image }
+        lock.withLock { tasks[cacheKey as String] = nil }
+        if let image {
+            let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+            cache.setObject(image, forKey: cacheKey, cost: cost)
+        }
+        return image
+    }
+
+    /// Уменьшает до нужного размера сразу при чтении и распаковывает заранее:
+    /// главному потоку остаётся только показать готовые пиксели.
+    private static func decode(_ data: Data, maxPixel: Int) -> UIImage? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, options) else { return nil }
+        let thumbOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions) else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
 /// Фото по идентификатору. Адрес фото никогда не меняется, поэтому
-/// оно кэшируется системой и второй раз не скачивается.
+/// оно кэшируется и второй раз не скачивается и не распаковывается.
 struct RemoteImage: View {
     let id: String?
     var contentMode: ContentMode = .fill
+    /// Сторона в точках, под которую уменьшить. По умолчанию — ширина экрана.
+    var maxPoints: CGFloat = 430
+
+    @State private var image: UIImage?
+    @State private var failed = false
+    @Environment(\.displayScale) private var displayScale
+
+    private var url: URL? { SocialService.shared.imageURL(id) }
+    private var maxPixel: Int { Int(min(maxPoints * displayScale, 1600)) }
 
     var body: some View {
-        if let url = SocialService.shared.imageURL(id) {
-            AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: contentMode)
-                case .failure:
-                    placeholder(icon: "photo")
-                default:
-                    placeholder(icon: nil)
-                }
+        ZStack {
+            if let image = image ?? url.flatMap({ ImagePipeline.shared.cached($0, maxPixel: maxPixel) }) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+                    .transition(.opacity)
+            } else {
+                placeholder(icon: (url == nil || failed) ? "photo" : nil)
             }
-        } else {
-            placeholder(icon: "photo")
+        }
+        .animation(.easeOut(duration: 0.18), value: image != nil)
+        .task(id: id) {
+            failed = false
+            guard let url else { image = nil; return }
+            if let ready = ImagePipeline.shared.cached(url, maxPixel: maxPixel) {
+                image = ready
+                return
+            }
+            let loaded = await ImagePipeline.shared.image(url, maxPixel: maxPixel)
+            guard !Task.isCancelled else { return }
+            image = loaded
+            failed = loaded == nil
         }
     }
 
+    /// Ровная подложка без спиннера: в ленте десятки спиннеров съедали кадры.
     private func placeholder(icon: String?) -> some View {
         ZStack {
             Color(white: 0.12)
@@ -33,8 +118,6 @@ struct RemoteImage: View {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.25))
-            } else {
-                ProgressView().tint(.white.opacity(0.4))
             }
         }
     }
@@ -48,7 +131,7 @@ struct AvatarView: View {
     var body: some View {
         Group {
             if imageId != nil {
-                RemoteImage(id: imageId)
+                RemoteImage(id: imageId, maxPoints: size)
             } else {
                 ZStack {
                     LinearGradient(colors: [Theme.accent, Theme.accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -123,27 +206,6 @@ private extension Shape {
     }
 }
 
-// MARK: - Карусель фото поста
-
-struct PhotoCarousel: View {
-    let ids: [String]
-    @State private var page = 0
-
-    var body: some View {
-        TabView(selection: $page) {
-            ForEach(Array(ids.enumerated()), id: \.offset) { index, id in
-                RemoteImage(id: id)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .tag(index)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: ids.count > 1 ? .always : .never))
-        .aspectRatio(4.0 / 5.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-}
-
 // MARK: - Камера
 
 extension UIImage {
@@ -157,6 +219,24 @@ extension UIImage {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+
+    /// Уменьшенная и отражённая по горизонтали копия — селфи таким, каким его
+    /// видно в камере. Уже отражённый кадр второй раз не переворачиваем.
+    func mirroredSelfie(maxSide: CGFloat = 2048) -> UIImage {
+        switch imageOrientation {
+        case .upMirrored, .downMirrored, .leftMirrored, .rightMirrored: return downscaled(maxSide: maxSide)
+        default: break
+        }
+        let ratio = min(1, maxSide / max(size.width, size.height))
+        let target = CGSize(width: (size.width * ratio).rounded(), height: (size.height * ratio).rounded())
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: target, format: format).image { context in
+            context.cgContext.translateBy(x: target.width, y: 0)
+            context.cgContext.scaleBy(x: -1, y: 1)
             draw(in: CGRect(origin: .zero, size: target))
         }
     }
@@ -191,7 +271,13 @@ struct CameraPicker: UIViewControllerRepresentable {
         }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let image = info[.originalImage] as? UIImage { onImage(image) }
+            if let image = info[.originalImage] as? UIImage {
+                // Фронталка отдаёт кадр не зеркальным, и лицо выглядит непривычно
+                // перекошенным. Сохраняем, как было в превью, — как «Зеркальная
+                // фронтальная камера» в настройках iPhone, только для всех сразу.
+                let selfie = picker.sourceType == .camera && picker.cameraDevice == .front
+                onImage(selfie ? image.mirroredSelfie() : image)
+            }
             isPresented.wrappedValue = false
         }
 
@@ -249,6 +335,8 @@ struct FollowButton: View {
                 .frame(maxWidth: compact ? nil : .infinity)
                 .frame(height: compact ? 32 : 50)
                 .background(isFollowing ? Color(white: 0.16) : Color.white, in: RoundedRectangle(cornerRadius: compact ? 16 : 18, style: .continuous))
+                // Подписался — кнопка плавно темнеет, а не перескакивает.
+                .animation(Motion.snappy, value: isFollowing)
         }
         .buttonStyle(.pressable)
     }

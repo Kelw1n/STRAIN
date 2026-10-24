@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -81,7 +83,11 @@ fun SocialRouteScreen(
         is SocialRoute.User -> UserProfileScreen(route.username, navigator, contentPadding)
         is SocialRoute.Followers -> PeopleListScreen("Подписчики", contentPadding, navigator) { SocialService.followers(route.username) }
         is SocialRoute.Following -> PeopleListScreen("Подписки", contentPadding, navigator) { SocialService.following(route.username) }
-        is SocialRoute.Program -> ProgramDayScreen(route.day, contentPadding, navigator)
+        is SocialRoute.Program -> ProgramDayScreen(route.day, contentPadding, navigator, route.all, route.author)
+        is SocialRoute.Chat -> ChatScreen(route.username, contentPadding, navigator)
+        SocialRoute.Activity -> ActivityScreen(contentPadding, navigator)
+        is SocialRoute.PostId -> PostLoaderScreen(route.id, contentPadding, navigator)
+        is SocialRoute.CopyProgram -> CopyProgramScreen(route.program, route.author, contentPadding, navigator)
         is SocialRoute.Badges -> BadgeListScreen(route.badges, contentPadding, navigator)
         SocialRoute.Achievements -> AchievementsScreen(remember(profile) { com.texasprogram.app.model.AchievementCalculator.progress(profile) }, contentPadding, navigator)
         SocialRoute.EditProfile -> EditProfileScreen(profile, contentPadding, navigator)
@@ -108,6 +114,8 @@ fun FeedScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var scopeMenu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    /// Обновление по повторному нажатию на «Главное» — с крутилкой сверху.
+    var tabRefreshing by remember { mutableStateOf(false) }
 
     fun cache() {
         SocialService.feedCache[feedScope] = SocialFeedPage(posts.toList(), next)
@@ -148,7 +156,38 @@ fun FeedScreen(
         }
     }
 
-    LaunchedEffect(feedScope, SocialService.feedVersion) { reload() }
+    LaunchedEffect(feedScope, SocialService.feedVersion) {
+        launch {
+            SocialService.refreshLive()
+            SocialService.refreshTogether()
+        }
+        reload()
+    }
+    // Кто в зале — раз в минуту, пока лента на экране.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            SocialService.refreshLive()
+        }
+    }
+
+    // Повторное нажатие на «Главное»: из поста или профиля — назад к ленте,
+    // в самой ленте — наверх и свежие тренировки.
+    OnTabReselect(MainTabItem.TODAY) {
+        if (navigator.stack.isNotEmpty()) {
+            navigator.stack.clear()
+            return@OnTabReselect
+        }
+        listState.scrollToTop()
+        if (!loading) {
+            tabRefreshing = true
+            try {
+                reload()
+            } finally {
+                tabRefreshing = false
+            }
+        }
+    }
 
     // Подгружаем следующую страницу, когда до конца списка остаётся пара постов.
     val nearEnd by remember {
@@ -217,16 +256,36 @@ fun FeedScreen(
                         }
                     }
                     Spacer(Modifier.weight(1f))
+                    if (SocialService.isSignedIn) ActivityBell { navigator.push(SocialRoute.Activity) }
                     Box(
-                        Modifier.size(42.dp).clip(CircleShape).pressable(onClick = onFindPeople),
+                        Modifier.size(42.dp).pressable(onClick = onFindPeople).clip(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Filled.Search, contentDescription = "Найти людей", tint = Color.White)
                     }
                 }
             }
+            if (tabRefreshing) {
+                item(key = "refreshing") {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                    }
+                }
+            }
             if (!SocialService.isSignedIn) item(key = "teaser") { SignUpTeaser(onCreateProfile) }
-            if (SocialService.outbox.isNotEmpty()) item(key = "outbox") { OutboxCard() }
+            SocialService.together.active?.let { active ->
+                item(key = "together") { Box(Modifier.animateItem(fadeInSpec = tween(240), placementSpec = Motion.snappy(), fadeOutSpec = tween(160)).padding(top = 8.dp)) { TogetherCard(active) } }
+            }
+            if (SocialService.isSignedIn && SocialService.liveFriends.isNotEmpty()) {
+                item(key = "live") {
+                    Box(Modifier.animateItem(fadeInSpec = tween(240), placementSpec = Motion.snappy(), fadeOutSpec = tween(160)).padding(top = 8.dp, bottom = 6.dp)) {
+                        LiveFriendsStrip(SocialService.liveFriends) { navigator.push(SocialRoute.User(it)) }
+                    }
+                }
+            }
+            if (SocialService.outbox.isNotEmpty()) item(key = "outbox") {
+                Box(Modifier.animateItem(fadeInSpec = tween(240), placementSpec = Motion.snappy(), fadeOutSpec = tween(160))) { OutboxCard() }
+            }
             val currentError = error
             if (currentError != null && posts.isEmpty()) {
                 item(key = "error") {
@@ -236,7 +295,8 @@ fun FeedScreen(
                 item(key = "empty") { FeedEmpty(feedScope, onFindPeople) }
             }
             items(posts, key = { it.id }) { post ->
-                Column {
+                // Новый пост проявляется, удалённый тает, остальные плавно съезжаются.
+                Column(Modifier.animateItem(fadeInSpec = tween(260), placementSpec = Motion.snappy(), fadeOutSpec = tween(180))) {
                     PostCard(
                         post = post,
                         onOpen = { navigator.push(SocialRoute.Post(post)) },
@@ -275,7 +335,7 @@ private fun SignUpTeaser(onCreateProfile: () -> Unit) {
             fontSize = 14.sp
         )
         Box(
-            Modifier.height(44.dp).clip(CircleShape).background(Color.White).pressable(onClick = onCreateProfile).padding(horizontal = 18.dp),
+            Modifier.height(44.dp).pressable(onClick = onCreateProfile).clip(CircleShape).background(Color.White).padding(horizontal = 18.dp),
             contentAlignment = Alignment.Center
         ) {
             Text("Создать профиль", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -338,6 +398,7 @@ private fun OutboxCard() {
 
     if (confirmDiscard) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDiscard = false },
             containerColor = Theme.dialog,
             title = { Text("Не публиковать тренировку?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -382,12 +443,15 @@ private fun FeedEmpty(scope: SocialService.FeedScope, onFindPeople: () -> Unit) 
 
 // MARK: - Друзья
 
-/// Вкладка «Друзья»: поиск по юзернейму и люди, которые недавно тренировались.
+/// Вкладка «Друзья»: поиск по юзернейму, люди, которые недавно тренировались,
+/// рейтинг недели и личные сообщения.
 @Composable
 fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCreateProfile: () -> Unit) {
     val navigator = rememberSocialNavigator()
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
+    /// 0 — люди, 1 — рейтинг недели, 2 — личные сообщения.
+    var section by rememberSaveable { mutableIntStateOf(0) }
     val people = remember { mutableStateListOf<SocialUserShort>() }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -411,13 +475,36 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
         search()
     }
 
+    val listState = rememberLazyListState()
+    OnTabReselect(MainTabItem.COMMUNITY) {
+        if (navigator.stack.isNotEmpty()) navigator.stack.clear() else listState.scrollToTop()
+    }
+
     SocialHost(navigator, screen = { route -> SocialRouteScreen(route, navigator, contentPadding, profile) }) {
         LazyColumn(
             Modifier.fillMaxSize().background(Color.Black),
+            state = listState,
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item { ScreenTitle("Друзья") }
+            if (SocialService.isSignedIn) {
+                item {
+                    val unread = SocialService.unreadMessages
+                    SegmentedControl(
+                        options = listOf("Люди", "Рейтинг", if (unread > 0) "Чаты · $unread" else "Чаты"),
+                        selectedIndex = section
+                    ) { section = it }
+                }
+            }
+            if (section == 1 && SocialService.isSignedIn) {
+                item { LeaderboardSection { navigator.push(SocialRoute.User(it)) } }
+                return@LazyColumn
+            }
+            if (section == 2 && SocialService.isSignedIn) {
+                item { ChatList { navigator.push(SocialRoute.Chat(it)) } }
+                return@LazyColumn
+            }
             item {
                 Row(
                     Modifier
@@ -456,9 +543,9 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .pressable(onClick = onCreateProfile)
                             .clip(RoundedCornerShape(18.dp))
                             .background(Color(0xFF161617))
-                            .pressable(onClick = onCreateProfile)
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

@@ -47,7 +47,7 @@ struct GoalSettingsSheet: View {
                                                 .fill(isSelected ? Theme.accent : Color(white: 0.16))
                                         )
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.pressable)
                             }
                         }
 
@@ -105,7 +105,7 @@ struct GoalSettingsSheet: View {
                             .padding(.vertical, 18)
                             .background(isReady ? Color.white : Color(white: 0.16), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .disabled(!isReady)
                     .padding(.bottom, 20)
                 }

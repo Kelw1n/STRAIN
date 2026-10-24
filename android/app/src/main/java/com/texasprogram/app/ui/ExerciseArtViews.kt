@@ -106,6 +106,7 @@ fun ExerciseArtDialog(name: String, onDismiss: () -> Unit) {
         Column(
             Modifier
                 .fillMaxWidth()
+                .popIn()
                 .clip(RoundedCornerShape(28.dp))
                 .background(Color(0xFF121212))
                 .padding(22.dp),
@@ -127,11 +128,11 @@ fun ExerciseArtDialog(name: String, onDismiss: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
                     .pressable {
                         picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    },
+                    }
+                    .clip(CircleShape)
+                    .background(Color.White),
                 contentAlignment = Alignment.Center
             ) {
                 Text("Выбрать из галереи", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -143,8 +144,8 @@ fun ExerciseArtDialog(name: String, onDismiss: () -> Unit) {
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
-                        .clip(CircleShape)
                         .pressable { ExerciseArt.removeCustomImage(context, name) }
+                        .clip(CircleShape)
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 )
             }

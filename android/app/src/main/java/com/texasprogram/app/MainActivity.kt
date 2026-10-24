@@ -1,5 +1,11 @@
 package com.texasprogram.app
 
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import android.view.ViewTreeObserver
+import android.os.SystemClock
+import androidx.compose.runtime.rememberUpdatedState
+import com.texasprogram.app.ui.popIn
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -8,9 +14,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -46,9 +58,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.foundation.border
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import com.texasprogram.app.ui.ThemeManager
 import androidx.compose.runtime.Composable
+import com.texasprogram.app.ui.TogetherInviteBanner
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +72,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.texasprogram.app.ui.LaunchReveal
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -73,6 +86,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import com.texasprogram.app.data.AppStore
 import com.texasprogram.app.data.BackupService
+import com.texasprogram.app.data.NutritionStore
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.ui.AppBackground
@@ -109,17 +123,33 @@ import com.texasprogram.app.ui.LiquidGlassTabBar
 import com.texasprogram.app.ui.MainTabItem
 import com.texasprogram.app.ui.MinimizedWorkoutBar
 import com.texasprogram.app.ui.WorkoutHubScreen
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    /// Самая высокая частота экрана при том же разрешении. Без этой просьбы часть
+    /// телефонов (Xiaomi, Samsung в адаптивном режиме) держит приложение на 60 Гц,
+    /// даже если экран умеет 90 или 120.
+    private fun requestHighestRefreshRate() {
+        runCatching {
+            val display = if (android.os.Build.VERSION.SDK_INT >= 30) display else @Suppress("DEPRECATION") windowManager.defaultDisplay
+            val current = display?.mode ?: return
+            val best = display.supportedModes
+                .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
+                .maxByOrNull { it.refreshRate } ?: return
+            if (best.modeId == window.attributes.preferredDisplayModeId) return
+            window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // До super: системный экран запуска (чёрный фон и знак) живёт до первого кадра.
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        ThemeManager.init(applicationContext)
+        requestHighestRefreshRate()
         WorkoutSessionManager.attach(filesDir)
         SocialService.init(applicationContext)
         handleDeepLink(intent)
@@ -135,29 +165,22 @@ class MainActivity : ComponentActivity() {
                     delay(if (phase < 20) 1000L else phase + 5)
                 }
             }
-            val isDark = Theme.isDark
+            // Тема одна и тёмная: светлые значки строки состояния на чёрном.
             val view = LocalView.current
             if (!view.isInEditMode) {
                 SideEffect {
                     val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
                     WindowCompat.getInsetsController(window, window.decorView).apply {
-                        isAppearanceLightStatusBars = !isDark
-                        isAppearanceLightNavigationBars = !isDark
+                        isAppearanceLightStatusBars = false
+                        isAppearanceLightNavigationBars = false
                     }
                 }
             }
-            val colorScheme = if (isDark) {
+            val colorScheme = remember {
                 darkColorScheme(
                     primary = Theme.accent,
                     // Белое на акценте: иначе у включённых переключателей тёмно-фиолетовый кружок.
                     onPrimary = Color.White,
-                    background = Theme.base,
-                    surface = Theme.surface,
-                    onSurface = Theme.textPrimary
-                )
-            } else {
-                lightColorScheme(
-                    primary = Theme.accent,
                     background = Theme.base,
                     surface = Theme.surface,
                     onSurface = Theme.textPrimary
@@ -180,6 +203,9 @@ class MainActivity : ComponentActivity() {
         RestTimer.get(applicationContext).tick()
         // Неотправленные посты — в путь, как только приложение снова на экране.
         SocialService.flushOutbox()
+        lifecycleScope.launch { SocialService.refreshUnread() }
+        // Вышла ли новая версия; вернулись из настроек с разрешением — ставим дальше.
+        com.texasprogram.app.service.AppUpdater.onResume(this)
     }
 
     override fun onStop() {
@@ -226,6 +252,8 @@ private fun rememberBackupImport(store: AppStore, onResult: (String) -> Unit) =
                     "В файле нет профилей"
                 } else {
                     store.restoreAll(restored)
+                    BackupService.restoreNutrition(archive, NutritionStore.directory(context))
+                    NutritionStore.get(context).reload()
                     "Восстановлено профилей: ${restored.size}. Открыт «${restored.first().name}»."
                 }
             } catch (e: Exception) {
@@ -284,6 +312,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     // Прежний экран «Сегодня» — из «Тренировки»; настройки — за шестерёнкой в профиле.
     var showToday by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showGuide by remember { mutableStateOf(false) }
 
     val isUpperLower = profile.programKind == TrainingProgramKind.UPPER_LOWER
 
@@ -310,7 +339,8 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         if (uri == null) return@rememberLauncherForActivityResult
         backupMessage = try {
             context.contentResolver.openOutputStream(uri)?.use {
-                it.write(BackupService.export(store.profiles, SocialService.token).toByteArray())
+                val nutrition = NutritionStore.directory(context)
+                it.write(BackupService.export(store.profiles, SocialService.token) { id -> NutritionStore.read(nutrition, id) }.toByteArray())
             }
             "Копия сохранена"
         } catch (e: Exception) {
@@ -345,6 +375,17 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     LaunchedEffect(Unit) {
         SocialService.flushOutbox()
         SocialService.refreshMe()
+        // Непрочитанные сообщения и активность — сразу и потом раз в минуту.
+        // Идущая тренировка заодно напоминает о себе, чтобы статус у друзей не протух.
+        while (true) {
+            SocialService.refreshUnread()
+            SocialService.reportLive(WorkoutSessionManager.liveStatus)
+            delay(60_000)
+        }
+    }
+    // Друзья видят, что идёт тренировка и какой подход.
+    LaunchedEffect(Unit) {
+        snapshotFlow { WorkoutSessionManager.liveStatus }.collect { SocialService.reportLive(it) }
     }
     LaunchedEffect(profile.completionLog, profile.bodyWeightLog, SocialService.isSignedIn) {
         SocialService.scheduleSync(profile)
@@ -359,32 +400,39 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
-    fun startWorkout(workout: com.texasprogram.app.service.ScheduledWorkout) {
-        if (android.os.Build.VERSION.SDK_INT >= 33 &&
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context, android.Manifest.permission.POST_NOTIFICATIONS
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            runCatching { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+    // Одна и та же функция между перерисовками: иначе вкладка «Тренировка»,
+    // которой она передаётся, пересобиралась бы на каждое изменение экрана.
+    val currentProfile by rememberUpdatedState(profile)
+    val startWorkout = remember(store, notificationPermission) {
+        { workout: com.texasprogram.app.service.ScheduledWorkout ->
+            if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                runCatching { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+            }
+            WorkoutSessionManager.requestStart(workout, store.active ?: currentProfile)
         }
-        WorkoutSessionManager.requestStart(workout, store.active ?: profile)
     }
 
     BackHandler(
         enabled = WorkoutSessionManager.isPresented || showPlan || benchFocus != null ||
             dayDetail != null || customizing != null || showHistoryList || historyFor != null || showNotes ||
-            showBodyWeight || showToday || showSettings
+            showBodyWeight || showToday || showSettings || showGuide
     ) {
         when {
             WorkoutSessionManager.isPresented -> WorkoutSessionManager.minimize()
-            showPlan -> showPlan = false
-            benchFocus != null -> benchFocus = null
+            // Правка и день открываются поверх плана — «Назад» сначала закрывает их.
             customizing != null -> customizing = null
+            benchFocus != null -> benchFocus = null
+            dayDetail != null -> dayDetail = null
+            showPlan -> showPlan = false
             historyFor != null -> historyFor = null
             showHistoryList -> showHistoryList = false
             showNotes -> showNotes = false
             showBodyWeight -> showBodyWeight = false
-            dayDetail != null -> dayDetail = null
+            showGuide -> showGuide = false
             showSettings -> showSettings = false
             showToday -> showToday = false
         }
@@ -394,19 +442,16 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     KeepScreenOn(profile.keepScreenOn)
 
     Box(Modifier.fillMaxSize()) {
-        // Как в iOS-версии: новый раздел въезжает со стороны, куда ведёшь
-        // по панели, старый чуть уменьшается и гаснет.
-        val tabShift = with(LocalDensity.current) { 36.dp.roundToPx() }
-        AnimatedContent(
-            targetState = tab,
-            transitionSpec = {
-                val forward = targetState.ordinal > initialState.ordinal
-                (slideInHorizontally(Motion.sheet()) { if (forward) tabShift else -tabShift } + fadeIn(tween(220))) togetherWith
-                    (scaleOut(tween(200), targetScale = 0.97f) + fadeOut(tween(160))) using
-                    SizeTransform(clip = false)
-            },
-            label = "tab"
-        ) { current ->
+        // Открытые вкладки живут дальше: при возврате экран не собирается заново —
+        // без пустого кадра, перезагрузки ленты и рывка анимации.
+        // Пока поверх вкладок открыт полноэкранный раздел, вкладку под ним
+        // не пересчитываем — её не видно, а отметки подходов идут часто.
+        val covered = WorkoutSessionManager.isPresented || showPlan || dayDetail != null || customizing != null ||
+            benchFocus != null || showHistoryList || historyFor != null || showNotes || showBodyWeight ||
+            showToday || showSettings || showGuide
+        // Вкладка передаётся лямбдой: её смена перестраивает только KeepAliveTabs,
+        // а не весь этот экран — и открываемая вкладка не пересобирается заново.
+        KeepAliveTabs(selectedTab = { tab }, frozen = covered) { current ->
             when (current) {
                 MainTabItem.TODAY -> FeedScreen(
                     profile = profile,
@@ -430,6 +475,11 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onOpenBodyWeight = { showBodyWeight = true },
                     onUpdate = { updated -> store.update(updated.id) { updated } }
                 )
+                MainTabItem.NUTRITION -> com.texasprogram.app.ui.NutritionScreen(
+                    profile = profile,
+                    contentPadding = contentPadding,
+                    onUpdate = { updated -> store.update(updated.id) { updated } }
+                )
                 MainTabItem.COMMUNITY -> CommunityScreen(
                     profile = profile,
                     contentPadding = contentPadding,
@@ -443,22 +493,66 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             }
         }
 
+        // Плашки сверху поверх любой вкладки: друг зовёт тренироваться вместе
+        // и вышла новая версия приложения.
+        Column(
+            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val invite = SocialService.together.incoming.firstOrNull()
+            AnimatedVisibility(
+                visible = invite != null,
+                enter = slideInVertically { -it } + fadeIn(),
+                exit = slideOutVertically { -it } + fadeOut()
+            ) {
+                invite?.let { TogetherInviteBanner(it) }
+            }
+            com.texasprogram.app.ui.AppUpdateBanner()
+        }
+
         Column(Modifier.align(Alignment.BottomCenter)) {
-            if (WorkoutSessionManager.isRunning && !WorkoutSessionManager.isPresented) {
+            // В переписке внизу поле ввода: свёрнутая тренировка, отдых и панель
+            // вкладок уезжают вниз, чтобы его не закрывать. Отдых при этом идёт
+            // дальше и виден в уведомлении; вышел из чата — плашки вернулись.
+            val chrome = !SocialService.hidesTabBar
+            AnimatedVisibility(
+                visible = chrome && WorkoutSessionManager.isRunning && !WorkoutSessionManager.isPresented,
+                enter = slideInVertically(Motion.sheet()) { it } + fadeIn(),
+                exit = slideOutVertically(Motion.sheet()) { it } + fadeOut()
+            ) {
                 MinimizedWorkoutBar()
             }
             // Карточка сама прячется и показывается с анимацией.
-            RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
-            LiquidGlassTabBar(
-                selectedTab = tab,
-                onTabSelected = { tab = it }
-            )
+            AnimatedVisibility(
+                visible = chrome,
+                enter = slideInVertically(Motion.sheet()) { it } + fadeIn(),
+                exit = slideOutVertically(Motion.sheet()) { it } + fadeOut()
+            ) {
+                RebrnRestTimerCard(timer, Modifier.padding(bottom = 8.dp))
+            }
+            AnimatedVisibility(
+                visible = chrome,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut()
+            ) {
+                LiquidGlassTabBar(
+                    selectedTab = tab,
+                    onTabSelected = { tab = it },
+                    // Повторное нажатие: из вложенного экрана — к началу вкладки, на нём — наверх.
+                    onReselect = { com.texasprogram.app.ui.TabReselect.fire(it) },
+                    // Новые сообщения — на «Друзьях», новая активность — на «Главном».
+                    badges = buildSet {
+                        if (SocialService.unreadMessages > 0) add(MainTabItem.COMMUNITY)
+                        if (SocialService.unseenActivity > 0) add(MainTabItem.TODAY)
+                    }
+                )
+            }
         }
 
         // Экран «Сегодня» с точками подходов и настройки — поверх вкладок.
         AnimatedContent(
             targetState = showToday,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "today"
         ) { visible ->
             if (visible) {
@@ -516,7 +610,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showSettings,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "settings"
         ) { visible ->
             if (visible) {
@@ -527,15 +621,56 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         onUpdate = { updated -> store.update(updated.id) { updated } },
                         onSwitchProfile = { id -> store.setActive(id) },
                         onAddProfile = { onAddProfile() },
-                        onDeleteProfile = { store.delete(profile.id) },
+                        onDeleteProfile = {
+                            // Начатая тренировка удаляемого профиля уходит вместе с ним.
+                            WorkoutSessionManager.forgetProfile(profile.id)
+                            store.delete(profile.id)
+                        },
                         onExportBackup = { exportLauncher.launch(BackupService.FILE_NAME) },
                         onImportBackup = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
                         onExportCsv = { csvLauncher.launch(CSVExport.FILE_NAME) },
                         backupMessage = backupMessage,
                         onClose = { showSettings = false },
+                        onOpenGuide = { showGuide = true },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
                     CloseButton(Modifier.align(Alignment.TopEnd)) { showSettings = false }
+                }
+            }
+        }
+
+        // Инструкция — поверх настроек, из которых её открыли.
+        AnimatedContent(
+            targetState = showGuide,
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            label = "guide"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    GuideScreen(programKind = profile.programKind, contentPadding = screenPadding(bottomExtra = 32.dp))
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showGuide = false }
+                }
+            }
+        }
+
+        // Модальный экран плана тренировок. Ниже дня и его правки: день,
+        // открытый из плана, должен лечь поверх плана, а не под него.
+        AnimatedContent(
+            targetState = showPlan,
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            label = "plan"
+        ) { visible ->
+            if (visible) {
+                Box(Modifier.fillMaxSize().background(Theme.base)) {
+                    PlanScreen(
+                        profile = profile,
+                        onOpenDay = { week, day -> dayDetail = week to day },
+                        onSetCurrent = { week, day ->
+                            store.updateActive { it.setCurrentWorkout(week, day) }
+                        },
+                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                    )
+                    CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
                 }
             }
         }
@@ -544,11 +679,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = dayDetail,
             transitionSpec = {
-                if (targetState != null) {
-                    (slideInHorizontally(tween(300)) { it / 2 } + fadeIn(tween(200))) togetherWith fadeOut(tween(200))
-                } else {
-                    fadeIn(tween(200)) togetherWith (slideOutHorizontally(tween(300)) { it / 2 } + fadeOut(tween(200)))
-                }
+                Motion.pushEnter() togetherWith Motion.pushExit()
             },
             label = "detail"
         ) { detail ->
@@ -611,11 +742,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = customizing,
             transitionSpec = {
-                if (targetState != null) {
-                    (slideInVertically(tween(320)) { it / 3 } + fadeIn(tween(220))) togetherWith fadeOut(tween(180))
-                } else {
-                    fadeIn(tween(180)) togetherWith (slideOutVertically(tween(320)) { it / 3 } + fadeOut(tween(200)))
-                }
+                Motion.sheetEnter() togetherWith Motion.sheetExit()
             },
             label = "customize"
         ) { target ->
@@ -634,31 +761,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             }
         }
 
-        // Модальный экран плана тренировок
-        AnimatedContent(
-            targetState = showPlan,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
-            label = "plan"
-        ) { visible ->
-            if (visible) {
-                Box(Modifier.fillMaxSize().background(Theme.base)) {
-                    PlanScreen(
-                        profile = profile,
-                        onOpenDay = { week, day -> dayDetail = week to day },
-                        onSetCurrent = { week, day ->
-                            store.updateActive { it.setCurrentWorkout(week, day) }
-                        },
-                        contentPadding = screenPadding(bottomExtra = 32.dp)
-                    )
-                    CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
-                }
-            }
-        }
-
         // Модальный экран жимовой волны
         AnimatedContent(
             targetState = benchFocus,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "benchFocus"
         ) { session ->
             if (session != null) {
@@ -684,8 +790,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = WorkoutSessionManager.isPresented,
             transitionSpec = {
-                (slideInVertically(tween(350)) { it } + fadeIn(tween(250))) togetherWith
-                        (slideOutVertically(tween(300)) { it } + fadeOut(tween(200)))
+                Motion.sheetEnter() togetherWith Motion.sheetExit()
             },
             label = "activeWorkout"
         ) { presented ->
@@ -702,6 +807,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         WorkoutSessionManager.pendingWorkout?.let { next ->
             val current = WorkoutSessionManager.activeWorkout
             androidx.compose.material3.AlertDialog(
+                modifier = Modifier.popIn(),
                 onDismissRequest = { WorkoutSessionManager.cancelReplace() },
                 containerColor = Theme.dialog,
                 title = { Text("Идёт другая тренировка", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -727,7 +833,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // Список движений, история одного и заметки — тоже поверх вкладок.
         AnimatedContent(
             targetState = showHistoryList,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "historyList"
         ) { visible ->
             if (visible) {
@@ -745,7 +851,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = historyFor,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "history"
         ) { name ->
             if (name != null) {
@@ -762,7 +868,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showNotes,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "notes"
         ) { visible ->
             if (visible) {
@@ -779,7 +885,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showBodyWeight,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
             label = "bodyWeight"
         ) { visible ->
             if (visible) {
@@ -797,11 +903,15 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
     // Напоминания пересобираем при запуске и на каждое изменение настроек:
     // будильники не переживают перезагрузку телефона.
+    // Профиль и режим расписания — тоже ключи: сменил профиль или очередь
+    // на дни недели — напоминания должны встать по новым дням и с новым текстом.
     LaunchedEffect(
+        profile.id,
         profile.reminderEnabled,
         profile.reminderHour,
         profile.reminderMinute,
-        profile.scheduleWeekdays
+        profile.weekdays,
+        profile.scheduleMode
     ) {
         ReminderScheduler.reschedule(context, profile)
         // Будильник без разрешения на уведомления срабатывает молча: на Android 13+
@@ -824,8 +934,8 @@ private fun CloseButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
         modifier
             .padding(top = topInset + 12.dp, end = 16.dp)
             .size(40.dp)
-            .background(Theme.surfaceSoft, androidx.compose.foundation.shape.CircleShape)
-            .pressable(onClick = onClick),
+            .pressable(onClick = onClick)
+            .background(Theme.surfaceSoft, androidx.compose.foundation.shape.CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text("✕", color = Theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -842,4 +952,102 @@ private fun screenPadding(bottomExtra: androidx.compose.ui.unit.Dp): PaddingValu
         top = insets.calculateTopPadding() + 8.dp,
         bottom = insets.calculateBottomPadding() + bottomExtra
     )
+}
+
+/// Вкладки, открытые хотя бы раз, остаются в памяти; видна только выбранная.
+/// Переход — короткое проявление и сдвиг на 24 dp, рисуется слоем без пересборки
+/// экранов.
+///
+/// Скрытая вкладка остаётся размещённой, но прозрачной: прозрачный слой система
+/// не рисует, а при показе его не надо заново раскладывать и записывать — смена
+/// вкладки, даже на ходу под пальцем, это только смена прозрачности. Касания
+/// скрытой вкладке не достаются: выбранная лежит сверху и ловит их целиком,
+/// а скрытая гасит всё, что до неё дошло.
+///
+/// Скрытая вкладка ещё и «заморожена»: она держит прежний экран и не
+/// пересчитывается на каждую отметку подхода. Так же — видимая, пока поверх
+/// открыт полноэкранный раздел (`frozen`): её всё равно не видно.
+@Composable
+private fun KeepAliveTabs(
+    selectedTab: () -> MainTabItem,
+    frozen: Boolean,
+    content: @Composable (MainTabItem) -> Unit
+) {
+    val selected = selectedTab()
+    val visited = remember { mutableStateListOf(selected) }
+    if (selected !in visited) visited.add(selected)
+    // Остальные вкладки собираются заранее, по одной: когда ведёшь пальцем
+    // по панели, они открываются мгновенно, без сборки на лету. Собираем только
+    // в паузу — когда экран ничего не рисует. Пока листают ленту или идёт
+    // анимация, не мешаем; если пауз нет (идёт отдых с таймером), ждём не дольше 5 с.
+    val view = LocalView.current
+    LaunchedEffect(Unit) {
+        var lastDraw = SystemClock.uptimeMillis()
+        val onDraw = ViewTreeObserver.OnDrawListener { lastDraw = SystemClock.uptimeMillis() }
+        view.viewTreeObserver.addOnDrawListener(onDraw)
+        try {
+            for (item in MainTabItem.entries) {
+                if (item in visited) continue
+                delay(900)
+                val waitUntil = SystemClock.uptimeMillis() + 5_000
+                while (SystemClock.uptimeMillis() - lastDraw < 350 && SystemClock.uptimeMillis() < waitUntil) delay(120)
+                if (item !in visited) visited.add(item)
+            }
+        } finally {
+            if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(onDraw)
+        }
+    }
+    val shift = with(LocalDensity.current) { 24.dp.toPx() }
+    Box(Modifier.fillMaxSize()) {
+        for (item in MainTabItem.entries) {
+            if (item !in visited) continue
+            key(item) {
+                val active = item == selected
+                val progress = remember { Animatable(if (active) 1f else 0f) }
+                LaunchedEffect(active) {
+                    progress.animateTo(if (active) 1f else 0f, tween(if (active) 220 else 160, easing = FastOutSlowInEasing))
+                }
+                val side = if (item.ordinal > selected.ordinal) 1f else -1f
+                // Новый экран берём, только пока вкладку видно и её ничто не закрывает.
+                val held = remember { arrayOfNulls<@Composable (MainTabItem) -> Unit>(1) }
+                if ((active && !frozen) || held[0] == null) held[0] = content
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .zIndex(if (active) 1f else 0f)
+                        .graphicsLayer {
+                            alpha = progress.value
+                            translationX = (1f - progress.value) * side * shift
+                        }
+                        .then(if (active) CatchTouches else SwallowTouches)
+                ) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.texasprogram.app.ui.LocalTabActive provides active) {
+                        TabContent(held[0]!!, item)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Выбранная вкладка «ловит» касание в любой своей точке, даже пустой: иначе
+/// оно провалилось бы к скрытой вкладке под ней.
+private val CatchTouches = Modifier.pointerInput(Unit) {
+    awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Final) }
+}
+
+/// Скрытая вкладка гасит касания раньше своих кнопок и списков — и не читается TalkBack.
+private val SwallowTouches = Modifier
+    .pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+        }
+    }
+    .clearAndSetSemantics {}
+
+/// Отдельная функция — чтобы Compose мог пропустить её целиком, когда экран
+/// вкладки тот же самый (заморожен).
+@Composable
+private fun TabContent(content: @Composable (MainTabItem) -> Unit, item: MainTabItem) {
+    content(item)
 }

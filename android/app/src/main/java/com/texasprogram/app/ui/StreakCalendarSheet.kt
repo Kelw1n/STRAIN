@@ -191,9 +191,9 @@ private fun ArrowButton(icon: androidx.compose.ui.graphics.vector.ImageVector, d
     Box(
         Modifier
             .size(40.dp)
+            .pressable(enabled = enabled, onClick = onClick)
             .background(Color.White.copy(alpha = if (enabled) 0.1f else 0.04f), CircleShape)
-            .clip(CircleShape)
-            .pressable(enabled = enabled, onClick = onClick),
+            .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = Color.White.copy(alpha = if (enabled) 1f else 0.25f), modifier = Modifier.size(22.dp))
@@ -310,12 +310,12 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                             Modifier
                                 .weight(1f)
                                 .height(46.dp)
-                                .background(if (on) Theme.accent else Color(0xFF262626), CircleShape)
-                                .clip(CircleShape)
                                 .pressable {
                                     haptics.light()
                                     days = if (on) days - weekday else days + weekday
-                                },
+                                }
+                                .selectionFill(on, Theme.accent, Color(0xFF262626), CircleShape)
+                                .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -371,8 +371,6 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                 Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .background(if (ready) Color.White else Color(0xFF2A2A2A), RoundedCornerShape(20.dp))
-                    .clip(RoundedCornerShape(20.dp))
                     .pressable(enabled = ready) {
                         haptics.success()
                         // Порядок с понедельника: первый день программы — первый в неделе.
@@ -386,7 +384,9 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                             )
                         )
                         onDismiss()
-                    },
+                    }
+                    .background(if (ready) Color.White else Color(0xFF2A2A2A), RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text("СОХРАНИТЬ ЦЕЛЬ", color = if (ready) Color.Black else Color.White.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.Black)
@@ -405,9 +405,9 @@ private fun StepChip(label: String, onClick: () -> Unit) {
     Box(
         Modifier
             .size(32.dp)
+            .pressable(onClick = onClick)
             .background(Color.White.copy(alpha = 0.1f), CircleShape)
-            .clip(CircleShape)
-            .pressable(onClick = onClick),
+            .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)

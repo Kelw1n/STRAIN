@@ -11,7 +11,8 @@ jobs:
   test:
     # Тесты и сборка на Xcode 16: проверяют, что запасной путь без iOS 26 SDK компилируется.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    continue-on-error: true
+    # Упавшие тесты должны краснить проверку: раньше сборка с ошибкой
+    # компиляции выглядела зелёной.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +61,9 @@ jobs:
   unsigned-ipa:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-15
+    # Запись — чтобы выложить IPA в релиз с прямой ссылкой.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
@@ -99,3 +103,19 @@ jobs:
           name: TexasProgram-unsigned
           path: TexasProgram-unsigned.ipa
           if-no-files-found: error
+      # Прямая ссылка на сам IPA — без zip-архива и без входа в GitHub: её можно
+      # открыть на айфоне или вставить в программу установки по ссылке.
+      - name: Publish IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp TexasProgram-unsigned.ipa STRAIN.ipa
+          gh release delete ios-latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create ios-latest STRAIN.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "STRAIN для iPhone — последняя сборка" \
+            --notes "Неподписанный IPA: ставится так же, как прошлые сборки. Сборка из коммита ${GITHUB_SHA::7}."
+          echo "Прямая ссылка: https://github.com/$GITHUB_REPOSITORY/releases/download/ios-latest/STRAIN.ipa" >> "$GITHUB_STEP_SUMMARY"

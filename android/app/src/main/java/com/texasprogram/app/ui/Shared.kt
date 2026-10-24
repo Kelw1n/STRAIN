@@ -151,9 +151,9 @@ fun ExerciseCard(
                 Box(
                     Modifier
                         .size(32.dp)
+                        .pressable(onClick = onOpenHistory)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Theme.accent.copy(alpha = 0.13f))
-                        .pressable(onClick = onOpenHistory),
+                        .background(Theme.accent.copy(alpha = 0.13f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -232,9 +232,9 @@ fun ExerciseCard(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
+                                .pressable(onClick = onKeepWeight)
                                 .clip(CircleShape)
                                 .background(Theme.surfaceSoft)
-                                .pressable(onClick = onKeepWeight)
                                 .padding(horizontal = 10.dp, vertical = 5.dp)
                         )
                     }
@@ -257,9 +257,9 @@ fun WeightStepChip(step: Double, onSelect: (Double) -> Unit) {
     Box {
         Row(
             Modifier
+                .pressable { expanded = true }
                 .clip(CircleShape)
                 .background(Theme.accent.copy(alpha = 0.12f))
-                .pressable { expanded = true }
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)

@@ -439,11 +439,44 @@ final class ProgramProfile {
     /// Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
     /// правки подставляют свои упражнения. Наоборот задержка стёрла бы то,
     /// что пользователь вписал руками.
-    var workoutPlan: WorkoutPlan { applySteps(to: applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan)))) }
+    ///
+    /// Расчёт всех недель дорогой, а план читают десятки раз за одну
+    /// перерисовку: медали, история упражнений, расписание. Поэтому готовый
+    /// план берём из кэша, пока не поменялось ничего из того, от чего он зависит.
+    var workoutPlan: WorkoutPlan {
+        PlanCache.plan(for: planInputs, kind: .full) {
+            applySteps(to: applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan))))
+        }
+    }
+
+    /// Всё, от чего зависит план. Сравниваются сами значения, а не хэш:
+    /// устаревший план из кэша невозможен.
+    fileprivate var planInputs: PlanInputs {
+        PlanInputs(
+            kind: programKindRaw,
+            peaking: isPeaking,
+            input: input,
+            peakingInput: peakingInput,
+            fullBodyLevel: fullBodyLevelRaw,
+            euthanasia: euthanasiaInput,
+            custom: customProgram,
+            edits: planEdits,
+            skipped: skipped,
+            reports: liftReports,
+            autoregulation: autoregulationEnabled,
+            cycle: cycleNumber,
+            steps: weightSteps,
+            defaultStep: defaultWeightStep
+        )
+    }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
     var generatedPlan: WorkoutPlan {
+        PlanCache.plan(for: planInputs, kind: .generated) { calculatedPlan }
+    }
+
+    private var calculatedPlan: WorkoutPlan {
         switch programKind {
         case .texas:
             return isPeaking
@@ -1732,5 +1765,53 @@ final class ProgramProfile {
     /// Считаем только текущий цикл: отметки пикирования лежат в своём пространстве имён.
     var completedDayCount: Int {
         Set(completedDayKeys.filter { isOwnKey($0) }).count
+    }
+}
+
+
+// MARK: - Кэш плана
+
+/// Входные данные плана: одинаковые — значит, и план тот же самый.
+fileprivate struct PlanInputs: Equatable {
+    let kind: String
+    let peaking: Bool
+    let input: ProgramInput
+    let peakingInput: ProgramInput
+    let fullBodyLevel: String
+    let euthanasia: EuthanasiaInput?
+    let custom: CustomProgram?
+    let edits: [PlanEdit]
+    let skipped: [SkippedWorkout]
+    let reports: [LiftReport]
+    let autoregulation: Bool
+    let cycle: Int
+    let steps: [String: Double]
+    let defaultStep: Double
+}
+
+/// Несколько последних посчитанных планов. Ключ — сами входные данные,
+/// поэтому кэш общий для всех профилей и не может отдать чужой или старый план.
+fileprivate enum PlanCache {
+    enum Kind { case full, generated }
+
+    private static let lock = NSLock()
+    private static var entries: [(kind: Kind, inputs: PlanInputs, plan: WorkoutPlan)] = []
+    private static let limit = 6
+
+    static func plan(for inputs: PlanInputs, kind: Kind, build: () -> WorkoutPlan) -> WorkoutPlan {
+        lock.lock()
+        if let hit = entries.first(where: { $0.kind == kind && $0.inputs == inputs }) {
+            lock.unlock()
+            return hit.plan
+        }
+        lock.unlock()
+        // Считаем без замка: внутри расчёт может сам спросить другой план.
+        let plan = build()
+        lock.lock()
+        entries.removeAll { $0.kind == kind && $0.inputs == inputs }
+        entries.insert((kind, inputs, plan), at: 0)
+        if entries.count > limit { entries.removeLast(entries.count - limit) }
+        lock.unlock()
+        return plan
     }
 }

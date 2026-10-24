@@ -75,6 +75,7 @@ import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.service.ScheduledWorkout
 import com.texasprogram.app.service.WorkoutSessionManager
 import com.texasprogram.app.model.SocialPostDraft
+import com.texasprogram.app.model.SocialChatWorkout
 import com.texasprogram.app.model.SocialWorkout
 import com.texasprogram.app.service.SocialService
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -116,21 +117,15 @@ fun WorkoutCompletionSummaryScreen(
     }
     val context = LocalContext.current
     // Снимок сразу из экрана итогов: не надо выходить в «Камеру» и искать фото в галерее.
-    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val uri = cameraUri
-        if (ok && uri != null && selectedImages.size < 5) selectedImages.add(uri)
-    }
-    fun openCamera() {
-        val uri = cameraFileUri(context)
-        cameraUri = uri
-        runCatching { cameraLauncher.launch(uri) }
-    }
+    val camera = rememberCameraLauncher { if (selectedImages.size < 5) selectedImages.add(it) }
+    fun openCamera() = camera.launch()
     fun openGallery() {
         photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
     /// Публиковать ли тренировку в ленту — по умолчанию да, если есть профиль.
     var publishToFeed by remember { mutableStateOf(true) }
+    /// Кому из друзей отправить тренировку карточкой в переписку.
+    var recipients by remember { mutableStateOf(setOf<String>()) }
 
     Box(
         modifier = Modifier
@@ -263,13 +258,13 @@ fun WorkoutCompletionSummaryScreen(
                                             .align(Alignment.TopEnd)
                                             .padding(4.dp)
                                             .size(22.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.7f))
-                                            .clickable {
+                                            .pressable {
                                                 if (index < selectedImages.size) {
                                                     selectedImages.removeAt(index)
                                                 }
-                                            },
+                                            }
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.7f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -405,12 +400,12 @@ fun WorkoutCompletionSummaryScreen(
 
                         Box(
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Theme.accent)
-                                .clickable {
+                                .pressable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     showingDurationPicker = true
                                 }
+                                .clip(CircleShape)
+                                .background(Theme.accent)
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -440,6 +435,11 @@ fun WorkoutCompletionSummaryScreen(
             // ЛЕНТА STRAIN
             PublishSection(publishToFeed) { publishToFeed = it }
 
+            // ДРУЗЬЯМ В ПЕРЕПИСКУ
+            if (SocialService.isSignedIn) {
+                FriendsSection(recipients) { name -> recipients = if (name in recipients) recipients - name else recipients + name }
+            }
+
             // КАРТОЧКА ДЛЯ СТОРИС
             ShareCardSection(
                 title = workoutTitle.ifBlank { workout.fullTitle },
@@ -468,29 +468,26 @@ fun WorkoutCompletionSummaryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .shadow(12.dp, CircleShape, ambientColor = Color.White.copy(alpha = 0.2f))
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .clickable {
+                    .pressable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         val updatedProfile = if (workoutDescription.isNotEmpty()) {
                             profile.setNote(workoutDescription, workout.week, workout.day.number)
                         } else profile
 
-                        // Пост в ленту — до завершения: потом подходы сессии уже сброшены.
-                        if (publishToFeed && SocialService.isSignedIn) {
-                            SocialService.enqueue(
-                                context,
-                                feedDraft(
-                                    title = workoutTitle.ifBlank { workout.fullTitle },
-                                    description = workoutDescription.trim(),
-                                    durationSeconds = durationSeconds,
-                                    effort = effortScore,
-                                    program = profile.programKind.title
-                                ),
-                                selectedImages.toList()
+                        // Пост в ленту и карточки друзьям — до завершения: потом подходы сессии уже сброшены.
+                        if (SocialService.isSignedIn && (publishToFeed || recipients.isNotEmpty())) {
+                            val draft = feedDraft(
+                                title = workoutTitle.ifBlank { workout.fullTitle },
+                                description = workoutDescription.trim(),
+                                durationSeconds = durationSeconds,
+                                effort = effortScore,
+                                program = profile.programKind.title
                             )
+                            if (publishToFeed) SocialService.enqueue(context, draft, selectedImages.toList())
+                            val card = SocialChatWorkout(draft.title, draft.durationSeconds, draft.volumeKg, draft.sets, draft.effort, draft.workout)
+                            recipients.sorted().forEach { SocialService.send(card, it) }
                         }
+                        if (!publishToFeed) SocialService.finishTogether()
                         WorkoutSessionManager.finishWorkout(
                             profile = updatedProfile,
                             customDuration = durationSeconds,
@@ -498,7 +495,10 @@ fun WorkoutCompletionSummaryScreen(
                             onUpdateProfile = onUpdateProfile
                         )
                         WorkoutSessionManager.showingSummary = false
-                    },
+                    }
+                    .shadow(12.dp, CircleShape, ambientColor = Color.White.copy(alpha = 0.2f))
+                    .clip(CircleShape)
+                    .background(Color.White),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -516,6 +516,7 @@ fun WorkoutCompletionSummaryScreen(
         var tempMinutes by remember { mutableIntStateOf(maxOf(1, durationSeconds / 60)) }
 
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { showingDurationPicker = false },
             title = {
                 Text(
@@ -593,9 +594,9 @@ private fun PhotoSourceTile(
     Column(
         modifier
             .then(if (large) Modifier.height(76.dp) else Modifier.size(80.dp))
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .pressable(onClick = onClick),
+            .background(Color.White.copy(alpha = 0.07f)),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -650,6 +651,36 @@ private fun PublishSection(checked: Boolean, onChange: (Boolean) -> Unit) {
     }
 }
 
+/// Друзья, которым тренировка уйдёт карточкой в личные сообщения.
+@Composable
+private fun FriendsSection(selected: Set<String>, onToggle: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = if (selected.isEmpty()) "ОТПРАВИТЬ ДРУГУ" else "ОТПРАВИТЬ ДРУГУ · ${selected.size}",
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF161616))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Отметь друзей — тренировка уйдёт им в переписку карточкой со всеми подходами.",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 12.sp
+            )
+            WorkoutRecipientsPicker(selected, onToggle)
+        }
+    }
+}
+
 /// Пост собирается до finishWorkout: после него менеджер сбрасывает подходы.
 private fun feedDraft(title: String, description: String, durationSeconds: Int, effort: Int?, program: String): SocialPostDraft {
     val exercises = WorkoutSessionManager.exercises.mapNotNull { exercise ->
@@ -666,6 +697,8 @@ private fun feedDraft(title: String, description: String, durationSeconds: Int, 
         volumeKg = WorkoutSessionManager.totalTonnage,
         sets = WorkoutSessionManager.totalCompletedSets,
         effort = effort,
-        workout = SocialWorkout(program, exercises)
+        workout = SocialWorkout(program, exercises),
+        // Тренировались вместе — пост выйдет «вместе с» напарником.
+        together = SocialService.together.active?.id
     )
 }

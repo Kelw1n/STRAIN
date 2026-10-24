@@ -1,5 +1,6 @@
 package com.texasprogram.app.service
 
+import com.texasprogram.app.model.EuthanasiaLevelSerializer
 import com.texasprogram.app.model.ExercisePrescription
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.WorkoutDayPlan
@@ -52,6 +53,7 @@ data class EuthanasiaMovement(
 )
 
 /// Уровень сложности: отличается шагом уплотнения.
+@Serializable(with = EuthanasiaLevelSerializer::class)
 enum class EuthanasiaLevel(val title: String) {
     BEGINNER("Начальный"),
     MEDIUM("Средний"),

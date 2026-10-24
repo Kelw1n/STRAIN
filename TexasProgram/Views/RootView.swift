@@ -6,7 +6,6 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\ProgramProfile.createdAt)]) private var profiles: [ProgramProfile]
     @AppStorage("activeProfileID") private var activeProfileID = ""
-    @AppStorage("app_theme_style") private var themeStyle = AppThemeStyle.rebrnBlack.rawValue
     @State private var isAddingProfile = false
 
     private var activeProfile: ProgramProfile? {
@@ -40,13 +39,14 @@ struct RootView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: activeProfile?.profileID)
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: isAddingProfile)
         .tint(Theme.accent)
-        .preferredColorScheme(ThemeManager.shared.current.preferredColorScheme)
+        .preferredColorScheme(.dark)
     }
 
     /// Восстановление с первого экрана: после переустановки профилей нет,
     /// и до настроек без новой программы не добраться.
     private func restore(_ archive: BackupArchive) {
         BackupService.restore(archive, into: modelContext, existing: profiles)
+        NutritionStore.shared.reload()
         SocialService.shared.adoptBackupToken(archive.socialToken)
         if let first = archive.profiles.first { activeProfileID = first.id }
         isAddingProfile = false
@@ -58,9 +58,18 @@ struct RootView: View {
 
     private func delete(_ profile: ProgramProfile) {
         let fallback = profiles.first { $0.profileID != profile.profileID }
+        // Начатая тренировка удаляемого профиля уходит вместе с ним.
+        WorkoutSessionManager.shared.forgetProfile(profile.profileID)
+        NutritionStore.delete(profile.profileID)
         modelContext.delete(profile)
         try? modelContext.save()
         activeProfileID = fallback?.profileID.uuidString ?? ""
+        if fallback == nil {
+            // Профилей не осталось: раньше напоминания приходили и дальше,
+            // а виджет показывал тренировку удалённого профиля.
+            ReminderScheduler.cancel()
+            WidgetBridge.clear()
+        }
     }
 }
 

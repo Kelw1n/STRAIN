@@ -20,6 +20,8 @@ struct WorkoutCompletionSummaryView: View {
     @State private var showingCamera = false
     /// Публиковать ли тренировку в ленту — по умолчанию да, если есть профиль.
     @State private var publishToFeed = true
+    /// Кому из друзей отправить тренировку карточкой в переписку.
+    @State private var recipients: Set<String> = []
 
     // Редактирование времени тренировки
     @State private var durationSeconds: Int = 0
@@ -48,6 +50,11 @@ struct WorkoutCompletionSummaryView: View {
 
                         // ЛЕНТА STRAIN
                         publishSection
+
+                        // ДРУЗЬЯМ В ПЕРЕПИСКУ
+                        if SocialService.shared.isSignedIn {
+                            friendsSection
+                        }
 
                         // КАРТОЧКА ДЛЯ СТОРИС
                         shareSection
@@ -93,7 +100,7 @@ struct WorkoutCompletionSummaryView: View {
                             .frame(width: 38, height: 38)
                             .background(Color.white.opacity(0.12), in: Circle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityLabel("Назад")
                 }
 
@@ -300,6 +307,32 @@ struct WorkoutCompletionSummaryView: View {
         }
     }
 
+    /// Друзья, которым тренировка уйдёт карточкой в личные сообщения.
+    private var friendsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(recipients.isEmpty ? "ОТПРАВИТЬ ДРУГУ" : "ОТПРАВИТЬ ДРУГУ · \(recipients.count)")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .padding(.leading, 4)
+                .contentTransition(.numericText())
+                .animation(Motion.snappy, value: recipients.count)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Отметь друзей — тренировка уйдёт им в переписку карточкой со всеми подходами.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                WorkoutRecipientsPicker(selected: $recipients)
+            }
+            .padding(16)
+            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+
     /// Пост собирается до `finishWorkout`: после него менеджер сбрасывает подходы.
     private func feedDraft() -> SocialPostDraft {
         let exercises: [SocialWorkout.Exercise] = sessionManager.exercises.compactMap { exercise in
@@ -321,7 +354,9 @@ struct WorkoutCompletionSummaryView: View {
             effort: effortScore,
             workout: SocialWorkout(program: profile.programKind.rawValue, exercises: exercises),
             photoCount: 0,
-            uploadedPhotos: []
+            uploadedPhotos: [],
+            // Тренировались вместе — пост выйдет «вместе с» напарником.
+            together: SocialService.shared.together.active?.id
         )
     }
 
@@ -410,7 +445,7 @@ struct WorkoutCompletionSummaryView: View {
                         .padding(.vertical, 8)
                         .background(Theme.accent, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             .padding(18)
             .background(Color(red: 0.10, green: 0.10, blue: 0.12))
@@ -512,7 +547,7 @@ struct WorkoutCompletionSummaryView: View {
                 .background(Color.white, in: Capsule())
                 .shadow(color: Color.white.opacity(0.20), radius: 12, y: 3)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     // MARK: - Модальное окно выбора продолжительности
@@ -558,7 +593,7 @@ struct WorkoutCompletionSummaryView: View {
                         .frame(height: 50)
                         .background(Color.white, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
             }
@@ -591,10 +626,21 @@ struct WorkoutCompletionSummaryView: View {
             )
         }
 
-        // Пост в ленту — до завершения: потом подходы сессии уже сброшены.
-        if publishToFeed && SocialService.shared.isSignedIn {
-            SocialService.shared.enqueue(feedDraft(), photos: selectedImages)
+        // Пост в ленту и карточки друзьям — до завершения: потом подходы сессии уже сброшены.
+        if SocialService.shared.isSignedIn && (publishToFeed || !recipients.isEmpty) {
+            let draft = feedDraft()
+            if publishToFeed {
+                SocialService.shared.enqueue(draft, photos: selectedImages)
+            }
+            let card = SocialChatWorkout(
+                title: draft.title, durationSeconds: draft.durationSeconds, volumeKg: draft.volumeKg,
+                sets: draft.sets, effort: draft.effort, workout: draft.workout
+            )
+            for username in recipients.sorted() {
+                SocialService.shared.send(card, to: username)
+            }
         }
+        if !publishToFeed { SocialService.shared.finishTogether() }
 
         // Завершаем тренировку в WorkoutSessionManager
         sessionManager.finishWorkout(
