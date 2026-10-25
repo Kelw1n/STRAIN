@@ -481,6 +481,7 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
             )
         }
         Text("@${user.username}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+        LevelChip(user.level, large = true)
         user.live?.let { LiveBadge(it) }
         user.bodyLine?.let { Text(it, color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         if (user.bio.isNotBlank()) {

@@ -164,6 +164,27 @@ private fun XPBar(fraction: Float, height: Dp = 6.dp) {
     }
 }
 
+// MARK: - Уровень у ника
+
+/// Плашка рядом с ником в ленте, у друзей и в рейтинге. Нет уровня — старая
+/// версия приложения его не присылала — ничего не рисуем.
+@Composable
+fun LevelChip(level: Int?, large: Boolean = false) {
+    level ?: return
+    Text(
+        if (large) "Уровень $level · ${Progression.title(level)}" else "ур. $level",
+        color = Theme.accent,
+        fontSize = if (large) 13.sp else 10.sp,
+        fontWeight = FontWeight.Black,
+        maxLines = 1,
+        softWrap = false,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(Theme.accent.copy(alpha = 0.16f))
+            .padding(horizontal = if (large) 10.dp else 5.dp, vertical = if (large) 4.dp else 1.dp)
+    )
+}
+
 // MARK: - Карточка уровня
 
 /// Уровень в «Прогрессе»: звание, шкала до следующего и награда месяца.

@@ -11,6 +11,8 @@ struct SocialAuthor: Codable, Hashable, Sendable {
     let id: String
     let username: String
     var avatar: String?
+    /// Уровень из сводки, которую присылает приложение автора; у старых версий — нет.
+    var level: Int? = nil
 }
 
 struct SocialUserShort: Codable, Hashable, Identifiable, Sendable {
@@ -20,6 +22,7 @@ struct SocialUserShort: Codable, Hashable, Identifiable, Sendable {
     var bio: String
     var isFollowing: Bool
     var isMe: Bool
+    var level: Int?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -27,6 +30,7 @@ struct SocialUserShort: Codable, Hashable, Identifiable, Sendable {
         username = try c.decode(String.self, forKey: .username)
         avatar = try c.decodeIfPresent(String.self, forKey: .avatar)
         bio = try c.decodeIfPresent(String.self, forKey: .bio) ?? ""
+        level = try? c.decodeIfPresent(Int.self, forKey: .level)
         isFollowing = try c.decodeIfPresent(Bool.self, forKey: .isFollowing) ?? false
         isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
     }
@@ -88,11 +92,13 @@ struct SocialUser: Codable, Hashable, Identifiable, Sendable {
     var live: SocialLive?
     /// Когда последний раз заходил — для «был(а) N минут назад».
     var lastSeen: Double?
+    var level: Int?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         username = try c.decode(String.self, forKey: .username)
+        level = try? c.decodeIfPresent(Int.self, forKey: .level)
         live = try? c.decodeIfPresent(SocialLive.self, forKey: .live)
         lastSeen = try? c.decodeIfPresent(Double.self, forKey: .lastSeen)
         bio = try c.decodeIfPresent(String.self, forKey: .bio) ?? ""
@@ -672,13 +678,18 @@ struct SocialWeekStats: Codable, Hashable, Sendable {
     var volumeKg: Double = 0
     var records: Int = 0
     var streakWeeks: Int = 0
+    /// Уровень и опыт за всю историю — по ним сервер показывает уровень у ника.
+    var level: Int?
+    var xp: Int?
 
-    init(week: String, workouts: Int, volumeKg: Double, records: Int, streakWeeks: Int) {
+    init(week: String, workouts: Int, volumeKg: Double, records: Int, streakWeeks: Int, level: Int? = nil, xp: Int? = nil) {
         self.week = week
         self.workouts = workouts
         self.volumeKg = volumeKg
         self.records = records
         self.streakWeeks = streakWeeks
+        self.level = level
+        self.xp = xp
     }
 
     init(from decoder: Decoder) throws {
@@ -688,6 +699,8 @@ struct SocialWeekStats: Codable, Hashable, Sendable {
         volumeKg = try c.decodeIfPresent(Double.self, forKey: .volumeKg) ?? 0
         records = try c.decodeIfPresent(Int.self, forKey: .records) ?? 0
         streakWeeks = try c.decodeIfPresent(Int.self, forKey: .streakWeeks) ?? 0
+        level = try? c.decodeIfPresent(Int.self, forKey: .level)
+        xp = try? c.decodeIfPresent(Int.self, forKey: .xp)
     }
 }
 

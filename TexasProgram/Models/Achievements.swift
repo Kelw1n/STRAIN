@@ -303,12 +303,15 @@ enum WeeklyStatsBuilder {
             }
         }
 
+        let experience = Progression.xp(for: profile)
         return SocialWeekStats(
             week: weekKey(for: now, calendar: calendar),
             workouts: thisWeek.count,
             volumeKg: (volume * 10).rounded() / 10,
             records: records,
-            streakWeeks: currentStreak(log.map(\.date), now: now, calendar: calendar)
+            streakWeeks: currentStreak(log.map(\.date), now: now, calendar: calendar),
+            level: Progression.level(forXP: experience).level,
+            xp: experience
         )
     }
 
@@ -337,7 +340,8 @@ enum WeeklyStatsBuilder {
         if stats.week == key { return stats }
         let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: now).map { weekKey(for: $0, calendar: calendar) }
         let streak = stats.week == previous && stats.workouts > 0 ? stats.streakWeeks : 0
-        return SocialWeekStats(week: key, workouts: 0, volumeKg: 0, records: 0, streakWeeks: streak)
+        // Уровень не обнуляется с неделей — его копят за всю историю.
+        return SocialWeekStats(week: key, workouts: 0, volumeKg: 0, records: 0, streakWeeks: streak, level: stats.level, xp: stats.xp)
     }
 }
 

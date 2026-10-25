@@ -117,10 +117,13 @@ struct PostHeader<MenuContent: View>: View {
                             }
                         }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(post.partner.map { "@\(post.author.username) и @\($0.username)" } ?? "@\(post.author.username)")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(post.partner.map { "@\(post.author.username) и @\($0.username)" } ?? "@\(post.author.username)")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            LevelChip(level: post.author.level)
+                        }
                         Text(SocialFormat.ago(post.date))
                             .font(.system(size: 13))
                             .foregroundStyle(Color.white.opacity(0.5))

@@ -454,10 +454,13 @@ struct LeaderboardRow: View {
                         }
                     }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.user.isMe ? "Ты" : "@\(entry.user.username)")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(entry.user.isMe ? "Ты" : "@\(entry.user.username)")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        LevelChip(level: entry.user.level ?? entry.stats.level)
+                    }
                     Text(secondary)
                         .font(.system(size: 12))
                         .foregroundStyle(Color.white.opacity(0.45))

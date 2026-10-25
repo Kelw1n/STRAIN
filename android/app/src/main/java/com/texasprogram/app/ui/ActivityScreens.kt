@@ -505,7 +505,18 @@ private fun LeaderboardRow(place: Int, entry: SocialLeaderboardEntry, metric: Le
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(if (entry.user.isMe) "Ты" else "@${entry.user.username}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    if (entry.user.isMe) "Ты" else "@${entry.user.username}",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                LevelChip(entry.user.level ?: entry.stats.level)
+            }
             // Остальные цифры недели мелко — чтобы было видно, за счёт чего место.
             Text(
                 LeaderboardMetric.entries.filter { it != metric }.joinToString(" · ") { it.format(entry.stats) },

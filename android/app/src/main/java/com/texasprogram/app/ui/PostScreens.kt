@@ -174,14 +174,18 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
             }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text(
-                    post.partner?.let { "@${post.author.username} и @${it.username}" } ?: "@${post.author.username}",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        post.partner?.let { "@${post.author.username} и @${it.username}" } ?: "@${post.author.username}",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    LevelChip(post.author.level)
+                }
                 Text(SocialFormat.ago(post.instant), color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
             }
         }

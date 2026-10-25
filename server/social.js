@@ -305,6 +305,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             cover: row.cover_id,
             programs: row.programs,
             achievements: row.achievements,
+            level: levelOf(row.stats && row.stats.level),
             workouts: counts.workouts,
             followers: counts.followers,
             following: counts.following,
@@ -328,7 +329,20 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         return live;
     };
 
-    const shortUser = (row) => ({ id: row.id, username: row.username, avatar: row.avatar_id, bio: row.bio });
+    // Уровень присылает само приложение в сводке недели: опыт считается по всей
+    // истории тренировок, которая живёт на телефоне.
+    const levelOf = (value) => {
+        const level = Math.floor(Number(value));
+        return Number.isFinite(level) && level >= 1 && level <= 50 ? level : null;
+    };
+
+    const shortUser = (row) => ({
+        id: row.id,
+        username: row.username,
+        avatar: row.avatar_id,
+        bio: row.bio,
+        level: levelOf(row.stats && row.stats.level)
+    });
 
     async function userByName(username) {
         const rows = await q('SELECT * FROM users WHERE username = $1', [String(username || '').toLowerCase()]);
@@ -339,7 +353,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     // MARK: Пост в ответе
 
     const POST_SELECT = `
-        SELECT p.*, u.username, u.avatar_id,
+        SELECT p.*, u.username, u.avatar_id, u.stats->'level' AS author_level,
             (SELECT count(*) FROM likes l WHERE l.post_id = p.id)::int AS like_count,
             (SELECT count(*) FROM comments c WHERE c.post_id = p.id)::int AS comment_count,
             EXISTS (SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $1) AS liked
@@ -348,7 +362,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     const postView = (row) => ({
         id: row.id,
-        author: { id: row.user_id, username: row.username, avatar: row.avatar_id },
+        author: { id: row.user_id, username: row.username, avatar: row.avatar_id, level: levelOf(row.author_level) },
         createdAt: new Date(row.created_at).getTime(),
         title: row.title,
         description: row.description,

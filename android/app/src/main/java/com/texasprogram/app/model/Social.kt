@@ -20,7 +20,9 @@ import kotlin.math.roundToLong
 data class SocialAuthor(
     val id: String,
     val username: String,
-    val avatar: String? = null
+    val avatar: String? = null,
+    /// Уровень из сводки, которую присылает приложение автора; у старых версий — нет.
+    val level: Int? = null
 )
 
 @Serializable
@@ -30,7 +32,8 @@ data class SocialUserShort(
     val avatar: String? = null,
     val bio: String = "",
     val isFollowing: Boolean = false,
-    val isMe: Boolean = false
+    val isMe: Boolean = false,
+    val level: Int? = null
 )
 
 /// Медаль на показ: какое достижение и на каком уровне.
@@ -70,7 +73,8 @@ data class SocialUser(
     /// Идёт тренировка — что делает прямо сейчас.
     val live: SocialLive? = null,
     /// Когда последний раз заходил — для «был(а) N минут назад».
-    val lastSeen: Double? = null
+    val lastSeen: Double? = null,
+    val level: Int? = null
 ) {
     /// «178 см · 75 кг» — то, что видно под юзернеймом.
     val bodyLine: String?
@@ -461,7 +465,10 @@ data class SocialWeekStats(
     val workouts: Int = 0,
     val volumeKg: Double = 0.0,
     val records: Int = 0,
-    val streakWeeks: Int = 0
+    val streakWeeks: Int = 0,
+    /// Уровень и опыт за всю историю — по ним сервер показывает уровень у ника.
+    val level: Int? = null,
+    val xp: Int? = null
 )
 
 @Serializable
@@ -764,12 +771,15 @@ object WeeklyStatsBuilder {
                 }
             }
         }
+        val experience = Progression.xp(profile)
         return SocialWeekStats(
             week = weekKey(today),
             workouts = thisWeek.size,
             volumeKg = Math.round(volume * 10) / 10.0,
             records = records,
-            streakWeeks = currentStreak(log.map { LocalDate.ofEpochDay(it.epochDay) }, today)
+            streakWeeks = currentStreak(log.map { LocalDate.ofEpochDay(it.epochDay) }, today),
+            level = Progression.level(experience).level,
+            xp = experience
         )
     }
 
@@ -793,7 +803,8 @@ object WeeklyStatsBuilder {
         val key = weekKey(today)
         if (stats.week == key) return stats
         val streak = if (stats.week == weekKey(today.minusWeeks(1)) && stats.workouts > 0) stats.streakWeeks else 0
-        return SocialWeekStats(week = key, streakWeeks = streak)
+        // Уровень не обнуляется с неделей — его копят за всю историю.
+        return SocialWeekStats(week = key, streakWeeks = streak, level = stats.level, xp = stats.xp)
     }
 }
 

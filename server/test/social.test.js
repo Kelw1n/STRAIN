@@ -361,6 +361,17 @@ test('лента, профили, подписки, фото и коммента
         const board = (await call('GET', '/leaderboard', { token: friend.token })).data;
         assert.deepEqual(board.map((r) => r.user.username).sort(), ['semobsessed', 'tim']);
         assert.equal(board.find((r) => r.user.isMe).stats.workouts, 3);
+
+        // Уровень из сводки — рядом с ником в профиле, рейтинге и ленте.
+        await call('PATCH', '/me', { token: me.token, body: { stats: { week: '2026-W42', workouts: 2, level: 7, xp: 2200 } } });
+        assert.equal((await call('GET', '/users/tim', { token: friend.token })).data.level, 7);
+        const ranked = (await call('GET', '/leaderboard', { token: friend.token })).data;
+        assert.equal(ranked.find((r) => r.user.username === 'tim').user.level, 7);
+        assert.equal(ranked.find((r) => r.user.username === 'semobsessed').user.level, null, 'старое приложение уровень не шлёт');
+        const leveled = (await call('POST', '/posts', { token: me.token, body: { clientId: 'lvl', title: 'С уровнем' } })).data;
+        assert.equal(leveled.author.level, 7);
+        await call('PATCH', '/me', { token: me.token, body: { stats: { level: 'много' } } });
+        assert.equal((await call('GET', '/users/tim', { token: friend.token })).data.level, null, 'мусор вместо уровня не показываем');
     });
 
     await t.test('активность: лайки, комментарии, ответы и подписчики', async () => {

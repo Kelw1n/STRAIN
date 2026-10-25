@@ -612,7 +612,18 @@ fun PersonRow(person: SocialUserShort, onOpen: () -> Unit, onChange: (SocialUser
             Avatar(person.avatar, person.username, 44.dp)
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("@${person.username}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "@${person.username}",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    LevelChip(person.level)
+                }
                 if (person.bio.isNotBlank()) {
                     Text(person.bio, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

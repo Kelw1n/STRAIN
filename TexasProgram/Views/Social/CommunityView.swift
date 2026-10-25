@@ -170,9 +170,13 @@ struct PersonRow: View {
                 HStack(spacing: 12) {
                     AvatarView(imageId: person.avatar, username: person.username, size: 44)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("@\(person.username)")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
+                        HStack(spacing: 6) {
+                            Text("@\(person.username)")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            LevelChip(level: person.level)
+                        }
                         if !person.bio.isEmpty {
                             Text(person.bio)
                                 .font(.system(size: 13))

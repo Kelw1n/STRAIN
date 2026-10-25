@@ -113,6 +113,29 @@ private enum ProgressionText {
     }
 }
 
+// MARK: - Уровень у ника
+
+/// Плашка рядом с ником в ленте, у друзей и в рейтинге. Нет уровня — старая
+/// версия приложения его не присылала — ничего не рисуем.
+struct LevelChip: View {
+    let level: Int?
+    var large = false
+
+    var body: some View {
+        if let level {
+            Text(large ? "Уровень \(level) · \(Progression.title(for: level))" : "ур. \(level)")
+                .font(.system(size: large ? 13 : 10, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Theme.accent)
+                .padding(.horizontal, large ? 10 : 5)
+                .padding(.vertical, large ? 4 : 2)
+                .background(Theme.accent.opacity(0.16), in: Capsule())
+                .fixedSize()
+                .accessibilityLabel("Уровень \(level)")
+        }
+    }
+}
+
 // MARK: - Карточка уровня
 
 /// Уровень в «Активности»: звание, шкала до следующего и награда месяца.

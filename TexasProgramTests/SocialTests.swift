@@ -353,6 +353,10 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(stats.volumeKg, 525, accuracy: 0.01)
         XCTAssertEqual(stats.records, 1, "105 после 100 — рекорд этой недели")
         XCTAssertEqual(stats.streakWeeks, 2)
+        // Опыт и уровень едут в сводке — по ним сервер ставит уровень у ника.
+        XCTAssertEqual(stats.xp, Progression.xp(for: profile))
+        XCTAssertEqual(stats.level, Progression.level(for: profile).level)
+        XCTAssertGreaterThan(stats.xp ?? 0, 0)
     }
 
     func testCurrentStreakWaitsForWeekToEnd() {
@@ -364,8 +368,8 @@ final class SocialTests: XCTestCase {
 
     func testLeaderboardIgnoresStaleWeeks() throws {
         let entries = try JSONDecoder().decode([SocialLeaderboardEntry].self, from: Data(#"""
-        [{"user":{"id":"1","username":"old"},"stats":{"week":"2026-W40","workouts":5,"volumeKg":20000,"records":3,"streakWeeks":9}},
-         {"user":{"id":"2","username":"last"},"stats":{"week":"2026-W41","workouts":2,"volumeKg":9000,"records":1,"streakWeeks":4}},
+        [{"user":{"id":"1","username":"old"},"stats":{"week":"2026-W40","workouts":5,"volumeKg":20000,"records":3,"streakWeeks":9,"level":12,"xp":8000}},
+         {"user":{"id":"2","username":"last","level":9},"stats":{"week":"2026-W41","workouts":2,"volumeKg":9000,"records":1,"streakWeeks":4}},
          {"user":{"id":"3","username":"now","isMe":true},"stats":{"week":"2026-W42","workouts":2,"volumeKg":6000,"records":2,"streakWeeks":3}},
          {"user":{"id":"4","username":"empty"},"stats":{}}]
         """#.utf8))
@@ -376,6 +380,10 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(byStreak.map(\.user.username), ["last", "now", "empty", "old"],
                        "серия прошлой недели ещё жива, позапрошлой — нет")
         XCTAssertEqual(LeaderboardMetric.volume.format(byVolume[0].stats), "6 т")
+        // Уровень копится за всю историю — со старой неделей не обнуляется.
+        XCTAssertEqual(byStreak.first { $0.user.username == "old" }?.stats.level, 12)
+        XCTAssertEqual(byStreak.first { $0.user.username == "last" }?.user.level, 9)
+        XCTAssertNil(byStreak.first { $0.user.username == "empty" }?.user.level)
     }
 
     // MARK: Копия

@@ -318,6 +318,10 @@ class SocialTest {
         assertEquals(525.0, stats.volumeKg, 0.01)
         assertEquals(1, stats.records)
         assertEquals(2, stats.streakWeeks)
+        // Опыт и уровень едут в сводке — по ним сервер ставит уровень у ника.
+        assertEquals(com.texasprogram.app.model.Progression.xp(profile), stats.xp)
+        assertEquals(com.texasprogram.app.model.Progression.level(profile).level, stats.level)
+        assertTrue((stats.xp ?: 0) > 0)
     }
 
     @Test
@@ -331,8 +335,8 @@ class SocialTest {
     @Test
     fun leaderboardIgnoresStaleWeeks() {
         val entries = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialLeaderboardEntry>>(
-            """[{"user":{"id":"1","username":"old"},"stats":{"week":"2026-W40","workouts":5,"volumeKg":20000,"records":3,"streakWeeks":9}},
-               {"user":{"id":"2","username":"last"},"stats":{"week":"2026-W41","workouts":2,"volumeKg":9000,"records":1,"streakWeeks":4}},
+            """[{"user":{"id":"1","username":"old"},"stats":{"week":"2026-W40","workouts":5,"volumeKg":20000,"records":3,"streakWeeks":9,"level":12,"xp":8000}},
+               {"user":{"id":"2","username":"last","level":9},"stats":{"week":"2026-W41","workouts":2,"volumeKg":9000,"records":1,"streakWeeks":4}},
                {"user":{"id":"3","username":"now","isMe":true},"stats":{"week":"2026-W42","workouts":2,"volumeKg":6000,"records":2,"streakWeeks":3}},
                {"user":{"id":"4","username":"empty"},"stats":{}}]"""
         )
@@ -343,6 +347,10 @@ class SocialTest {
         val byStreak = metric.ranked(entries, com.texasprogram.app.model.LeaderboardMetric.STREAK, day(2))
         assertEquals(listOf("last", "now", "empty", "old"), byStreak.map { it.user.username })
         assertEquals("6 т", com.texasprogram.app.model.LeaderboardMetric.VOLUME.format(byVolume[0].stats))
+        // Уровень копится за всю историю — со старой неделей не обнуляется.
+        assertEquals(12, byStreak.first { it.user.username == "old" }.stats.level)
+        assertEquals(9, byStreak.first { it.user.username == "last" }.user.level)
+        assertEquals(null, byStreak.first { it.user.username == "empty" }.user.level)
     }
 
     @Test

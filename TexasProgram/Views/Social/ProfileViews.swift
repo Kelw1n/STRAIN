@@ -313,6 +313,7 @@ struct ProfileContent<Action: View>: View {
             Text("@\(user.username)")
                 .font(.system(size: 28, weight: .heavy, design: Theme.fontDesign))
                 .foregroundStyle(.white)
+            LevelChip(level: user.level, large: true)
             if let live = user.live {
                 LiveBadge(live: live)
             }
