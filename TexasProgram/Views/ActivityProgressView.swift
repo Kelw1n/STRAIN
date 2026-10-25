@@ -21,6 +21,9 @@ struct ActivityProgressView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 16) {
+                    // Уровень и награда месяца
+                    LevelCard(profile: profile)
+
                     // Итоги месяца и года историями
                     TrainingRecapEntryCard(profile: profile)
 

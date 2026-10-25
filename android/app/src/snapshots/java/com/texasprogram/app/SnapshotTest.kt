@@ -393,6 +393,46 @@ class SnapshotTest {
         }
     }
 
+    /// Уровень: карточка в «Прогрессе», экран уровня, новый уровень и карточка для сторис.
+    @Test
+    fun levels() {
+        val today = LocalDate.now()
+        val log = (0 until 30).map { index ->
+            com.texasprogram.app.model.CompletionRecord("${index / 3 + 1}-${index % 3 + 1}", today.minusDays(index * 7L / 3 + 1).toEpochDay(), index / 3 + 1, index % 3 + 1)
+        }
+        val sets = log.flatMap { record ->
+            val index = log.indexOf(record)
+            (0 until 5).flatMap { set ->
+                listOf(
+                    "${record.key}|Приседания|$set" to com.texasprogram.app.model.SetEntry(5, 140 - index * 1.25),
+                    "${record.key}|Жим лёжа|$set" to com.texasprogram.app.model.SetEntry(5, 100.0 - index)
+                )
+            }
+        }.toMap()
+        val leveled = profile.copy(completionLog = log, setLog = sets)
+        val xp = com.texasprogram.app.model.Progression.xp(leveled)
+        val level = com.texasprogram.app.model.Progression.level(xp)
+        paparazzi.snapshot("26-level-card") {
+            Screen { Column(Modifier.padding(16.dp)) { com.texasprogram.app.ui.LevelCard(leveled) } }
+        }
+        tall(2600)
+        paparazzi.snapshot("27-level-sheet") {
+            Screen { CompositionLocalProvider(LocalNutritionSheetInline provides true) { com.texasprogram.app.ui.LevelSheet(leveled) {} } }
+        }
+        paparazzi.unsafeUpdateConfig(deviceConfig = DeviceConfig.PIXEL_5)
+        paparazzi.snapshot("28-level-up") {
+            Screen {
+                com.texasprogram.app.ui.LevelUpOverlay(com.texasprogram.app.service.ProgressionEvents.Gain(level.floor - 40, xp)) {}
+            }
+        }
+        paparazzi.snapshot("29-level-share") {
+            Screen {
+                val bitmap = remember { com.texasprogram.app.ui.LevelShareCard.render(level) }
+                androidx.compose.foundation.Image(bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
+            }
+        }
+    }
+
     @Test
     fun summary() {
         tall()

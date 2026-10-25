@@ -255,6 +255,8 @@ final class WorkoutSessionManager {
 
     func finishWorkout(profile: ProgramProfile, customDuration: Int? = nil, effort: String? = nil) {
         guard let workout = activeWorkout else { return }
+        // Опыт до и после — разница уйдёт на экран «+N опыта» и новый уровень.
+        let xpBefore = Progression.xp(for: profile)
 
         for ex in exercises {
             for set in ex.sets where set.isDone {
@@ -289,6 +291,7 @@ final class WorkoutSessionManager {
 
         reset()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+        ProgressionEvents.shared.celebrate(before: xpBefore, after: Progression.xp(for: profile))
     }
 
     func discardWorkout(profile: ProgramProfile) {

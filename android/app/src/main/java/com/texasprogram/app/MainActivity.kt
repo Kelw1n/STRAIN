@@ -899,6 +899,23 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                 }
             }
         }
+
+        // Опыт за тренировку — когда её экран уже уехал вниз.
+        val gain = com.texasprogram.app.service.ProgressionEvents.pending
+        androidx.compose.animation.AnimatedVisibility(
+            visible = gain != null && !WorkoutSessionManager.isPresented,
+            enter = androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.fadeOut()
+        ) {
+            // На выходе pending уже пуст — дорисовываем последнее значение.
+            val last = remember { arrayOfNulls<com.texasprogram.app.service.ProgressionEvents.Gain>(1) }
+            if (gain != null) last[0] = gain
+            last[0]?.let { current ->
+                com.texasprogram.app.ui.LevelUpOverlay(current) {
+                    com.texasprogram.app.service.ProgressionEvents.pending = null
+                }
+            }
+        }
     }
 
     // Напоминания пересобираем при запуске и на каждое изменение настроек:

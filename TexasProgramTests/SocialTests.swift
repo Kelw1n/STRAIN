@@ -495,5 +495,82 @@ final class SocialTests: XCTestCase {
         XCTAssertTrue(SocialError.offline.isRetryable)
         XCTAssertFalse(SocialError(message: "Фото не найдено", status: 400).isRetryable)
     }
+
+    // MARK: Опыт и уровни
+
+    /// Та же история, что в тесте Android: опыт обязан совпасть до единицы.
+    private func progressionFixture() -> (log: [CompletionRecord], sets: [String: SetEntry]) {
+        func date(_ month: Int, _ day: Int) -> Date {
+            WeeklyStatsBuilder.calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 18))!
+        }
+        let log = [
+            CompletionRecord(key: "1-1", date: date(10, 5), week: 1, day: 1),
+            CompletionRecord(key: "1-2", date: date(10, 7), week: 1, day: 2),
+            // Повтор той же тренировки: считается один раз, по последней дате.
+            CompletionRecord(key: "1-3", date: date(10, 8), week: 1, day: 3),
+            CompletionRecord(key: "1-3", date: date(10, 9), week: 1, day: 3),
+            CompletionRecord(key: "2-1", date: date(10, 12), week: 2, day: 1),
+            // Неделя пропущена — серия начинается заново.
+            CompletionRecord(key: "c2-1-1", date: date(10, 26), week: 1, day: 1)
+        ]
+        let sets: [String: SetEntry] = [
+            "1-1|Приседания|0": SetEntry(reps: 5, weight: 100),
+            "1-1|Приседания|1": SetEntry(reps: 5, weight: 100),
+            "1-1|Жим лёжа|0": SetEntry(reps: 5, weight: 80),
+            "1-2|Приседания|0": SetEntry(reps: 5, weight: 102.5),
+            "2-1|Жим лёжа|0": SetEntry(reps: 3, weight: 85),
+            "2-1|Жим лёжа|1": SetEntry(reps: 0, weight: 85),
+            "c2-1-1|Приседания|0": SetEntry(reps: 5, weight: 100),
+            // Подход без завершённой тренировки опыта не даёт и рекорд не двигает.
+            "3-1|Приседания|0": SetEntry(reps: 5, weight: 200)
+        ]
+        return (log, sets)
+    }
+
+    func testExperienceMatchesAndroid() {
+        let fixture = progressionFixture()
+        // Неделя 5 окт.: 115 + 155 (рекорд) + 100 + 150 за цель = 520.
+        // Неделя 12 окт.: 155 (рекорд жима) × 1,1 серии = 170. Неделя 26 окт.: 105.
+        XCTAssertEqual(Progression.xp(log: fixture.log, sets: fixture.sets, weeklyGoal: 3), 795)
+        XCTAssertEqual(Progression.xp(log: fixture.log.filter { $0.key != "c2-1-1" }, sets: fixture.sets, weeklyGoal: 3), 690)
+        // Цель недели не выше трёх: четырёхдневная программа бонус не отнимает.
+        XCTAssertEqual(Progression.xp(log: fixture.log, sets: fixture.sets, weeklyGoal: 4), 795)
+
+        let level = Progression.level(forXP: 795)
+        XCTAssertEqual(level.level, 4)
+        XCTAssertEqual(level.floor, 540)
+        XCTAssertEqual(level.next, 960)
+        XCTAssertEqual(level.title, "Новичок")
+        XCTAssertEqual(level.toNext, 165)
+    }
+
+    func testLevelCurveAndTitles() {
+        XCTAssertEqual(Progression.level(forXP: 0).level, 1)
+        XCTAssertEqual(Progression.level(forXP: 59).level, 1)
+        XCTAssertEqual(Progression.level(forXP: 60).level, 2)
+        XCTAssertEqual(Progression.threshold(for: 50), 144_060)
+        let top = Progression.level(forXP: 10_000_000)
+        XCTAssertEqual(top.level, 50)
+        XCTAssertNil(top.next)
+        XCTAssertEqual(top.fraction, 1)
+        XCTAssertEqual(top.title, "Легенда")
+        XCTAssertEqual(Progression.title(for: 10), "Атлет")
+        XCTAssertEqual(Progression.title(for: 25), "Мастер")
+    }
+
+    func testMonthAwards() {
+        func date(_ month: Int, _ day: Int) -> Date {
+            WeeklyStatsBuilder.calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 18))!
+        }
+        let september = (1...12).map { CompletionRecord(key: "s\($0)", date: date(9, $0), week: 1, day: $0) }
+        let august = (1...8).map { CompletionRecord(key: "a\($0)", date: date(8, $0), week: 1, day: $0) }
+        let october = (1...5).map { CompletionRecord(key: "o\($0)", date: date(10, $0), week: 1, day: $0) }
+        let awards = Progression.monthAwards(log: september + august + october)
+        XCTAssertEqual(awards.map(\.title), ["Сентябрь 2026", "Август 2026"])
+        XCTAssertEqual(awards.map(\.tier), [.silver, .bronze])
+        let now = Progression.currentMonth(log: october, now: date(10, 20))
+        XCTAssertEqual(now.workouts, 5)
+        XCTAssertEqual(now.next, .bronze)
+    }
 }
 

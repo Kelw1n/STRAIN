@@ -175,6 +175,16 @@ struct MainTabView: View {
             }
         }
         .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: SocialService.shared.together.incoming.first?.id)
+        // Опыт за тренировку и новый уровень — когда экран тренировки уже закрылся.
+        .overlay {
+            if let gain = ProgressionEvents.shared.pending, !sessionManager.isPresented {
+                LevelUpOverlay(gain: gain) {
+                    withAnimation(Motion.snappy) { ProgressionEvents.shared.pending = nil }
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(Motion.snappy, value: ProgressionEvents.shared.pending)
         .confirmationDialog(
             sessionManager.replaceTitle,
             isPresented: $sessionManager.showingReplaceConfirm,

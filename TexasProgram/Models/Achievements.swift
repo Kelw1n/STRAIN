@@ -340,3 +340,229 @@ enum WeeklyStatsBuilder {
         return SocialWeekStats(week: key, workouts: 0, volumeKg: 0, records: 0, streakWeeks: streak)
     }
 }
+
+// MARK: - Опыт и уровни
+
+/// Опыт за то, что человек и так делает, и уровни 1–50 со званиями.
+///
+/// Считается заново по всей истории — по завершённым тренировкам и записанным
+/// подходам всех циклов, поэтому старые тренировки тоже приносят опыт, а
+/// уровень после переноса копии на другой телефон тот же. Правила совпадают
+/// с Android до единицы: одна и та же история — один и тот же уровень.
+enum Progression {
+    static let workoutXP = 100
+    static let setXP = 5
+    static let recordXP = 50
+    static let weekGoalXP = 150
+    /// Серия недель с тренировкой: каждая следующая неделя +10% к опыту недели, до +50%.
+    static let maxStreakSteps = 5
+    static let maxLevel = 50
+
+    struct Level: Equatable, Sendable {
+        let level: Int
+        let xp: Int
+        /// Опыт, с которого начинается этот уровень.
+        let floor: Int
+        /// С которого начнётся следующий; на пятидесятом — нет.
+        let next: Int?
+
+        var title: String { Progression.title(for: level) }
+
+        /// Доля пути до следующего уровня, 0…1.
+        var fraction: Double {
+            guard let next, next > floor else { return 1 }
+            return min(1, max(0, Double(xp - floor) / Double(next - floor)))
+        }
+
+        var toNext: Int? { next.map { max(0, $0 - xp) } }
+    }
+
+    /// Опыт, с которого начинается уровень: 60 × (уровень − 1)².
+    /// Пятый — после пары недель, двадцатый — месяцев через пять, пятидесятый — через годы.
+    static func threshold(for level: Int) -> Int {
+        let step = max(0, min(level, maxLevel) - 1)
+        return 60 * step * step
+    }
+
+    static func level(forXP xp: Int) -> Level {
+        var level = 1
+        while level < maxLevel && xp >= threshold(for: level + 1) { level += 1 }
+        return Level(level: level, xp: xp, floor: threshold(for: level), next: level < maxLevel ? threshold(for: level + 1) : nil)
+    }
+
+    static func title(for level: Int) -> String {
+        switch level {
+        case ..<5: return "Новичок"
+        case ..<10: return "Любитель"
+        case ..<15: return "Атлет"
+        case ..<20: return "Силач"
+        case ..<25: return "Ветеран зала"
+        case ..<30: return "Мастер"
+        case ..<35: return "Железный"
+        case ..<40: return "Титан"
+        case ..<45: return "Чемпион"
+        case ..<50: return "Икона зала"
+        default: return "Легенда"
+        }
+    }
+
+    /// Цель недели для бонуса: тренировок в неделе программы, но не больше трёх —
+    /// иначе смена программы на четырёхдневную отнимала бы опыт за прошлые недели.
+    static func weeklyGoal(for profile: ProgramProfile) -> Int { min(3, max(1, profile.trainingDayCount)) }
+
+    static func level(for profile: ProgramProfile) -> Level { level(forXP: xp(for: profile)) }
+
+    static func xp(for profile: ProgramProfile, excluding key: String? = nil) -> Int {
+        let log = key.map { excluded in profile.completionLog.filter { $0.key != excluded } } ?? profile.completionLog
+        return xp(log: log, sets: profile.setLog, weeklyGoal: weeklyGoal(for: profile))
+    }
+
+    /// Опыт по истории. Порядок тренировок — по дню, при равенстве — по ключу,
+    /// чтобы рекорды считались одинаково на любом телефоне.
+    static func xp(log: [CompletionRecord], sets: [String: SetEntry], weeklyGoal: Int, calendar: Calendar = WeeklyStatsBuilder.calendar) -> Int {
+        let workouts = orderedWorkouts(log, calendar: calendar)
+        guard !workouts.isEmpty else { return 0 }
+
+        // Подходы по дню тренировки: ключ подхода — «день|упражнение|номер».
+        var byDay: [String: [(exercise: String, entry: SetEntry)]] = [:]
+        for (key, entry) in sets where entry.reps > 0 {
+            let parts = key.split(separator: "|", omittingEmptySubsequences: false)
+            guard parts.count >= 3 else { continue }
+            byDay[String(parts[0]), default: []].append((String(parts[1]), entry))
+        }
+
+        var top: [String: Double] = [:]
+        var weekXP: [Date: Int] = [:]
+        var weekCount: [Date: Int] = [:]
+        for workout in workouts {
+            let daySets = byDay[workout.key] ?? []
+            var best: [String: Double] = [:]
+            for item in daySets where item.entry.weight > 0 {
+                best[item.exercise] = max(best[item.exercise] ?? 0, item.entry.weight)
+            }
+            var records = 0
+            for exercise in best.keys.sorted() {
+                guard let weight = best[exercise] else { continue }
+                if let current = top[exercise] {
+                    if weight > current + 1e-9 {
+                        records += 1
+                        top[exercise] = weight
+                    }
+                } else {
+                    top[exercise] = weight
+                }
+            }
+            let gained = workoutXP + setXP * daySets.count + recordXP * records
+            weekXP[workout.week, default: 0] += gained
+            weekCount[workout.week, default: 0] += 1
+        }
+
+        let goal = min(3, max(1, weeklyGoal))
+        var total = 0
+        var run = 0
+        var previous: Date?
+        for week in weekXP.keys.sorted() {
+            if let previous, let expected = calendar.date(byAdding: .weekOfYear, value: 1, to: previous),
+               calendar.isDate(expected, inSameDayAs: week) {
+                run += 1
+            } else {
+                run = 1
+            }
+            previous = week
+            var points = weekXP[week] ?? 0
+            if (weekCount[week] ?? 0) >= goal { points += weekGoalXP }
+            // Целочисленно: одинаковое округление на iPhone и Android.
+            total += points * (10 + min(run - 1, maxStreakSteps)) / 10
+        }
+        return total
+    }
+
+    private struct Workout {
+        let key: String
+        let day: Date
+        let week: Date
+    }
+
+    private static func orderedWorkouts(_ log: [CompletionRecord], calendar: Calendar) -> [Workout] {
+        // Повтор ключа — та же тренировка: берём последнюю дату.
+        var latest: [String: Date] = [:]
+        for record in log { latest[record.key] = max(latest[record.key] ?? record.date, record.date) }
+        return latest.compactMap { key, date in
+            let day = calendar.startOfDay(for: date)
+            guard let week = calendar.dateInterval(of: .weekOfYear, for: day)?.start else { return nil }
+            return Workout(key: key, day: day, week: week)
+        }
+        .sorted { $0.day == $1.day ? $0.key < $1.key : $0.day < $1.day }
+    }
+
+    // MARK: Награды месяца
+
+    enum MonthTier: Int, Comparable, Sendable {
+        case bronze = 1, silver, gold
+
+        static func < (lhs: MonthTier, rhs: MonthTier) -> Bool { lhs.rawValue < rhs.rawValue }
+
+        var title: String {
+            switch self {
+            case .bronze: return "Бронза"
+            case .silver: return "Серебро"
+            case .gold: return "Золото"
+            }
+        }
+
+        /// Сколько тренировок за месяц нужно.
+        var workouts: Int {
+            switch self {
+            case .bronze: return 8
+            case .silver: return 12
+            case .gold: return 16
+            }
+        }
+    }
+
+    /// Награда за месяц: получить её можно только в этом месяце, потом она остаётся.
+    struct MonthAward: Identifiable, Equatable, Sendable {
+        let year: Int
+        let month: Int
+        let workouts: Int
+        let tier: MonthTier
+
+        var id: String { "\(year)-\(month)" }
+        var title: String { "\(Progression.monthNames[month]) \(year)" }
+    }
+
+    static let monthNames = ["", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+                             "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+
+    static func tier(forWorkouts count: Int) -> MonthTier? {
+        if count >= MonthTier.gold.workouts { return .gold }
+        if count >= MonthTier.silver.workouts { return .silver }
+        if count >= MonthTier.bronze.workouts { return .bronze }
+        return nil
+    }
+
+    /// Награды по месяцам — новые первыми.
+    static func monthAwards(log: [CompletionRecord], calendar: Calendar = WeeklyStatsBuilder.calendar) -> [MonthAward] {
+        var counts: [String: (year: Int, month: Int, count: Int)] = [:]
+        for workout in orderedWorkouts(log, calendar: calendar) {
+            let parts = calendar.dateComponents([.year, .month], from: workout.day)
+            guard let year = parts.year, let month = parts.month else { continue }
+            let id = "\(year)-\(month)"
+            counts[id] = (year, month, (counts[id]?.count ?? 0) + 1)
+        }
+        return counts.values
+            .compactMap { item in tier(forWorkouts: item.count).map { MonthAward(year: item.year, month: item.month, workouts: item.count, tier: $0) } }
+            .sorted { ($0.year, $0.month) > ($1.year, $1.month) }
+    }
+
+    /// Этот месяц: сколько уже есть и до какой награды осталось.
+    static func currentMonth(log: [CompletionRecord], now: Date = Date(), calendar: Calendar = WeeklyStatsBuilder.calendar) -> (workouts: Int, next: MonthTier?) {
+        let parts = calendar.dateComponents([.year, .month], from: now)
+        let count = orderedWorkouts(log, calendar: calendar).filter {
+            let day = calendar.dateComponents([.year, .month], from: $0.day)
+            return day.year == parts.year && day.month == parts.month
+        }.count
+        let next = [MonthTier.bronze, .silver, .gold].first { count < $0.workouts }
+        return (count, next)
+    }
+}

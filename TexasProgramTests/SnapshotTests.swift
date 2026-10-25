@@ -388,6 +388,45 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    // MARK: Уровни
+
+    /// Три тренировки в неделю за десять недель, жим и присед растут.
+    private func levelProfile() -> ProgramProfile {
+        let profile = ProgramProfile(input: .demo)
+        let calendar = WorkoutScheduler.trainingCalendar()
+        var log: [CompletionRecord] = []
+        var sets: [String: SetEntry] = [:]
+        for index in 0..<30 {
+            let date = calendar.date(byAdding: .day, value: -(index * 7 / 3) - 1, to: Date()) ?? Date()
+            let key = "\(index / 3 + 1)-\(index % 3 + 1)"
+            log.append(CompletionRecord(key: key, date: date, week: index / 3 + 1, day: index % 3 + 1))
+            for set in 0..<5 {
+                sets["\(key)|Приседания|\(set)"] = SetEntry(reps: 5, weight: 140 - Double(index) * 1.25)
+                sets["\(key)|Жим лёжа|\(set)"] = SetEntry(reps: 5, weight: 100 - Double(index))
+            }
+        }
+        profile.completionLog = log
+        profile.setLog = sets
+        return profile
+    }
+
+    @MainActor func testLevels() throws {
+        let profile = levelProfile()
+        try snap("24-level-card") {
+            VStack { LevelCard(profile: profile); Spacer() }
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+        }
+        try snap("25-level-sheet", height: 2200) { LevelSheet(profile: profile) }
+        let xp = Progression.xp(for: profile)
+        let gain = ProgressionEvents.Gain(before: Progression.threshold(for: Progression.level(forXP: xp).level) - 40, after: xp)
+        try snap("26-level-up", wait: 3) { LevelUpOverlay(gain: gain) {} }
+        try snap("27-level-share") {
+            ZStack { Color.black.ignoresSafeArea(); LevelShareCard(level: Progression.level(forXP: xp)) }
+        }
+    }
+
     // MARK: Съёмка
 
     /// Экран рисуется в настоящем окне — так работают прокрутка, навигация и

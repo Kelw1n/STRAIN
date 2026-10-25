@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import com.texasprogram.app.model.ExercisePrescription
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.Progression
 import com.texasprogram.app.model.SetEntry
 import com.texasprogram.app.model.SocialLive
 import com.texasprogram.app.model.formatWeight
@@ -331,6 +332,7 @@ object WorkoutSessionManager {
         onUpdateProfile: (ProgramProfile) -> Unit
     ) {
         val workout = activeWorkout ?: return
+        val xpBefore = Progression.xp(profile)
         var next = profile
         for (ex in exercises) {
             for (set in ex.sets) {
@@ -351,6 +353,7 @@ object WorkoutSessionManager {
         }
         onUpdateProfile(next)
         reset()
+        ProgressionEvents.celebrate(xpBefore, Progression.xp(next))
     }
 
     /// Отмена возвращает день к отметкам на момент старта. Возвращает профиль

@@ -75,6 +75,7 @@ fun ProgressScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item(key = "title") { ScreenTitle("Прогресс") }
+        item(key = "level") { LevelCard(profile) }
 
         item(key = "hero") {
             HighlightCard(Modifier.appearIn(0)) {
