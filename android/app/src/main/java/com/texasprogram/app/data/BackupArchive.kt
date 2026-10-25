@@ -74,7 +74,9 @@ data class ProfileSnapshot(
     val stallDismissed: Map<String, Double> = emptyMap(),
     /// Дневник и метод питания — из отдельного файла профиля. В копиях,
     /// снятых до вкладки «Питание», его нет, и тогда прежний дневник не трогаем.
-    val nutrition: NutritionData? = null
+    val nutrition: NutritionData? = null,
+    /// Опыт за места в челленджах. В старых копиях его нет.
+    val challengeAwards: List<com.texasprogram.app.model.ChallengeAward> = emptyList()
 )
 
 /// Отчёт авторегуляции в копии. Android хранит номер дня `epochDay`, iOS —
@@ -217,7 +219,8 @@ object BackupService {
         weightSteps = profile.weightSteps,
         defaultWeightStep = profile.defaultWeightStep,
         stallDismissed = profile.stallDismissed,
-        nutrition = nutrition
+        nutrition = nutrition,
+        challengeAwards = profile.challengeAwards
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(
@@ -273,6 +276,7 @@ object BackupService {
         weightSteps = snapshot.weightSteps,
         defaultWeightStep = snapshot.defaultWeightStep,
         stallDismissed = snapshot.stallDismissed,
+        challengeAwards = snapshot.challengeAwards,
         scheduleWeekdays = snapshot.scheduleWeekdays,
         scheduleMode = if (snapshot.scheduleMode == "QUEUE") ScheduleMode.QUEUE else ScheduleMode.WEEKDAY,
         cycleStartedEpochDay = snapshot.cycleStartedEpochDay,

@@ -433,6 +433,44 @@ class SnapshotTest {
         }
     }
 
+    /// Челленджи: приглашение, идущий и законченный, таблица целиком и карточка итога.
+    @Test
+    fun challenges() {
+        val now = System.currentTimeMillis()
+        val day = 86_400_000L
+        fun member(id: String, name: String, place: Int, score: Int, detail: String, me: Boolean = false, level: Int? = null) =
+            """{"user":{"id":"$id","username":"$name","isMe":$me${level?.let { ",\"level\":$it" } ?: ""}},"status":"joined","score":$score,"detail":"$detail","place":$place}"""
+        val list = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialChallenge>>(
+            """[
+            {"id":"inv","kind":"volume","weeks":2,"startsAt":${now - day},"endsAt":${now + 13 * day},"status":"active","myStatus":"invited",
+             "owner":{"id":"u2","username":"bro.lifts"},"members":[${member("u2", "bro.lifts", 1, 4200, "4200 кг")}]},
+            {"id":"run","kind":"workouts","weeks":2,"startsAt":${now - 5 * day},"endsAt":${now + 9 * day},"status":"active","myStatus":"joined",
+             "members":[${member("u2", "bro.lifts", 1, 4, "4 тренировки", level = 12)},${member("u1", "kelw1n", 2, 3, "3 тренировки", true, 9)},
+                        ${member("u3", "heavy.anna", 3, 1, "1 тренировка", level = 21)},{"user":{"id":"u4","username":"slowpoke"},"status":"invited"}]},
+            {"id":"fin","kind":"strength","weeks":4,"startsAt":${now - 33 * day},"endsAt":${now - 5 * day},"status":"finished","myStatus":"joined",
+             "members":[${member("u1", "kelw1n", 1, 6, "+5,2 кг · 6,3% веса", true, 9)},${member("u3", "heavy.anna", 2, 4, "+3,1 кг · 4,8% веса")}]}
+            ]"""
+        )
+        com.texasprogram.app.service.ChallengeStore.setForPreview(list)
+        tall(2400)
+        paparazzi.snapshot("30-challenges") {
+            Screen { Column(Modifier.padding(16.dp)) { com.texasprogram.app.ui.ChallengesSection() } }
+        }
+        paparazzi.snapshot("31-challenge-detail") {
+            Screen { CompositionLocalProvider(LocalNutritionSheetInline provides true) { com.texasprogram.app.ui.ChallengeDetailSheet("fin") {} } }
+        }
+        paparazzi.snapshot("32-challenge-new") {
+            Screen { CompositionLocalProvider(LocalNutritionSheetInline provides true) { com.texasprogram.app.ui.NewChallengeSheet {} } }
+        }
+        paparazzi.unsafeUpdateConfig(deviceConfig = DeviceConfig.PIXEL_5)
+        paparazzi.snapshot("33-challenge-share") {
+            Screen {
+                val bitmap = remember { com.texasprogram.app.ui.ChallengeShareCard.render(list[2]) }
+                androidx.compose.foundation.Image(bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
+            }
+        }
+    }
+
     @Test
     fun summary() {
         tall()

@@ -403,6 +403,7 @@ fun LeaderboardSection(onOpen: (String) -> Unit) {
     var metric by rememberSaveable { mutableStateOf(LeaderboardMetric.VOLUME) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showingWinners by remember { mutableStateOf(false) }
 
     suspend fun reload() {
         loading = true
@@ -436,7 +437,16 @@ fun LeaderboardSection(onOpen: (String) -> Unit) {
                 }
             }
         }
-        SectionCaption(weekTitle())
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionCaption(weekTitle(), Modifier.weight(1f))
+            Text(
+                "👑 Победители",
+                color = ChallengePlace.color(1),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.pressable { showingWinners = true }.padding(vertical = 4.dp)
+            )
+        }
         val currentError = error
         when {
             currentError != null && entries.isEmpty() -> SocialErrorCard(currentError) { scope.launch { reload() } }
@@ -455,11 +465,12 @@ fun LeaderboardSection(onOpen: (String) -> Unit) {
             }
         }
         Text(
-            "Считаются все тренировки в приложении, а не только опубликованные. Неделя — с понедельника.",
+            "Считаются все тренировки в приложении, а не только опубликованные. Неделя — с понедельника. Корона — тому, у кого за прошлую неделю больше всех тренировок.",
             color = Color.White.copy(alpha = 0.35f),
             fontSize = 12.sp
         )
     }
+    if (showingWinners) WeekWinnersSheet { showingWinners = false }
 }
 
 private fun weekTitle(today: LocalDate = LocalDate.now()): String {
@@ -515,11 +526,14 @@ private fun LeaderboardRow(place: Int, entry: SocialLeaderboardEntry, metric: Le
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
+                // Корона — победителю прошлой недели.
+                if (entry.crown) Text("👑", fontSize = 12.sp)
                 LevelChip(entry.user.level ?: entry.stats.level)
             }
             // Остальные цифры недели мелко — чтобы было видно, за счёт чего место.
             Text(
-                LeaderboardMetric.entries.filter { it != metric }.joinToString(" · ") { it.format(entry.stats) },
+                ((if (entry.wins > 0) listOf("👑 ${entry.wins}") else emptyList()) +
+                    LeaderboardMetric.entries.filter { it != metric }.map { it.format(entry.stats) }).joinToString(" · "),
                 color = Color.White.copy(alpha = 0.45f),
                 fontSize = 12.sp,
                 maxLines = 1,

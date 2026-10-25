@@ -93,6 +93,8 @@ data class ProgramProfile(
     val workoutNotes: Map<String, String> = emptyMap(),
     /// Замеры веса тела, по одному на дату.
     val bodyWeightLog: List<BodyWeightEntry> = emptyList(),
+    /// Опыт за места в законченных челленджах: один раз за каждый челлендж.
+    val challengeAwards: List<ChallengeAward> = emptyList(),
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
     val accessoryProgressionEnabled: Boolean = true,
     /// Шаг прибавки по упражнениям: ключ — нормализованное название.

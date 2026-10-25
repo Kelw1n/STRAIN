@@ -492,13 +492,18 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                 item {
                     val unread = SocialService.unreadMessages
                     SegmentedControl(
-                        options = listOf("Люди", "Рейтинг", if (unread > 0) "Чаты · $unread" else "Чаты"),
+                        options = listOf(
+                            "Люди",
+                            if (SocialService.challengeInvites > 0) "Рейтинг · ${SocialService.challengeInvites}" else "Рейтинг",
+                            if (unread > 0) "Чаты · $unread" else "Чаты"
+                        ),
                         selectedIndex = section
                     ) { section = it }
                 }
             }
             if (section == 1 && SocialService.isSignedIn) {
-                item { LeaderboardSection { navigator.push(SocialRoute.User(it)) } }
+                item(key = "challenges") { ChallengesSection() }
+                item(key = "leaderboard") { LeaderboardSection { navigator.push(SocialRoute.User(it)) } }
                 return@LazyColumn
             }
             if (section == 2 && SocialService.isSignedIn) {

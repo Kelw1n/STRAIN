@@ -71,7 +71,7 @@ struct MainTabView: View {
     /// Точки: новые сообщения — на «Друзьях», новая активность — на «Главном».
     private var tabBadges: Set<MainTabItem> {
         var badges: Set<MainTabItem> = []
-        if SocialService.shared.unreadMessages > 0 { badges.insert(.community) }
+        if SocialService.shared.unreadMessages > 0 || SocialService.shared.challengeInvites > 0 { badges.insert(.community) }
         if SocialService.shared.unseenActivity > 0 { badges.insert(.today) }
         return badges
     }
@@ -223,6 +223,8 @@ struct MainTabView: View {
             Task {
                 await SocialService.shared.refreshMe()
                 await SocialService.shared.refreshUnread()
+                // Счёт в челленджах — по тренировкам, сделанным с прошлого запуска.
+                await ChallengeStore.shared.sync(profile)
             }
         }
         // Остальные вкладки собираются заранее, по одной и в паузах: когда
@@ -247,6 +249,7 @@ struct MainTabView: View {
         .onChange(of: sessionManager.liveStatus) { _, live in SocialService.shared.reportLive(live) }
         .onChange(of: profile.completionLog) { _, _ in
             SocialService.shared.scheduleSync(from: profile)
+            Task { await ChallengeStore.shared.sync(profile) }
             // Сегодняшняя тренировка сделана — вечернее напоминание уже ни к чему.
             ReminderScheduler.reschedule(for: profile)
         }

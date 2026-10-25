@@ -24,7 +24,7 @@ struct CommunityView: View {
                     if social.isSignedIn {
                         Picker("Раздел", selection: $section) {
                             Text("Люди").tag(Part.people)
-                            Text("Рейтинг").tag(Part.rating)
+                            Text(social.challengeInvites > 0 ? "Рейтинг · \(social.challengeInvites)" : "Рейтинг").tag(Part.rating)
                             Text(social.unreadMessages > 0 ? "Чаты · \(social.unreadMessages)" : "Чаты").tag(Part.messages)
                         }
                         .pickerStyle(.segmented)
@@ -32,6 +32,8 @@ struct CommunityView: View {
                     if section == .messages && social.isSignedIn {
                         ChatListView { path.append(FeedRoute.chat($0)) }
                     } else if section == .rating && social.isSignedIn {
+                        ChallengesSection()
+                            .id(ratingVersion)
                         LeaderboardView { path.append(FeedRoute.user($0)) }
                             .id(ratingVersion)
                     } else {

@@ -75,7 +75,7 @@ object Progression {
 
     fun xp(profile: ProgramProfile, excluding: String? = null): Int {
         val log = if (excluding == null) profile.completionLog else profile.completionLog.filter { it.key != excluding }
-        return xp(log, profile.setLog, weeklyGoal(profile))
+        return xp(log, profile.setLog, weeklyGoal(profile)) + profile.challengeAwards.sumOf { it.xp }
     }
 
     private data class Workout(val key: String, val day: LocalDate, val week: LocalDate)

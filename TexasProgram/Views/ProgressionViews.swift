@@ -262,6 +262,7 @@ struct LevelSheet: View {
             rule("Личный рекорд", "+\(Progression.recordXP)")
             rule("Цель недели: \(Progression.weeklyGoal(for: profile)) \(RuPlural.word(Progression.weeklyGoal(for: profile), "тренировка", "тренировки", "тренировок"))", "+\(Progression.weekGoalXP)")
             rule("Серия недель подряд", "до +50%")
+            rule("Место в челлендже", "до +300")
             Text("Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.white.opacity(0.4))

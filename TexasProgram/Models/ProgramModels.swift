@@ -320,6 +320,8 @@ final class ProgramProfile {
     var workoutNotes: [String: String] = [:]
     /// Замеры веса тела, по одному на дату.
     var bodyWeightLog: [BodyWeightEntry] = []
+    /// Опыт за места в законченных челленджах: один раз за каждый челлендж.
+    var challengeAwards: [ChallengeAward] = []
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
     var accessoryProgressionEnabled: Bool = true
     /// Шаг прибавки по упражнениям: ключ — нормализованное название.

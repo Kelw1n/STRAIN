@@ -74,7 +74,9 @@ data class SocialUser(
     val live: SocialLive? = null,
     /// Когда последний раз заходил — для «был(а) N минут назад».
     val lastSeen: Double? = null,
-    val level: Int? = null
+    val level: Int? = null,
+    /// Сколько челленджей выиграл.
+    val challengeWins: Int = 0
 ) {
     /// «178 см · 75 кг» — то, что видно под юзернеймом.
     val bodyLine: String?
@@ -472,7 +474,13 @@ data class SocialWeekStats(
 )
 
 @Serializable
-data class SocialLeaderboardEntry(val user: SocialUserShort, val stats: SocialWeekStats = SocialWeekStats())
+data class SocialLeaderboardEntry(
+    val user: SocialUserShort,
+    val stats: SocialWeekStats = SocialWeekStats(),
+    /// Сколько прошлых недель выигрывал среди своих и корона за прошлую.
+    val wins: Int = 0,
+    val crown: Boolean = false
+)
 
 // MARK: - Активность
 

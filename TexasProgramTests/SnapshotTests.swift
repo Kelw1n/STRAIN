@@ -427,6 +427,36 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    // MARK: Челленджи
+
+    @MainActor func testChallenges() throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let day = 86_400_000.0
+        func member(_ id: String, _ name: String, _ place: Int, _ score: Int, _ detail: String, me: Bool = false, level: Int? = nil) -> String {
+            let levelPart = level.map { ",\"level\":\($0)" } ?? ""
+            return #"{"user":{"id":"\#(id)","username":"\#(name)","isMe":\#(me)\#(levelPart)},"status":"joined","score":\#(score),"detail":"\#(detail)","place":\#(place)}"#
+        }
+        let json = """
+        [{"id":"inv","kind":"volume","weeks":2,"startsAt":\(now - day),"endsAt":\(now + 13 * day),"status":"active","myStatus":"invited",
+          "owner":{"id":"u2","username":"bro.lifts"},"members":[\(member("u2", "bro.lifts", 1, 4200, "4200 кг"))]},
+         {"id":"run","kind":"workouts","weeks":2,"startsAt":\(now - 5 * day),"endsAt":\(now + 9 * day),"status":"active","myStatus":"joined",
+          "members":[\(member("u2", "bro.lifts", 1, 4, "4 тренировки", level: 12)),\(member("u1", "kelw1n", 2, 3, "3 тренировки", me: true, level: 9)),
+                     \(member("u3", "heavy.anna", 3, 1, "1 тренировка", level: 21)),{"user":{"id":"u4","username":"slowpoke"},"status":"invited"}]},
+         {"id":"fin","kind":"strength","weeks":4,"startsAt":\(now - 33 * day),"endsAt":\(now - 5 * day),"status":"finished","myStatus":"joined",
+          "members":[\(member("u1", "kelw1n", 1, 6, "+5,2 кг · 6,3% веса", me: true, level: 9)),\(member("u3", "heavy.anna", 2, 4, "+3,1 кг · 4,8% веса"))]}]
+        """
+        let list = try JSONDecoder().decode([SocialChallenge].self, from: Data(json.utf8))
+        ChallengeStore.shared.setForPreview(list)
+        try snap("28-challenges", height: 1800) {
+            ScrollView { ChallengesSection().padding(16) }.background(Color.black)
+        }
+        try snap("29-challenge-detail", height: 1800) { ChallengeDetailSheet(id: "fin") }
+        try snap("30-challenge-new", height: 1800) { NewChallengeSheet() }
+        try snap("31-challenge-share") {
+            ZStack { Color.black.ignoresSafeArea(); ChallengeShareCard(challenge: list[2]) }
+        }
+    }
+
     // MARK: Съёмка
 
     /// Экран рисуется в настоящем окне — так работают прокрутка, навигация и

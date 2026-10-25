@@ -314,6 +314,11 @@ struct ProfileContent<Action: View>: View {
                 .font(.system(size: 28, weight: .heavy, design: Theme.fontDesign))
                 .foregroundStyle(.white)
             LevelChip(level: user.level, large: true)
+            if user.challengeWins > 0 {
+                Label("\(user.challengeWins) \(RuPlural.word(user.challengeWins, "победа", "победы", "побед")) в челленджах", systemImage: "trophy.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(ChallengePlace.color(1))
+            }
             if let live = user.live {
                 LiveBadge(live: live)
             }

@@ -13,6 +13,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.exifinterface.media.ExifInterface
 import com.texasprogram.app.model.SocialVoice
+import com.texasprogram.app.model.ChallengeKind
+import com.texasprogram.app.model.ChallengeScoreUpdate
+import com.texasprogram.app.model.SocialChallenge
+import com.texasprogram.app.model.SocialWeekWinner
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.ChatPending
@@ -50,6 +54,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -64,6 +70,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.time.LocalDate
 import java.util.UUID
 
 /// Ошибка ленты с понятным текстом: показываем её человеку как есть.
@@ -111,6 +118,8 @@ object SocialService {
     /// Новые лайки, комментарии и подписчики — точка на колокольчике и вкладке «Главное».
     var unseenActivity by mutableIntStateOf(0)
         private set
+    /// Приглашения в челленджи, на которые ещё не ответил.
+    var challengeInvites by mutableIntStateOf(0)
     /// Подписки, которые тренируются прямо сейчас.
     var liveFriends by mutableStateOf<List<SocialLiveFriend>>(emptyList())
         private set
@@ -269,6 +278,7 @@ object SocialService {
         me = null
         unreadMessages = 0
         unseenActivity = 0
+        challengeInvites = 0
         liveFriends = emptyList()
         together = SocialTogetherState()
         lastLive = null
@@ -431,6 +441,7 @@ object SocialService {
             .onSuccess {
                 unreadMessages = it["messages"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
                 unseenActivity = it["activity"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                challengeInvites = it["challenges"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
                 // Приглашения и совместную тренировку спрашиваем, только когда они есть.
                 val invites = it["invites"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
                 if (invites > 0 || together.active != null || together.outgoing.isNotEmpty() || together.incoming.isNotEmpty()) refreshTogether()
@@ -744,6 +755,33 @@ object SocialService {
     // MARK: Рейтинг недели
 
     suspend fun leaderboard(): List<SocialLeaderboardEntry> = decode(call("GET", "/leaderboard", requiresAuth = true))
+
+    /// Кто выигрывал прошлые недели среди своих — новые первыми.
+    suspend fun leaderboardHistory(): List<SocialWeekWinner> = decode(call("GET", "/leaderboard/history", requiresAuth = true))
+
+    // MARK: Челленджи
+
+    suspend fun challenges(): List<SocialChallenge> = decode(call("GET", "/challenges", requiresAuth = true))
+
+    /// Начало — полночь сегодняшнего дня: тренировка, сделанная утром, уже в счёт.
+    suspend fun createChallenge(kind: ChallengeKind, weeks: Int, invite: List<String>): SocialChallenge {
+        val start = LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val body = buildJsonObject {
+            put("kind", kind.key)
+            put("weeks", weeks)
+            put("invite", JsonArray(invite.map { JsonPrimitive(it) }))
+            put("startsAt", start)
+        }
+        return decode(call("POST", "/challenges", body = body.toString(), requiresAuth = true))
+    }
+
+    suspend fun challenge(id: String, action: String): SocialChallenge =
+        decode(call("POST", "/challenges/${q(id)}/$action", requiresAuth = true))
+
+    suspend fun postChallengeScores(scores: List<ChallengeScoreUpdate>) {
+        val body = buildJsonObject { put("scores", json.encodeToJsonElement(scores)) }
+        call("PUT", "/challenges/scores", body = body.toString(), requiresAuth = true)
+    }
 
     suspend fun deleteMessage(id: String) {
         call("DELETE", "/messages/$id", requiresAuth = true)

@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.CameraAlt
@@ -482,6 +483,17 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
         }
         Text("@${user.username}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
         LevelChip(user.level, large = true)
+        if (user.challengeWins > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = ChallengePlace.color(1), modifier = Modifier.size(15.dp))
+                Text(
+                    "${user.challengeWins} ${RuPlural.word(user.challengeWins, "победа", "победы", "побед")} в челленджах",
+                    color = ChallengePlace.color(1),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
         user.live?.let { LiveBadge(it) }
         user.bodyLine?.let { Text(it, color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         if (user.bio.isNotBlank()) {

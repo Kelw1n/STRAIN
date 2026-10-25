@@ -261,6 +261,7 @@ fun LevelSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
             RuleRow("Личный рекорд", "+${Progression.RECORD_XP}")
             RuleRow("Цель недели: $goal ${RuPlural.word(goal, "тренировка", "тренировки", "тренировок")}", "+${Progression.WEEK_GOAL_XP}")
             RuleRow("Серия недель подряд", "до +50%")
+            RuleRow("Место в челлендже", "до +300")
             Text(
                 "Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.",
                 color = Color.White.copy(alpha = 0.4f),

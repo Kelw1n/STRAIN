@@ -93,12 +93,15 @@ struct SocialUser: Codable, Hashable, Identifiable, Sendable {
     /// Когда последний раз заходил — для «был(а) N минут назад».
     var lastSeen: Double?
     var level: Int?
+    /// Сколько челленджей выиграл.
+    var challengeWins: Int
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         username = try c.decode(String.self, forKey: .username)
         level = try? c.decodeIfPresent(Int.self, forKey: .level)
+        challengeWins = (try? c.decodeIfPresent(Int.self, forKey: .challengeWins)) ?? 0
         live = try? c.decodeIfPresent(SocialLive.self, forKey: .live)
         lastSeen = try? c.decodeIfPresent(Double.self, forKey: .lastSeen)
         bio = try c.decodeIfPresent(String.self, forKey: .bio) ?? ""
@@ -706,8 +709,21 @@ struct SocialWeekStats: Codable, Hashable, Sendable {
 
 struct SocialLeaderboardEntry: Codable, Hashable, Identifiable, Sendable {
     let user: SocialUserShort
-    let stats: SocialWeekStats
+    var stats: SocialWeekStats
+    /// Сколько прошлых недель выигрывал среди своих и корона за прошлую.
+    var wins: Int = 0
+    var crown: Bool = false
     var id: String { user.id }
+}
+
+extension SocialLeaderboardEntry {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        user = try c.decode(SocialUserShort.self, forKey: .user)
+        stats = (try? c.decodeIfPresent(SocialWeekStats.self, forKey: .stats)) ?? SocialWeekStats(week: "", workouts: 0, volumeKg: 0, records: 0, streakWeeks: 0)
+        wins = (try? c.decodeIfPresent(Int.self, forKey: .wins)) ?? 0
+        crown = (try? c.decodeIfPresent(Bool.self, forKey: .crown)) ?? false
+    }
 }
 
 // MARK: - Активность

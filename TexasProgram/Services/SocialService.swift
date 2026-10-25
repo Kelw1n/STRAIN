@@ -88,6 +88,8 @@ final class SocialService {
     private(set) var unreadMessages = 0
     /// Новые лайки, комментарии и подписчики — точка на колокольчике и вкладке «Главное».
     private(set) var unseenActivity = 0
+    /// Приглашения в челленджи, на которые ещё не ответил.
+    var challengeInvites = 0
     /// Подписки, которые тренируются прямо сейчас.
     private(set) var liveFriends: [SocialLiveFriend] = []
     /// Приглашения на совместную тренировку и идущая совместная тренировка.
@@ -248,6 +250,7 @@ final class SocialService {
         me = nil
         unreadMessages = 0
         unseenActivity = 0
+        challengeInvites = 0
         liveFriends = []
         together = SocialTogetherState()
         lastLive = nil
@@ -425,10 +428,11 @@ final class SocialService {
     /// Сколько непрочитанных сообщений и новой активности — для точек на вкладках.
     func refreshUnread() async {
         guard token != nil else { unreadMessages = 0; unseenActivity = 0; return }
-        struct Badges: Decodable { let messages: Int; let activity: Int; let invites: Int? }
+        struct Badges: Decodable { let messages: Int; let activity: Int; let invites: Int?; let challenges: Int? }
         if let value: Badges = try? await request("GET", "/badges") {
             unreadMessages = value.messages
             unseenActivity = value.activity
+            challengeInvites = value.challenges ?? 0
             // Приглашения и совместную тренировку спрашиваем, только когда они есть.
             if (value.invites ?? 0) > 0 || together.active != nil || !together.outgoing.isEmpty || !together.incoming.isEmpty {
                 await refreshTogether()
@@ -719,6 +723,45 @@ final class SocialService {
 
     func leaderboard() async throws -> [SocialLeaderboardEntry] {
         try await request("GET", "/leaderboard", requiresAuth: true)
+    }
+
+    /// Кто выигрывал прошлые недели среди своих — новые первыми.
+    func leaderboardHistory() async throws -> [SocialWeekWinner] {
+        try await request("GET", "/leaderboard/history", requiresAuth: true)
+    }
+
+    // MARK: Челленджи
+
+    private struct NewChallenge: Encodable {
+        let kind: String
+        let weeks: Int
+        let invite: [String]
+        let startsAt: Double
+    }
+
+    private struct ChallengeScores: Encodable { let scores: [ChallengeScoreUpdate] }
+    private struct ScoresResponse: Decodable { let updated: Int }
+
+    func challenges() async throws -> [SocialChallenge] {
+        try await request("GET", "/challenges", requiresAuth: true)
+    }
+
+    /// Начало — полночь сегодняшнего дня: тренировка, сделанная утром, уже в счёт.
+    func createChallenge(kind: ChallengeKind, weeks: Int, invite: [String], now: Date = Date()) async throws -> SocialChallenge {
+        let start = WeeklyStatsBuilder.calendar.startOfDay(for: now)
+        return try await request(
+            "POST", "/challenges",
+            json: NewChallenge(kind: kind.rawValue, weeks: weeks, invite: invite, startsAt: (start.timeIntervalSince1970 * 1000).rounded()),
+            requiresAuth: true
+        )
+    }
+
+    func challenge(_ id: String, action: String) async throws -> SocialChallenge {
+        try await request("POST", "/challenges/\(id)/\(action)", requiresAuth: true)
+    }
+
+    func postChallengeScores(_ scores: [ChallengeScoreUpdate]) async throws {
+        let _: ScoresResponse = try await request("PUT", "/challenges/scores", json: ChallengeScores(scores: scores), requiresAuth: true)
     }
 
     // MARK: Фото

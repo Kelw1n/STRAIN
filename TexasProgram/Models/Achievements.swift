@@ -419,6 +419,7 @@ enum Progression {
     static func xp(for profile: ProgramProfile, excluding key: String? = nil) -> Int {
         let log = key.map { excluded in profile.completionLog.filter { $0.key != excluded } } ?? profile.completionLog
         return xp(log: log, sets: profile.setLog, weeklyGoal: weeklyGoal(for: profile))
+            + profile.challengeAwards.reduce(0) { $0 + $1.xp }
     }
 
     /// Опыт по истории. Порядок тренировок — по дню, при равенстве — по ключу,

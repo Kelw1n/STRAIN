@@ -344,7 +344,11 @@ enum LeaderboardMetric: String, CaseIterable, Identifiable {
     /// Места: больше — выше; поровну — по тоннажу, потом по имени.
     static func ranked(_ entries: [SocialLeaderboardEntry], by metric: LeaderboardMetric, now: Date = Date()) -> [SocialLeaderboardEntry] {
         entries
-            .map { SocialLeaderboardEntry(user: $0.user, stats: WeeklyStatsBuilder.current($0.stats, now: now)) }
+            .map { entry in
+                var current = entry
+                current.stats = WeeklyStatsBuilder.current(entry.stats, now: now)
+                return current
+            }
             .sorted { a, b in
                 let left = metric.value(a.stats), right = metric.value(b.stats)
                 if left != right { return left > right }
@@ -362,6 +366,7 @@ struct LeaderboardView: View {
     @State private var metric: LeaderboardMetric = .volume
     @State private var loading = true
     @State private var error: String?
+    @State private var showingWinners = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -382,10 +387,19 @@ struct LeaderboardView: View {
             }
             .scrollIndicators(.hidden)
 
-            Text(Self.weekTitle())
-                .font(.system(size: 12, weight: .bold))
-                .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.45))
+            HStack {
+                Text(Self.weekTitle())
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(Color.white.opacity(0.45))
+                Spacer()
+                Button { showingWinners = true } label: {
+                    Label("Победители", systemImage: "crown.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(ChallengePlace.color(1))
+                }
+                .buttonStyle(.pressable)
+            }
 
             let ranked = LeaderboardMetric.ranked(entries, by: metric)
             if let error, entries.isEmpty {
@@ -408,11 +422,12 @@ struct LeaderboardView: View {
                         .foregroundStyle(Color.white.opacity(0.5))
                 }
             }
-            Text("Считаются все тренировки в приложении, а не только опубликованные. Неделя — с понедельника.")
+            Text("Считаются все тренировки в приложении, а не только опубликованные. Неделя — с понедельника. Корона — тому, у кого за прошлую неделю больше всех тренировок.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.white.opacity(0.35))
         }
         .task { await reload() }
+        .sheet(isPresented: $showingWinners) { WeekWinnersSheet() }
     }
 
     static func weekTitle(now: Date = Date()) -> String {
@@ -459,6 +474,13 @@ struct LeaderboardRow: View {
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
+                        // Корона — победителю прошлой недели.
+                        if entry.crown {
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(ChallengePlace.color(1))
+                                .accessibilityLabel("Победитель прошлой недели")
+                        }
                         LevelChip(level: entry.user.level ?? entry.stats.level)
                     }
                     Text(secondary)
@@ -481,7 +503,8 @@ struct LeaderboardRow: View {
 
     /// Остальные цифры недели мелко — чтобы было видно, за счёт чего место.
     private var secondary: String {
-        LeaderboardMetric.allCases.filter { $0 != metric }.map { $0.format(entry.stats) }.joined(separator: " · ")
+        let wins = entry.wins > 0 ? ["👑 \(entry.wins)"] : []
+        return (wins + LeaderboardMetric.allCases.filter { $0 != metric }.map { $0.format(entry.stats) }).joined(separator: " · ")
     }
 
     private var placeColor: Color {

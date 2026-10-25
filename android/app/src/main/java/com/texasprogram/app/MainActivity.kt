@@ -95,6 +95,7 @@ import com.texasprogram.app.ui.BodyWeightScreen
 import com.texasprogram.app.ui.CommunityScreen
 import com.texasprogram.app.ui.FeedScreen
 import com.texasprogram.app.ui.ProfileTabScreen
+import com.texasprogram.app.service.ChallengeStore
 import com.texasprogram.app.service.SocialService
 import com.texasprogram.app.ui.DayCustomizeScreen
 import com.texasprogram.app.ui.DayDetailScreen
@@ -390,6 +391,15 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     LaunchedEffect(profile.completionLog, profile.bodyWeightLog, SocialService.isSignedIn) {
         SocialService.scheduleSync(profile)
     }
+    // Счёт в челленджах — после каждой тренировки и при запуске; опыт за места
+    // дописывается к свежему профилю, без повторов.
+    LaunchedEffect(profile.id, profile.completionLog, SocialService.isSignedIn) {
+        ChallengeStore.sync(profile) { awards ->
+            store.update(profile.id) { current ->
+                current.copy(challengeAwards = current.challengeAwards + awards.filter { award -> current.challengeAwards.none { it.id == award.id } })
+            }
+        }
+    }
 
     // Профиль на момент нажатия, а не на момент последней перерисовки:
     // два быстрых нажатия по подходам не затирают друг друга.
@@ -542,7 +552,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     onReselect = { com.texasprogram.app.ui.TabReselect.fire(it) },
                     // Новые сообщения — на «Друзьях», новая активность — на «Главном».
                     badges = buildSet {
-                        if (SocialService.unreadMessages > 0) add(MainTabItem.COMMUNITY)
+                        if (SocialService.unreadMessages > 0 || SocialService.challengeInvites > 0) add(MainTabItem.COMMUNITY)
                         if (SocialService.unseenActivity > 0) add(MainTabItem.TODAY)
                     }
                 )
