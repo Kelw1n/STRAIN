@@ -544,7 +544,12 @@ private fun GuideSection(title: String, lines: List<String>) {
 /// Свой ключ Google AI: где взять, проверить и сохранить. Хранится только
 /// на этом телефоне и уходит только в Google.
 @Composable
-fun GeminiKeySheet(onDismiss: () -> Unit) {
+fun GeminiKeySheet(
+    /// Ключ один на всё: и для фото еды, и для ИИ-тренера.
+    title: String = "Ключ для фото еды",
+    intro: String = "Фото разбирает ИИ Google Gemini по твоему ключу. Ключ бесплатный и хранится только на этом телефоне.",
+    onDismiss: () -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptics = rememberHapticEngine()
@@ -590,9 +595,9 @@ fun GeminiKeySheet(onDismiss: () -> Unit) {
         onAction = { close -> close() }
     ) {
         NutritionCard {
-            NutritionCaption("Ключ для фото еды", color = Theme.accent)
+            NutritionCaption(title, color = Theme.accent)
             Text(
-                "Фото разбирает ИИ Google Gemini по твоему ключу. Ключ бесплатный и хранится только на этом телефоне.",
+                intro,
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 14.sp
             )

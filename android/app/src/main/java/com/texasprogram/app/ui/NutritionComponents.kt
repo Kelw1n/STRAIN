@@ -315,6 +315,8 @@ fun NutritionSheet(
     action: String? = null,
     actionEnabled: Boolean = true,
     onAction: (close: () -> Unit) -> Unit = {},
+    /// Без своей прокрутки: экран сам раскладывает список и поле ввода, как чат.
+    scrollable: Boolean = true,
     content: @Composable ColumnScope.(close: () -> Unit) -> Unit
 ) {
     val visible = remember { MutableTransitionState(false).apply { targetState = true } }
@@ -324,7 +326,7 @@ fun NutritionSheet(
         if (visible.isIdle && !visible.currentState && !visible.targetState) onDismiss()
     }
     val frame: @Composable () -> Unit = {
-        NutritionSheetFrame(title, leading, action, actionEnabled, close, { onAction(close) }) { content(close) }
+        NutritionSheetFrame(title, leading, action, actionEnabled, close, { onAction(close) }, scrollable) { content(close) }
     }
     if (LocalNutritionSheetInline.current) {
         frame()
@@ -348,6 +350,7 @@ private fun NutritionSheetFrame(
     actionEnabled: Boolean,
     close: () -> Unit,
     onAction: () -> Unit,
+    scrollable: Boolean,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
@@ -387,6 +390,10 @@ private fun NutritionSheetFrame(
                         .padding(vertical = 8.dp)
                 )
             }
+        }
+        if (!scrollable) {
+            Column(Modifier.fillMaxWidth().weight(1f).navigationBarsPadding()) { content() }
+            return@Column
         }
         Column(
             Modifier

@@ -103,6 +103,7 @@ class AppStore private constructor(val context: Context) {
         persist()
         // Дневник питания удалённого профиля больше никому не нужен.
         NutritionStore.delete(NutritionStore.directory(context), id)
+        com.texasprogram.app.model.CoachHistory.delete(com.texasprogram.app.model.CoachHistory.directory(context.filesDir), id)
         // Профилей не осталось: раньше будильник удалённого профиля звенел и дальше.
         if (profiles.isEmpty()) com.texasprogram.app.service.ReminderScheduler.cancel(context)
     }

@@ -116,6 +116,34 @@ object FoodRecognizer {
                 put("responseMimeType", "application/json")
             }
         }.toString()
+        return post(body, key)
+    }
+
+    /// Разговор с ИИ-тренером: правила и данные — системной инструкцией,
+    /// дальше реплики по очереди. Ответ — JSON, как и у фото еды.
+    suspend fun converse(system: String, turns: List<Pair<String, String>>, key: String): String {
+        val body = buildJsonObject {
+            putJsonObject("systemInstruction") {
+                putJsonArray("parts") { addJsonObject { put("text", system) } }
+            }
+            putJsonArray("contents") {
+                turns.forEach { (role, text) ->
+                    addJsonObject {
+                        put("role", role)
+                        putJsonArray("parts") { addJsonObject { put("text", text) } }
+                    }
+                }
+            }
+            putJsonObject("generationConfig") {
+                put("temperature", 0.4)
+                put("maxOutputTokens", 4096)
+                put("responseMimeType", "application/json")
+            }
+        }.toString()
+        return post(body, key)
+    }
+
+    private suspend fun post(body: String, key: String): String {
         var lastFailure: Failure = Failure.Busy
         for (model in models) {
             val (status, text) = send("POST", "$BASE/models/$model:generateContent", key, body, 90_000)

@@ -76,6 +76,7 @@ fun ProgressScreen(
     ) {
         item(key = "title") { ScreenTitle("Прогресс") }
         item(key = "level") { LevelCard(profile) }
+        item(key = "coach") { CoachEntryCard(profile, onUpdate) }
 
         item(key = "hero") {
             HighlightCard(Modifier.appearIn(0)) {
