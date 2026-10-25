@@ -192,7 +192,7 @@ fun LevelChip(level: Int?, large: Boolean = false) {
 fun LevelCard(profile: ProgramProfile, modifier: Modifier = Modifier) {
     val haptics = rememberHapticEngine()
     var showing by remember { mutableStateOf(false) }
-    val level = remember(profile.completionLog, profile.setLog, profile.programKind) { Progression.level(profile) }
+    val level = remember(profile.completionLog, profile.setLog, profile.programKind, profile.challengeAwards) { Progression.level(profile) }
     val month = remember(profile.completionLog) { Progression.currentMonth(profile.completionLog) }
     Row(
         modifier

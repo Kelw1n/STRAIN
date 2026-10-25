@@ -427,6 +427,31 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    // MARK: ИИ-тренер
+
+    @MainActor func testCoach() throws {
+        let profile = levelProfile()
+        let messages = [
+            CoachMessage(role: .user, text: "Почему встал жим?"),
+            CoachMessage(
+                role: .coach,
+                text: "Жим три тренировки подряд на **100 кг** без прибавки в повторах, а тяжёлый день ты отметил как «тяжело». Это застой.\n\n- Сбрось максимум на 10% и набери заново.\n- Спи 8 часов и добавь 20 г белка.",
+                actions: [CoachAction(type: "stall_reset", lift: "bench"), CoachAction(type: "weight_step", exercise: "Жим лёжа", step: 1.25)]
+            ),
+            CoachMessage(role: .user, text: Coach.reviewPrompt, reviewWeek: "2026-W43"),
+            CoachMessage(role: .coach, text: "Неделя закрыта: 3 из 3 тренировок, присед +2,5 кг. Тяга отстаёт — на этой неделе держи вес.", reviewWeek: "2026-W43")
+        ]
+        CoachHistory.write(messages, for: profile.profileID)
+        defer { CoachHistory.delete(profile.profileID) }
+        try snap("32-coach", height: 1700, wait: 2) { CoachView(profile: profile) }
+        try snap("33-coach-entry") {
+            VStack { CoachEntryCard(profile: profile); Spacer() }
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+        }
+    }
+
     // MARK: Челленджи
 
     @MainActor func testChallenges() throws {

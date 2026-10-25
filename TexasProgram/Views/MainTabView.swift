@@ -254,6 +254,8 @@ struct MainTabView: View {
             ReminderScheduler.reschedule(for: profile)
         }
         .onChange(of: profile.bodyWeightLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
+        // Опыт за место в челлендже — новый уровень у ника тоже.
+        .onChange(of: profile.challengeAwards) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         // Расписание напоминаний собирается заново на каждое изменение
         .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.reminderHour) { _, _ in ReminderScheduler.reschedule(for: profile) }
