@@ -216,8 +216,7 @@ fun LevelCard(profile: ProgramProfile, modifier: Modifier = Modifier) {
                 ProgressionText.month(month.first, month.second),
                 color = if (month.second == null) gold else Theme.accent,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
+                fontWeight = FontWeight.SemiBold
             )
         }
         Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))

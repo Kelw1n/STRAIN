@@ -80,6 +80,21 @@ enum FoodRecognizer {
             "contents": [["role": "user", "parts": parts]],
             "generationConfig": ["temperature": 0.1, "maxOutputTokens": 8192, "responseMimeType": "application/json"]
         ]
+        return try await post(body, key: key, session: session)
+    }
+
+    /// Разговор с ИИ-тренером: правила и данные — системной инструкцией,
+    /// дальше реплики по очереди. Ответ — JSON, как и у фото еды.
+    static func converse(system: String, turns: [(role: String, text: String)], key: String, session: URLSession = .shared) async throws -> String {
+        let body: [String: Any] = [
+            "systemInstruction": ["parts": [["text": system]]],
+            "contents": turns.map { ["role": $0.role, "parts": [["text": $0.text]]] },
+            "generationConfig": ["temperature": 0.4, "maxOutputTokens": 4096, "responseMimeType": "application/json"]
+        ]
+        return try await post(body, key: key, session: session)
+    }
+
+    private static func post(_ body: [String: Any], key: String, session: URLSession) async throws -> String {
         let payload = try JSONSerialization.data(withJSONObject: body)
         var lastFailure: Error = Failure.busy
         for model in models {

@@ -23,6 +23,7 @@ struct ActivityProgressView: View {
                 VStack(spacing: 16) {
                     // Уровень и награда месяца
                     LevelCard(profile: profile)
+                    CoachEntryCard(profile: profile)
 
                     // Итоги месяца и года историями
                     TrainingRecapEntryCard(profile: profile)

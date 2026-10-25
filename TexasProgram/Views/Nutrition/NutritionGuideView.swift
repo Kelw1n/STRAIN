@@ -105,6 +105,9 @@ struct NutritionGuideView: View {
 /// ключей телефона и уходит только в Google.
 struct GeminiKeySheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Ключ один на всё: и для фото еды, и для ИИ-тренера.
+    var title = "Ключ для фото еды"
+    var intro = "Фото разбирает ИИ Google Gemini по твоему ключу. Ключ бесплатный и хранится только на этом телефоне."
 
     @State private var key = ""
     @State private var saved = GeminiKeychain.load() != nil
@@ -117,8 +120,8 @@ struct GeminiKeySheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 12) {
-                        NutritionCaption(text: "Ключ для фото еды", color: Theme.accent)
-                        Text("Фото разбирает ИИ Google Gemini по твоему ключу. Ключ бесплатный и хранится только на этом телефоне.")
+                        NutritionCaption(text: title, color: Theme.accent)
+                        Text(intro)
                             .font(.system(size: 14))
                             .foregroundStyle(Color.white.opacity(0.75))
                             .fixedSize(horizontal: false, vertical: true)

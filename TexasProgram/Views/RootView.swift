@@ -61,6 +61,7 @@ struct RootView: View {
         // Начатая тренировка удаляемого профиля уходит вместе с ним.
         WorkoutSessionManager.shared.forgetProfile(profile.profileID)
         NutritionStore.delete(profile.profileID)
+        CoachHistory.delete(profile.profileID)
         modelContext.delete(profile)
         try? modelContext.save()
         activeProfileID = fallback?.profileID.uuidString ?? ""
