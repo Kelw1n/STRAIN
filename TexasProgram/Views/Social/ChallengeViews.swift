@@ -702,31 +702,48 @@ struct WeekWinnersSheet: View {
     }
 
     /// Кто сколько недель выиграл — сверху самые частые победители.
+    private var tallies: [Tally] {
+        var counts: [String: Tally] = [:]
+        for winner in winners {
+            let previous = counts[winner.user.id]?.count ?? 0
+            counts[winner.user.id] = Tally(user: winner.user, count: previous + 1)
+        }
+        return counts.values.sorted { left, right in
+            if left.count != right.count { return left.count > right.count }
+            return left.user.username < right.user.username
+        }
+    }
+
     private var tally: some View {
-        let counts = Dictionary(grouping: winners, by: \.user.id)
-            .compactMap { _, items in items.first.map { Tally(user: $0.user, count: items.count) } }
-            .sorted { $0.count == $1.count ? $0.user.username < $1.user.username : $0.count > $1.count }
-        return ScrollView(.horizontal) {
+        ScrollView(.horizontal) {
             HStack(spacing: 10) {
-                ForEach(counts) { item in
-                    let user = item.user, count = item.count
-                    VStack(spacing: 6) {
-                        AvatarView(imageId: user.avatar, username: user.username, size: 44)
-                        Text(user.isMe ? "Ты" : "@\(user.username)")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                        Text("👑 \(count)")
-                            .font(.system(size: 13, weight: .heavy))
-                            .foregroundStyle(ChallengePlace.color(1))
-                    }
-                    .frame(width: 84)
-                    .padding(.vertical, 12)
-                    .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                ForEach(tallies) { item in
+                    TallyTile(user: item.user, count: item.count)
                 }
             }
         }
         .scrollIndicators(.hidden)
+    }
+
+    private struct TallyTile: View {
+        let user: SocialUserShort
+        let count: Int
+
+        var body: some View {
+            VStack(spacing: 6) {
+                AvatarView(imageId: user.avatar, username: user.username, size: 44)
+                Text(user.isMe ? "Ты" : "@\(user.username)")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("👑 \(count)")
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundStyle(ChallengePlace.color(1))
+            }
+            .frame(width: 84)
+            .padding(.vertical, 12)
+            .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
     }
 
     /// «2026-W42» → «12 – 18 окт.».

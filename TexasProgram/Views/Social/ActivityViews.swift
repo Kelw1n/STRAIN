@@ -503,7 +503,7 @@ struct LeaderboardRow: View {
 
     /// Остальные цифры недели мелко — чтобы было видно, за счёт чего место.
     private var secondary: String {
-        let wins = entry.wins > 0 ? ["👑 \(entry.wins)"] : []
+        let wins: [String] = entry.wins > 0 ? ["👑 \(entry.wins)"] : []
         return (wins + LeaderboardMetric.allCases.filter { $0 != metric }.map { $0.format(entry.stats) }).joined(separator: " · ")
     }
 
