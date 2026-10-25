@@ -26,6 +26,12 @@ const REACTIONS = new Set(['🔥', '💪', '👍', '❤️', '😂', '😮']);
 // совместная тренировка длится не дольше шести.
 const INVITE_TTL_MS = 2 * 60 * 60 * 1000;
 const TOGETHER_TTL_MS = 6 * 60 * 60 * 1000;
+// Виды челленджей: больше тренировок, больше тоннаж, недели без пропусков, рост силы.
+const CHALLENGE_KINDS = new Set(['workouts', 'volume', 'streak', 'strength']);
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Счёт ещё сутки после конца: тренировку последнего дня могли отметить без сети.
+const CHALLENGE_GRACE_MS = DAY_MS;
+const WEEK_KEY = /^\d{4}-W\d{2}$/;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -158,6 +164,37 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS forward_from TEXT REFERENCES users
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS heard_at TIMESTAMPTZ;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS workout JSONB;
 CREATE INDEX IF NOT EXISTS messages_reply ON messages (reply_to) WHERE reply_to IS NOT NULL;
+-- Сводки прошлых недель: по ним корона победителю недели и история побед.
+CREATE TABLE IF NOT EXISTS weekly_stats (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    week TEXT NOT NULL,
+    workouts INT NOT NULL DEFAULT 0,
+    volume_kg REAL NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, week)
+);
+-- Челленджи с друзьями: вид, сроки и участники со счётом, который считают
+-- сами приложения — вся история тренировок живёт на телефоне.
+CREATE TABLE IF NOT EXISTS challenges (
+    id TEXT PRIMARY KEY,
+    owner TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    weeks INT NOT NULL,
+    starts_at TIMESTAMPTZ NOT NULL,
+    ends_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS challenge_members (
+    challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'invited',
+    score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    detail TEXT NOT NULL DEFAULT '',
+    invited_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (challenge_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS challenge_members_user ON challenge_members (user_id, status);
 `;
 
 const newId = () => crypto.randomBytes(12).toString('hex');
@@ -284,12 +321,20 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     // MARK: Профиль в ответе
 
+    // Победы в челленджах: законченные, где было хотя бы двое и счёт первый.
+    const CHALLENGE_WINS_SQL = `
+        SELECT count(*) FROM challenge_members m JOIN challenges c ON c.id = m.challenge_id
+        WHERE m.user_id = $1 AND m.status = 'joined' AND m.score > 0 AND c.ends_at < now()
+        AND (SELECT count(*) FROM challenge_members o WHERE o.challenge_id = c.id AND o.status = 'joined') >= 2
+        AND NOT EXISTS (SELECT 1 FROM challenge_members o WHERE o.challenge_id = c.id AND o.status = 'joined' AND o.score > m.score)`;
+
     async function userView(row, me) {
         const [counts] = await q(
             `SELECT
                 (SELECT count(*) FROM posts WHERE user_id = $1)::int AS workouts,
                 (SELECT count(*) FROM follows WHERE followee = $1)::int AS followers,
                 (SELECT count(*) FROM follows WHERE follower = $1)::int AS following,
+                (${CHALLENGE_WINS_SQL})::int AS challenge_wins,
                 EXISTS (SELECT 1 FROM follows WHERE follower = $2 AND followee = $1) AS is_following`,
             [row.id, me ? me.id : '']
         );
@@ -306,6 +351,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             programs: row.programs,
             achievements: row.achievements,
             level: levelOf(row.stats && row.stats.level),
+            challengeWins: counts.challenge_wins,
             workouts: counts.workouts,
             followers: counts.followers,
             following: counts.following,
@@ -437,6 +483,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (body.programs !== undefined) set('programs', JSON.stringify(jsonLimited(body.programs, 64_000, [])));
         if (body.achievements !== undefined) set('achievements', JSON.stringify(jsonLimited(body.achievements, 16_000, [])));
         if (body.stats !== undefined) set('stats', JSON.stringify(jsonLimited(body.stats, 4_000, {})));
+        await rememberWeek(me, body.stats);
         if (sets.length === 0) return res.json(await userView(me, me));
         params.push(me.id);
         const rows = await q(`UPDATE users SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params);
@@ -1073,7 +1120,17 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
              WHERE u.id = $1 OR u.id IN (SELECT followee FROM follows WHERE follower = $1)`,
             [me.id]
         );
-        res.json(rows.map((row) => ({ user: { ...shortUser(row), isMe: row.id === me.id }, stats: row.stats || {} })));
+        // Корона — победителю прошлой недели, рядом — сколько недель выигрывал.
+        const winners = await weekWinners(rows.map((row) => row.id), isoWeek(new Date()), 52);
+        const lastWeek = isoWeek(new Date(Date.now() - 7 * DAY_MS));
+        const wins = new Map();
+        for (const w of winners) wins.set(w.user_id, (wins.get(w.user_id) || 0) + 1);
+        res.json(rows.map((row) => ({
+            user: { ...shortUser(row), isMe: row.id === me.id },
+            stats: row.stats || {},
+            wins: wins.get(row.id) || 0,
+            crown: winners.some((w) => w.week === lastWeek && w.user_id === row.id)
+        })));
     }));
 
     // MARK: Активность
@@ -1125,7 +1182,12 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     // Точки на вкладках: непрочитанные сообщения и новая активность одним запросом.
     router.get('/badges', wrap(async (req, res) => {
         const me = await requireViewer(req);
-        res.json({ messages: await unreadCount(me), activity: await unseenActivity(me), invites: await pendingInvites(me) });
+        res.json({
+            messages: await unreadCount(me),
+            activity: await unseenActivity(me),
+            invites: await pendingInvites(me),
+            challenges: await pendingChallenges(me)
+        });
     }));
 
     // MARK: Совместная тренировка
@@ -1262,6 +1324,208 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         }
         await touchInvite(row.id);
         res.json({ success: true });
+    }));
+
+    // MARK: Корона недели
+
+    // Сводка недели из приложения ложится и в историю: по ней видно,
+    // кто выиграл прошлые недели.
+    async function rememberWeek(me, stats) {
+        if (!stats || typeof stats !== 'object' || !WEEK_KEY.test(String(stats.week || ''))) return;
+        await q(
+            `INSERT INTO weekly_stats (user_id, week, workouts, volume_kg) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (user_id, week) DO UPDATE SET workouts = $3, volume_kg = $4, updated_at = now()`,
+            [me.id, String(stats.week), number(stats.workouts, 0, 100) || 0, number(stats.volumeKg, 0, 10_000_000) || 0]
+        );
+    }
+
+    // Победитель каждой прошлой недели среди своих: больше тренировок,
+    // при равенстве — больше тоннаж.
+    async function weekWinners(ids, before, limit) {
+        return q(
+            `SELECT week, user_id, workouts, volume_kg FROM (
+                SELECT *, row_number() OVER (PARTITION BY week ORDER BY workouts DESC, volume_kg DESC, user_id) AS place
+                FROM weekly_stats WHERE user_id = ANY($1) AND week < $2 AND workouts > 0
+             ) ranked WHERE place = 1 ORDER BY week DESC LIMIT $3`,
+            [ids, before, limit]
+        );
+    }
+
+    // Неделя по ISO, как её считают приложения: «2026-W43».
+    function isoWeek(date) {
+        const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+        const weekday = day.getUTCDay() || 7;
+        day.setUTCDate(day.getUTCDate() + 4 - weekday);
+        const yearStart = new Date(Date.UTC(day.getUTCFullYear(), 0, 1));
+        const week = Math.ceil(((day - yearStart) / DAY_MS + 1) / 7);
+        return `${day.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+    }
+
+    async function circle(me) {
+        return [me.id, ...(await q('SELECT followee FROM follows WHERE follower = $1', [me.id])).map((r) => r.followee)];
+    }
+
+    // Кто выигрывал недели среди своих — новые первыми.
+    router.get('/leaderboard/history', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const winners = await weekWinners(await circle(me), isoWeek(new Date()), 26);
+        const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [[...new Set(winners.map((w) => w.user_id))]])).map((u) => [u.id, u]));
+        res.json(winners.filter((w) => users.has(w.user_id)).map((w) => ({
+            week: w.week,
+            user: { ...shortUser(users.get(w.user_id)), isMe: w.user_id === me.id },
+            workouts: w.workouts,
+            volumeKg: w.volume_kg
+        })));
+    }));
+
+    // MARK: Челленджи
+
+    function challengeStatus(row, now = Date.now()) {
+        if (now < new Date(row.starts_at).getTime()) return 'upcoming';
+        return now < new Date(row.ends_at).getTime() ? 'active' : 'finished';
+    }
+
+    // Места по счёту: равный счёт — одно место.
+    function ranked(members) {
+        const joined = members.filter((m) => m.status === 'joined').sort((a, b) => b.score - a.score || a.username.localeCompare(b.username));
+        let place = 0;
+        let previous = null;
+        joined.forEach((m, index) => {
+            if (previous === null || m.score < previous) place = index + 1;
+            previous = m.score;
+            m.place = place;
+        });
+        return joined.concat(members.filter((m) => m.status === 'invited'));
+    }
+
+    async function challengeViews(rows, me) {
+        if (rows.length === 0) return [];
+        const members = await q(
+            `SELECT m.*, u.id, u.username, u.avatar_id, u.bio, u.stats FROM challenge_members m JOIN users u ON u.id = m.user_id
+             WHERE m.challenge_id = ANY($1) AND m.status IN ('joined', 'invited')`,
+            [rows.map((r) => r.id)]
+        );
+        const owners = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [[...new Set(rows.map((r) => r.owner))]])).map((u) => [u.id, u]));
+        const mine = new Map((await q('SELECT challenge_id, status FROM challenge_members WHERE user_id = $1 AND challenge_id = ANY($2)', [me.id, rows.map((r) => r.id)])).map((m) => [m.challenge_id, m.status]));
+        return rows.map((row) => {
+            const list = ranked(members.filter((m) => m.challenge_id === row.id).map((m) => ({
+                user: { ...shortUser(m), isMe: m.user_id === me.id },
+                username: m.username,
+                status: m.status,
+                score: m.score,
+                detail: m.detail,
+                place: null
+            })));
+            const status = challengeStatus(row);
+            return {
+                id: row.id,
+                kind: row.kind,
+                weeks: row.weeks,
+                startsAt: new Date(row.starts_at).getTime(),
+                endsAt: new Date(row.ends_at).getTime(),
+                status,
+                owner: owners.has(row.owner) ? shortUser(owners.get(row.owner)) : null,
+                myStatus: mine.get(row.id) || null,
+                members: list.map(({ username, ...member }) => member)
+            };
+        });
+    }
+
+    async function challengeFor(req, me) {
+        const row = (await q(
+            `SELECT c.* FROM challenges c JOIN challenge_members m ON m.challenge_id = c.id
+             WHERE c.id = $1 AND m.user_id = $2`,
+            [req.params.id, me.id]
+        ))[0];
+        if (!row) throw new HttpError(404, 'Челлендж не найден');
+        return row;
+    }
+
+    async function pendingChallenges(me) {
+        const [row] = await q(
+            `SELECT count(*)::int AS count FROM challenge_members m JOIN challenges c ON c.id = m.challenge_id
+             WHERE m.user_id = $1 AND m.status = 'invited' AND c.ends_at > now()`,
+            [me.id]
+        );
+        return row.count;
+    }
+
+    // Новый челлендж: вид, на сколько недель и кого позвать. Начало присылает
+    // приложение — полночь сегодняшнего дня по времени телефона.
+    router.post('/challenges', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        messageLimit(me.id);
+        const body = req.body || {};
+        const kind = String(body.kind || '');
+        if (!CHALLENGE_KINDS.has(kind)) throw new HttpError(400, 'Неизвестный вид челленджа');
+        const weeks = Number(body.weeks);
+        if (!Number.isInteger(weeks) || weeks < 1 || weeks > 4) throw new HttpError(400, 'Челлендж — от одной до четырёх недель');
+        const names = [...new Set((Array.isArray(body.invite) ? body.invite : []).map((n) => text(n, 24).toLowerCase()).filter(Boolean))].slice(0, 20);
+        const invited = names.length ? await q('SELECT * FROM users WHERE username = ANY($1) AND id <> $2', [names, me.id]) : [];
+        if (invited.length === 0) throw new HttpError(400, 'Позови хотя бы одного друга');
+        const requested = Number(body.startsAt);
+        const now = Date.now();
+        const start = Number.isFinite(requested) && requested > now - 2 * DAY_MS && requested < now + 7 * DAY_MS ? requested : now;
+        const id = newId();
+        const [row] = await q(
+            'INSERT INTO challenges (id, owner, kind, weeks, starts_at, ends_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [id, me.id, kind, weeks, new Date(start), new Date(start + weeks * 7 * DAY_MS)]
+        );
+        await q("INSERT INTO challenge_members (challenge_id, user_id, status) VALUES ($1, $2, 'joined')", [id, me.id]);
+        for (const user of invited) {
+            await q('INSERT INTO challenge_members (challenge_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, user.id]);
+        }
+        res.status(201).json((await challengeViews([row], me))[0]);
+    }));
+
+    // Свои челленджи: идущие, приглашения и последние законченные.
+    router.get('/challenges', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const rows = await q(
+            `SELECT c.* FROM challenges c JOIN challenge_members m ON m.challenge_id = c.id
+             WHERE m.user_id = $1 AND (m.status = 'joined' OR (m.status = 'invited' AND c.ends_at > now()))
+             AND c.ends_at > now() - interval '120 days'
+             ORDER BY c.ends_at DESC LIMIT 40`,
+            [me.id]
+        );
+        res.json(await challengeViews(rows, me));
+    }));
+
+    router.post('/challenges/:id/:action(join|decline|leave)', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const row = await challengeFor(req, me);
+        const action = req.params.action;
+        if (action === 'join') {
+            if (challengeStatus(row) === 'finished') throw new HttpError(409, 'Челлендж уже закончился');
+            await q("UPDATE challenge_members SET status = 'joined', updated_at = now() WHERE challenge_id = $1 AND user_id = $2 AND status = 'invited'", [row.id, me.id]);
+        } else if (action === 'decline') {
+            await q("UPDATE challenge_members SET status = 'declined', updated_at = now() WHERE challenge_id = $1 AND user_id = $2 AND status = 'invited'", [row.id, me.id]);
+        } else {
+            if (challengeStatus(row) === 'finished') throw new HttpError(409, 'Челлендж уже закончился');
+            await q("UPDATE challenge_members SET status = 'left', updated_at = now() WHERE challenge_id = $1 AND user_id = $2", [row.id, me.id]);
+        }
+        const fresh = (await q('SELECT * FROM challenges WHERE id = $1', [row.id]))[0];
+        res.json((await challengeViews([fresh], me))[0]);
+    }));
+
+    // Счёт после тренировки: приложение присылает его сразу по всем своим
+    // идущим челленджам. Закончившийся принимает счёт ещё сутки.
+    router.put('/challenges/scores', wrap(async (req, res) => {
+        const me = await requireViewer(req);
+        const scores = Array.isArray(req.body && req.body.scores) ? req.body.scores.slice(0, 40) : [];
+        let updated = 0;
+        for (const item of scores) {
+            const score = number(item && item.score, 0, 1e9);
+            if (score === null || !item.id) continue;
+            const rows = await q(
+                `UPDATE challenge_members m SET score = $3, detail = $4, updated_at = now()
+                 FROM challenges c WHERE c.id = m.challenge_id AND m.challenge_id = $1 AND m.user_id = $2
+                 AND m.status = 'joined' AND c.starts_at <= now() AND c.ends_at > $5 RETURNING m.challenge_id`,
+                [String(item.id), me.id, score, text(item.detail, 60), new Date(Date.now() - CHALLENGE_GRACE_MS)]
+            );
+            updated += rows.length;
+        }
+        res.json({ updated });
     }));
 
     router.use((error, req, res, next) => {

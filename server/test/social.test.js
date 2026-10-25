@@ -9,7 +9,7 @@ const url = process.env.TEST_DATABASE_URL;
 
 test('лента, профили, подписки, фото и комментарии', { skip: !url && 'нет TEST_DATABASE_URL' }, async (t) => {
     const social = createSocial({ databaseUrl: url });
-    await social.pool().query('DROP TABLE IF EXISTS messages, together, comments, likes, posts, images, voices, follows, users CASCADE');
+    await social.pool().query('DROP TABLE IF EXISTS challenge_members, challenges, weekly_stats, messages, together, comments, likes, posts, images, voices, follows, users CASCADE');
     await social.init();
 
     const app = express();
@@ -372,6 +372,69 @@ test('лента, профили, подписки, фото и коммента
         assert.equal(leveled.author.level, 7);
         await call('PATCH', '/me', { token: me.token, body: { stats: { level: 'много' } } });
         assert.equal((await call('GET', '/users/tim', { token: friend.token })).data.level, null, 'мусор вместо уровня не показываем');
+    });
+
+    await t.test('корона победителю прошлой недели и история побед', async () => {
+        const isoWeek = (date) => {
+            const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+            day.setUTCDate(day.getUTCDate() + 4 - (day.getUTCDay() || 7));
+            const week = Math.ceil(((day - new Date(Date.UTC(day.getUTCFullYear(), 0, 1))) / 864e5 + 1) / 7);
+            return `${day.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+        };
+        const last = isoWeek(new Date(Date.now() - 7 * 864e5));
+        await call('PATCH', '/me', { token: friend.token, body: { stats: { week: '2025-W01', workouts: 3, volumeKg: 100 } } });
+        await call('PATCH', '/me', { token: friend.token, body: { stats: { week: last, workouts: 4, volumeKg: 10000 } } });
+        await call('PATCH', '/me', { token: me.token, body: { stats: { week: last, workouts: 4, volumeKg: 12000 } } });
+        await call('PATCH', '/me', { token: me.token, body: { stats: { week: isoWeek(new Date()), workouts: 9, volumeKg: 99999 } } });
+        const board = (await call('GET', '/leaderboard', { token: friend.token })).data;
+        const tim = board.find((r) => r.user.username === 'tim');
+        const sem = board.find((r) => r.user.username === 'semobsessed');
+        assert.equal(tim.crown, true, 'тренировок поровну — решает тоннаж');
+        assert.equal(sem.crown, false);
+        assert.ok(sem.wins >= 1, 'старую неделю выиграл semobsessed');
+        assert.ok(tim.wins >= 1);
+        const history = (await call('GET', '/leaderboard/history', { token: friend.token })).data;
+        assert.equal(history[0].week, last, 'идущая неделя ещё не выиграна');
+        assert.equal(history[0].user.username, 'tim');
+        assert.equal(history.at(-1).week, '2025-W01');
+    });
+
+    await t.test('челленджи: приглашение, счёт, места и победа в профиле', async () => {
+        const stranger = (await call('POST', '/register', { body: { username: 'stranger.one' } })).data;
+        assert.equal((await call('POST', '/challenges', { token: me.token, body: { kind: 'jump', weeks: 2, invite: ['semobsessed'] } })).status, 400);
+        assert.equal((await call('POST', '/challenges', { token: me.token, body: { kind: 'workouts', weeks: 2, invite: [] } })).status, 400);
+        assert.equal((await call('POST', '/challenges', { token: me.token, body: { kind: 'workouts', weeks: 9, invite: ['semobsessed'] } })).status, 400);
+        const created = await call('POST', '/challenges', {
+            token: me.token,
+            body: { kind: 'workouts', weeks: 2, invite: ['SemObsessed', 'nobody.here', 'tim'], startsAt: Date.now() - 1000 }
+        });
+        assert.equal(created.status, 201);
+        const id = created.data.id;
+        assert.equal(created.data.status, 'active');
+        assert.equal(created.data.endsAt - created.data.startsAt, 14 * 864e5);
+        assert.deepEqual(created.data.members.map((m) => [m.user.username, m.status]), [['tim', 'joined'], ['semobsessed', 'invited']]);
+        assert.equal((await call('GET', '/badges', { token: friend.token })).data.challenges, 1);
+        assert.equal((await call('POST', `/challenges/${id}/join`, { token: stranger.token })).status, 404, 'чужой челлендж не виден');
+
+        const early = await call('PUT', '/challenges/scores', { token: friend.token, body: { scores: [{ id, score: 9 }] } });
+        assert.equal(early.data.updated, 0, 'до вступления счёт не принимается');
+        assert.equal((await call('POST', `/challenges/${id}/join`, { token: friend.token })).data.myStatus, 'joined');
+        assert.equal((await call('GET', '/badges', { token: friend.token })).data.challenges, 0);
+        assert.equal((await call('PUT', '/challenges/scores', { token: friend.token, body: { scores: [{ id, score: 3, detail: '3 тренировки' }] } })).data.updated, 1);
+        await call('PUT', '/challenges/scores', { token: me.token, body: { scores: [{ id, score: 2, detail: '2 тренировки' }, { id: 'nope', score: 5 }] } });
+        const live = (await call('GET', '/challenges', { token: me.token })).data.find((c) => c.id === id);
+        assert.deepEqual(live.members.map((m) => [m.user.username, m.place, m.detail]), [['semobsessed', 1, '3 тренировки'], ['tim', 2, '2 тренировки']]);
+        assert.equal(live.owner.username, 'tim');
+
+        // Конец и сутки на досчёт прошли — счёт закрыт, победа в профиле.
+        await social.pool().query("UPDATE challenges SET starts_at = now() - interval '15 days', ends_at = now() - interval '25 hours' WHERE id = $1", [id]);
+        assert.equal((await call('PUT', '/challenges/scores', { token: me.token, body: { scores: [{ id, score: 10 }] } })).data.updated, 0);
+        const finished = (await call('GET', '/challenges', { token: me.token })).data.find((c) => c.id === id);
+        assert.equal(finished.status, 'finished');
+        assert.equal(finished.members[0].user.username, 'semobsessed');
+        assert.equal((await call('GET', '/users/semobsessed', { token: me.token })).data.challengeWins, 1);
+        assert.equal((await call('GET', '/users/tim', { token: me.token })).data.challengeWins, 0);
+        assert.equal((await call('POST', `/challenges/${id}/leave`, { token: me.token })).status, 409);
     });
 
     await t.test('активность: лайки, комментарии, ответы и подписчики', async () => {
