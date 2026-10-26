@@ -76,6 +76,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Scale
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -354,6 +355,17 @@ private class SessionActions(
     fun chooseArt(name: String) {
         manager.artTarget = name
     }
+
+    fun chooseSwap(ex: Int) {
+        manager.swapTarget = ex
+    }
+
+    fun swap(ex: Int, suggestion: com.texasprogram.app.model.ExerciseSwap.Suggestion, scope: com.texasprogram.app.model.SwapScope) = withProfile {
+        haptics.success()
+        manager.swapExercise(ex, suggestion, scope, it, update)
+    }
+
+    fun currentProfile(): ProgramProfile? = profile()
 
     fun step(name: String): Double = profile()?.weightStep(name) ?: com.texasprogram.app.model.AccessoryHint.STEP
 
@@ -711,6 +723,19 @@ fun ActiveWorkoutSessionScreen(
         WorkoutSessionManager.artTarget?.let { name ->
             ExerciseArtDialog(name = name, onDismiss = { WorkoutSessionManager.artTarget = null })
         }
+
+        WorkoutSessionManager.swapTarget?.let { index ->
+            val current = actions.currentProfile()
+            if (current != null) {
+                ExerciseSwapSheet(
+                    profile = current,
+                    workout = workout,
+                    index = index,
+                    onSwap = { suggestion, scope -> actions.swap(index, suggestion, scope) },
+                    onDismiss = { WorkoutSessionManager.swapTarget = null }
+                )
+            }
+        }
     }
 }
 
@@ -903,6 +928,11 @@ private fun ExerciseHeader(
                     MenuItem("Добавить подход", Icons.Filled.Add) {
                         menuExpanded = false
                         actions.addSet(index)
+                    }
+                    // Тренажёр занят — похожее упражнение с весом по истории.
+                    MenuItem("Заменить упражнение", Icons.Filled.SwapHoriz) {
+                        menuExpanded = false
+                        actions.chooseSwap(index)
                     }
                     MenuItem("Картинка упражнения", Icons.Filled.Image) {
                         menuExpanded = false

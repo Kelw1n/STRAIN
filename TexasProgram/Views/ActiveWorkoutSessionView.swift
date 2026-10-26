@@ -62,6 +62,9 @@ struct ActiveWorkoutSessionView: View {
             .sheet(item: $sessionManager.artTarget) { target in
                 ExerciseArtSheet(name: target.name)
             }
+            .sheet(item: $sessionManager.swapTarget) { target in
+                ExerciseSwapSheet(profile: profile, workout: workout, index: target.index)
+            }
             .confirmationDialog("Время отдыха", isPresented: Binding(
                 get: { sessionManager.customRestTargetExerciseIndex != nil },
                 set: { if !$0 { sessionManager.customRestTargetExerciseIndex = nil } }
@@ -549,6 +552,12 @@ private struct ExerciseSessionCard: View {
                 withAnimation(Motion.reorder) { manager.addSet(to: index, profile: profile) }
             } label: {
                 Label("Добавить подход", systemImage: "plus")
+            }
+            // Тренажёр занят — похожее упражнение с весом по истории.
+            Button {
+                manager.swapTarget = .init(id: exercise.id, index: index)
+            } label: {
+                Label("Заменить упражнение", systemImage: "arrow.triangle.2.circlepath")
             }
             Button {
                 manager.artTarget = ExerciseArtTarget(name: exercise.prescription.name)
