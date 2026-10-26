@@ -266,11 +266,12 @@ extension ProgramProfile {
             return edit
         }
 
-        // Сегодня: своё добавленное или уже заменённое — переименовываем, иначе новая замена.
+        // Сегодня: разовая правка этой недели — переименовываем, иначе новая замена.
+        // Правку на все недели не трогаем: переименование задело бы прошлые
+        // тренировки и «только сегодня» стало бы «навсегда».
         var today: ExercisePrescription
         let target: String
-        if let index = planEdits.firstIndex(where: { $0.id == old.id }),
-           planEdits[index].kind == .add || planEdits[index].week == week {
+        if let index = planEdits.firstIndex(where: { $0.id == old.id }), planEdits[index].week == week {
             remember(planEdits[index])
             planEdits[index].name = name
             planEdits[index].kilograms = nil

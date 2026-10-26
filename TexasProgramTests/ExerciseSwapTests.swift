@@ -60,6 +60,30 @@ final class ExerciseSwapTests: XCTestCase {
         XCTAssertTrue(weeks.last?.days[0].exercises.contains { $0.name == "Своё упражнение" } ?? false)
     }
 
+    func testOwnEveryWeekExerciseSwapsOnlyWhereAsked() throws {
+        let profile = texas()
+        let added = profile.addExercise(name: "Сгибания на бицепс", sets: 3, reps: "10", kilograms: 20, loadText: nil,
+                                        week: 1, day: 1, scope: .everyWeek)
+        profile.recordSet(week: 1, day: 1, exercise: added.prescription, index: 0, reps: 10, weight: 20)
+        let own = try XCTUnwrap(profile.workoutPlan.weeks[1].days[0].exercises.first { $0.id == added.id })
+        var undo = ProgramProfile.SwapUndo()
+        let today = profile.swapExercise(own, to: "Молотки", week: 2, day: 1, scope: .today, undo: &undo)
+        let weeks = profile.workoutPlan.weeks
+        XCTAssertTrue(weeks[1].days[0].exercises.contains { $0.id == today.id && $0.name == "Молотки" })
+        XCTAssertFalse(weeks[1].days[0].exercises.contains { $0.id == added.id })
+        XCTAssertTrue(weeks[0].days[0].exercises.contains { $0.id == added.id && $0.name == "Сгибания на бицепс" }, "прошлая неделя как была")
+        XCTAssertTrue(weeks[2].days[0].exercises.contains { $0.id == added.id }, "следующая неделя по-старому")
+        XCTAssertEqual(profile.history(forExerciseNamed: "Сгибания на бицепс").first { !$0.entries.isEmpty }?.week, 1, "история не переехала")
+
+        _ = profile.swapExercise(today, to: "Сгибания со штангой", week: 2, day: 1, scope: .rest, undo: &undo)
+        XCTAssertTrue(profile.workoutPlan.weeks[1].days[0].exercises.contains { $0.name == "Сгибания со штангой" })
+        XCTAssertTrue(profile.workoutPlan.weeks.last?.days[0].exercises.contains { $0.name == "Сгибания со штангой" } ?? false)
+        XCTAssertTrue(profile.workoutPlan.weeks[0].days[0].exercises.contains { $0.id == added.id })
+
+        profile.undoSwaps(undo)
+        XCTAssertEqual(profile.planEdits, [added])
+    }
+
     func testSessionSwapClearsMarkedSetsAndDiscardRestores() throws {
         let profile = texas()
         let manager = WorkoutSessionManager.shared

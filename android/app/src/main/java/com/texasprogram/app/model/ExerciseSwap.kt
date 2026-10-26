@@ -258,12 +258,14 @@ fun ProgramProfile.swapExercise(
         return edit
     }
 
-    // Сегодня: своё добавленное или уже заменённое — переименовываем, иначе новая замена.
+    // Сегодня: разовая правка этой недели — переименовываем, иначе новая замена.
+    // Правку на все недели не трогаем: переименование задело бы прошлые
+    // тренировки и «только сегодня» стало бы «навсегда».
     val index = edits.indexOfFirst { it.id == old.key }
     val existing = edits.getOrNull(index)
     val todayId: String
     val target: String
-    if (existing != null && (existing.kind == PlanEditKind.ADD || existing.week == week)) {
+    if (existing != null && existing.week == week) {
         remember(existing)
         val renamed = existing.copy(name = name, kilograms = null, loadText = null)
         edits = edits.toMutableList().also { it[index] = renamed }

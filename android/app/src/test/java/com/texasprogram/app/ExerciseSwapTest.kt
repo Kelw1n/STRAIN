@@ -1,6 +1,7 @@
 package com.texasprogram.app
 
 import com.texasprogram.app.model.ExerciseSwap
+import com.texasprogram.app.model.PlanEditScope
 import com.texasprogram.app.model.ProgramInput
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.SwapScope
@@ -75,6 +76,31 @@ class ExerciseSwapTest {
         }
         assertTrue(weeks[1].days[0].exercises.any { it.name == "Своё упражнение" })
         assertTrue(weeks.last().days[0].exercises.any { it.name == "Своё упражнение" })
+    }
+
+    @Test
+    fun ownEveryWeekExerciseSwapsOnlyWhereAsked() {
+        var profile = texas().addExercise("Сгибания на бицепс", 3, "10", 20.0, null, 1, 1, PlanEditScope.EVERY_WEEK)
+        val added = profile.planEdits.single()
+        profile = profile.recordSet(1, 1, added.prescription, 0, 10, 20.0)
+        val own = profile.workoutPlan.weeks[1].days[0].exercises.first { it.key == added.id }
+        val first = profile.swapExercise(own, "Молотки", 2, 1, SwapScope.TODAY, SwapUndo())
+        profile = first.profile
+        var weeks = profile.workoutPlan.weeks
+        assertTrue(weeks[1].days[0].exercises.any { it.key == first.prescription.key && it.name == "Молотки" })
+        assertFalse(weeks[1].days[0].exercises.any { it.key == added.id })
+        assertTrue("прошлая неделя как была", weeks[0].days[0].exercises.any { it.key == added.id && it.name == "Сгибания на бицепс" })
+        assertTrue("следующая неделя по-старому", weeks[2].days[0].exercises.any { it.key == added.id })
+        assertEquals("история не переехала", 1, profile.history("Сгибания на бицепс").first { it.entries.isNotEmpty() }.week)
+
+        val second = profile.swapExercise(first.prescription, "Сгибания со штангой", 2, 1, SwapScope.REST, first.undo)
+        profile = second.profile
+        weeks = profile.workoutPlan.weeks
+        assertTrue(weeks[1].days[0].exercises.any { it.name == "Сгибания со штангой" })
+        assertTrue(weeks.last().days[0].exercises.any { it.name == "Сгибания со штангой" })
+        assertTrue(weeks[0].days[0].exercises.any { it.key == added.id })
+
+        assertEquals(listOf(added), profile.undoSwaps(second.undo).planEdits)
     }
 
     @Test

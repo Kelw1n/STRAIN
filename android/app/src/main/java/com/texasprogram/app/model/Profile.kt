@@ -217,6 +217,13 @@ data class ProgramProfile(
                     if (index >= 0) list[index] = edit.prescription
                 }
                 edits.filter { it.kind == PlanEditKind.ADD }.forEach { list.add(it.prescription) }
+                // Своё добавленное меняют прямо в тренировке («тренажёр занят») —
+                // такая замена находит цель только теперь. Уже применённые
+                // свою цель здесь не найдут и ничего не тронут.
+                edits.filter { it.kind == PlanEditKind.REPLACE }.forEach { edit ->
+                    val index = list.indexOfFirst { it.key == edit.targetKey }
+                    if (index >= 0) list[index] = edit.prescription
+                }
                 // Порядок применяем последним: к этому моменту состав дня уже
                 // окончательный. Упражнения вне списка идут в конец — их могли
                 // добавить после перестановки. sortedBy устойчива, поэтому свой

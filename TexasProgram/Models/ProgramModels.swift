@@ -519,6 +519,13 @@ final class ProgramProfile {
                 for edit in edits where edit.kind == .add {
                     list.append(edit.prescription)
                 }
+                // Своё добавленное меняют прямо в тренировке («тренажёр занят») —
+                // такая замена находит цель только теперь. Уже применённые
+                // свою цель здесь не найдут и ничего не тронут.
+                for edit in edits where edit.kind == .replace {
+                    guard let index = list.firstIndex(where: { $0.id == edit.targetID }) else { continue }
+                    list[index] = edit.prescription
+                }
                 // Порядок применяем последним: к этому моменту состав дня уже
                 // окончательный. Упражнения, которых нет в списке, идут в конец —
                 // их могли добавить после перестановки.
