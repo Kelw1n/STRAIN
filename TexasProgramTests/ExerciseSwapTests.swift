@@ -84,6 +84,21 @@ final class ExerciseSwapTests: XCTestCase {
         XCTAssertEqual(profile.planEdits, [added])
     }
 
+    func testSwapKeepsOwnOrderOfDay() throws {
+        let profile = texas()
+        let reversed = Array(profile.workoutPlan.weeks[1].days[0].exercises.reversed())
+        profile.setOrder(reversed.map(\.id), week: 2, day: 1, scope: .everyWeek)
+        let orderEdit = try XCTUnwrap(profile.planEdits.first)
+        let first = try XCTUnwrap(profile.workoutPlan.weeks[1].days[0].exercises.first)
+        XCTAssertEqual(first.id, reversed.first?.id)
+        var undo = ProgramProfile.SwapUndo()
+        _ = profile.swapExercise(first, to: "Своё упражнение", week: 2, day: 1, scope: .rest, undo: &undo)
+        XCTAssertEqual(profile.workoutPlan.weeks[1].days[0].exercises.first?.name, "Своё упражнение", "на месте прежнего, а не в конце")
+        XCTAssertEqual(profile.workoutPlan.weeks[1].days[0].exercises.count, reversed.count)
+        profile.undoSwaps(undo)
+        XCTAssertEqual(profile.planEdits, [orderEdit])
+    }
+
     func testSessionSwapClearsMarkedSetsAndDiscardRestores() throws {
         let profile = texas()
         let manager = WorkoutSessionManager.shared

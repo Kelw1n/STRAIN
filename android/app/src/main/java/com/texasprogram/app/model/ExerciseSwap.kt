@@ -255,6 +255,18 @@ fun ProgramProfile.swapExercise(
         )
         edits = edits + edit
         added = added + edit.id
+        // Свой порядок дня: новое упражнение встаёт на место прежнего, а не в конец.
+        edits = edits.map { other ->
+            val keys = other.order
+            if (other.kind != PlanEditKind.ORDER || !other.matches(forWeek, day, isPeaking) ||
+                keys == null || target !in keys || edit.id in keys
+            ) {
+                other
+            } else {
+                remember(other)
+                other.copy(order = keys.toMutableList().also { it.add(keys.indexOf(target) + 1, edit.id) })
+            }
+        }
         return edit
     }
 

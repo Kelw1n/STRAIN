@@ -263,6 +263,15 @@ extension ProgramProfile {
                                 name: name, sets: old.sets, reps: old.reps)
             planEdits.append(edit)
             undo.added.append(edit.id)
+            // Свой порядок дня: новое упражнение встаёт на место прежнего, а не в конец.
+            for index in planEdits.indices where planEdits[index].kind == .order
+                && planEdits[index].matches(week: week, day: day, isPeaking: peaking) {
+                guard var order = planEdits[index].order, let position = order.firstIndex(of: target),
+                      !order.contains(edit.id) else { continue }
+                remember(planEdits[index])
+                order.insert(edit.id, at: position + 1)
+                planEdits[index].order = order
+            }
             return edit
         }
 

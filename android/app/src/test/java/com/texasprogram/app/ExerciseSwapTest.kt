@@ -104,6 +104,21 @@ class ExerciseSwapTest {
     }
 
     @Test
+    fun swapKeepsOwnOrderOfDay() {
+        val base = texas()
+        val reversed = base.workoutPlan.weeks[1].days[0].exercises.reversed()
+        val profile = base.setOrder(reversed.map { it.key }, 2, 1, PlanEditScope.EVERY_WEEK)
+        val orderEdit = profile.planEdits.single()
+        val first = profile.workoutPlan.weeks[1].days[0].exercises.first()
+        assertEquals(reversed.first().key, first.key)
+        val result = profile.swapExercise(first, "Своё упражнение", 2, 1, SwapScope.REST, SwapUndo())
+        val day = result.profile.workoutPlan.weeks[1].days[0].exercises
+        assertEquals("на месте прежнего, а не в конце", "Своё упражнение", day.first().name)
+        assertEquals(reversed.size, day.size)
+        assertEquals(listOf(orderEdit), result.profile.undoSwaps(result.undo).planEdits)
+    }
+
+    @Test
     fun sessionSwapClearsMarkedSetsAndDiscardRestores() {
         WorkoutSessionManager.forgetForTesting()
         var profile = texas()
