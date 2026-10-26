@@ -444,5 +444,5 @@ private fun CoachActionRow(action: CoachAction, profile: ProgramProfile, applied
 /// Звёздочки разметки Gemini без отрисовки — убираем, чтобы текст читался.
 internal fun plainMarkdown(text: String): String =
     text.replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")
-        .replace(Regex("(?m)^\\s*[*-]\\s+"), "• ")
+        .replace(Regex("(?m)^[ \\t]*[*-][ \\t]+"), "• ")
         .replace(Regex("(?<!\\*)\\*(?!\\s)(.+?)(?<!\\s)\\*(?!\\*)"), "$1")

@@ -329,8 +329,11 @@ private struct CoachBubble: View {
     var onApply: (Int) -> Void
 
     static func rendered(_ text: String) -> AttributedString {
-        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-            ?? AttributedString(text)
+        // Пункты списка — точками, как на Android: иначе одинокая «*» в начале
+        // строки читалась бы как начало курсива.
+        let bullets = text.replacingOccurrences(of: #"(?m)^[ \t]*[*-][ \t]+"#, with: "• ", options: .regularExpression)
+        return (try? AttributedString(markdown: bullets, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(bullets)
     }
 
     var body: some View {

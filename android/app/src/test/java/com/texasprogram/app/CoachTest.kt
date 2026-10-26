@@ -6,6 +6,7 @@ import com.texasprogram.app.model.CoachMessage
 import com.texasprogram.app.model.CompletionRecord
 import com.texasprogram.app.model.ProgramInput
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.ui.plainMarkdown
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -16,6 +17,14 @@ import java.time.LocalDate
 
 /// ИИ-тренер: разбор ответа, проверка и применение действий, данные для тренера.
 class CoachTest {
+    @Test
+    fun markdownBecomesPlainTextWithBullets() {
+        assertEquals(
+            "Итог недели — 3 тренировки.\n\n• Присед: застой\n• Жим растёт на 6,3% веса",
+            plainMarkdown("**Итог недели** — 3 тренировки.\n\n* Присед: *застой*\n- Жим растёт на 6,3% веса")
+        )
+    }
+
     private fun profile(): ProgramProfile {
         val base = ProgramProfile.texas(ProgramInput.demo)
         val squat = base.workoutPlan.weeks[0].days[0].exercises[0]
