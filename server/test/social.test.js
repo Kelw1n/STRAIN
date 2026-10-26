@@ -436,6 +436,16 @@ test('лента, профили, подписки, фото и коммента
         assert.equal((await call('GET', '/users/semobsessed', { token: me.token })).data.challengeWins, 1);
         assert.equal((await call('GET', '/users/tim', { token: me.token })).data.challengeWins, 0);
         assert.equal((await call('POST', `/challenges/${id}/leave`, { token: me.token })).status, 409);
+
+        // Создатель удалил аккаунт — у остальных челлендж остаётся.
+        await call('POST', '/users/tim/follow', { token: stranger.token });
+        const orphan = (await call('POST', '/challenges', { token: stranger.token, body: { kind: 'volume', weeks: 1, invite: ['tim'] } })).data;
+        await call('POST', `/challenges/${orphan.id}/join`, { token: me.token });
+        assert.equal((await call('DELETE', '/me', { token: stranger.token })).status, 200);
+        const kept = (await call('GET', '/challenges', { token: me.token })).data.find((c) => c.id === orphan.id);
+        assert.ok(kept, 'челлендж не удалился');
+        assert.equal(kept.owner, null);
+        assert.deepEqual(kept.members.map((m) => m.user.username), ['tim']);
     });
 
     await t.test('активность: лайки, комментарии, ответы и подписчики', async () => {

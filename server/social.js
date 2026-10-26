@@ -177,13 +177,22 @@ CREATE TABLE IF NOT EXISTS weekly_stats (
 -- сами приложения — вся история тренировок живёт на телефоне.
 CREATE TABLE IF NOT EXISTS challenges (
     id TEXT PRIMARY KEY,
-    owner TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    owner TEXT REFERENCES users(id) ON DELETE SET NULL,
     kind TEXT NOT NULL,
     weeks INT NOT NULL,
     starts_at TIMESTAMPTZ NOT NULL,
     ends_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Создатель удалил аккаунт — челлендж остаётся остальным. Первая версия
+-- таблицы удаляла его целиком вместе с создателем.
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'challenges_owner_fkey' AND confdeltype = 'c') THEN
+        ALTER TABLE challenges ALTER COLUMN owner DROP NOT NULL;
+        ALTER TABLE challenges DROP CONSTRAINT challenges_owner_fkey;
+        ALTER TABLE challenges ADD CONSTRAINT challenges_owner_fkey FOREIGN KEY (owner) REFERENCES users(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS challenge_members (
     challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
