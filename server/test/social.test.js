@@ -401,6 +401,7 @@ test('лента, профили, подписки, фото и коммента
 
     await t.test('челленджи: приглашение, счёт, места и победа в профиле', async () => {
         const stranger = (await call('POST', '/register', { body: { username: 'stranger.one' } })).data;
+        assert.equal((await call('POST', '/challenges', { token: me.token, body: { kind: 'workouts', weeks: 1, invite: ['stranger.one'] } })).status, 400, 'незнакомого не позвать');
         assert.equal((await call('POST', '/challenges', { token: me.token, body: { kind: 'jump', weeks: 2, invite: ['semobsessed'] } })).status, 400);
         assert.equal((await call('POST', '/challenges', { token: me.token, body: { kind: 'workouts', weeks: 2, invite: [] } })).status, 400);
         assert.equal((await call('POST', '/challenges', { token: me.token, body: { kind: 'workouts', weeks: 9, invite: ['semobsessed'] } })).status, 400);

@@ -236,7 +236,8 @@ extension ProgramProfile {
     /// Упражнение программы с весом от расчёта — основное движение. Его меняем
     /// только на сегодня: программа строится вокруг него.
     func isProgramLift(_ exercise: ExercisePrescription) -> Bool {
-        guard case .kilograms = exercise.load else { return false }
+        // В своей программе веса вписаны руками — её упражнения меняются как любые.
+        guard programKind != .custom, case .kilograms = exercise.load else { return false }
         return !planEdits.contains { $0.id == exercise.id }
     }
 

@@ -218,7 +218,9 @@ data class SwapUndo(val added: List<String> = emptyList(), val originals: List<P
 /// Упражнение программы с весом от расчёта — основное движение. Его меняем
 /// только на сегодня: программа строится вокруг него.
 fun ProgramProfile.isProgramLift(exercise: ExercisePrescription): Boolean =
-    exercise.load is LoadPrescription.Kilograms && planEdits.none { it.id == exercise.key }
+    // В своей программе веса вписаны руками — её упражнения меняются как любые.
+    programKind != TrainingProgramKind.CUSTOM &&
+        exercise.load is LoadPrescription.Kilograms && planEdits.none { it.id == exercise.key }
 
 /// Результат замены: новый профиль, упражнение на сегодня и обновлённый откат.
 data class SwapResult(val profile: ProgramProfile, val prescription: ExercisePrescription, val undo: SwapUndo)

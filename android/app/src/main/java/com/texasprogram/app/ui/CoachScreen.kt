@@ -336,6 +336,9 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
         ) {
             showingKey = false
             hasKey = GeminiKeyStore.load(context) != null
+            // Ключ вставили ради разбора недели — сразу его и просим.
+            val week = Coach.reviewWeek()
+            if (hasKey && startReview && messages.none { it.reviewWeek == week }) ask(Coach.REVIEW_PROMPT, review = week)
         }
     }
 }

@@ -159,7 +159,13 @@ struct CoachView: View {
                     CoachHistory.delete(profile.profileID)
                 }
             }
-            .sheet(isPresented: $showingKey, onDismiss: { hasKey = GeminiKeychain.load() != nil }) {
+            .sheet(isPresented: $showingKey, onDismiss: {
+                hasKey = GeminiKeychain.load() != nil
+                // Ключ вставили ради разбора недели — сразу его и просим.
+                if hasKey, startReview, !messages.contains(where: { $0.reviewWeek == Coach.reviewWeek() }) {
+                    Task { await ask(Coach.reviewPrompt, review: Coach.reviewWeek()) }
+                }
+            }) {
                 GeminiKeySheet(
                     title: "Ключ для ИИ-тренера",
                     intro: "Тренер отвечает через ИИ Google Gemini по твоему ключу — тому же, что и для фото еды. Ключ бесплатный и хранится только на этом телефоне."
@@ -322,6 +328,11 @@ private struct CoachBubble: View {
     let profile: ProgramProfile
     var onApply: (Int) -> Void
 
+    static func rendered(_ text: String) -> AttributedString {
+        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(text)
+    }
+
     var body: some View {
         if message.role == .user {
             HStack {
@@ -340,7 +351,9 @@ private struct CoachBubble: View {
                         .font(.system(size: 12, weight: .heavy))
                         .foregroundStyle(Theme.accent)
                 }
-                Text(LocalizedStringKey(message.text))
+                // Разметка Gemini — жирный и курсив; строка-ключ локализации
+                // путала бы проценты («6,3% веса») с подстановками.
+                Text(Self.rendered(message.text))
                     .font(.system(size: 15))
                     .foregroundStyle(.white)
                     .textSelection(.enabled)

@@ -1461,7 +1461,12 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const weeks = Number(body.weeks);
         if (!Number.isInteger(weeks) || weeks < 1 || weeks > 4) throw new HttpError(400, 'Челлендж — от одной до четырёх недель');
         const names = [...new Set((Array.isArray(body.invite) ? body.invite : []).map((n) => text(n, 24).toLowerCase()).filter(Boolean))].slice(0, 20);
-        const invited = names.length ? await q('SELECT * FROM users WHERE username = ANY($1) AND id <> $2', [names, me.id]) : [];
+        // Звать можно только своих: на кого подписан или кто подписан на тебя.
+        const invited = names.length ? await q(
+            `SELECT * FROM users WHERE username = ANY($1) AND id <> $2
+             AND (id IN (SELECT followee FROM follows WHERE follower = $2) OR id IN (SELECT follower FROM follows WHERE followee = $2))`,
+            [names, me.id]
+        ) : [];
         if (invited.length === 0) throw new HttpError(400, 'Позови хотя бы одного друга');
         const requested = Number(body.startsAt);
         const now = Date.now();
