@@ -93,6 +93,8 @@ struct SocialUser: Codable, Hashable, Identifiable, Sendable {
     /// Когда последний раз заходил — для «был(а) N минут назад».
     var lastSeen: Double?
     var level: Int?
+    /// Опыт из той же сводки — для шкалы до следующего уровня; у старых версий — нет.
+    var xp: Int?
     /// Сколько челленджей выиграл.
     var challengeWins: Int
 
@@ -101,6 +103,7 @@ struct SocialUser: Codable, Hashable, Identifiable, Sendable {
         id = try c.decode(String.self, forKey: .id)
         username = try c.decode(String.self, forKey: .username)
         level = try? c.decodeIfPresent(Int.self, forKey: .level)
+        xp = try? c.decodeIfPresent(Int.self, forKey: .xp)
         challengeWins = (try? c.decodeIfPresent(Int.self, forKey: .challengeWins)) ?? 0
         live = try? c.decodeIfPresent(SocialLive.self, forKey: .live)
         lastSeen = try? c.decodeIfPresent(Double.self, forKey: .lastSeen)

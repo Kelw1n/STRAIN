@@ -53,6 +53,13 @@ object Progression {
         return Level(level, xp, threshold(level), if (level < MAX_LEVEL) threshold(level + 1) else null)
     }
 
+    /// Опыт человека, если он сходится с его уровнем: старые версии приложения
+    /// присылали только номер — тогда шкалы нет.
+    fun progress(level: Int, xp: Int?): Level? {
+        xp ?: return null
+        return Progression.level(xp).takeIf { it.level == level }
+    }
+
     fun title(level: Int): String = when {
         level < 5 -> "Новичок"
         level < 10 -> "Любитель"

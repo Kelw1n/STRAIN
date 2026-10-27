@@ -75,6 +75,8 @@ data class SocialUser(
     /// Когда последний раз заходил — для «был(а) N минут назад».
     val lastSeen: Double? = null,
     val level: Int? = null,
+    /// Опыт из той же сводки — для шкалы до следующего уровня; у старых версий — нет.
+    val xp: Int? = null,
     /// Сколько челленджей выиграл.
     val challengeWins: Int = 0
 ) {

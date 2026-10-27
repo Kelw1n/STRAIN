@@ -3,6 +3,8 @@ package com.texasprogram.app
 import com.texasprogram.app.model.CompletionRecord
 import com.texasprogram.app.model.Progression
 import com.texasprogram.app.model.SetEntry
+import com.texasprogram.app.model.SocialUser
+import com.texasprogram.app.service.SocialService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -34,6 +36,15 @@ class ProgressionTest {
         // Подход без завершённой тренировки опыта не даёт и рекорд не двигает.
         "3-1|Приседания|0" to SetEntry(5, 200.0)
     )
+
+    @Test
+    fun otherUserLevelProgress() {
+        val user = SocialService.json.decodeFromString<SocialUser>("""{"id":"u","username":"tim","level":12,"xp":8000}""")
+        assertEquals(8000, user.xp)
+        assertEquals("до 13-го — 8640", 640, Progression.progress(12, user.xp)?.toNext)
+        assertNull("старое приложение опыт не шлёт", Progression.progress(12, null))
+        assertNull("опыт не сходится с уровнем — шкалу не рисуем", Progression.progress(20, 8000))
+    }
 
     @Test
     fun experienceMatchesIphone() {

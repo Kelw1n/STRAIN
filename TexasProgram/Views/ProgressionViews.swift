@@ -120,18 +120,27 @@ private enum ProgressionText {
 struct LevelChip: View {
     let level: Int?
     var large = false
+    /// Стрелка — плашка нажимается и открывает экран уровня.
+    var opens = false
 
     var body: some View {
         if let level {
-            Text(large ? "Уровень \(level) · \(Progression.title(for: level))" : "ур. \(level)")
-                .font(.system(size: large ? 13 : 10, weight: .heavy, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(Theme.accent)
-                .padding(.horizontal, large ? 10 : 5)
-                .padding(.vertical, large ? 4 : 2)
-                .background(Theme.accent.opacity(0.16), in: Capsule())
-                .fixedSize()
-                .accessibilityLabel("Уровень \(level)")
+            HStack(spacing: 4) {
+                Text(large ? "Уровень \(level) · \(Progression.title(for: level))" : "ур. \(level)")
+                    .monospacedDigit()
+                if opens {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: large ? 9 : 7, weight: .heavy))
+                }
+            }
+            .font(.system(size: large ? 13 : 10, weight: .heavy, design: .rounded))
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, large ? 10 : 5)
+            .padding(.vertical, large ? 4 : 2)
+            .background(Theme.accent.opacity(0.16), in: Capsule())
+            .fixedSize()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Уровень \(level)")
         }
     }
 }
@@ -188,21 +197,6 @@ struct LevelSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var profile: ProgramProfile
 
-    private struct TitleRange: Hashable {
-        let levels: String
-        let title: String
-        let from: Int
-    }
-
-    private static let titleRanges: [TitleRange] = [
-        TitleRange(levels: "1–4", title: "Новичок", from: 1), TitleRange(levels: "5–9", title: "Любитель", from: 5),
-        TitleRange(levels: "10–14", title: "Атлет", from: 10), TitleRange(levels: "15–19", title: "Силач", from: 15),
-        TitleRange(levels: "20–24", title: "Ветеран зала", from: 20), TitleRange(levels: "25–29", title: "Мастер", from: 25),
-        TitleRange(levels: "30–34", title: "Железный", from: 30), TitleRange(levels: "35–39", title: "Титан", from: 35),
-        TitleRange(levels: "40–44", title: "Чемпион", from: 40), TitleRange(levels: "45–49", title: "Икона зала", from: 45),
-        TitleRange(levels: "50", title: "Легенда", from: 50)
-    ]
-
     var body: some View {
         let level = Progression.level(for: profile)
         let month = Progression.currentMonth(log: profile.completionLog)
@@ -210,10 +204,10 @@ struct LevelSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
-                    hero(level)
-                    rules
+                    LevelHeroCard(level: level.level, progress: level)
+                    LevelRulesCard(weeklyGoal: Progression.weeklyGoal(for: profile))
                     monthCard(month, awards: awards)
-                    titles(level)
+                    LevelTitlesCard(level: level.level)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -234,48 +228,9 @@ struct LevelSheet: View {
         .preferredColorScheme(.dark)
     }
 
-    private func hero(_ level: Progression.Level) -> some View {
-        VStack(spacing: 12) {
-            LevelRing(level: level.level, fraction: level.fraction, size: 120, lineWidth: 10)
-            Text(level.title)
-                .font(.system(size: 26, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
-            Text(ProgressionText.experience(level.xp))
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.6))
-            XPBar(fraction: level.fraction, height: 8)
-                .padding(.horizontal, 24)
-            Text(ProgressionText.toNext(level))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.45))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
-    private var rules: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            caption("За что опыт")
-            rule("Тренировка", "+\(Progression.workoutXP)")
-            rule("Рабочий подход", "+\(Progression.setXP)")
-            rule("Личный рекорд", "+\(Progression.recordXP)")
-            rule("Цель недели: \(Progression.weeklyGoal(for: profile)) \(RuPlural.word(Progression.weeklyGoal(for: profile), "тренировка", "тренировки", "тренировок"))", "+\(Progression.weekGoalXP)")
-            rule("Серия недель подряд", "до +50%")
-            rule("Место в челлендже", "до +300")
-            Text("Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.")
-                .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.4))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
     private func monthCard(_ month: (workouts: Int, next: Progression.MonthTier?), awards: [Progression.MonthAward]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            caption("Награды месяцев")
+            LevelCaption(text: "Награды месяцев")
             Text(ProgressionText.month(month.workouts, next: month.next))
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.white)
@@ -331,14 +286,194 @@ struct LevelSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
+}
 
-    private func titles(_ level: Progression.Level) -> some View {
+/// Уровень другого человека из его профиля: звание, шкала до следующего,
+/// сравнение со своим и за что даётся опыт.
+struct UserLevelSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let user: SocialUser
+    /// Свой уровень — для сравнения; в своём же профиле не нужен.
+    var myLevel: Int?
+
+    var body: some View {
+        let level = user.level ?? 1
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 14) {
+                    LevelHeroCard(level: level, progress: Progression.progress(level: level, xp: user.xp), caption: "@\(user.username)")
+                    if !user.isMe, let myLevel {
+                        LevelComparisonCard(mine: myLevel, theirs: level)
+                    }
+                    LevelRulesCard(weeklyGoal: nil)
+                    LevelTitlesCard(level: level)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
+            }
+            .scrollIndicators(.hidden)
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("Уровень")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Готово") { dismiss() }
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+extension Progression {
+    /// Опыт человека, если он сходится с его уровнем: старые версии приложения
+    /// присылали только номер — тогда шкалы нет.
+    static func progress(level: Int, xp: Int?) -> Level? {
+        guard let xp else { return nil }
+        let computed = Progression.level(forXP: xp)
+        return computed.level == level ? computed : nil
+    }
+}
+
+/// Кольцо, звание и шкала до следующего уровня. Без опыта — только номер и звание.
+private struct LevelHeroCard: View {
+    let level: Int
+    let progress: Progression.Level?
+    var caption: String?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            LevelRing(level: level, fraction: progress?.fraction ?? 0, size: 120, lineWidth: 10)
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.7))
+            }
+            Text(Progression.title(for: level))
+                .font(.system(size: 26, weight: .heavy, design: Theme.fontDesign))
+                .foregroundStyle(.white)
+            if let progress {
+                Text(ProgressionText.experience(progress.xp))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.6))
+                XPBar(fraction: progress.fraction, height: 8)
+                    .padding(.horizontal, 24)
+                Text(ProgressionText.toNext(progress))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.45))
+            } else {
+                Text("Уровень \(level)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.6))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+/// «Ты — 12, Атлет» и на сколько уровней разница.
+private struct LevelComparisonCard: View {
+    let mine: Int
+    let theirs: Int
+
+    private var verdict: String {
+        let gap = abs(theirs - mine)
+        let levels = "\(gap) \(RuPlural.word(gap, "уровень", "уровня", "уровней"))"
+        if gap == 0 { return "Вы на одном уровне" }
+        return theirs > mine ? "Впереди тебя на \(levels)" : "Позади тебя на \(levels)"
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            LevelRing(level: mine, fraction: 1, size: 48, lineWidth: 4)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Ты — \(Progression.title(for: mine))")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(verdict)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theirs > mine ? Theme.accent : Color.white.opacity(0.55))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+/// За что даётся опыт. Цель недели у каждого своя — у чужого числа не знаем.
+private struct LevelRulesCard: View {
+    let weeklyGoal: Int?
+
+    private var goalTitle: String {
+        guard let weeklyGoal else { return "Цель недели" }
+        return "Цель недели: \(weeklyGoal) \(RuPlural.word(weeklyGoal, "тренировка", "тренировки", "тренировок"))"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LevelCaption(text: "За что опыт")
+            rule("Тренировка", "+\(Progression.workoutXP)")
+            rule("Рабочий подход", "+\(Progression.setXP)")
+            rule("Личный рекорд", "+\(Progression.recordXP)")
+            rule(goalTitle, "+\(Progression.weekGoalXP)")
+            rule("Серия недель подряд", "до +50%")
+            rule("Место в челлендже", "до +300")
+            Text("Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.white.opacity(0.4))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func rule(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+            Spacer()
+            Text(value)
+                .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign))
+                .foregroundStyle(Theme.accent)
+        }
+    }
+}
+
+/// Лестница званий: пройденные — галочкой, текущее — отметкой.
+private struct LevelTitlesCard: View {
+    let level: Int
+
+    private struct TitleRange: Hashable {
+        let levels: String
+        let title: String
+        let from: Int
+    }
+
+    private static let titleRanges: [TitleRange] = [
+        TitleRange(levels: "1–4", title: "Новичок", from: 1), TitleRange(levels: "5–9", title: "Любитель", from: 5),
+        TitleRange(levels: "10–14", title: "Атлет", from: 10), TitleRange(levels: "15–19", title: "Силач", from: 15),
+        TitleRange(levels: "20–24", title: "Ветеран зала", from: 20), TitleRange(levels: "25–29", title: "Мастер", from: 25),
+        TitleRange(levels: "30–34", title: "Железный", from: 30), TitleRange(levels: "35–39", title: "Титан", from: 35),
+        TitleRange(levels: "40–44", title: "Чемпион", from: 40), TitleRange(levels: "45–49", title: "Икона зала", from: 45),
+        TitleRange(levels: "50", title: "Легенда", from: 50)
+    ]
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            caption("Звания")
+            LevelCaption(text: "Звания")
                 .padding(.bottom, 6)
             ForEach(Self.titleRanges, id: \.from) { item in
-                let current = Progression.title(for: level.level) == item.title
-                let reached = level.level >= item.from
+                let current = Progression.title(for: level) == item.title
+                let reached = level >= item.from
                 HStack {
                     Text(item.title)
                         .font(.system(size: 15, weight: current ? .heavy : .semibold))
@@ -363,24 +498,16 @@ struct LevelSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
+}
 
-    private func caption(_ text: String) -> some View {
+private struct LevelCaption: View {
+    let text: String
+
+    var body: some View {
         Text(text.uppercased())
             .font(.system(size: 12, weight: .bold))
             .tracking(1.2)
             .foregroundStyle(Color.white.opacity(0.45))
-    }
-
-    private func rule(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
-            Spacer()
-            Text(value)
-                .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(Theme.accent)
-        }
     }
 }
 

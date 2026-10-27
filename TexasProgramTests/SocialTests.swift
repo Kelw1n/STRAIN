@@ -566,6 +566,15 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(Progression.title(for: 25), "Мастер")
     }
 
+    func testOtherUserLevelProgress() throws {
+        let user = try JSONDecoder().decode(SocialUser.self, from: Data(#"{"id":"u","username":"tim","level":12,"xp":8000}"#.utf8))
+        XCTAssertEqual(user.xp, 8000)
+        let progress = try XCTUnwrap(Progression.progress(level: 12, xp: user.xp))
+        XCTAssertEqual(progress.toNext, 640, "до 13-го — 8640")
+        XCTAssertNil(Progression.progress(level: 12, xp: nil), "старое приложение опыт не шлёт")
+        XCTAssertNil(Progression.progress(level: 20, xp: 8000), "опыт не сходится с уровнем — шкалу не рисуем")
+    }
+
     func testMonthAwards() {
         func date(_ month: Int, _ day: Int) -> Date {
             WeeklyStatsBuilder.calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 18))!

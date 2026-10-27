@@ -8,6 +8,14 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -185,6 +193,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                         }
                     },
                     onPostChange = ::replace,
+                    levelProfile = profile,
                     primaryAction = {
                         Box(
                             Modifier
@@ -374,16 +383,23 @@ fun ProfileContent(
     onAchievements: () -> Unit,
     onLoadMore: () -> Unit,
     onPostChange: (String, SocialPost?) -> Unit,
+    /// Свой профиль программы: по нажатию на уровень — полный экран уровня
+    /// с наградами месяцев. У чужого — его уровень и сравнение со своим.
+    levelProfile: ProgramProfile? = null,
     primaryAction: @Composable () -> Unit
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var viewingAvatar by remember { mutableStateOf(false) }
+    var showingLevel by remember { mutableStateOf(false) }
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = contentPadding.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        item(key = "header") { ProfileHeader(user, contentPadding) }
+        item(key = "header") {
+            ProfileHeader(user, contentPadding, onAvatar = { viewingAvatar = true }, onLevel = { showingLevel = true })
+        }
         item(key = "stats") {
             Row(Modifier.fillMaxWidth()) {
                 SocialStat("${user.workouts}", "Тренировки", Modifier.weight(1f))
@@ -459,10 +475,31 @@ fun ProfileContent(
             }
         }
     }
+    val avatar = user.avatar
+    if (viewingAvatar && avatar != null) AvatarViewer(avatar, user.username) { viewingAvatar = false }
+    if (showingLevel) {
+        if (levelProfile != null) {
+            LevelSheet(levelProfile) { showingLevel = false }
+        } else {
+            UserLevelSheet(user, SocialService.me?.level) { showingLevel = false }
+        }
+    }
 }
 
 @Composable
-private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
+private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues, onAvatar: () -> Unit, onLevel: () -> Unit) {
+    val haptics = rememberHapticEngine()
+    var pressingAvatar by remember { mutableStateOf(false) }
+    val avatarScale by animateFloatAsState(
+        if (pressingAvatar) 0.94f else 1f,
+        animationSpec = if (pressingAvatar) spring(stiffness = Spring.StiffnessHigh) else spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
+        label = "avatarPress"
+    )
+    fun openAvatar() {
+        if (user.avatar == null) return
+        haptics.medium()
+        onAvatar()
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         // Обложка — от края до края экрана, сквозь боковые отступы списка.
         Box(Modifier.bleed(16.dp).fillMaxWidth().height(contentPadding.calculateTopPadding() + 230.dp)) {
@@ -472,17 +509,49 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
                     .fillMaxWidth()
                     .height(contentPadding.calculateTopPadding() + 170.dp)
             )
+            // Аватарка как в Telegram: зажми — и она откроется на весь экран.
+            // Обычное нажатие тоже открывает. Без фото открывать нечего.
             Avatar(
                 user.avatar,
                 user.username,
                 118.dp,
                 Modifier
                     .align(Alignment.BottomCenter)
+                    .graphicsLayer {
+                        scaleX = avatarScale
+                        scaleY = avatarScale
+                    }
                     .border(4.dp, Color.Black, CircleShape)
+                    .pointerInput(user.avatar) {
+                        if (user.avatar == null) return@pointerInput
+                        detectTapGestures(
+                            onPress = {
+                                pressingAvatar = true
+                                tryAwaitRelease()
+                                pressingAvatar = false
+                            },
+                            onTap = { openAvatar() },
+                            onLongPress = {
+                                pressingAvatar = false
+                                openAvatar()
+                            }
+                        )
+                    }
+                    .semantics { if (user.avatar != null) contentDescription = "Аватарка @${user.username}, открыть на весь экран" }
             )
         }
         Text("@${user.username}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
-        LevelChip(user.level, large = true)
+        LevelChip(
+            user.level,
+            large = true,
+            opens = true,
+            modifier = Modifier
+                .pressable {
+                    haptics.light()
+                    onLevel()
+                }
+                .semantics { contentDescription = "Уровень ${user.level ?: ""}, открыть" }
+        )
         if (user.challengeWins > 0) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = ChallengePlace.color(1), modifier = Modifier.size(15.dp))

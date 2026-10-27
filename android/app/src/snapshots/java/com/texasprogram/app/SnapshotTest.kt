@@ -433,6 +433,24 @@ class SnapshotTest {
         }
     }
 
+    /// Уровень другого человека и его аватарка на весь экран.
+    @Test
+    fun userLevelAndAvatar() {
+        val other = Fixtures.user().copy(isMe = false)
+        tall(2200)
+        paparazzi.snapshot("34-user-level") {
+            Screen { CompositionLocalProvider(LocalNutritionSheetInline provides true) { com.texasprogram.app.ui.UserLevelSheet(other, 9) {} } }
+        }
+        paparazzi.unsafeUpdateConfig(deviceConfig = DeviceConfig.PIXEL_5)
+        paparazzi.snapshot("35-avatar-viewer") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    com.texasprogram.app.ui.AvatarViewer("0123456789abcdef01234567", other.username) {}
+                }
+            }
+        }
+    }
+
     /// Челленджи: приглашение, идущий и законченный, таблица целиком и карточка итога.
     @Test
     fun challenges() {
@@ -530,7 +548,7 @@ private object Fixtures {
         """
         {"id":"u1","username":"kelw1n","bio":"Техасская программа, второй месяц. Жим 120 к Новому году.",
          "heightCm":182,"weightKg":86.4,"showBody":true,"workouts":27,"followers":14,"following":9,
-         "isMe":true,"isFollowing":false,
+         "isMe":true,"isFollowing":false,"level":12,"xp":8000,
          "achievements":[{"id":"path","level":2},{"id":"streak","level":3},{"id":"bench","level":1}],
          "programs":[]}
         """

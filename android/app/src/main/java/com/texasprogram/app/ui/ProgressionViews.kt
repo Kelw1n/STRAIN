@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.Progression
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.SocialUser
 import com.texasprogram.app.service.ProgressionEvents
 import com.texasprogram.app.service.RuPlural
 import kotlinx.coroutines.delay
@@ -169,20 +170,29 @@ private fun XPBar(fraction: Float, height: Dp = 6.dp) {
 /// Плашка рядом с ником в ленте, у друзей и в рейтинге. Нет уровня — старая
 /// версия приложения его не присылала — ничего не рисуем.
 @Composable
-fun LevelChip(level: Int?, large: Boolean = false) {
+fun LevelChip(level: Int?, large: Boolean = false, opens: Boolean = false, modifier: Modifier = Modifier) {
     level ?: return
-    Text(
-        if (large) "Уровень $level · ${Progression.title(level)}" else "ур. $level",
-        color = Theme.accent,
-        fontSize = if (large) 13.sp else 10.sp,
-        fontWeight = FontWeight.Black,
-        maxLines = 1,
-        softWrap = false,
-        modifier = Modifier
+    Row(
+        modifier
             .clip(CircleShape)
             .background(Theme.accent.copy(alpha = 0.16f))
-            .padding(horizontal = if (large) 10.dp else 5.dp, vertical = if (large) 4.dp else 1.dp)
-    )
+            .padding(horizontal = if (large) 10.dp else 5.dp, vertical = if (large) 4.dp else 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            if (large) "Уровень $level · ${Progression.title(level)}" else "ур. $level",
+            color = Theme.accent,
+            fontSize = if (large) 13.sp else 10.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 1,
+            softWrap = false
+        )
+        // Стрелка — плашка нажимается и открывает экран уровня.
+        if (opens) {
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(if (large) 15.dp else 11.dp))
+        }
+    }
 }
 
 // MARK: - Карточка уровня
@@ -243,30 +253,9 @@ fun LevelSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
     val awards = remember(profile) { Progression.monthAwards(profile.completionLog) }
     val goal = Progression.weeklyGoal(profile)
     NutritionSheet(title = "Уровень", onDismiss = onDismiss, leading = null, action = "Готово", onAction = { close -> close() }) {
-        NutritionCard(spacing = 12.dp) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                LevelRing(level.level, level.fraction.toFloat(), size = 120.dp, stroke = 10.dp)
-                Text(level.title, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
-                Text(ProgressionText.experience(level.xp), color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Box(Modifier.padding(horizontal = 24.dp)) { XPBar(level.fraction.toFloat(), 8.dp) }
-                Text(ProgressionText.toNext(level), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
+        LevelHeroCard(level.level, level)
 
-        NutritionCard(spacing = 10.dp) {
-            NutritionCaption("За что опыт")
-            RuleRow("Тренировка", "+${Progression.WORKOUT_XP}")
-            RuleRow("Рабочий подход", "+${Progression.SET_XP}")
-            RuleRow("Личный рекорд", "+${Progression.RECORD_XP}")
-            RuleRow("Цель недели: $goal ${RuPlural.word(goal, "тренировка", "тренировки", "тренировок")}", "+${Progression.WEEK_GOAL_XP}")
-            RuleRow("Серия недель подряд", "до +50%")
-            RuleRow("Место в челлендже", "до +300")
-            Text(
-                "Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.",
-                color = Color.White.copy(alpha = 0.4f),
-                fontSize = 12.sp
-            )
-        }
+        LevelRulesCard(goal)
 
         NutritionCard(spacing = 12.dp) {
             NutritionCaption("Награды месяцев")
@@ -318,33 +307,120 @@ fun LevelSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
             }
         }
 
-        NutritionCard(spacing = 4.dp) {
-            NutritionCaption("Звания", Modifier.padding(bottom = 6.dp))
-            titleRanges.forEach { item ->
-                val current = Progression.title(level.level) == item.title
-                val reached = level.level >= item.from
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        item.title,
-                        color = when {
-                            current -> Theme.accent
-                            reached -> Color.White
-                            else -> Color.White.copy(alpha = 0.4f)
-                        },
-                        fontSize = 15.sp,
-                        fontWeight = if (current) FontWeight.ExtraBold else FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text("ур. ${item.levels}", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterEnd) {
-                        if (reached) {
-                            Icon(
-                                if (current) Icons.Filled.Place else Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = if (current) Theme.accent else Theme.success,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
+        LevelTitlesCard(level.level)
+    }
+}
+
+/// Уровень другого человека из его профиля: звание, шкала до следующего,
+/// сравнение со своим и за что даётся опыт.
+@Composable
+fun UserLevelSheet(user: SocialUser, myLevel: Int?, onDismiss: () -> Unit) {
+    val level = user.level ?: 1
+    val progress = remember(level, user.xp) { Progression.progress(level, user.xp) }
+    NutritionSheet(title = "Уровень", onDismiss = onDismiss, leading = null, action = "Готово", onAction = { close -> close() }) {
+        LevelHeroCard(level, progress, caption = "@${user.username}")
+        if (!user.isMe && myLevel != null) LevelComparisonCard(myLevel, level)
+        LevelRulesCard(null)
+        LevelTitlesCard(level)
+    }
+}
+
+/// Кольцо, звание и шкала до следующего уровня. Без опыта — только номер и звание.
+@Composable
+private fun LevelHeroCard(level: Int, progress: Progression.Level?, caption: String? = null) {
+    NutritionCard(spacing = 12.dp) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LevelRing(level, progress?.fraction?.toFloat() ?: 0f, size = 120.dp, stroke = 10.dp)
+            caption?.let { Text(it, color = Color.White.copy(alpha = 0.7f), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            Text(Progression.title(level), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+            if (progress != null) {
+                Text(ProgressionText.experience(progress.xp), color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Box(Modifier.padding(horizontal = 24.dp)) { XPBar(progress.fraction.toFloat(), 8.dp) }
+                Text(ProgressionText.toNext(progress), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            } else {
+                Text("Уровень $level", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/// «Ты — Атлет» и на сколько уровней разница.
+@Composable
+private fun LevelComparisonCard(mine: Int, theirs: Int) {
+    val gap = kotlin.math.abs(theirs - mine)
+    val levels = "$gap ${RuPlural.word(gap, "уровень", "уровня", "уровней")}"
+    val verdict = when {
+        gap == 0 -> "Вы на одном уровне"
+        theirs > mine -> "Впереди тебя на $levels"
+        else -> "Позади тебя на $levels"
+    }
+    NutritionCard(spacing = 0.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            LevelRing(mine, 1f, size = 48.dp, stroke = 4.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("Ты — ${Progression.title(mine)}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    verdict,
+                    color = if (theirs > mine) Theme.accent else Color.White.copy(alpha = 0.55f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+/// За что даётся опыт. Цель недели у каждого своя — у чужого числа не знаем.
+@Composable
+private fun LevelRulesCard(goal: Int?) {
+    NutritionCard(spacing = 10.dp) {
+        NutritionCaption("За что опыт")
+        RuleRow("Тренировка", "+${Progression.WORKOUT_XP}")
+        RuleRow("Рабочий подход", "+${Progression.SET_XP}")
+        RuleRow("Личный рекорд", "+${Progression.RECORD_XP}")
+        RuleRow(
+            if (goal == null) "Цель недели" else "Цель недели: $goal ${RuPlural.word(goal, "тренировка", "тренировки", "тренировок")}",
+            "+${Progression.WEEK_GOAL_XP}"
+        )
+        RuleRow("Серия недель подряд", "до +50%")
+        RuleRow("Место в челлендже", "до +300")
+        Text(
+            "Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.",
+            color = Color.White.copy(alpha = 0.4f),
+            fontSize = 12.sp
+        )
+    }
+}
+
+/// Лестница званий: пройденные — галочкой, текущее — отметкой.
+@Composable
+private fun LevelTitlesCard(level: Int) {
+    NutritionCard(spacing = 4.dp) {
+        NutritionCaption("Звания", Modifier.padding(bottom = 6.dp))
+        titleRanges.forEach { item ->
+            val current = Progression.title(level) == item.title
+            val reached = level >= item.from
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    item.title,
+                    color = when {
+                        current -> Theme.accent
+                        reached -> Color.White
+                        else -> Color.White.copy(alpha = 0.4f)
+                    },
+                    fontSize = 15.sp,
+                    fontWeight = if (current) FontWeight.ExtraBold else FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Text("ур. ${item.levels}", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterEnd) {
+                    if (reached) {
+                        Icon(
+                            if (current) Icons.Filled.Place else Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = if (current) Theme.accent else Theme.success,
+                            modifier = Modifier.size(15.dp)
+                        )
                     }
                 }
             }

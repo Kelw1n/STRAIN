@@ -76,6 +76,8 @@ struct RemoteImage: View {
     var contentMode: ContentMode = .fill
     /// Сторона в точках, под которую уменьшить. По умолчанию — ширина экрана.
     var maxPoints: CGFloat = 430
+    /// Без серой подложки, пока грузится: под фото уже лежит его маленькая копия.
+    var showsPlaceholder = true
 
     @State private var image: UIImage?
     @State private var failed = false
@@ -91,7 +93,7 @@ struct RemoteImage: View {
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
                     .transition(.opacity)
-            } else {
+            } else if showsPlaceholder {
                 placeholder(icon: (url == nil || failed) ? "photo" : nil)
             }
         }

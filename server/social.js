@@ -360,6 +360,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             programs: row.programs,
             achievements: row.achievements,
             level: levelOf(row.stats && row.stats.level),
+            xp: xpOf(row.stats && row.stats.xp),
             challengeWins: counts.challenge_wins,
             workouts: counts.workouts,
             followers: counts.followers,
@@ -389,6 +390,12 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     const levelOf = (value) => {
         const level = Math.floor(Number(value));
         return Number.isFinite(level) && level >= 1 && level <= 50 ? level : null;
+    };
+    // Опыт оттуда же — по нему в профиле шкала до следующего уровня.
+    const xpOf = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const xp = Math.floor(Number(value));
+        return Number.isFinite(xp) && xp >= 0 && xp <= 10_000_000 ? xp : null;
     };
 
     const shortUser = (row) => ({

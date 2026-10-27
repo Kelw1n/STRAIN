@@ -46,7 +46,8 @@ struct ProfileTabView: View {
                             },
                             onAchievements: { path.append(ProfileRoute.achievements) },
                             onLoadMore: { Task { await loadMore(me.username) } },
-                            onPostChange: replace
+                            onPostChange: replace,
+                            levelProfile: profile
                         )
                         .tabScrollAnchor(.profile)
                     }
@@ -266,8 +267,14 @@ struct ProfileContent<Action: View>: View {
     var onAchievements: () -> Void
     var onLoadMore: () -> Void
     var onPostChange: (String, SocialPost?) -> Void
+    /// Свой профиль программы: по нажатию на уровень — полный экран уровня
+    /// с наградами месяцев. У чужого — его уровень и сравнение со своим.
+    var levelProfile: ProgramProfile? = nil
 
     @State private var tab = 0
+    @State private var viewingAvatar = false
+    @State private var pressingAvatar = false
+    @State private var showingLevel = false
 
     var body: some View {
         VStack(spacing: 18) {
@@ -304,8 +311,7 @@ struct ProfileContent<Action: View>: View {
                     .frame(maxWidth: .infinity)
                     .clipped()
                     .padding(.horizontal, -16)
-                AvatarView(imageId: user.avatar, username: user.username, size: 118)
-                    .overlay(Circle().strokeBorder(Color.black, lineWidth: 4))
+                avatar
                     .offset(y: 58)
             }
             .padding(.bottom, 58)
@@ -313,7 +319,16 @@ struct ProfileContent<Action: View>: View {
             Text("@\(user.username)")
                 .font(.system(size: 28, weight: .heavy, design: Theme.fontDesign))
                 .foregroundStyle(.white)
-            LevelChip(level: user.level, large: true)
+            if user.level != nil {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    showingLevel = true
+                } label: {
+                    LevelChip(level: user.level, large: true, opens: true)
+                }
+                .buttonStyle(.pressable)
+                .accessibilityHint("Открыть уровень")
+            }
             if user.challengeWins > 0 {
                 Label("\(user.challengeWins) \(RuPlural.word(user.challengeWins, "победа", "победы", "побед")) в челленджах", systemImage: "trophy.fill")
                     .font(.system(size: 13, weight: .bold))
@@ -335,6 +350,38 @@ struct ProfileContent<Action: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// Аватарка как в Telegram: зажми — и она откроется на весь экран.
+    /// Обычное нажатие тоже открывает. Без фото открывать нечего.
+    private var avatar: some View {
+        AvatarView(imageId: user.avatar, username: user.username, size: 118)
+            .overlay(Circle().strokeBorder(Color.black, lineWidth: 4))
+            .scaleEffect(pressingAvatar ? 0.94 : 1)
+            .animation(pressingAvatar ? Motion.press : Motion.release, value: pressingAvatar)
+            .contentShape(Circle())
+            .onTapGesture { openAvatar() }
+            .onLongPressGesture(minimumDuration: 0.3, perform: openAvatar) { pressing in
+                pressingAvatar = pressing && user.avatar != nil
+            }
+            .accessibilityAddTraits(user.avatar == nil ? [] : .isButton)
+            .accessibilityLabel(user.avatar == nil ? "" : "Аватарка @\(user.username)")
+            .accessibilityHint(user.avatar == nil ? "" : "Открыть на весь экран")
+            .avatarViewer(isPresented: $viewingAvatar, imageId: user.avatar, username: user.username)
+            .sheet(isPresented: $showingLevel) {
+                if let levelProfile {
+                    LevelSheet(profile: levelProfile)
+                } else {
+                    UserLevelSheet(user: user, myLevel: SocialService.shared.me?.level)
+                }
+            }
+    }
+
+    private func openAvatar() {
+        guard user.avatar != nil, !viewingAvatar else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        pressingAvatar = false
+        presentWithoutAnimation { viewingAvatar = true }
     }
 
     private var achievementsCard: some View {

@@ -427,6 +427,14 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    @MainActor func testUserLevelAndAvatar() throws {
+        let user = try Fixtures.user(isMe: false)
+        try snap("34-user-level", height: 1800) { UserLevelSheet(user: user, myLevel: 9) }
+        try snap("35-avatar-viewer", wait: 1) {
+            AvatarViewer(imageId: "0123456789abcdef01234567", username: user.username) {}
+        }
+    }
+
     // MARK: ИИ-тренер
 
     @MainActor func testCoach() throws {
@@ -531,7 +539,7 @@ private enum Fixtures {
         try decode("""
         {"id":"u1","username":"kelw1n","bio":"Техасская программа, второй месяц. Жим 120 к Новому году.",
          "heightCm":182,"weightKg":86.4,"showBody":true,"workouts":27,"followers":14,"following":9,
-         "isMe":\(isMe),"isFollowing":false,
+         "isMe":\(isMe),"isFollowing":false,"level":12,"xp":8000,
          "achievements":[{"id":"path","level":2},{"id":"streak","level":3},{"id":"bench","level":1}],
          "programs":[]}
         """)
