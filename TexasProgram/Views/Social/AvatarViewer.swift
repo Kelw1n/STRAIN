@@ -23,18 +23,18 @@ struct AvatarViewer: View {
     static let maxScale: CGFloat = 4
     static let doubleTapScale: CGFloat = 2.5
 
-    private var pullProgress: CGFloat { min(1, abs(pull.height) / 320) }
+    private var pullProgress: Double { min(1, Double(abs(pull.height)) / 320) }
 
     var body: some View {
         GeometryReader { proxy in
             let side = proxy.size.width
             ZStack {
                 Color.black
-                    .opacity((appeared ? 1 : 0) * (1 - pullProgress * 0.75))
+                    .opacity(appeared ? 1 - pullProgress * 0.75 : 0)
                     .ignoresSafeArea()
                     .onTapGesture(perform: close)
                 photo(side: side)
-                    .scaleEffect(appeared ? scale * (1 - pullProgress * 0.2) : 0.35)
+                    .scaleEffect(appeared ? scale * CGFloat(1 - pullProgress * 0.2) : 0.35)
                     .offset(x: pan.width + pull.width, y: pan.height + pull.height)
                     .opacity(appeared ? 1 : 0)
                     .gesture(drag(side: side, height: proxy.size.height))
@@ -84,7 +84,7 @@ struct AvatarViewer: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
-        .opacity(appeared ? 1 - min(1, pullProgress * 3) : 0)
+        .opacity(appeared ? 1 - min(1.0, pullProgress * 3) : 0)
     }
 
     // MARK: Жесты
