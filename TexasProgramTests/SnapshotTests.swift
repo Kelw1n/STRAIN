@@ -433,6 +433,16 @@ final class SnapshotTests: XCTestCase {
         try snap("36-records", height: 1400) {
             RecordsSheet(username: user.username, records: user.records, bodyWeight: user.weightKg)
         }
+        try snap("37-heatmap-records") {
+            VStack(spacing: 18) {
+                if let heatmap = user.heatmap { ProfileHeatmapCard(levels: TrainingHeatmap.levels(heatmap)) }
+                ProfileRecordsCard(records: user.records, isMe: false, bodyWeight: user.weightKg) {}
+                Spacer()
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+        }
         try snap("35-avatar-viewer", wait: 1) {
             AvatarViewer(imageId: "0123456789abcdef01234567", username: user.username) {}
         }

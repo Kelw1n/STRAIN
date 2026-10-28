@@ -9,6 +9,7 @@ import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -449,6 +450,14 @@ class SnapshotTest {
             }
         }
         paparazzi.unsafeUpdateConfig(deviceConfig = DeviceConfig.PIXEL_5)
+        paparazzi.snapshot("37-heatmap-records") {
+            Screen {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    other.heatmap?.let { com.texasprogram.app.ui.ProfileHeatmapCard(com.texasprogram.app.model.TrainingHeatmap.levels(it)) }
+                    com.texasprogram.app.ui.ProfileRecordsCard(other.records, false, other.weightKg) {}
+                }
+            }
+        }
         paparazzi.snapshot("35-avatar-viewer") {
             Screen {
                 CompositionLocalProvider(LocalNutritionSheetInline provides true) {
