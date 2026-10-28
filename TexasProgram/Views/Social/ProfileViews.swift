@@ -48,7 +48,8 @@ struct ProfileTabView: View {
                             onLoadMore: { Task { await loadMore(me.username) } },
                             onPostChange: replace,
                             levelProfile: profile,
-                            records: PersonalRecords.records(for: profile)
+                            records: PersonalRecords.records(for: profile),
+                            heatmap: TrainingHeatmap.build(for: profile)
                         )
                         .tabScrollAnchor(.profile)
                     }
@@ -274,6 +275,8 @@ struct ProfileContent<Action: View>: View {
     /// Свои рекорды считаются на телефоне — свежие сразу после тренировки.
     /// У чужого — те, что прислало его приложение.
     var records: [SocialRecord]? = nil
+    /// Своя карта года — с телефона, у чужого — из его профиля.
+    var heatmap: SocialHeatmap? = nil
 
     @State private var tab = 0
     @State private var showingRecords = false
@@ -296,6 +299,9 @@ struct ProfileContent<Action: View>: View {
                 .buttonStyle(.pressable)
             }
             primaryAction()
+            if let shown = heatmap ?? user.heatmap {
+                ProfileHeatmapCard(levels: TrainingHeatmap.levels(shown))
+            }
             achievementsCard
             recordsCard
             Picker("", selection: $tab) {

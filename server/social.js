@@ -137,6 +137,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS live JSONB;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS live_at TIMESTAMPTZ;
 -- Рекорды из приложения: лучший подход каждого движения за всё время.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS records JSONB NOT NULL DEFAULT '[]';
+-- Год тренировок клеточками: день последней клеточки и строка тяжести 0–4.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS heatmap JSONB;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stats JSONB NOT NULL DEFAULT '{}';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS activity_seen_at TIMESTAMPTZ NOT NULL DEFAULT now();
 CREATE INDEX IF NOT EXISTS comments_reply_user ON comments (reply_to_user);
@@ -251,6 +253,14 @@ function imageIds(value) {
     return value.filter((id) => typeof id === 'string' && /^[a-f0-9]{24}$/.test(id)).slice(0, 5);
 }
 
+// Карта тренировок: «2026-10-28» и до 400 цифр 0–4. Иное — карты нет.
+function heatmapOf(value) {
+    if (!value || typeof value !== 'object') return null;
+    const end = String(value.end || '');
+    const days = String(value.days || '');
+    return /^\d{4}-\d{2}-\d{2}$/.test(end) && /^[0-4]{1,400}$/.test(days) ? { end, days } : null;
+}
+
 function jsonLimited(value, maxBytes, fallback) {
     if (value === undefined || value === null) return fallback;
     const raw = JSON.stringify(value);
@@ -362,6 +372,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             programs: row.programs,
             achievements: row.achievements,
             records: Array.isArray(row.records) ? row.records : [],
+            heatmap: heatmapOf(row.heatmap),
             level: levelOf(row.stats && row.stats.level),
             xp: xpOf(row.stats && row.stats.xp),
             challengeWins: counts.challenge_wins,
@@ -501,6 +512,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (body.cover !== undefined) set('cover_id', imageIds([body.cover])[0] || null);
         if (body.programs !== undefined) set('programs', JSON.stringify(jsonLimited(body.programs, 64_000, [])));
         if (body.achievements !== undefined) set('achievements', JSON.stringify(jsonLimited(body.achievements, 16_000, [])));
+        if (body.heatmap !== undefined) set('heatmap', JSON.stringify(heatmapOf(body.heatmap)));
         if (body.records !== undefined) {
             const records = jsonLimited(body.records, 16_000, []);
             set('records', JSON.stringify(Array.isArray(records) ? records.slice(0, 40) : []));

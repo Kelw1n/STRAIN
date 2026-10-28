@@ -110,6 +110,8 @@ import com.texasprogram.app.model.SocialProgramDay
 import com.texasprogram.app.model.SocialUser
 import com.texasprogram.app.model.PersonalRecords
 import com.texasprogram.app.model.SocialRecord
+import com.texasprogram.app.model.TrainingHeatmap
+import com.texasprogram.app.model.SocialHeatmap
 import com.texasprogram.app.model.formatWeight
 import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.SocialException
@@ -158,6 +160,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
     val progress = remember(profile) { AchievementCalculator.progress(profile) }
     val programs = remember(profile) { SocialProgramBuilder.days(profile) }
     val records = remember(profile) { PersonalRecords.records(profile) }
+    val heatmap = remember(profile) { TrainingHeatmap.build(profile) }
     val listState = rememberLazyListState()
     OnTabReselect(MainTabItem.PROFILE) {
         if (navigator.stack.isNotEmpty()) navigator.stack.clear() else listState.scrollToTop()
@@ -198,6 +201,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                     onPostChange = ::replace,
                     levelProfile = profile,
                     records = records,
+                    heatmap = heatmap,
                     primaryAction = {
                         Box(
                             Modifier
@@ -393,6 +397,8 @@ fun ProfileContent(
     /// Свои рекорды считаются на телефоне — свежие сразу после тренировки.
     /// У чужого — те, что прислало его приложение.
     records: List<SocialRecord>? = null,
+    /// Своя карта года — с телефона, у чужого — из его профиля.
+    heatmap: SocialHeatmap? = null,
     primaryAction: @Composable () -> Unit
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -417,6 +423,13 @@ fun ProfileContent(
             }
         }
         item(key = "action") { primaryAction() }
+        val shownHeatmap = heatmap ?: user.heatmap
+        if (shownHeatmap != null) {
+            item(key = "heatmap") {
+                val levels = remember(shownHeatmap) { TrainingHeatmap.levels(shownHeatmap) }
+                ProfileHeatmapCard(levels)
+            }
+        }
         item(key = "achievements") { AchievementsCard(badges, achievedCount, onAchievements) }
         if (user.isMe || shownRecords.isNotEmpty()) {
             item(key = "records") { ProfileRecordsCard(shownRecords, user.isMe, user.weightKg) { showingRecords = true } }

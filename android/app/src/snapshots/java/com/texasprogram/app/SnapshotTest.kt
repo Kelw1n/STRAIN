@@ -556,6 +556,7 @@ private object Fixtures {
         {"id":"u1","username":"kelw1n","bio":"Техасская программа, второй месяц. Жим 120 к Новому году.",
          "heightCm":182,"weightKg":86.4,"showBody":true,"workouts":27,"followers":14,"following":9,
          "isMe":true,"isFollowing":false,"level":12,"xp":8000,
+         "heatmap":{"end":"${java.time.LocalDate.now()}","days":"${"1030240".repeat(53)}"},
          "achievements":[{"id":"path","level":2},{"id":"streak","level":3},{"id":"bench","level":1}],
          "records":[{"name":"Становая тяга","weight":180,"reps":3,"estimate":198,"date":1761000000000,"lift":"deadlift"},
                     {"name":"Приседания","weight":140,"reps":5,"estimate":163.5,"date":1760000000000,"lift":"squat"},

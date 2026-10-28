@@ -369,6 +369,10 @@ test('лента, профили, подписки, фото и коммента
         assert.deepEqual((await call('GET', '/users/tim', { token: friend.token })).data.records, records, 'рекорды видят друзья');
         await call('PATCH', '/me', { token: me.token, body: { records: { name: 'не список' } } });
         assert.deepEqual((await call('GET', '/users/tim', { token: friend.token })).data.records, [], 'не список — пусто');
+        await call('PATCH', '/me', { token: me.token, body: { heatmap: { end: '2026-10-28', days: '0012034' } } });
+        assert.deepEqual((await call('GET', '/users/tim', { token: friend.token })).data.heatmap, { end: '2026-10-28', days: '0012034' });
+        await call('PATCH', '/me', { token: me.token, body: { heatmap: { end: 'вчера', days: '9' } } });
+        assert.equal((await call('GET', '/users/tim', { token: friend.token })).data.heatmap, null, 'мусор вместо карты не показываем');
         const leveledUser = (await call('GET', '/users/tim', { token: friend.token })).data;
         assert.equal(leveledUser.level, 7);
         assert.equal(leveledUser.xp, 2200, 'опыт — для шкалы до следующего уровня');

@@ -67,6 +67,8 @@ data class SocialUser(
     val achievements: List<SocialBadge> = emptyList(),
     /// Лучшие подходы движений — их считает приложение владельца.
     val records: List<SocialRecord> = emptyList(),
+    /// Год тренировок клеточками; у старых версий приложения — нет.
+    val heatmap: SocialHeatmap? = null,
     val workouts: Int = 0,
     val followers: Int = 0,
     val following: Int = 0,

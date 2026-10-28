@@ -25,6 +25,8 @@ import com.texasprogram.app.model.SocialActivityPage
 import com.texasprogram.app.model.SocialBadge
 import com.texasprogram.app.model.PersonalRecords
 import com.texasprogram.app.model.SocialRecord
+import com.texasprogram.app.model.TrainingHeatmap
+import com.texasprogram.app.model.SocialHeatmap
 import com.texasprogram.app.model.SocialChatList
 import com.texasprogram.app.model.SocialChatPage
 import com.texasprogram.app.model.SocialComment
@@ -327,6 +329,7 @@ object SocialService {
         val programs: List<SocialProgramDay>? = null,
         val achievements: List<SocialBadge>? = null,
         val records: List<SocialRecord>? = null,
+        val heatmap: SocialHeatmap? = null,
         val stats: SocialWeekStats? = null
     ) {
         fun toJson(): String {
@@ -341,6 +344,7 @@ object SocialService {
             programs?.let { map["programs"] = json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(SocialProgramDay.serializer()), it) }
             achievements?.let { map["achievements"] = json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(SocialBadge.serializer()), it) }
             records?.let { map["records"] = json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(SocialRecord.serializer()), it) }
+            heatmap?.let { map["heatmap"] = json.encodeToJsonElement(SocialHeatmap.serializer(), it) }
             stats?.let { map["stats"] = json.encodeToJsonElement(SocialWeekStats.serializer(), it) }
             return JsonObject(map).toString()
         }
@@ -364,6 +368,7 @@ object SocialService {
                     programs = SocialProgramBuilder.days(profile),
                     achievements = AchievementCalculator.badges(AchievementCalculator.progress(profile)),
                     records = PersonalRecords.records(profile),
+                    heatmap = TrainingHeatmap.build(profile),
                     stats = WeeklyStatsBuilder.stats(profile)
                 )
             }
