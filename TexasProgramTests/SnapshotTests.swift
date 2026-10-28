@@ -430,6 +430,9 @@ final class SnapshotTests: XCTestCase {
     @MainActor func testUserLevelAndAvatar() throws {
         let user = try Fixtures.user(isMe: false)
         try snap("34-user-level", height: 1800) { UserLevelSheet(user: user, myLevel: 9) }
+        try snap("36-records", height: 1400) {
+            RecordsSheet(username: user.username, records: user.records, bodyWeight: user.weightKg)
+        }
         try snap("35-avatar-viewer", wait: 1) {
             AvatarViewer(imageId: "0123456789abcdef01234567", username: user.username) {}
         }
@@ -541,6 +544,11 @@ private enum Fixtures {
          "heightCm":182,"weightKg":86.4,"showBody":true,"workouts":27,"followers":14,"following":9,
          "isMe":\(isMe),"isFollowing":false,"level":12,"xp":8000,
          "achievements":[{"id":"path","level":2},{"id":"streak","level":3},{"id":"bench","level":1}],
+         "records":[{"name":"Становая тяга","weight":180,"reps":3,"estimate":198,"date":1761000000000,"lift":"deadlift"},
+                    {"name":"Приседания","weight":140,"reps":5,"estimate":163.5,"date":1760000000000,"lift":"squat"},
+                    {"name":"Жим лёжа","weight":100,"reps":5,"estimate":116.5,"date":1761400000000,"lift":"bench"},
+                    {"name":"Жим стоя","weight":60,"reps":5,"estimate":70,"date":1761300000000},
+                    {"name":"Подтягивания","weight":20,"reps":8,"estimate":25.5,"date":1761200000000}],
          "programs":[]}
         """)
     }

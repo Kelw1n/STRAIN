@@ -364,6 +364,11 @@ test('лента, профили, подписки, фото и коммента
 
         // Уровень из сводки — рядом с ником в профиле, рейтинге и ленте.
         await call('PATCH', '/me', { token: me.token, body: { stats: { week: '2026-W42', workouts: 2, level: 7, xp: 2200 } } });
+        const records = [{ name: 'Жим лёжа', weight: 100, reps: 5, estimate: 116.5, date: 1761500000000, lift: 'bench' }];
+        await call('PATCH', '/me', { token: me.token, body: { records } });
+        assert.deepEqual((await call('GET', '/users/tim', { token: friend.token })).data.records, records, 'рекорды видят друзья');
+        await call('PATCH', '/me', { token: me.token, body: { records: { name: 'не список' } } });
+        assert.deepEqual((await call('GET', '/users/tim', { token: friend.token })).data.records, [], 'не список — пусто');
         const leveledUser = (await call('GET', '/users/tim', { token: friend.token })).data;
         assert.equal(leveledUser.level, 7);
         assert.equal(leveledUser.xp, 2200, 'опыт — для шкалы до следующего уровня');

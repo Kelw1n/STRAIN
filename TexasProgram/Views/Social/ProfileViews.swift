@@ -47,7 +47,8 @@ struct ProfileTabView: View {
                             onAchievements: { path.append(ProfileRoute.achievements) },
                             onLoadMore: { Task { await loadMore(me.username) } },
                             onPostChange: replace,
-                            levelProfile: profile
+                            levelProfile: profile,
+                            records: PersonalRecords.records(for: profile)
                         )
                         .tabScrollAnchor(.profile)
                     }
@@ -270,8 +271,12 @@ struct ProfileContent<Action: View>: View {
     /// Свой профиль программы: по нажатию на уровень — полный экран уровня
     /// с наградами месяцев. У чужого — его уровень и сравнение со своим.
     var levelProfile: ProgramProfile? = nil
+    /// Свои рекорды считаются на телефоне — свежие сразу после тренировки.
+    /// У чужого — те, что прислало его приложение.
+    var records: [SocialRecord]? = nil
 
     @State private var tab = 0
+    @State private var showingRecords = false
     @State private var viewingAvatar = false
     @State private var pressingAvatar = false
     @State private var showingLevel = false
@@ -292,6 +297,7 @@ struct ProfileContent<Action: View>: View {
             }
             primaryAction()
             achievementsCard
+            recordsCard
             Picker("", selection: $tab) {
                 Text("Тренировки").tag(0)
                 Text("Программы").tag(1)
@@ -382,6 +388,20 @@ struct ProfileContent<Action: View>: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         pressingAvatar = false
         presentWithoutAnimation { viewingAvatar = true }
+    }
+
+    @ViewBuilder
+    private var recordsCard: some View {
+        let shown = records ?? user.records
+        if user.isMe || !shown.isEmpty {
+            ProfileRecordsCard(records: shown, isMe: user.isMe, bodyWeight: user.weightKg) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                showingRecords = true
+            }
+            .sheet(isPresented: $showingRecords) {
+                RecordsSheet(username: user.username, records: shown, bodyWeight: user.weightKg, profile: levelProfile)
+            }
+        }
     }
 
     private var achievementsCard: some View {

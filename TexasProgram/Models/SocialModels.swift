@@ -83,6 +83,8 @@ struct SocialUser: Codable, Hashable, Identifiable, Sendable {
     var cover: String?
     var programs: [SocialProgramDay]
     var achievements: [SocialBadge]
+    /// Лучшие подходы движений — их считает приложение владельца.
+    var records: [SocialRecord]
     var workouts: Int
     var followers: Int
     var following: Int
@@ -115,6 +117,7 @@ struct SocialUser: Codable, Hashable, Identifiable, Sendable {
         cover = try c.decodeIfPresent(String.self, forKey: .cover)
         programs = (try? c.decodeIfPresent([SocialProgramDay].self, forKey: .programs)) ?? []
         achievements = (try? c.decodeIfPresent([SocialBadge].self, forKey: .achievements)) ?? []
+        records = (try? c.decodeIfPresent([SocialRecord].self, forKey: .records)) ?? []
         workouts = try c.decodeIfPresent(Int.self, forKey: .workouts) ?? 0
         followers = try c.decodeIfPresent(Int.self, forKey: .followers) ?? 0
         following = try c.decodeIfPresent(Int.self, forKey: .following) ?? 0

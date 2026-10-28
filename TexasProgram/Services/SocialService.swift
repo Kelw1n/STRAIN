@@ -290,10 +290,11 @@ final class SocialService {
         var cover: String?
         var programs: [SocialProgramDay]?
         var achievements: [SocialBadge]?
+        var records: [SocialRecord]?
         var stats: SocialWeekStats?
 
         enum CodingKeys: String, CodingKey {
-            case username, bio, heightCm, weightKg, showBody, avatar, cover, programs, achievements, stats
+            case username, bio, heightCm, weightKg, showBody, avatar, cover, programs, achievements, records, stats
         }
 
         func encode(to encoder: Encoder) throws {
@@ -307,6 +308,7 @@ final class SocialService {
             try c.encodeIfPresent(cover, forKey: .cover)
             try c.encodeIfPresent(programs, forKey: .programs)
             try c.encodeIfPresent(achievements, forKey: .achievements)
+            try c.encodeIfPresent(records, forKey: .records)
             try c.encodeIfPresent(stats, forKey: .stats)
         }
     }
@@ -326,6 +328,7 @@ final class SocialService {
             weightKg: profile.latestBodyWeight,
             programs: SocialProgramBuilder.days(for: profile),
             achievements: AchievementCalculator.badges(from: AchievementCalculator.progress(for: profile)),
+            records: PersonalRecords.records(for: profile),
             stats: WeeklyStatsBuilder.stats(for: profile)
         )
         guard let data = try? JSONEncoder().encode(patch) else { return }

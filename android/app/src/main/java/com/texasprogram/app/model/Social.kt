@@ -65,6 +65,8 @@ data class SocialUser(
     val cover: String? = null,
     val programs: List<SocialProgramDay> = emptyList(),
     val achievements: List<SocialBadge> = emptyList(),
+    /// Лучшие подходы движений — их считает приложение владельца.
+    val records: List<SocialRecord> = emptyList(),
     val workouts: Int = 0,
     val followers: Int = 0,
     val following: Int = 0,

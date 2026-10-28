@@ -135,6 +135,8 @@ CREATE INDEX IF NOT EXISTS messages_updated ON messages (updated_at);
 -- открывали «Активность».
 ALTER TABLE users ADD COLUMN IF NOT EXISTS live JSONB;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS live_at TIMESTAMPTZ;
+-- Рекорды из приложения: лучший подход каждого движения за всё время.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS records JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stats JSONB NOT NULL DEFAULT '{}';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS activity_seen_at TIMESTAMPTZ NOT NULL DEFAULT now();
 CREATE INDEX IF NOT EXISTS comments_reply_user ON comments (reply_to_user);
@@ -359,6 +361,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             cover: row.cover_id,
             programs: row.programs,
             achievements: row.achievements,
+            records: Array.isArray(row.records) ? row.records : [],
             level: levelOf(row.stats && row.stats.level),
             xp: xpOf(row.stats && row.stats.xp),
             challengeWins: counts.challenge_wins,
@@ -498,6 +501,10 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (body.cover !== undefined) set('cover_id', imageIds([body.cover])[0] || null);
         if (body.programs !== undefined) set('programs', JSON.stringify(jsonLimited(body.programs, 64_000, [])));
         if (body.achievements !== undefined) set('achievements', JSON.stringify(jsonLimited(body.achievements, 16_000, [])));
+        if (body.records !== undefined) {
+            const records = jsonLimited(body.records, 16_000, []);
+            set('records', JSON.stringify(Array.isArray(records) ? records.slice(0, 40) : []));
+        }
         if (body.stats !== undefined) set('stats', JSON.stringify(jsonLimited(body.stats, 4_000, {})));
         await rememberWeek(me, body.stats);
         if (sets.length === 0) return res.json(await userView(me, me));

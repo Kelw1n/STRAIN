@@ -108,6 +108,8 @@ import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialProgramBuilder
 import com.texasprogram.app.model.SocialProgramDay
 import com.texasprogram.app.model.SocialUser
+import com.texasprogram.app.model.PersonalRecords
+import com.texasprogram.app.model.SocialRecord
 import com.texasprogram.app.model.formatWeight
 import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.SocialException
@@ -155,6 +157,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
 
     val progress = remember(profile) { AchievementCalculator.progress(profile) }
     val programs = remember(profile) { SocialProgramBuilder.days(profile) }
+    val records = remember(profile) { PersonalRecords.records(profile) }
     val listState = rememberLazyListState()
     OnTabReselect(MainTabItem.PROFILE) {
         if (navigator.stack.isNotEmpty()) navigator.stack.clear() else listState.scrollToTop()
@@ -194,6 +197,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                     },
                     onPostChange = ::replace,
                     levelProfile = profile,
+                    records = records,
                     primaryAction = {
                         Box(
                             Modifier
@@ -386,11 +390,16 @@ fun ProfileContent(
     /// Свой профиль программы: по нажатию на уровень — полный экран уровня
     /// с наградами месяцев. У чужого — его уровень и сравнение со своим.
     levelProfile: ProgramProfile? = null,
+    /// Свои рекорды считаются на телефоне — свежие сразу после тренировки.
+    /// У чужого — те, что прислало его приложение.
+    records: List<SocialRecord>? = null,
     primaryAction: @Composable () -> Unit
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var viewingAvatar by remember { mutableStateOf(false) }
     var showingLevel by remember { mutableStateOf(false) }
+    var showingRecords by remember { mutableStateOf(false) }
+    val shownRecords = records ?: user.records
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
@@ -409,6 +418,9 @@ fun ProfileContent(
         }
         item(key = "action") { primaryAction() }
         item(key = "achievements") { AchievementsCard(badges, achievedCount, onAchievements) }
+        if (user.isMe || shownRecords.isNotEmpty()) {
+            item(key = "records") { ProfileRecordsCard(shownRecords, user.isMe, user.weightKg) { showingRecords = true } }
+        }
         item(key = "tabs") {
             SegmentedControl(options = listOf("Тренировки", "Программы"), selectedIndex = tab) { tab = it }
         }
@@ -477,6 +489,7 @@ fun ProfileContent(
     }
     val avatar = user.avatar
     if (viewingAvatar && avatar != null) AvatarViewer(avatar, user.username) { viewingAvatar = false }
+    if (showingRecords) RecordsSheet(user.username, shownRecords, user.weightKg, levelProfile) { showingRecords = false }
     if (showingLevel) {
         if (levelProfile != null) {
             LevelSheet(levelProfile) { showingLevel = false }
