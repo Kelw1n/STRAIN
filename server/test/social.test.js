@@ -7,6 +7,14 @@ const { createSocial } = require('../social');
 
 const url = process.env.TEST_DATABASE_URL;
 
+// Неделя по ISO, как её считают приложения: «2026-W43».
+const isoWeek = (date) => {
+    const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    day.setUTCDate(day.getUTCDate() + 4 - (day.getUTCDay() || 7));
+    const week = Math.ceil(((day - new Date(Date.UTC(day.getUTCFullYear(), 0, 1))) / 864e5 + 1) / 7);
+    return `${day.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+};
+
 test('лента, профили, подписки, фото и комментарии', { skip: !url && 'нет TEST_DATABASE_URL' }, async (t) => {
     const social = createSocial({ databaseUrl: url });
     await social.pool().query('DROP TABLE IF EXISTS challenge_members, challenges, weekly_stats, messages, together, comments, likes, posts, images, voices, follows, users CASCADE');
@@ -388,17 +396,22 @@ test('лента, профили, подписки, фото и коммента
     });
 
     await t.test('корона победителю прошлой недели и история побед', async () => {
-        const isoWeek = (date) => {
-            const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-            day.setUTCDate(day.getUTCDate() + 4 - (day.getUTCDay() || 7));
-            const week = Math.ceil(((day - new Date(Date.UTC(day.getUTCFullYear(), 0, 1))) / 864e5 + 1) / 7);
-            return `${day.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-        };
         const last = isoWeek(new Date(Date.now() - 7 * 864e5));
-        await call('PATCH', '/me', { token: friend.token, body: { stats: { week: '2025-W01', workouts: 3, volumeKg: 100 } } });
-        await call('PATCH', '/me', { token: friend.token, body: { stats: { week: last, workouts: 4, volumeKg: 10000 } } });
-        await call('PATCH', '/me', { token: me.token, body: { stats: { week: last, workouts: 4, volumeKg: 12000 } } });
+        // Прошлые недели легли в историю, пока шли: приложения шлют сводку только за идущую.
+        const remember = (user, week, workouts, volumeKg) => social.pool().query(
+            `INSERT INTO weekly_stats (user_id, week, workouts, volume_kg) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (user_id, week) DO UPDATE SET workouts = $3, volume_kg = $4`,
+            [user.user.id, week, workouts, volumeKg]
+        );
+        await remember(friend, '2025-W01', 3, 100);
+        await remember(friend, last, 4, 10000);
+        await remember(me, last, 4, 12000);
         await call('PATCH', '/me', { token: me.token, body: { stats: { week: isoWeek(new Date()), workouts: 9, volumeKg: 99999 } } });
+        const current = await social.pool().query('SELECT workouts FROM weekly_stats WHERE user_id = $1 AND week = $2', [me.user.id, isoWeek(new Date())]);
+        assert.equal(current.rows[0].workouts, 9, 'идущая неделя пишется в историю');
+        // Задним числом историю не переписать: ни прошлую неделю с уже выданной короной, ни старые.
+        assert.equal((await call('PATCH', '/me', { token: friend.token, body: { stats: { week: last, workouts: 50, volumeKg: 1 } } })).status, 200);
+        await call('PATCH', '/me', { token: friend.token, body: { stats: { week: '2025-W02', workouts: 50, volumeKg: 1 } } });
         const board = (await call('GET', '/leaderboard', { token: friend.token })).data;
         const tim = board.find((r) => r.user.username === 'tim');
         const sem = board.find((r) => r.user.username === 'semobsessed');
@@ -410,6 +423,100 @@ test('лента, профили, подписки, фото и коммента
         assert.equal(history[0].week, last, 'идущая неделя ещё не выиграна');
         assert.equal(history[0].user.username, 'tim');
         assert.equal(history.at(-1).week, '2025-W01');
+        assert.equal(history.some((w) => w.week === '2025-W02'), false, 'старую неделю не дописать');
+    });
+
+    await t.test('данные для чужих приложений приводятся к нужным типам', async () => {
+        // Android декодирует строго: одно поле не того типа — и вся лента не открывается.
+        const junk = await call('POST', '/posts', {
+            token: me.token,
+            body: {
+                clientId: 'junk-1',
+                title: 'Мусор',
+                workout: {
+                    program: 7,
+                    extra: { keep: true },
+                    exercises: [{ name: 5, sets: [{ reps: '5', weight: 'тяжело', record: 1 }, 'x', { reps: 5.4, weight: 80 }] }, 'мусор', null]
+                }
+            }
+        });
+        assert.equal(junk.status, 201);
+        assert.deepEqual(junk.data.workout, { program: '7', extra: { keep: true }, exercises: [{ name: '5', sets: [{}, { reps: 5, weight: 80 }] }] });
+        const stringy = await call('POST', '/posts', { token: me.token, body: { clientId: 'junk-2', workout: 'строка' } });
+        assert.deepEqual(stringy.data.workout, {});
+        // Мусор, который уже лежит в базе, тоже не уходит в ленту.
+        await social.pool().query(`UPDATE posts SET workout = '{"exercises": [{"name": "Присед", "sets": [{"reps": "много"}]}]}' WHERE id = $1`, [stringy.data.id]);
+        const feed = (await call('GET', '/feed')).data.posts;
+        assert.deepEqual(feed.find((p) => p.id === stringy.data.id).workout, { exercises: [{ name: 'Присед', sets: [{}] }] });
+
+        // Профиль: программа, медаль и рекорд без обязательного поля выпадают, числа — числа.
+        await call('PATCH', '/me', {
+            token: me.token,
+            body: {
+                programs: [{ title: 'День', groups: ['Ноги', 3, {}], exercises: [{ name: 'Присед', sets: 5, reps: 5, load: '100 кг' }, { name: 'Жим' }] }, 'x'],
+                achievements: [{ id: 'path', level: 2 }, { id: 3 }, null],
+                records: [{ name: 'Присед', weight: 150, reps: 3 }, { name: 'Жим' }, 'x', { name: 'Тяга', weight: '200', reps: 1 }]
+            }
+        });
+        const profile = (await call('GET', '/users/tim', { token: friend.token })).data;
+        assert.deepEqual(profile.programs, [{ title: 'День', groups: ['Ноги', '3'], exercises: [{ name: 'Присед', sets: 5, reps: '5', load: '100 кг' }] }]);
+        assert.deepEqual(profile.achievements, [{ id: 'path', level: 2 }]);
+        assert.deepEqual(profile.records, [{ name: 'Присед', weight: 150, reps: 3 }]);
+
+        // Сводка недели: мусор в одном профиле не ломает рейтинг всем, кто на него подписан.
+        await social.pool().query(`UPDATE users SET stats = '{"week": 5, "workouts": "много", "volumeKg": null, "level": 3.6, "records": 1e12}' WHERE username = 'tim'`);
+        const board = (await call('GET', '/leaderboard', { token: friend.token })).data;
+        assert.deepEqual(board.find((r) => r.user.username === 'tim').stats, { week: '5', level: 4, records: 100000 });
+        await call('PATCH', '/me', { token: me.token, body: { stats: [1, 2] } });
+        assert.deepEqual((await call('GET', '/leaderboard', { token: friend.token })).data.find((r) => r.user.username === 'tim').stats, {});
+
+        // Тренировка карточкой в переписке.
+        const card = await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { workout: { title: 5, sets: 'много', workout: { exercises: 'x' } } } });
+        assert.equal(card.status, 201);
+        assert.deepEqual(card.data.workout, { title: '5', workout: {} });
+
+        for (const post of [junk.data, stringy.data]) await call('DELETE', `/posts/${post.id}`, { token: me.token });
+    });
+
+    await t.test('кривые параметры и дробные числа — не 500', async () => {
+        for (const path of ['/feed?limit=1.5', '/feed?before=1e20', '/feed?before=abc&limit=-3', '/users/tim/posts?before=99999999999999999']) {
+            assert.equal((await call('GET', path)).status, 200, path);
+        }
+        for (const query of ['since=1e20', 'after=9e15', 'before=1e300', 'limit=2.5']) {
+            assert.equal((await call('GET', `/chats/semobsessed/messages?${query}`, { token: me.token })).status, 200, query);
+        }
+        const tall = await call('PATCH', '/me', { token: me.token, body: { heightCm: 178.6 } });
+        assert.equal(tall.status, 200);
+        assert.equal(tall.data.heightCm, 179);
+        const week = isoWeek(new Date());
+        assert.equal((await call('PATCH', '/me', { token: me.token, body: { stats: { week, workouts: 2.5, volumeKg: 100 } } })).status, 200);
+    });
+
+    await t.test('аватарка — только своё фото, удаление поста её не трогает', async () => {
+        const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+        const foreign = (await call('POST', '/images', { token: friend.token, raw: jpeg })).data.id;
+        assert.equal((await call('PATCH', '/me', { token: me.token, body: { avatar: foreign } })).data.avatar, null, 'чужое фото на аватарку не поставить');
+        const own = (await call('POST', '/images', { token: me.token, raw: jpeg, type: 'image/jpeg; charset=binary' })).data.id;
+        assert.equal((await call('PATCH', '/me', { token: me.token, body: { avatar: own } })).data.avatar, own);
+        const post = (await call('POST', '/posts', { token: me.token, body: { clientId: 'avatar-post', photos: [own] } })).data;
+        assert.equal((await call('DELETE', `/posts/${post.id}`, { token: me.token })).status, 200);
+        const kept = await call('GET', `/images/${own}`);
+        assert.equal(kept.status, 200, 'фото с аватарки живо после удаления поста');
+        assert.equal(kept.headers.get('content-type'), 'image/jpeg');
+        assert.equal(kept.headers.get('x-content-type-options'), 'nosniff');
+        await call('PATCH', '/me', { token: me.token, body: { avatar: null } });
+    });
+
+    await t.test('реакции двоих в одну секунду не теряются', async () => {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+            const message = (await call('POST', '/chats/semobsessed/messages', { token: me.token, body: { text: `Реагируйте ${attempt}` } })).data;
+            await Promise.all([
+                call('POST', `/messages/${message.id}/react`, { token: me.token, body: { emoji: '🔥' } }),
+                call('POST', `/messages/${message.id}/react`, { token: friend.token, body: { emoji: '💪' } })
+            ]);
+            const seen = (await call('GET', '/chats/tim/messages', { token: friend.token })).data.messages.find((m) => m.id === message.id);
+            assert.deepEqual(seen.reactions.map((r) => r.emoji).sort(), ['💪', '🔥'].sort());
+        }
     });
 
     await t.test('челленджи: приглашение, счёт, места и победа в профиле', async () => {
@@ -434,7 +541,8 @@ test('лента, профили, подписки, фото и коммента
         assert.equal(early.data.updated, 0, 'до вступления счёт не принимается');
         assert.equal((await call('POST', `/challenges/${id}/join`, { token: friend.token })).data.myStatus, 'joined');
         assert.equal((await call('GET', '/badges', { token: friend.token })).data.challenges, 0);
-        assert.equal((await call('PUT', '/challenges/scores', { token: friend.token, body: { scores: [{ id, score: 3, detail: '3 тренировки' }] } })).data.updated, 1);
+        // Один челлендж дважды в одной отправке — засчитывается последний счёт.
+        assert.equal((await call('PUT', '/challenges/scores', { token: friend.token, body: { scores: [{ id, score: 1 }, { id, score: 3, detail: '3 тренировки' }] } })).data.updated, 1);
         await call('PUT', '/challenges/scores', { token: me.token, body: { scores: [{ id, score: 2, detail: '2 тренировки' }, { id: 'nope', score: 5 }] } });
         const live = (await call('GET', '/challenges', { token: me.token })).data.find((c) => c.id === id);
         assert.deepEqual(live.members.map((m) => [m.user.username, m.place, m.detail]), [['semobsessed', 1, '3 тренировки'], ['tim', 2, '2 тренировки']]);

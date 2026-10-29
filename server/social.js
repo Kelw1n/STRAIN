@@ -32,6 +32,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Счёт ещё сутки после конца: тренировку последнего дня могли отметить без сети.
 const CHALLENGE_GRACE_MS = DAY_MS;
 const WEEK_KEY = /^\d{4}-W\d{2}$/;
+const HOUR_MS = 60 * 60 * 1000;
+// «Был в сети» пишем в базу не чаще раза в полминуты: «в сети» у приложений —
+// последние две минуты, а опрашивают они сервер каждые несколько секунд.
+const LAST_SEEN_STEP_MS = 30 * 1000;
+// Короткий профиль для списков и для того, кто делает запрос: без программ,
+// рекордов и карты года — они бывают по сотне килобайт, а нужны только на
+// странице самого профиля.
+const USER_SHORT_COLUMNS = ['id', 'username', 'avatar_id', 'bio', 'stats', 'live', 'live_at', 'last_seen', 'activity_seen_at'];
+const userColumns = (alias) => USER_SHORT_COLUMNS.map((column) => (alias ? `${alias}.${column}` : column)).join(', ');
+const SHORT = userColumns();
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -208,6 +218,13 @@ CREATE TABLE IF NOT EXISTS challenge_members (
     PRIMARY KEY (challenge_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS challenge_members_user ON challenge_members (user_id, status);
+-- Список переписок ищет сообщения и по получателю; карточка приглашения,
+-- фото и голосовое — по ссылке из сообщения. Без индексов это полный обход
+-- самой большой таблицы на каждый запрос.
+CREATE INDEX IF NOT EXISTS messages_recipient ON messages (recipient, created_at DESC);
+CREATE INDEX IF NOT EXISTS messages_together ON messages (together) WHERE together IS NOT NULL;
+CREATE INDEX IF NOT EXISTS messages_image ON messages (image) WHERE image IS NOT NULL;
+CREATE INDEX IF NOT EXISTS messages_voice ON messages (voice) WHERE voice IS NOT NULL;
 `;
 
 const newId = () => crypto.randomBytes(12).toString('hex');
@@ -224,8 +241,15 @@ class HttpError extends Error {
 // при перезапуске не страшен — он защищает от случайных циклов и спама.
 function limiter(limit, windowMs) {
     const hits = new Map();
+    let sweepAt = 10_000;
     return (key) => {
         const now = Date.now();
+        // Отжившие окна выбрасываем: иначе за месяцы работы в памяти копятся
+        // все адреса и профили, что хоть раз заходили.
+        if (hits.size >= sweepAt) {
+            for (const [old, entry] of hits) if (now - entry.start > windowMs) hits.delete(old);
+            sweepAt = Math.max(10_000, hits.size * 2);
+        }
         const entry = hits.get(key);
         if (!entry || now - entry.start > windowMs) {
             hits.set(key, { start: now, count: 1 });
@@ -248,6 +272,24 @@ function number(value, min, max) {
     return Math.min(max, Math.max(min, parsed));
 }
 
+// Целое для колонки INT: «178.6» база не примет и ответит 500.
+function integer(value, min, max) {
+    const parsed = number(value, min, max);
+    return parsed === null ? null : Math.round(parsed);
+}
+
+// Время из адреса — миллисекунды. Мусор и даты за пределами календаря —
+// как будто параметра нет, а не 500 от базы.
+function timeParam(value) {
+    const ms = Number(value);
+    return Number.isFinite(ms) && ms > 0 && ms <= 8.64e15 ? new Date(ms) : null;
+}
+
+// Сколько строк отдать: целое в пределах, иначе — по умолчанию.
+function limitParam(value, fallback, max) {
+    return Math.min(max, Math.max(1, Math.floor(Number(value)) || fallback));
+}
+
 function imageIds(value) {
     if (!Array.isArray(value)) return [];
     return value.filter((id) => typeof id === 'string' && /^[a-f0-9]{24}$/.test(id)).slice(0, 5);
@@ -268,10 +310,74 @@ function jsonLimited(value, maxBytes, fallback) {
     return value;
 }
 
+// MARK: Данные из приложений, которые читают другие люди
+//
+// Тренировку, программы, медали, рекорды и сводку недели сервер хранит, как
+// прислали, а читают их чужие приложения. Android декодирует строго: одно поле
+// не того типа — и не открывается вся лента или весь рейтинг у всех, кто их
+// видит. Поэтому известные поля приводим к нужному типу или убираем, а
+// незнакомые оставляем как есть — обе платформы их пропускают.
+
+const INT_MAX = 2_147_483_647;
+const asText = (value) => (typeof value === 'string' ? value
+    : typeof value === 'number' && Number.isFinite(value) ? String(value) : undefined);
+const asNumber = (min = -Number.MAX_VALUE, max = Number.MAX_VALUE) => (value) => (
+    typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined);
+const asInt = (min = -INT_MAX, max = INT_MAX) => (value) => (
+    typeof value === 'number' && Number.isFinite(value) ? Math.round(Math.min(max, Math.max(min, value))) : undefined);
+const asBool = (value) => (typeof value === 'boolean' ? value : undefined);
+const orNull = (kind) => (value) => (value === null ? null : kind(value));
+const listOf = (kind) => (value) => (Array.isArray(value) ? value.map(kind).filter((item) => item !== undefined) : undefined);
+
+// Объект по схеме: поле не того типа убираем, а без обязательного поля
+// (его ждут оба приложения) объект выпадает из списка целиком.
+function shape(schema, required = []) {
+    return (value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+        const out = { ...value };
+        for (const [key, kind] of Object.entries(schema)) {
+            if (!Object.prototype.hasOwnProperty.call(out, key)) continue;
+            const cleaned = kind(out[key]);
+            if (cleaned === undefined) delete out[key];
+            else out[key] = cleaned;
+        }
+        return required.every((key) => Object.prototype.hasOwnProperty.call(out, key)) ? out : undefined;
+    };
+}
+
+const WORKOUT = shape({
+    program: orNull(asText),
+    exercises: listOf(shape({ name: asText, sets: listOf(shape({ reps: asInt(), weight: asNumber(), record: asBool })) }))
+});
+const CHAT_WORKOUT = shape({
+    title: asText, durationSeconds: asInt(), volumeKg: asNumber(), sets: asInt(), effort: orNull(asInt()), workout: WORKOUT
+});
+const PROGRAMS = listOf(shape({
+    title: asText,
+    groups: listOf(asText),
+    exercises: listOf(shape({ name: asText, sets: asInt(), reps: asText, load: asText }, ['name', 'sets', 'reps', 'load']))
+}));
+const BADGES = listOf(shape({ id: asText, level: asInt() }, ['id', 'level']));
+const RECORDS = listOf(shape({
+    name: asText, weight: asNumber(), reps: asInt(), estimate: asNumber(), date: asNumber(), lift: orNull(asText)
+}, ['name', 'weight', 'reps']));
+// Пределы — те же, что у истории недель.
+const WEEK_STATS = shape({
+    week: asText, workouts: asInt(0, 100), volumeKg: asNumber(0, 10_000_000), records: asInt(0, 100_000),
+    streakWeeks: asInt(0, 10_000), level: orNull(asInt()), xp: orNull(asInt())
+});
+
+const workoutOf = (value) => WORKOUT(value) || {};
+const chatWorkoutOf = (value) => CHAT_WORKOUT(value) || null;
+const programsOf = (value) => PROGRAMS(value) || [];
+const badgesOf = (value) => BADGES(value) || [];
+const recordsOf = (value) => (RECORDS(value) || []).slice(0, 40);
+const statsOf = (value) => WEEK_STATS(value) || {};
+
 // Тренировка карточкой в сообщении — объект с упражнениями, не больше 32 КБ.
 function chatWorkout(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    return jsonLimited(value, 32_000, null);
+    return chatWorkoutOf(jsonLimited(value, 32_000, null));
 }
 
 function createSocial({ databaseUrl, pool: injectedPool } = {}) {
@@ -281,7 +387,9 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     if (!pool && databaseUrl) {
         const { Pool } = require('pg');
-        pool = new Pool({ connectionString: databaseUrl, max: 5, idleTimeoutMillis: 30_000 });
+        // Без connectionTimeoutMillis запрос при недоступной базе висит, пока
+        // не оборвётся TCP, и держит телефон с крутилкой.
+        pool = new Pool({ connectionString: databaseUrl, max: 5, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 20_000 });
         pool.on('error', (error) => console.error('Postgres pool error:', error.message));
     }
 
@@ -304,6 +412,9 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     const messageLimit = limiter(400, 60 * 60 * 1000);
     const imageLimit = limiter(80, 60 * 60 * 1000);
     const voiceLimit = limiter(120, 60 * 60 * 1000);
+    // Приложения шлют профиль не чаще раза в три секунды и только с изменениями,
+    // а запрос — до сотни килобайт: предел ловит зациклившийся клиент.
+    const profileLimit = limiter(600, 60 * 60 * 1000);
 
     // Все маршруты раздела ждут готовую базу.
     router.use(async (req, res, next) => {
@@ -317,22 +428,32 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         }
     });
 
-    async function viewer(req) {
+    // Кто делает запрос. Раньше каждый запрос переписывал строку профиля
+    // (UPDATE … RETURNING *) и тащил из базы программы и рекорды целиком —
+    // а приложения опрашивают сервер каждые несколько секунд.
+    async function viewer(req, columns = SHORT) {
         const header = req.get('authorization') || '';
         const match = header.match(/^Bearer\s+([a-f0-9]{64})$/i);
         if (!match) return null;
-        const rows = await q('UPDATE users SET last_seen = now() WHERE token_hash = $1 RETURNING *', [hashToken(match[1])]);
-        return rows[0] || null;
+        const me = (await q(`SELECT ${columns} FROM users WHERE token_hash = $1`, [hashToken(match[1])]))[0];
+        if (!me) return null;
+        if (Date.now() - new Date(me.last_seen).getTime() > LAST_SEEN_STEP_MS) {
+            const [fresh] = await q('UPDATE users SET last_seen = now() WHERE id = $1 RETURNING last_seen', [me.id]);
+            if (fresh) me.last_seen = fresh.last_seen;
+        }
+        return me;
     }
 
-    async function requireViewer(req) {
-        const me = await viewer(req);
+    async function requireViewer(req, columns) {
+        const me = await viewer(req, columns);
         if (!me) throw new HttpError(401, 'Нужно войти в профиль STRAIN');
         return me;
     }
 
     const wrap = (handler) => (req, res) => {
         handler(req, res).catch((error) => {
+            // Ответ уже ушёл — второй ответ уронил бы процесс необработанной ошибкой.
+            if (res.headersSent) return console.error(req.method, req.originalUrl, error);
             if (error instanceof HttpError) return res.status(error.status).json({ error: error.message });
             if (error && error.code === '23505') return res.status(409).json({ error: 'Такой юзернейм уже занят' });
             console.error(req.method, req.originalUrl, error);
@@ -369,9 +490,9 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             showBody: row.show_body,
             avatar: row.avatar_id,
             cover: row.cover_id,
-            programs: row.programs,
-            achievements: row.achievements,
-            records: Array.isArray(row.records) ? row.records : [],
+            programs: programsOf(row.programs),
+            achievements: badgesOf(row.achievements),
+            records: recordsOf(row.records),
             heatmap: heatmapOf(row.heatmap),
             level: levelOf(row.stats && row.stats.level),
             xp: xpOf(row.stats && row.stats.xp),
@@ -420,8 +541,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         level: levelOf(row.stats && row.stats.level)
     });
 
-    async function userByName(username) {
-        const rows = await q('SELECT * FROM users WHERE username = $1', [String(username || '').toLowerCase()]);
+    async function userByName(username, columns = '*') {
+        const rows = await q(`SELECT ${columns} FROM users WHERE username = $1`, [String(username || '').toLowerCase()]);
         if (!rows[0]) throw new HttpError(404, 'Пользователь не найден');
         return rows[0];
     }
@@ -447,7 +568,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         sets: row.sets,
         effort: row.effort,
         photos: row.photos,
-        workout: row.workout,
+        workout: workoutOf(row.workout),
         partner: row.partner && row.partner_username
             ? { id: row.partner, username: row.partner_username, avatar: row.partner_avatar }
             : null,
@@ -457,9 +578,10 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     });
 
     function page(req) {
-        const before = Number(req.query.before);
-        const limit = Math.min(50, Math.max(1, Number(req.query.limit) || PAGE));
-        return { before: Number.isFinite(before) && before > 0 ? new Date(before) : new Date(Date.now() + 60_000), limit };
+        return {
+            before: timeParam(req.query.before) || new Date(Date.now() + 60_000),
+            limit: limitParam(req.query.limit, PAGE, 50)
+        };
     }
 
     function pageResult(rows, limit) {
@@ -485,12 +607,13 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     }));
 
     router.get('/me', wrap(async (req, res) => {
-        const me = await requireViewer(req);
+        const me = await requireViewer(req, '*');
         res.json(await userView(me, me));
     }));
 
     router.patch('/me', wrap(async (req, res) => {
-        const me = await requireViewer(req);
+        const me = await requireViewer(req, '*');
+        profileLimit(me.id);
         const body = req.body || {};
         const sets = [];
         const params = [];
@@ -505,20 +628,24 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             set('username', username);
         }
         if (body.bio !== undefined) set('bio', text(body.bio, 160));
-        if (body.heightCm !== undefined) set('height_cm', number(body.heightCm, 100, 250));
+        if (body.heightCm !== undefined) set('height_cm', integer(body.heightCm, 100, 250));
         if (body.weightKg !== undefined) set('weight_kg', number(body.weightKg, 20, 400));
         if (body.showBody !== undefined) set('show_body', !!body.showBody);
-        if (body.avatar !== undefined) set('avatar_id', imageIds([body.avatar])[0] || null);
-        if (body.cover !== undefined) set('cover_id', imageIds([body.cover])[0] || null);
-        if (body.programs !== undefined) set('programs', JSON.stringify(jsonLimited(body.programs, 64_000, [])));
-        if (body.achievements !== undefined) set('achievements', JSON.stringify(jsonLimited(body.achievements, 16_000, [])));
+        // Аватарка и обложка — только свои фото: чужое (например, присланное в
+        // переписке) не должно жить в профиле после того, как автор его удалил.
+        const ownImage = async (value) => {
+            const id = imageIds([value])[0];
+            return id && (await q('SELECT 1 FROM images WHERE id = $1 AND owner = $2', [id, me.id]))[0] ? id : null;
+        };
+        if (body.avatar !== undefined) set('avatar_id', await ownImage(body.avatar));
+        if (body.cover !== undefined) set('cover_id', await ownImage(body.cover));
+        if (body.programs !== undefined) set('programs', JSON.stringify(programsOf(jsonLimited(body.programs, 64_000, []))));
+        if (body.achievements !== undefined) set('achievements', JSON.stringify(badgesOf(jsonLimited(body.achievements, 16_000, []))));
         if (body.heatmap !== undefined) set('heatmap', JSON.stringify(heatmapOf(body.heatmap)));
-        if (body.records !== undefined) {
-            const records = jsonLimited(body.records, 16_000, []);
-            set('records', JSON.stringify(Array.isArray(records) ? records.slice(0, 40) : []));
-        }
-        if (body.stats !== undefined) set('stats', JSON.stringify(jsonLimited(body.stats, 4_000, {})));
-        await rememberWeek(me, body.stats);
+        if (body.records !== undefined) set('records', JSON.stringify(recordsOf(jsonLimited(body.records, 16_000, []))));
+        const stats = body.stats !== undefined ? statsOf(jsonLimited(body.stats, 4_000, {})) : undefined;
+        if (stats !== undefined) set('stats', JSON.stringify(stats));
+        await rememberWeek(me, stats);
         if (sets.length === 0) return res.json(await userView(me, me));
         params.push(me.id);
         const rows = await q(`UPDATE users SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params);
@@ -539,11 +666,11 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const query = text(req.query.q, 24).toLowerCase().replace(/^@/, '');
         const rows = query
             ? await q(
-                `SELECT * FROM users WHERE username LIKE $1 ESCAPE '\\'
+                `SELECT ${SHORT} FROM users WHERE username LIKE $1 ESCAPE '\\'
                  ORDER BY (username LIKE $2 ESCAPE '\\') DESC, last_seen DESC LIMIT 30`,
                 ['%' + query.replace(/[\\%_]/g, '\\$&') + '%', query.replace(/[\\%_]/g, '\\$&') + '%']
             )
-            : await q('SELECT * FROM users WHERE id <> $1 ORDER BY last_seen DESC LIMIT 30', [me ? me.id : '']);
+            : await q(`SELECT ${SHORT} FROM users WHERE id <> $1 ORDER BY last_seen DESC LIMIT 30`, [me ? me.id : '']);
         const following = me
             ? new Set((await q('SELECT followee FROM follows WHERE follower = $1', [me.id])).map((r) => r.followee))
             : new Set();
@@ -557,7 +684,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     router.get('/users/:username/posts', wrap(async (req, res) => {
         const me = await viewer(req);
-        const user = await userByName(req.params.username);
+        const user = await userByName(req.params.username, 'id');
         const { before, limit } = page(req);
         const rows = await q(
             `${POST_SELECT} WHERE p.user_id = $2 AND p.created_at < $3 ORDER BY p.created_at DESC LIMIT $4`,
@@ -568,7 +695,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     async function people(req, res, sql) {
         const me = await viewer(req);
-        const user = await userByName(req.params.username);
+        const user = await userByName(req.params.username, 'id');
         const rows = await q(sql, [user.id]);
         const following = me
             ? new Set((await q('SELECT followee FROM follows WHERE follower = $1', [me.id])).map((r) => r.followee))
@@ -577,10 +704,10 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     }
 
     router.get('/users/:username/followers', wrap((req, res) => people(req, res,
-        'SELECT u.* FROM follows f JOIN users u ON u.id = f.follower WHERE f.followee = $1 ORDER BY f.created_at DESC LIMIT 200')));
+        `SELECT ${userColumns('u')} FROM follows f JOIN users u ON u.id = f.follower WHERE f.followee = $1 ORDER BY f.created_at DESC LIMIT 200`)));
 
     router.get('/users/:username/following', wrap((req, res) => people(req, res,
-        'SELECT u.* FROM follows f JOIN users u ON u.id = f.followee WHERE f.follower = $1 ORDER BY f.created_at DESC LIMIT 200')));
+        `SELECT ${userColumns('u')} FROM follows f JOIN users u ON u.id = f.followee WHERE f.follower = $1 ORDER BY f.created_at DESC LIMIT 200`)));
 
     router.post('/users/:username/follow', wrap(async (req, res) => {
         const me = await requireViewer(req);
@@ -599,12 +726,24 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     // MARK: Фото
 
+    // Тип файла без параметров из заголовка: в базу и обратно — только сам тип.
+    const mediaType = (req) => String(req.get('content-type') || '').split(';')[0].trim().toLowerCase();
+
+    // Файлы отдаются как есть всем, кто знает адрес: браузер не должен
+    // угадывать в них страницу со скриптом.
+    function sendMedia(res, row) {
+        // Файл по одному адресу никогда не меняется — телефон кэширует его навсегда.
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+        res.set('X-Content-Type-Options', 'nosniff');
+        res.type(row.mime).send(row.data);
+    }
+
     router.post('/images', express.raw({ type: ['image/jpeg', 'image/png', 'image/heic', 'image/webp'], limit: MAX_IMAGE_BYTES }), wrap(async (req, res) => {
         const me = await requireViewer(req);
         imageLimit(me.id);
         if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, 'Пустое фото');
         const id = newId();
-        await q('INSERT INTO images (id, owner, mime, data) VALUES ($1, $2, $3, $4)', [id, me.id, req.get('content-type'), req.body]);
+        await q('INSERT INTO images (id, owner, mime, data) VALUES ($1, $2, $3, $4)', [id, me.id, mediaType(req), req.body]);
         res.status(201).json({ id });
     }));
 
@@ -612,9 +751,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (!/^[a-f0-9]{24}$/.test(req.params.id)) throw new HttpError(404, 'Нет такого фото');
         const rows = await q('SELECT mime, data FROM images WHERE id = $1', [req.params.id]);
         if (!rows[0]) throw new HttpError(404, 'Нет такого фото');
-        // Фото по одному адресу никогда не меняется — телефон кэширует его навсегда.
-        res.set('Cache-Control', 'public, max-age=31536000, immutable');
-        res.type(rows[0].mime).send(rows[0].data);
+        sendMedia(res, rows[0]);
     }));
 
     // MARK: Голосовые
@@ -631,7 +768,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const id = newId();
         await q(
             'INSERT INTO voices (id, owner, mime, duration_ms, waveform, data) VALUES ($1, $2, $3, $4, $5, $6)',
-            [id, me.id, req.get('content-type'), durationMs, waveform, req.body]
+            [id, me.id, mediaType(req), durationMs, waveform, req.body]
         );
         res.status(201).json({ id, durationMs, waveform });
     }));
@@ -640,9 +777,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (!/^[a-f0-9]{24}$/.test(req.params.id)) throw new HttpError(404, 'Нет такого голосового');
         const rows = await q('SELECT mime, data FROM voices WHERE id = $1', [req.params.id]);
         if (!rows[0]) throw new HttpError(404, 'Нет такого голосового');
-        // Звук по одному адресу никогда не меняется — телефон кэширует его навсегда.
-        res.set('Cache-Control', 'public, max-age=31536000, immutable');
-        res.type(rows[0].mime).send(rows[0].data);
+        sendMedia(res, rows[0]);
     }));
 
     // MARK: Посты
@@ -684,7 +819,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
                 Math.round(number(body.sets, 0, 1000) || 0),
                 effort === null ? null : Math.round(effort),
                 JSON.stringify(photos),
-                JSON.stringify(jsonLimited(body.workout, 64_000, {})),
+                JSON.stringify(workoutOf(jsonLimited(body.workout, 64_000, {}))),
                 partner
             ]
         );
@@ -707,8 +842,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const me = await requireViewer(req);
         const rows = await q('DELETE FROM posts WHERE id = $1 AND user_id = $2 RETURNING photos', [req.params.id, me.id]);
         if (!rows[0]) throw new HttpError(404, 'Пост не найден');
-        const photos = imageIds(rows[0].photos);
-        if (photos.length > 0) await q('DELETE FROM images WHERE owner = $1 AND id = ANY($2)', [me.id, photos]);
+        // Фото поста могло стоять и на аватарке или уйти в переписку — такое остаётся.
+        for (const photo of imageIds(rows[0].photos)) await dropImageIfUnused(photo);
         res.json({ success: true });
     }));
 
@@ -828,7 +963,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             voice: row.voice
                 ? { id: row.voice, durationMs: Number(row.v_duration) || 0, waveform: row.v_waveform || '' }
                 : null,
-            workout: row.workout || null,
+            workout: chatWorkoutOf(row.workout),
             fromMe: row.sender === me.id,
             createdAt: new Date(row.created_at).getTime(),
             read: row.read_at !== null,
@@ -879,10 +1014,17 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     // Ответы на изменённое или удалённое сообщение: их цитата обновится у обоих.
     const touchReplies = (id) => q('UPDATE messages SET updated_at = now() WHERE reply_to = $1', [id]);
 
+    const UNREAD_SQL = 'SELECT count(*) FROM messages WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL';
+
     async function unreadCount(me) {
-        const [row] = await q('SELECT count(*)::int AS count FROM messages WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL', [me.id]);
+        const [row] = await q(`SELECT (${UNREAD_SQL})::int AS count`, [me.id]);
         return row.count;
     }
+
+    // Переписка двоих — в том же виде, что индекс messages_pair: иначе база
+    // не может им воспользоваться и перебирает все сообщения обоих.
+    const PAIR_SQL = `LEAST(m.sender, m.recipient) = LEAST($1::text, $2::text)
+        AND GREATEST(m.sender, m.recipient) = GREATEST($1::text, $2::text)`;
 
     // Переписки: с кем, последнее сообщение и сколько не прочитано.
     router.get('/chats', wrap(async (req, res) => {
@@ -896,7 +1038,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         );
         if (rows.length === 0) return res.json({ chats: [], unread: 0 });
         const others = rows.map((row) => row.other);
-        const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [others])).map((u) => [u.id, u]));
+        const users = new Map((await q(`SELECT ${SHORT} FROM users WHERE id = ANY($1)`, [others])).map((u) => [u.id, u]));
         const unread = new Map((await q(
             `SELECT sender, count(*)::int AS count FROM messages
              WHERE recipient = $1 AND read_at IS NULL AND deleted_at IS NULL GROUP BY sender`,
@@ -924,7 +1066,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     router.post('/chats/:username/typing', wrap(async (req, res) => {
         const me = await requireViewer(req);
-        const other = await userByName(req.params.username);
+        const other = await userByName(req.params.username, 'id');
         typing.set(`${me.id}:${other.id}`, Date.now());
         if (typing.size > 5000) {
             const now = Date.now();
@@ -938,29 +1080,29 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     // начиная с `serverTime` прошлого ответа.
     router.get('/chats/:username/messages', wrap(async (req, res) => {
         const me = await requireViewer(req);
-        const other = await userByName(req.params.username);
+        const other = await userByName(req.params.username, SHORT);
         const serverTime = Date.now();
-        const before = Number(req.query.before);
-        const after = Number(req.query.after);
-        const since = Number(req.query.since);
-        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+        const before = timeParam(req.query.before);
+        const after = timeParam(req.query.after);
+        const since = timeParam(req.query.since);
+        const limit = limitParam(req.query.limit, 50, 100);
         const params = [me.id, other.id, limit];
         // Время в ответе — в миллисекундах, а в базе — в микросекундах: сравниваем
         // по миллисекундам, иначе «новее, чем последнее» вернуло бы его же.
         let range = 'AND m.deleted_at IS NULL';
-        if (Number.isFinite(since) && since > 0) {
-            params.push(new Date(since));
+        if (since) {
+            params.push(since);
             range = `AND date_trunc('milliseconds', m.updated_at) >= $${params.length}`;
-        } else if (Number.isFinite(after) && after > 0) {
-            params.push(new Date(after));
+        } else if (after) {
+            params.push(after);
             range = `AND m.deleted_at IS NULL AND date_trunc('milliseconds', m.created_at) > $${params.length}`;
-        } else if (Number.isFinite(before) && before > 0) {
-            params.push(new Date(before));
+        } else if (before) {
+            params.push(before);
             range = `AND m.deleted_at IS NULL AND date_trunc('milliseconds', m.created_at) < $${params.length}`;
         }
         const rows = await q(
             `${MESSAGE_SELECT}
-             WHERE ((m.sender = $1 AND m.recipient = $2) OR (m.sender = $2 AND m.recipient = $1)) ${range}
+             WHERE ${PAIR_SQL} ${range}
              ORDER BY m.created_at DESC LIMIT $3`,
             params
         );
@@ -987,7 +1129,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     router.post('/chats/:username/messages', wrap(async (req, res) => {
         const me = await requireViewer(req);
         messageLimit(me.id);
-        const other = await userByName(req.params.username);
+        const other = await userByName(req.params.username, 'id');
         if (other.id === me.id) throw new HttpError(400, 'Нельзя написать самому себе');
         let body = text(req.body && req.body.text, 2000);
         // Фото и голосовое — только свои, загруженные через /images и /voices.
@@ -1048,15 +1190,16 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const me = await requireViewer(req);
         const emoji = req.body && req.body.emoji ? String(req.body.emoji) : null;
         if (emoji && !REACTIONS.has(emoji)) throw new HttpError(400, 'Такой реакции нет');
+        // Одним UPDATE: прочитать, поменять и записать целиком — значит потерять
+        // реакцию собеседника, поставленную в ту же секунду.
         const row = (await q(
-            'SELECT * FROM messages WHERE id = $1 AND (sender = $2 OR recipient = $2) AND deleted_at IS NULL',
-            [req.params.id, me.id]
+            `UPDATE messages SET updated_at = now(), reactions = CASE
+                 WHEN $3::text IS NULL OR reactions->>($2::text) = $3::text THEN reactions - $2::text
+                 ELSE reactions || jsonb_build_object($2::text, $3::text) END
+             WHERE id = $1 AND (sender = $2 OR recipient = $2) AND deleted_at IS NULL RETURNING id`,
+            [req.params.id, me.id, emoji]
         ))[0];
         if (!row) throw new HttpError(404, 'Сообщение не найдено');
-        const reactions = { ...(row.reactions || {}) };
-        if (!emoji || reactions[me.id] === emoji) delete reactions[me.id];
-        else reactions[me.id] = emoji;
-        await q('UPDATE messages SET reactions = $2, updated_at = now() WHERE id = $1', [row.id, JSON.stringify(reactions)]);
         const updated = (await q(`${MESSAGE_SELECT} WHERE m.id = $1`, [row.id]))[0];
         res.json(messageView(updated, me));
     }));
@@ -1136,7 +1279,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     router.get('/live', wrap(async (req, res) => {
         const me = await requireViewer(req);
         const rows = await q(
-            `SELECT u.* FROM follows f JOIN users u ON u.id = f.followee
+            `SELECT ${userColumns('u')} FROM follows f JOIN users u ON u.id = f.followee
              WHERE f.follower = $1 AND u.live IS NOT NULL AND u.live_at > $2
              ORDER BY u.live_at DESC LIMIT 50`,
             [me.id, new Date(Date.now() - LIVE_TTL_MS)]
@@ -1151,7 +1294,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     router.get('/leaderboard', wrap(async (req, res) => {
         const me = await requireViewer(req);
         const rows = await q(
-            `SELECT u.* FROM users u
+            `SELECT ${userColumns('u')} FROM users u
              WHERE u.id = $1 OR u.id IN (SELECT followee FROM follows WHERE follower = $1)`,
             [me.id]
         );
@@ -1162,7 +1305,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         for (const w of winners) wins.set(w.user_id, (wins.get(w.user_id) || 0) + 1);
         res.json(rows.map((row) => ({
             user: { ...shortUser(row), isMe: row.id === me.id },
-            stats: row.stats || {},
+            stats: statsOf(row.stats),
             wins: wins.get(row.id) || 0,
             crown: winners.some((w) => w.week === lastWeek && w.user_id === row.id)
         })));
@@ -1183,8 +1326,10 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         UNION ALL
         SELECT 'follow', f.created_at, f.follower, NULL, NULL, NULL FROM follows f WHERE f.followee = $1`;
 
+    const UNSEEN_SQL = `SELECT count(*) FROM (${ACTIVITY_SQL}) a WHERE a.created_at > $2`;
+
     async function unseenActivity(me) {
-        const [row] = await q(`SELECT count(*)::int AS count FROM (${ACTIVITY_SQL}) a WHERE a.created_at > $2`, [me.id, me.activity_seen_at]);
+        const [row] = await q(`SELECT (${UNSEEN_SQL})::int AS count`, [me.id, me.activity_seen_at]);
         return row.count;
     }
 
@@ -1192,7 +1337,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     router.get('/activity', wrap(async (req, res) => {
         const me = await requireViewer(req);
         const rows = await q(`SELECT * FROM (${ACTIVITY_SQL}) a ORDER BY a.created_at DESC LIMIT 80`, [me.id]);
-        const actors = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [[...new Set(rows.map((r) => r.actor))]])).map((u) => [u.id, u]));
+        const actors = new Map((await q(`SELECT ${SHORT} FROM users WHERE id = ANY($1)`, [[...new Set(rows.map((r) => r.actor))]])).map((u) => [u.id, u]));
         const seen = new Date(me.activity_seen_at).getTime();
         res.json({
             items: rows.filter((row) => actors.has(row.actor)).map((row) => ({
@@ -1215,14 +1360,15 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     }));
 
     // Точки на вкладках: непрочитанные сообщения и новая активность одним запросом.
+    // Его опрашивают постоянно, поэтому все четыре счётчика — за одно обращение к базе.
     router.get('/badges', wrap(async (req, res) => {
         const me = await requireViewer(req);
-        res.json({
-            messages: await unreadCount(me),
-            activity: await unseenActivity(me),
-            invites: await pendingInvites(me),
-            challenges: await pendingChallenges(me)
-        });
+        const [row] = await q(
+            `SELECT (${UNREAD_SQL})::int AS messages, (${UNSEEN_SQL})::int AS activity,
+                    (${INVITES_SQL})::int AS invites, (${CHALLENGE_INVITES_SQL})::int AS challenges`,
+            [me.id, me.activity_seen_at]
+        );
+        res.json({ messages: row.messages, activity: row.activity, invites: row.invites, challenges: row.challenges });
     }));
 
     // MARK: Совместная тренировка
@@ -1247,13 +1393,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         partnerDone: row.inviter === me.id ? row.invitee_done : row.inviter_done
     });
 
-    async function pendingInvites(me) {
-        const [row] = await q(
-            "SELECT count(*)::int AS count FROM together WHERE invitee = $1 AND status = 'pending' AND created_at > $2",
-            [me.id, new Date(Date.now() - INVITE_TTL_MS)]
-        );
-        return row.count;
-    }
+    const INVITES_SQL = `SELECT count(*) FROM together WHERE invitee = $1 AND status = 'pending'
+        AND created_at > now() - interval '${INVITE_TTL_MS / 1000} seconds'`;
 
     // Карточка приглашения в переписке подтянет новый статус при обновлении.
     const touchInvite = (id) => q('UPDATE messages SET updated_at = now() WHERE together = $1', [id]);
@@ -1274,7 +1415,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     router.post('/users/:username/together', wrap(async (req, res) => {
         const me = await requireViewer(req);
         messageLimit(me.id);
-        const other = await userByName(req.params.username);
+        const other = await userByName(req.params.username, SHORT);
         if (other.id === me.id) throw new HttpError(400, 'Нельзя позвать самого себя');
         // Уже звали друг друга и ответа ещё нет — второе приглашение не нужно.
         const existing = (await q(
@@ -1304,7 +1445,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             [me.id, new Date(Date.now() - INVITE_TTL_MS), new Date(Date.now() - TOGETHER_TTL_MS)]
         );
         const ids = [...new Set(rows.map((row) => (row.inviter === me.id ? row.invitee : row.inviter)))];
-        const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [ids])).map((u) => [u.id, u]));
+        const users = new Map((await q(`SELECT ${SHORT} FROM users WHERE id = ANY($1)`, [ids])).map((u) => [u.id, u]));
         const views = rows
             .filter((row) => users.has(row.inviter === me.id ? row.invitee : row.inviter))
             .map((row) => ({ row, view: togetherView(row, me, users.get(row.inviter === me.id ? row.invitee : row.inviter)) }));
@@ -1336,7 +1477,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         );
         const [updated] = await q("UPDATE together SET status = 'accepted', responded_at = now() WHERE id = $1 RETURNING *", [row.id]);
         await touchInvite(row.id);
-        const inviter = (await q('SELECT * FROM users WHERE id = $1', [row.inviter]))[0];
+        const inviter = (await q(`SELECT ${SHORT} FROM users WHERE id = $1`, [row.inviter]))[0];
         res.json(togetherView(updated, me, inviter));
     }));
 
@@ -1364,13 +1505,21 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     // MARK: Корона недели
 
     // Сводка недели из приложения ложится и в историю: по ней видно,
-    // кто выиграл прошлые недели.
+    // кто выиграл прошлые недели. Писать можно только в идущую неделю — с
+    // запасом на часовые пояса телефонов (от −12 до +14 часов): приложения
+    // шлют сводку только за неё, а иначе прошлые недели и уже выданную корону
+    // можно было бы переписать задним числом.
+    function currentWeeks(now = Date.now()) {
+        return new Set([-14, 0, 14].map((hours) => isoWeek(new Date(now + hours * HOUR_MS))));
+    }
+
     async function rememberWeek(me, stats) {
         if (!stats || typeof stats !== 'object' || !WEEK_KEY.test(String(stats.week || ''))) return;
+        if (!currentWeeks().has(stats.week)) return;
         await q(
             `INSERT INTO weekly_stats (user_id, week, workouts, volume_kg) VALUES ($1, $2, $3, $4)
              ON CONFLICT (user_id, week) DO UPDATE SET workouts = $3, volume_kg = $4, updated_at = now()`,
-            [me.id, String(stats.week), number(stats.workouts, 0, 100) || 0, number(stats.volumeKg, 0, 10_000_000) || 0]
+            [me.id, String(stats.week), integer(stats.workouts, 0, 100) || 0, number(stats.volumeKg, 0, 10_000_000) || 0]
         );
     }
 
@@ -1404,7 +1553,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     router.get('/leaderboard/history', wrap(async (req, res) => {
         const me = await requireViewer(req);
         const winners = await weekWinners(await circle(me), isoWeek(new Date()), 26);
-        const users = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [[...new Set(winners.map((w) => w.user_id))]])).map((u) => [u.id, u]));
+        const users = new Map((await q(`SELECT ${SHORT} FROM users WHERE id = ANY($1)`, [[...new Set(winners.map((w) => w.user_id))]])).map((u) => [u.id, u]));
         res.json(winners.filter((w) => users.has(w.user_id)).map((w) => ({
             week: w.week,
             user: { ...shortUser(users.get(w.user_id)), isMe: w.user_id === me.id },
@@ -1440,7 +1589,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
              WHERE m.challenge_id = ANY($1) AND m.status IN ('joined', 'invited')`,
             [rows.map((r) => r.id)]
         );
-        const owners = new Map((await q('SELECT * FROM users WHERE id = ANY($1)', [[...new Set(rows.map((r) => r.owner))]])).map((u) => [u.id, u]));
+        const owners = new Map((await q(`SELECT ${SHORT} FROM users WHERE id = ANY($1)`, [[...new Set(rows.map((r) => r.owner))]])).map((u) => [u.id, u]));
         const mine = new Map((await q('SELECT challenge_id, status FROM challenge_members WHERE user_id = $1 AND challenge_id = ANY($2)', [me.id, rows.map((r) => r.id)])).map((m) => [m.challenge_id, m.status]));
         return rows.map((row) => {
             const list = ranked(members.filter((m) => m.challenge_id === row.id).map((m) => ({
@@ -1476,14 +1625,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         return row;
     }
 
-    async function pendingChallenges(me) {
-        const [row] = await q(
-            `SELECT count(*)::int AS count FROM challenge_members m JOIN challenges c ON c.id = m.challenge_id
-             WHERE m.user_id = $1 AND m.status = 'invited' AND c.ends_at > now()`,
-            [me.id]
-        );
-        return row.count;
-    }
+    const CHALLENGE_INVITES_SQL = `SELECT count(*) FROM challenge_members m JOIN challenges c ON c.id = m.challenge_id
+        WHERE m.user_id = $1 AND m.status = 'invited' AND c.ends_at > now()`;
 
     // Новый челлендж: вид, на сколько недель и кого позвать. Начало присылает
     // приложение — полночь сегодняшнего дня по времени телефона.
@@ -1498,7 +1641,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const names = [...new Set((Array.isArray(body.invite) ? body.invite : []).map((n) => text(n, 24).toLowerCase()).filter(Boolean))].slice(0, 20);
         // Звать можно только своих: на кого подписан или кто подписан на тебя.
         const invited = names.length ? await q(
-            `SELECT * FROM users WHERE username = ANY($1) AND id <> $2
+            `SELECT id FROM users WHERE username = ANY($1) AND id <> $2
              AND (id IN (SELECT followee FROM follows WHERE follower = $2) OR id IN (SELECT follower FROM follows WHERE followee = $2))`,
             [names, me.id]
         ) : [];
@@ -1511,10 +1654,13 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             'INSERT INTO challenges (id, owner, kind, weeks, starts_at, ends_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
             [id, me.id, kind, weeks, new Date(start), new Date(start + weeks * 7 * DAY_MS)]
         );
-        await q("INSERT INTO challenge_members (challenge_id, user_id, status) VALUES ($1, $2, 'joined')", [id, me.id]);
-        for (const user of invited) {
-            await q('INSERT INTO challenge_members (challenge_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, user.id]);
-        }
+        // Создатель и приглашённые — одним запросом, а не по запросу на человека.
+        await q(
+            `INSERT INTO challenge_members (challenge_id, user_id, status)
+             SELECT $1, member, CASE WHEN member = $2 THEN 'joined' ELSE 'invited' END FROM unnest($3::text[]) AS member
+             ON CONFLICT DO NOTHING`,
+            [id, me.id, [me.id, ...invited.map((user) => user.id)]]
+        );
         res.status(201).json((await challengeViews([row], me))[0]);
     }));
 
@@ -1553,19 +1699,25 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     router.put('/challenges/scores', wrap(async (req, res) => {
         const me = await requireViewer(req);
         const scores = Array.isArray(req.body && req.body.scores) ? req.body.scores.slice(0, 40) : [];
-        let updated = 0;
+        // Все счета одним UPDATE; один челлендж дважды — побеждает последний, как раньше.
+        const latest = new Map();
         for (const item of scores) {
             const score = number(item && item.score, 0, 1e9);
             if (score === null || !item.id) continue;
-            const rows = await q(
-                `UPDATE challenge_members m SET score = $3, detail = $4, updated_at = now()
-                 FROM challenges c WHERE c.id = m.challenge_id AND m.challenge_id = $1 AND m.user_id = $2
-                 AND m.status = 'joined' AND c.starts_at <= now() AND c.ends_at > $5 RETURNING m.challenge_id`,
-                [String(item.id), me.id, score, text(item.detail, 60), new Date(Date.now() - CHALLENGE_GRACE_MS)]
-            );
-            updated += rows.length;
+            latest.set(String(item.id), { score, detail: text(item.detail, 60) });
         }
-        res.json({ updated });
+        if (latest.size === 0) return res.json({ updated: 0 });
+        const rows = await q(
+            `UPDATE challenge_members m SET score = s.score, detail = s.detail, updated_at = now()
+             FROM challenges c, unnest($2::text[], $3::float8[], $4::text[]) AS s(id, score, detail)
+             WHERE m.challenge_id = s.id AND c.id = m.challenge_id AND m.user_id = $1
+             AND m.status = 'joined' AND c.starts_at <= now() AND c.ends_at > $5 RETURNING m.challenge_id`,
+            [
+                me.id, [...latest.keys()], [...latest.values()].map((v) => v.score), [...latest.values()].map((v) => v.detail),
+                new Date(Date.now() - CHALLENGE_GRACE_MS)
+            ]
+        );
+        res.json({ updated: rows.length });
     }));
 
     router.use((error, req, res, next) => {

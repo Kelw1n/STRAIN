@@ -9,6 +9,7 @@ const PORT = process.env.PORT || 10000;
 // Render стоит за прокси: без этого у всех запросов один и тот же IP,
 // и ограничение частоты регистраций срабатывало бы на всех сразу.
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
 // Enable CORS for mobile apps and web
 app.use(cors());
@@ -49,13 +50,33 @@ app.get('/', (req, res) => {
 // -----------------------------------------------------------------------------
 const social = createSocial({ databaseUrl: process.env.DATABASE_URL });
 app.use('/v2', social.router);
-social.init().then(
-    (ok) => console.log(ok ? 'Social: database ready' : 'Social: DATABASE_URL not set, /v2 disabled'),
-    (error) => console.error('Social: database init failed:', error.message)
-);
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`STRAIN Backend running on port ${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/health`);
+// Неизвестный адрес и ошибки разбора тела — тоже JSON: приложения ждут {error},
+// а стандартный ответ Express — HTML-страница, да ещё со стеком вызовов, если
+// NODE_ENV не production (на Render его никто не выставляет).
+app.use((req, res) => res.status(404).json({ error: 'Нет такого адреса' }));
+
+// eslint-disable-next-line no-unused-vars
+app.use((error, req, res, next) => {
+    const status = Number(error && (error.status || error.statusCode)) || 500;
+    if (status >= 500) console.error(req.method, req.originalUrl, error);
+    if (res.headersSent) return res.end();
+    const message = error && error.type === 'entity.too.large' ? 'Слишком большой запрос'
+        : error && error.type === 'entity.parse.failed' ? 'Тело запроса — не JSON'
+            : status >= 500 ? 'Ошибка сервера' : 'Неверный запрос';
+    res.status(status >= 400 && status < 600 ? status : 500).json({ error: message });
 });
+
+if (require.main === module) {
+    social.init().then(
+        (ok) => console.log(ok ? 'Social: database ready' : 'Social: DATABASE_URL not set, /v2 disabled'),
+        (error) => console.error('Social: database init failed:', error.message)
+    );
+
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`STRAIN Backend running on port ${PORT}`);
+        console.log(`Health check: http://localhost:${PORT}/health`);
+    });
+}
+
+module.exports = { app, social };
