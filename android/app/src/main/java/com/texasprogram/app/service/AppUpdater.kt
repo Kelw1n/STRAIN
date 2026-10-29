@@ -35,9 +35,32 @@ object AppUpdater {
     private const val APK_URL = BASE + "STRAIN.apk"
     /// Свёрнутое и снова открытое приложение проверяет не чаще раза в шесть часов.
     private const val RECHECK_MS = 6 * 60 * 60 * 1000L
+    private const val SEEN_KEY = "seen_version"
+
+    /// Одна версия в истории: номер, когда вышла и что в ней нового.
+    @Serializable
+    data class Change(val versionCode: Long, val versionName: String = "", val notes: String = "", val date: String? = null) {
+        /// Строки описания — каждая пунктом списка, без своих маркеров.
+        val points: List<String>
+            get() = notes.lines().map { it.trim().trimStart('•', '-', '*', '—').trim() }.filter { it.isNotEmpty() }
+    }
 
     @Serializable
-    data class Release(val versionCode: Long, val versionName: String = "", val notes: String = "")
+    data class Release(
+        val versionCode: Long,
+        val versionName: String = "",
+        val notes: String = "",
+        val date: String? = null,
+        /// Последние версии, новые сверху. У старого version.json истории нет.
+        val history: List<Change> = emptyList()
+    ) {
+        /// Что вышло после версии `since` и до `upTo` включительно — новые сверху.
+        fun changes(since: Long, upTo: Long = Long.MAX_VALUE): List<Change> =
+            history.ifEmpty { listOf(Change(versionCode, versionName, notes, date)) }
+                .filter { it.versionCode > since && it.versionCode <= upTo }
+                .distinctBy { it.versionCode }
+                .sortedByDescending { it.versionCode }
+    }
 
     sealed interface State {
         /// Какую версию предлагаем; `null` — обновлений нет.
@@ -61,6 +84,15 @@ object AppUpdater {
 
     /// «Позже» на плашке — до следующего запуска приложения не показываем.
     var dismissed by mutableStateOf(false)
+        private set
+
+    /// Только что обновились: что нового в установленной версии и пропущенных.
+    /// Показываем один раз после обновления.
+    var whatsNew by mutableStateOf<List<Change>>(emptyList())
+        private set
+
+    /// Что нового в версии, которую предлагаем, и во всех между ней и установленной.
+    var pending by mutableStateOf<List<Change>>(emptyList())
         private set
 
     private val scope = MainScope()
@@ -89,10 +121,14 @@ object AppUpdater {
             lastCheck = now
             val release = json.decodeFromString<Release>(text)
             val app = context.applicationContext
-            return if (release.versionCode > installedVersionCode(app)) {
+            val installed = installedVersionCode(app)
+            rememberSeen(app, installed, release)
+            return if (release.versionCode > installed) {
                 if (state.release?.versionCode != release.versionCode) state = State.Available(release)
+                pending = release.changes(since = installed)
                 true
             } else {
+                pending = emptyList()
                 state = State.Idle
                 withContext(Dispatchers.IO) { updatesDir(app).deleteRecursively() }
                 false
@@ -109,6 +145,28 @@ object AppUpdater {
     fun dismiss() {
         dismissed = true
     }
+
+    /// «Понятно» под «что нового»: больше не показываем для этой версии.
+    fun dismissWhatsNew(context: Context) {
+        whatsNew = emptyList()
+        prefs(context).edit().putLong(SEEN_KEY, installedVersionCode(context)).apply()
+    }
+
+    /// Первая версия на телефоне — помним её молча. Обновились — показываем,
+    /// что вышло после той, которую видели последней.
+    private fun rememberSeen(context: Context, installed: Long, release: Release) {
+        val prefs = prefs(context)
+        val seen = prefs.getLong(SEEN_KEY, -1L)
+        if (seen < 0 || seen > installed) {
+            prefs.edit().putLong(SEEN_KEY, installed).apply()
+            return
+        }
+        if (seen == installed) return
+        val changes = release.changes(since = seen, upTo = installed)
+        if (changes.isEmpty()) prefs.edit().putLong(SEEN_KEY, installed).apply() else whatsNew = changes
+    }
+
+    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences("app_updates", Context.MODE_PRIVATE)
 
     /// «Обновить»: скачать, если ещё не скачано, и открыть установщик.
     fun update(context: Context) {

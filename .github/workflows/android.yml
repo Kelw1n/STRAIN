@@ -108,11 +108,21 @@ jobs:
           set -euo pipefail
           cp android/app/build/outputs/apk/release/app-release.apk STRAIN.apk
           NOTES="${NOTES_INPUT:-$(git log -1 --format=%s)}"
-          jq -n \
+          # История «что нового» за последние версии: кто пропустил несколько
+          # обновлений, увидит изменения каждого. Берём её из прошлого version.json.
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/android-latest/version.json" -o previous.json || echo '{}' > previous.json
+          jq empty previous.json 2>/dev/null || echo '{}' > previous.json
+          jq \
             --argjson code "$STRAIN_VERSION_CODE" \
             --arg name "$STRAIN_VERSION_NAME" \
             --arg notes "$NOTES" \
-            '{versionCode: $code, versionName: $name, notes: $notes}' > version.json
+            --arg date "$(date -u +%F)" \
+            '(if (.history | type) == "array" then .history
+              elif (.versionCode | type) == "number" then [{versionCode, versionName, notes, date}]
+              else [] end) as $old
+             | {versionCode: $code, versionName: $name, notes: $notes, date: $date,
+                history: ([{versionCode: $code, versionName: $name, notes: $notes, date: $date}]
+                          + ($old | map(select(.versionCode < $code))))[:30]}' previous.json > version.json
           cat version.json
           gh release delete android-latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
           gh release create android-latest STRAIN.apk version.json \
