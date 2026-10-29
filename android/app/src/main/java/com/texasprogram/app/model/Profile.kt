@@ -487,8 +487,12 @@ data class ProgramProfile(
 
     /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана:
     /// без запаса подход, добавленный в тренировке кнопкой, в историю и графики не попадал.
-    fun entries(week: Int, day: Int, exercise: ExercisePrescription): List<SetEntry> =
-        (0 until maxOf(exercise.sets, 0) + EXTRA_SET_ALLOWANCE).mapNotNull { setEntry(week, day, exercise, it) }
+    /// Самый частый вызов: им читают историю, медали, рекорды и подсказки весов.
+    /// Ключ дня и упражнения собираем один раз, а не на каждый из двадцати номеров.
+    fun entries(week: Int, day: Int, exercise: ExercisePrescription): List<SetEntry> {
+        val base = setKey(week, day, exercise) + "|"
+        return (0 until maxOf(exercise.sets, 0) + EXTRA_SET_ALLOWANCE).mapNotNull { setLog[base + it] }
+    }
 
     // MARK: - История упражнения
 
@@ -496,19 +500,19 @@ data class ProgramProfile(
     ///
     /// Берём из плана, а не из ключей: в ключе лежит идентификатор, а показать
     /// нужно человеческое имя, и порядок должен совпадать с порядком в программе.
-    val loggedExerciseNames: List<String>
-        get() {
-            val names = mutableListOf<String>()
-            for (week in workoutPlan.weeks) {
-                for (day in week.days) {
-                    for (exercise in day.exercises) {
-                        if (names.contains(exercise.name)) continue
-                        if (entries(week.number, day.number, exercise).isNotEmpty()) names += exercise.name
-                    }
+    /// Профиль неизменяемый — список считаем один раз на экземпляр.
+    val loggedExerciseNames: List<String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val names = LinkedHashSet<String>()
+        for (week in workoutPlan.weeks) {
+            for (day in week.days) {
+                for (exercise in day.exercises) {
+                    if (exercise.name in names) continue
+                    if (entries(week.number, day.number, exercise).isNotEmpty()) names += exercise.name
                 }
             }
-            return names
         }
+        names.toList()
+    }
 
     /// Весь путь одного движения по текущему циклу.
     fun history(exerciseName: String): List<ExerciseHistoryPoint> =
