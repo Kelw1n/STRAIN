@@ -434,6 +434,26 @@ class SnapshotTest {
         }
     }
 
+    /// Плашка обновления: свёрнутая и раскрытая «Что нового» за несколько версий.
+    @Test
+    fun updateBanner() {
+        val release = SocialService.json.decodeFromString<com.texasprogram.app.service.AppUpdater.Release>(
+            """{"versionCode":1172,"versionName":"3.1.172","notes":"Стекло как в iOS 26","date":"2026-10-30",
+               "history":[{"versionCode":1172,"versionName":"3.1.172","notes":"Стекло как в iOS 26\nВсё плавнее","date":"2026-10-30"},
+                          {"versionCode":1170,"versionName":"3.1.170","notes":"Плашка обновления с описанием\nИсправления","date":"2026-10-29"},
+                          {"versionCode":1163,"versionName":"3.1.163","notes":"Рекорды и год тренировок в профиле","date":"2026-10-28"}]}"""
+        )
+        val state = com.texasprogram.app.service.AppUpdater.State.Available(release)
+        paparazzi.snapshot("38-update-banner") {
+            Screen {
+                Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    com.texasprogram.app.ui.AppUpdateBanner(state = state)
+                    com.texasprogram.app.ui.AppUpdateBanner(state = state, startExpanded = true)
+                }
+            }
+        }
+    }
+
     /// Уровень другого человека и его аватарка на весь экран.
     @Test
     fun userLevelAndAvatar() {

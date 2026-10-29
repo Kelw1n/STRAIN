@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
 /// прогресса и открыть системный установщик; «Что нового» со стрелкой раскрывает
 /// изменения всех версий новее установленной; «×» — напомнить при следующем запуске.
 @Composable
-fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.state) {
+fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.state, startExpanded: Boolean = false) {
     val context = LocalContext.current
     val visible = state.release != null && !(AppUpdater.dismissed && state is State.Available)
     // Пока плашка уезжает, показываем последнее, что на ней было.
@@ -87,7 +87,7 @@ fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.sta
         val changes = AppUpdater.pending.ifEmpty { release.changes(since = AppUpdater.installedVersionCode(context)) }
         val progress = (current as? State.Downloading)?.progress
         val bar by animateFloatAsState(progress?.coerceAtLeast(0f) ?: 0f, Motion.snappy(), label = "updateProgress")
-        var expanded by rememberSaveable { mutableStateOf(false) }
+        var expanded by rememberSaveable { mutableStateOf(startExpanded) }
         val accent = Theme.accent
         val shape = RoundedCornerShape(22.dp)
 
