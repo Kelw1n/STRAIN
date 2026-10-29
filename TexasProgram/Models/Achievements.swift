@@ -133,9 +133,11 @@ enum AchievementCalculator {
 
     static func progress(for profile: ProgramProfile, now: Date = Date()) -> [AchievementProgress] {
         let bodyWeight = profile.latestBodyWeight
-        let squat = best(profile, names: squatNames, floor: profile.squat5RM)
-        let bench = best(profile, names: benchNames, floor: profile.bench5RM)
-        let deadlift = best(profile, names: deadliftNames, floor: profile.deadlift5RM)
+        // История всех движений — одним проходом: дальше медали только читают её.
+        let history = profile.historyByName()
+        let squat = best(history.points, names: squatNames, floor: profile.squat5RM)
+        let bench = best(history.points, names: benchNames, floor: profile.bench5RM)
+        let deadlift = best(history.points, names: deadliftNames, floor: profile.deadlift5RM)
 
         func ratio(_ lift: Double) -> Double {
             guard let bodyWeight, bodyWeight > 0 else { return 0 }
@@ -147,7 +149,7 @@ enum AchievementCalculator {
             switch kind {
             case .path: value = Double(profile.completionLog.count)
             case .iron: value = profile.setLog.values.reduce(0) { $0 + $1.tonnage }
-            case .records: value = Double(recordCount(profile))
+            case .records: value = Double(recordCount(names: history.names, points: history.points))
             case .streak: value = Double(bestWeekStreak(profile.completionLog.map(\.date)))
             case .bench: value = ratio(bench)
             case .squat: value = ratio(squat)
@@ -171,9 +173,14 @@ enum AchievementCalculator {
     /// Лучший поднятый вес в движении: из записанных подходов или из максимума,
     /// с которого начата программа, — он тоже был поднят по-настоящему.
     static func best(_ profile: ProgramProfile, names: [String], floor: Double) -> Double {
+        best(profile.historyByName().points, names: names, floor: floor)
+    }
+
+    /// То же по готовой истории всех движений.
+    static func best(_ history: [String: [ExerciseHistoryPoint]], names: [String], floor: Double) -> Double {
         var best = floor
         for name in names {
-            for point in profile.history(forExerciseNamed: name) {
+            for point in history[name] ?? [] {
                 best = max(best, point.best)
             }
         }
@@ -183,10 +190,16 @@ enum AchievementCalculator {
     /// Рекорд — тренировка, где лучший вес движения выше всех прошлых.
     /// Первая тренировка движения рекордом не считается: побить ещё нечего.
     static func recordCount(_ profile: ProgramProfile) -> Int {
+        let history = profile.historyByName()
+        return recordCount(names: history.names, points: history.points)
+    }
+
+    /// То же по готовой истории: имена — в порядке программы.
+    static func recordCount(names: [String], points history: [String: [ExerciseHistoryPoint]]) -> Int {
         var count = 0
-        for name in profile.loggedExerciseNames {
+        for name in names {
             var top: Double?
-            for point in profile.history(forExerciseNamed: name) where point.best > 0 {
+            for point in history[name] ?? [] where point.best > 0 {
                 if let current = top {
                     if point.best > current + 1e-9 {
                         count += 1
@@ -289,9 +302,10 @@ enum WeeklyStatsBuilder {
         // Рекорд недели — тренировка этой недели, где лучший вес движения выше всех прошлых.
         let dates = Dictionary(log.map { ($0.key, $0.date) }, uniquingKeysWith: { max($0, $1) })
         var records = 0
-        for name in profile.loggedExerciseNames {
+        let history = profile.historyByName()
+        for name in history.names {
             var top: Double?
-            for point in profile.history(forExerciseNamed: name) where point.best > 0 {
+            for point in history.points[name] ?? [] where point.best > 0 {
                 if let current = top {
                     if point.best > current + 1e-9 {
                         top = point.best

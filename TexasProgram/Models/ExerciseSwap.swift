@@ -295,9 +295,13 @@ extension ProgramProfile {
         guard scope == .rest else { return today }
 
         // Следующие недели: там, где на месте этого упражнения ещё стоит прежнее.
-        let weeks = workoutPlan.weeks.map(\.number).filter { $0 > week }
+        // План — один раз: каждая новая правка сбрасывала кэш, и все недели
+        // пересчитывались заново на каждой итерации. Правка недели трогает только
+        // её саму, поэтому состав следующих недель от этого не меняется.
+        let plan = workoutPlan
+        let weeks = plan.weeks.map(\.number).filter { $0 > week }
         for next in weeks {
-            guard let exercises = workoutPlan.weeks.first(where: { $0.number == next })?
+            guard let exercises = plan.weeks.first(where: { $0.number == next })?
                 .days.first(where: { $0.number == day })?.exercises,
                   exercises.contains(where: { $0.id == target }) else { continue }
             _ = append(target: target, week: next)

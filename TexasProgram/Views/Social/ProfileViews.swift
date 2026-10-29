@@ -15,6 +15,7 @@ struct ProfileTabView: View {
     @State private var loadingPosts = false
     @State private var postsError: String?
     @State private var showingEdit = false
+    @State private var statsCache = ProfileStatsCache()
 
     private var social: SocialService { .shared }
 
@@ -23,12 +24,12 @@ struct ProfileTabView: View {
             Group {
                 if let me = social.me {
                     ScrollView {
-                        let progress = AchievementCalculator.progress(for: profile)
+                        let stats = statsCache.stats(for: profile)
                         ProfileContent(
                             user: me,
-                            badges: AchievementCalculator.badges(from: progress),
-                            achievedCount: progress.filter { $0.level > 0 }.count,
-                            programs: SocialProgramBuilder.days(for: profile),
+                            badges: stats.badges,
+                            achievedCount: stats.achievedCount,
+                            programs: stats.programs,
                             posts: posts,
                             loadingPosts: loadingPosts,
                             postsError: postsError,
@@ -48,8 +49,8 @@ struct ProfileTabView: View {
                             onLoadMore: { Task { await loadMore(me.username) } },
                             onPostChange: replace,
                             levelProfile: profile,
-                            records: PersonalRecords.records(for: profile),
-                            heatmap: TrainingHeatmap.build(for: profile)
+                            records: stats.records,
+                            heatmap: stats.heatmap
                         )
                         .tabScrollAnchor(.profile)
                     }
@@ -94,7 +95,7 @@ struct ProfileTabView: View {
             .navigationDestination(for: ProfileRoute.self) { route in
                 switch route {
                 case .achievements:
-                    AchievementsView(progress: AchievementCalculator.progress(for: profile))
+                    AchievementsView(progress: statsCache.stats(for: profile).progress)
                 }
             }
             .sheet(isPresented: $showingEdit) {
@@ -141,6 +142,78 @@ struct ProfileTabView: View {
 
 enum ProfileRoute: Hashable {
     case achievements
+}
+
+/// Свои медали, программа, рекорды и карта года — посчитанные один раз.
+///
+/// Каждая цифра здесь — проход по всей истории подходов и плану, а `body`
+/// вкладки перевычисляется на каждую отметку подхода, даже когда вкладка
+/// скрыта за тренировкой. Поэтому пересчитываем, только когда поменялось то,
+/// от чего цифры зависят, и в том же проходе — без пустого кадра. Сравнение
+/// дешёвое: массивы и словари модели сначала сравниваются по общему буферу.
+final class ProfileStatsCache {
+    struct Stats {
+        let progress: [AchievementProgress]
+        let badges: [SocialBadge]
+        let achievedCount: Int
+        let programs: [SocialProgramDay]
+        let records: [SocialRecord]
+        let heatmap: SocialHeatmap
+    }
+
+    /// Всё, что читают медали, программа недели, рекорды и карта года.
+    struct Key: Equatable {
+        let profile: ObjectIdentifier
+        let plan: WorkoutPlan
+        let log: [CompletionRecord]
+        let sets: [String: SetEntry]
+        let completed: [String]
+        let skipped: [SkippedWorkout]
+        let edits: [PlanEdit]
+        let custom: CustomProgram?
+        let bodyWeight: [BodyWeightEntry]
+        let maxes: [Double]
+        let cycle: Int
+        let peaking: Bool
+        /// Карта года кончается сегодняшним днём — с новым днём она другая.
+        let day: Date
+
+        init(_ profile: ProgramProfile, now: Date, calendar: Calendar) {
+            self.profile = ObjectIdentifier(profile)
+            plan = profile.workoutPlan
+            log = profile.completionLog
+            sets = profile.setLog
+            completed = profile.completedDayKeys
+            skipped = profile.skipped
+            edits = profile.planEdits
+            custom = profile.customProgram
+            bodyWeight = profile.bodyWeightLog
+            maxes = [profile.squat5RM, profile.bench5RM, profile.deadlift5RM]
+            cycle = profile.cycleNumber
+            peaking = profile.isPeaking
+            day = calendar.startOfDay(for: now)
+        }
+    }
+
+    private var key: Key?
+    private var cached: Stats?
+
+    func stats(for profile: ProgramProfile, now: Date = Date(), calendar: Calendar = .current) -> Stats {
+        let current = Key(profile, now: now, calendar: calendar)
+        if let cached, key == current { return cached }
+        let progress = AchievementCalculator.progress(for: profile, now: now)
+        let fresh = Stats(
+            progress: progress,
+            badges: AchievementCalculator.badges(from: progress),
+            achievedCount: progress.filter { $0.level > 0 }.count,
+            programs: SocialProgramBuilder.days(for: profile),
+            records: PersonalRecords.records(for: profile),
+            heatmap: TrainingHeatmap.build(for: profile, today: now)
+        )
+        key = current
+        cached = fresh
+        return fresh
+    }
 }
 
 // MARK: - Чужой профиль

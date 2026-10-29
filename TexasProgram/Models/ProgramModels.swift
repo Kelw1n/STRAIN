@@ -870,9 +870,15 @@ final class ProgramProfile {
     static let extraSetAllowance = 12
 
     /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана.
+    ///
+    /// Самый частый вызов в приложении: им читают историю, медали, рекорды и
+    /// подсказки весов. Поэтому ключ дня и упражнения собираем один раз, а не на
+    /// каждый из двадцати номеров, и записи модели читаем тоже один раз.
     func entries(week: Int, day: Int, exercise: ExercisePrescription) -> [(index: Int, entry: SetEntry)] {
-        (0..<(max(exercise.sets, 0) + Self.extraSetAllowance)).compactMap { index in
-            setEntry(week: week, day: day, exercise: exercise, index: index).map { (index, $0) }
+        let base = setKey(week: week, day: day, exercise: exercise) + "|"
+        let log = setLog
+        return (0..<(max(exercise.sets, 0) + Self.extraSetAllowance)).compactMap { index in
+            log[base + String(index)].map { (index, $0) }
         }
     }
 
@@ -891,6 +897,18 @@ final class ProgramProfile {
         return setLog.reduce(0) { sum, item in
             item.key.hasPrefix(prefix) ? sum + item.value.tonnage : sum
         }
+    }
+
+    /// Тоннаж всех дней за один проход по записям — для списков тренировок:
+    /// `tonnage(forDayKey:)` на каждую строку заново перебирал бы все подходы.
+    /// Подходы складываются в том же порядке, поэтому числа те же до бита.
+    func tonnageByDay() -> [String: Double] {
+        var result: [String: Double] = [:]
+        for (key, entry) in setLog {
+            guard let bar = key.firstIndex(of: "|") else { continue }
+            result[String(key[..<bar]), default: 0] += entry.tonnage
+        }
+        return result
     }
 
     // MARK: - История упражнения
@@ -931,6 +949,30 @@ final class ProgramProfile {
             }
         }
         return points
+    }
+
+    /// История всех движений за один проход по плану: имена — в том же порядке,
+    /// что и у `loggedExerciseNames`, точки — те же, что у `history(forExerciseNamed:)`.
+    /// Медали и сводка недели читают историю каждого движения, а по отдельности
+    /// это десятки проходов по всем неделям на каждую перерисовку профиля.
+    func historyByName() -> (names: [String], points: [String: [ExerciseHistoryPoint]]) {
+        var names: [String] = []
+        var points: [String: [ExerciseHistoryPoint]] = [:]
+        for week in workoutPlan.weeks {
+            for day in week.days {
+                for exercise in day.exercises {
+                    let logged = entries(week: week.number, day: day.number, exercise: exercise).map(\.entry)
+                    guard !logged.isEmpty else { continue }
+                    var planned: Double?
+                    if case .kilograms(let value) = exercise.load { planned = value }
+                    if points[exercise.name] == nil { names.append(exercise.name) }
+                    points[exercise.name, default: []].append(
+                        ExerciseHistoryPoint(week: week.number, day: day.number, planned: planned, entries: logged)
+                    )
+                }
+            }
+        }
+        return (names, points)
     }
 
     // MARK: - Вес тела

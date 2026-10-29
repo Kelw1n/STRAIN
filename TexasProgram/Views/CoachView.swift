@@ -85,7 +85,6 @@ struct CoachView: View {
     @State private var hasKey = GeminiKeychain.load() != nil
     @State private var confirmClear = false
     @State private var startedReview = false
-    @FocusState private var focused: Bool
 
     var body: some View {
         NavigationStack {
@@ -135,7 +134,11 @@ struct CoachView: View {
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             }
             .background(Color.black.ignoresSafeArea())
-            .safeAreaInset(edge: .bottom) { composer }
+            .safeAreaInset(edge: .bottom) {
+                CoachComposer(draft: $draft, thinking: thinking) { question in
+                    Task { await ask(question) }
+                }
+            }
             .navigationTitle("ИИ-тренер")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -221,63 +224,15 @@ struct CoachView: View {
         .padding(.vertical, 12)
     }
 
-    private var composer: some View {
-        VStack(spacing: 8) {
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(Coach.quickQuestions, id: \.self) { question in
-                        Button { Task { await ask(question) } } label: {
-                            Text(question)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .frame(height: 32)
-                                .background(Color(white: 0.16), in: Capsule())
-                        }
-                        .buttonStyle(.pressable)
-                        .disabled(thinking)
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            .scrollIndicators(.hidden)
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("Спроси тренера", text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
-                    .focused($focused)
-                    .font(.system(size: 16))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                Button {
-                    let question = draft
-                    draft = ""
-                    Task { await ask(question) }
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .heavy))
-                        .foregroundStyle(.black)
-                        .frame(width: 40, height: 40)
-                        .background(Theme.accent, in: Circle())
-                }
-                .buttonStyle(.pressable)
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || thinking)
-                .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || thinking ? 0.4 : 1)
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .background(.ultraThinMaterial)
-    }
-
     // MARK: Вопрос и ответ
 
     private func ask(_ raw: String, review: String? = nil, retry: Bool = false) async {
         let question = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !thinking else { return }
         guard let key = GeminiKeychain.load() else {
+            // Вопрос не теряется: поле уже очистилось, а после ключа его
+            // останется только отправить.
+            if review == nil, !retry, draft.isEmpty { draft = question }
             showingKey = true
             return
         }
@@ -319,6 +274,67 @@ struct CoachView: View {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         withAnimation(Motion.snappy) { messages[position].applied.append(index) }
         CoachHistory.write(messages, for: profile.profileID)
+    }
+}
+
+/// Поле ввода и быстрые вопросы — отдельным вью. Текст поля живёт у переписки,
+/// но читает его только поле: набор буквы перерисовывает его одно, а не всю
+/// переписку с разбором разметки каждого ответа тренера.
+private struct CoachComposer: View {
+    @Binding var draft: String
+    let thinking: Bool
+    var onAsk: (String) -> Void
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(Coach.quickQuestions, id: \.self) { question in
+                        Button { onAsk(question) } label: {
+                            Text(question)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .frame(height: 32)
+                                .background(Color(white: 0.16), in: Capsule())
+                        }
+                        .buttonStyle(.pressable)
+                        .disabled(thinking)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .scrollIndicators(.hidden)
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField("Спроси тренера", text: $draft, axis: .vertical)
+                    .lineLimit(1...5)
+                    .focused($focused)
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Button {
+                    let question = draft
+                    draft = ""
+                    onAsk(question)
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 16, weight: .heavy))
+                        .foregroundStyle(.black)
+                        .frame(width: 40, height: 40)
+                        .background(Theme.accent, in: Circle())
+                }
+                .buttonStyle(.pressable)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || thinking)
+                .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || thinking ? 0.4 : 1)
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial)
     }
 }
 
@@ -375,8 +391,9 @@ private struct CoachBubble: View {
     @ViewBuilder
     private func actionRow(_ index: Int, _ action: CoachAction) -> some View {
         let applied = message.applied.contains(index)
-        if applied || Coach.resolve(action, profile: profile) != nil {
-            let resolved = Coach.resolve(action, profile: profile)
+        // Один разбор на строку: для шага прибавки он ищет упражнение по всей истории.
+        let resolved = Coach.resolve(action, profile: profile)
+        if applied || resolved != nil {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(resolved?.title ?? "Применено")

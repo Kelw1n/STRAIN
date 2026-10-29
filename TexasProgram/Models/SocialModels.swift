@@ -911,12 +911,18 @@ enum SocialFormat {
 
     /// «1 470» — с пробелом между тысячами, как пишут вес по-русски.
     static func grouped(_ value: Double) -> String {
+        groupedFormatter.string(from: NSNumber(value: value.rounded())) ?? "\(Int(value.rounded()))"
+    }
+
+    /// Один на всё приложение: собирать `NumberFormatter` дорого, а у каждой
+    /// карточки ленты числа считаются по нескольку раз — на каждый вариант ширины.
+    private static let groupedFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = "\u{2009}"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value.rounded())) ?? "\(Int(value.rounded()))"
-    }
+        return formatter
+    }()
 
     /// Юзернейм так, как его примет сервер: строчные латинские буквы, цифры, точка и подчёркивание.
     static func normalizedUsername(_ raw: String) -> String {

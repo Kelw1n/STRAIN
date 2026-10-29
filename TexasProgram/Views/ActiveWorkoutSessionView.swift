@@ -476,7 +476,8 @@ private struct ExerciseSessionCard: View {
                             .transition(.opacity)
                     }
                     if compact {
-                        Text("\(doneCount) из \(RuPlural.sets(exercise.sets.count))")
+                        // После «из» — родительный падеж: «из 3 подходов», а не «из 3 подхода».
+                        Text("\(doneCount) из \(exercise.sets.count) \(RuPlural.word(exercise.sets.count, "подхода", "подходов", "подходов"))")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Color.white.opacity(0.45))
                             .transition(.opacity)
@@ -543,7 +544,17 @@ private struct ExerciseSessionCard: View {
             .background(Color.white.opacity(0.10), in: Capsule())
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel("Отдых \(exercise.restSeconds / 60) минут \(exercise.restSeconds % 60) секунд")
+        .accessibilityLabel(Self.restLabel(exercise.restSeconds))
+    }
+
+    /// «Отдых 2 минуты 30 секунд» — с согласованными словами и без «0 секунд».
+    private static func restLabel(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        let rest = seconds % 60
+        var parts: [String] = []
+        if minutes > 0 { parts.append("\(minutes) \(RuPlural.word(minutes, "минута", "минуты", "минут"))") }
+        if rest > 0 || minutes == 0 { parts.append("\(rest) \(RuPlural.word(rest, "секунда", "секунды", "секунд"))") }
+        return "Отдых " + parts.joined(separator: " ")
     }
 
     private var menu: some View {

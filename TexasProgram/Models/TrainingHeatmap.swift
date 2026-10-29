@@ -73,20 +73,28 @@ enum TrainingHeatmap {
         levels.suffix(365).filter { $0 > 0 }.count
     }
 
-    private static func formatter(_ calendar: Calendar) -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
+    /// Даты в карте — всегда по григорианскому календарю, в поясе телефона.
+    /// С японским или буддийским календарём в настройках iPhone год в строке
+    /// был другим («0008-…», «2569-…»), и Android и другие iPhone сдвигали карту
+    /// на годы. И без `DateFormatter`: собирать его дорого, а карту друга
+    /// пересчитывают на каждую перерисовку профиля.
+    private static func gregorian(_ calendar: Calendar) -> Calendar {
+        var result = Calendar(identifier: .gregorian)
+        result.timeZone = calendar.timeZone
+        return result
     }
 
     static func dayString(_ date: Date, calendar: Calendar = .current) -> String {
-        formatter(calendar).string(from: date)
+        let parts = gregorian(calendar).dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     static func date(_ string: String, calendar: Calendar = .current) -> Date? {
-        formatter(calendar).date(from: string).map { calendar.startOfDay(for: $0) }
+        let parts = string.split(separator: "-")
+        guard parts.count == 3, let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]),
+              (1...12).contains(month), (1...31).contains(day),
+              let date = gregorian(calendar).date(from: DateComponents(year: year, month: month, day: day))
+        else { return nil }
+        return calendar.startOfDay(for: date)
     }
 }

@@ -187,7 +187,10 @@ struct ActivityProgressView: View {
         let records = periodRecords
         // Объём — из записанных подходов дня, а не из максимумов: раньше столбики
         // считались как «сумма максимумов × 5» и к реальной работе отношения не имели.
-        let tonnages = records.map { profile.tonnage(forDayKey: $0.key) }
+        // Все дни — одним проходом по подходам, а не проходом на каждую тренировку:
+        // «Всё время» на каждую перерисовку перебирало подходы сотни раз.
+        let byDay = profile.tonnageByDay()
+        let tonnages = records.map { byDay[$0.key] ?? 0 }
         let totalTonnage = tonnages.reduce(0, +)
         let totalSeconds = records.compactMap(\.durationSeconds).reduce(0, +)
         let recent = Array(zip(records, tonnages).suffix(8))
@@ -673,12 +676,16 @@ struct MuscleGroupAnalytics {
         }
 
         var loggedSetsCount = 0
+        // Группа по названию — один раз на упражнение, а не на каждый подход:
+        // разбор названия — два десятка поисков подстроки.
+        var categories: [String: MuscleCategory] = [:]
         for (key, _) in profile.setLog {
             let parts = key.split(separator: "|")
             guard parts.count >= 2 else { continue }
             let exId = String(parts[1])
             let exName = idToName[exId] ?? exId
-            let cat = MuscleCategory.categorize(exerciseName: exName)
+            let cat = categories[exName] ?? MuscleCategory.categorize(exerciseName: exName)
+            categories[exName] = cat
             groupSets[cat, default: 0] += 1
             groupExercises[cat, default: []].insert(exName)
             loggedSetsCount += 1

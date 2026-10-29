@@ -125,7 +125,7 @@ final class SocialService {
     }
 
     private let session: URLSession
-    private var syncTask: Task<Void, Never>?
+    @ObservationIgnored private var syncTask: Task<Void, Never>?
     /// Связь вернулась — неотправленное уходит само.
     @ObservationIgnored private let pathMonitor = NWPathMonitor()
 
@@ -324,23 +324,33 @@ final class SocialService {
 
     /// Программа, медали, вес и сводка недели из приложения — в профиль. Шлём, только если
     /// что-то поменялось, и не чаще раза в несколько секунд.
+    ///
+    /// Сначала пауза, потом расчёт: программа, медали, рекорды, карта года и
+    /// сводка недели — это проход по всей истории, а зовут синхронизацию на
+    /// каждую отметку тренировки и открытие профиля. Раньше всё считалось
+    /// сразу на каждый вызов, прямо в момент нажатия «Готово». Несколько
+    /// вызовов подряд дают один расчёт — и уходит самое свежее, а не то,
+    /// что было при первом вызове.
     func scheduleSync(from profile: ProgramProfile) {
         guard token != nil else { return }
-        let patch = ProfilePatch(
-            weightKg: profile.latestBodyWeight,
-            programs: SocialProgramBuilder.days(for: profile),
-            achievements: AchievementCalculator.badges(from: AchievementCalculator.progress(for: profile)),
-            records: PersonalRecords.records(for: profile),
-            heatmap: TrainingHeatmap.build(for: profile),
-            stats: WeeklyStatsBuilder.stats(for: profile)
-        )
-        guard let data = try? JSONEncoder().encode(patch) else { return }
-        let fingerprint = data.base64EncodedString()
-        guard fingerprint != UserDefaults.standard.string(forKey: "social_sync_fingerprint") else { return }
         syncTask?.cancel()
+        let attached = profile.modelContext != nil
         syncTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard let self, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled, self.token != nil else { return }
+            // Профиль за эти секунды могли удалить: к удалённой модели обращаться нельзя.
+            guard !profile.isDeleted, !attached || profile.modelContext != nil else { return }
+            let patch = ProfilePatch(
+                weightKg: profile.latestBodyWeight,
+                programs: SocialProgramBuilder.days(for: profile),
+                achievements: AchievementCalculator.badges(from: AchievementCalculator.progress(for: profile)),
+                records: PersonalRecords.records(for: profile),
+                heatmap: TrainingHeatmap.build(for: profile),
+                stats: WeeklyStatsBuilder.stats(for: profile)
+            )
+            guard let data = try? JSONEncoder().encode(patch) else { return }
+            let fingerprint = data.base64EncodedString()
+            guard fingerprint != UserDefaults.standard.string(forKey: "social_sync_fingerprint") else { return }
             if (try? await self.update(patch)) != nil {
                 UserDefaults.standard.set(fingerprint, forKey: "social_sync_fingerprint")
             }
@@ -782,7 +792,9 @@ final class SocialService {
     }
 
     func uploadImage(_ image: UIImage, maxSide: CGFloat = 1280) async throws -> String {
-        guard let data = Self.jpeg(image, maxSide: maxSide) else { throw SocialError(message: "Не удалось подготовить фото") }
+        // Сжатие — в фоне: на главном потоке экран замирал, пока готовилось фото.
+        let prepared = await Task.detached(priority: .userInitiated) { SocialService.jpeg(image, maxSide: maxSide) }.value
+        guard let data = prepared else { throw SocialError(message: "Не удалось подготовить фото") }
         return try await uploadImage(data)
     }
 
@@ -802,8 +814,24 @@ final class SocialService {
 
     /// Кладёт пост в очередь на телефоне и сразу пробует отправить.
     /// Нет связи — пост дождётся следующего открытия приложения.
+    ///
+    /// Фото сжимаются в фоне: пять снимков на главном потоке замораживали
+    /// экран как раз в момент «Готово» в конце тренировки.
     func enqueue(_ draft: SocialPostDraft, photos: [UIImage]) {
-        let files = photos.prefix(5).compactMap { Self.jpeg($0) }
+        let images = Array(photos.prefix(5))
+        guard !images.isEmpty else {
+            store(draft, files: [])
+            return
+        }
+        Task { [weak self] in
+            let files = await Task.detached(priority: .userInitiated) {
+                images.compactMap { SocialService.jpeg($0) }
+            }.value
+            self?.store(draft, files: files)
+        }
+    }
+
+    private func store(_ draft: SocialPostDraft, files: [Data]) {
         var saved = draft
         saved.photoCount = files.count
         saved.uploadedPhotos = Array(repeating: nil, count: files.count)
@@ -835,9 +863,10 @@ final class SocialService {
         guard token != nil, !isFlushing, !outbox.isEmpty else { return }
         isFlushing = true
         outboxError = nil
+        let batch = outbox
         Task {
-            defer { isFlushing = false }
-            for var draft in outbox {
+            var stopped = false
+            for var draft in batch {
                 do {
                     if draft.uploadedPhotos.count != draft.photoCount {
                         draft.uploadedPhotos = Array(repeating: nil, count: draft.photoCount)
@@ -865,9 +894,17 @@ final class SocialService {
                     feedVersion += 1
                 } catch {
                     outboxError = error.socialMessage
+                    stopped = true
                     break
                 }
             }
+            isFlushing = false
+            // Пока шла отправка, в очередь мог встать ещё один пост: повторный
+            // вызов в это время ничего не делал, и пост ждал до следующего
+            // открытия приложения. Шлём его сразу — только новые, чтобы пост,
+            // который не удалось убрать с диска, не уходил по кругу.
+            let attempted = Set(batch.map(\.clientId))
+            if !stopped, outbox.contains(where: { !attempted.contains($0.clientId) }) { flushOutbox() }
             await refreshMe()
             // Пост совместной тренировки отмечает её законченной.
             if together.active != nil { await refreshTogether() }
