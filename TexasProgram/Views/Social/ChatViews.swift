@@ -279,7 +279,8 @@ struct ChatView: View {
             }
         }
         // Панель ввода плавает поверх переписки: сообщения видны сквозь стекло.
-        .safeAreaInset(edge: .bottom) { inputBar }
+        // Все её стеклянные кнопки и плашки — в одном контейнере стекла.
+        .safeAreaInset(edge: .bottom) { GlassGroup { inputBar } }
         .background(Color.black.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1562,7 +1563,7 @@ struct ImageViewer: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
-                    .chatGlass(Circle())
+                    .chatGlass(Circle(), interactive: true)
             }
             .padding(16)
             .accessibilityLabel("Закрыть")
@@ -1577,25 +1578,5 @@ extension View {
         background(Color(white: 0.11), in: shape)
             .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
             .shadow(color: .black.opacity(0.5), radius: 16, y: 8)
-    }
-
-    /// Жидкое стекло iOS 26 там, где оно есть; на старых iOS — матовое стекло с тонкой кромкой.
-    @ViewBuilder
-    func chatGlass<S: Shape>(_ shape: S, enabled: Bool = true) -> some View {
-        if !enabled {
-            self
-        } else {
-            #if compiler(>=6.2)
-            if #available(iOS 26.0, *) {
-                self.glassEffect(.regular, in: shape)
-            } else {
-                self.background(.ultraThinMaterial, in: shape)
-                    .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
-            }
-            #else
-            self.background(.ultraThinMaterial, in: shape)
-                .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
-            #endif
-        }
     }
 }

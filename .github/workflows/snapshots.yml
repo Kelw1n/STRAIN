@@ -67,6 +67,52 @@ jobs:
                   print(f"SNAP {name} {index + 1}/{len(chunks)} {chunk}")
           PY
 
+  # Настоящее жидкое стекло есть только в сборке Xcode 26 на iOS 26: здесь
+  # снимается панель вкладок из прозрачного и матового стекла. Нет Xcode 26
+  # или симулятора iOS 26 на раннере — задача просто ничего не снимет.
+  ios-glass:
+    runs-on: macos-15
+    timeout-minutes: 50
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshots on iOS 26
+        run: |
+          set -euo pipefail
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          [ -n "$XCODE" ] || { echo "::warning::Нет Xcode 26"; exit 0; }
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          UDID="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          ids = [d["udid"] for runtime, items in sorted(devices.items()) if "iOS-26" in runtime
+                 for d in items if d["name"].startswith("iPhone") and "Pro" in d["name"]]
+          print(ids[-1] if ids else "")
+          ')"
+          [ -n "$UDID" ] || { echo "::warning::Нет симулятора iOS 26"; exit 0; }
+          TEST_RUNNER_SNAPSHOTS=1 TEST_RUNNER_SNAPSHOT_DIR="$PWD/snapshots/ios26" \
+            xcodebuild test \
+              -project TexasProgram.xcodeproj -scheme TexasProgram \
+              -destination "platform=iOS Simulator,id=$UDID" \
+              -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+              -only-testing:TexasProgramTests/SnapshotTests/testGlassTabBar \
+              -only-testing:TexasProgramTests/SnapshotTests/testChat \
+              -only-testing:TexasProgramTests/SnapshotTests/testFeedTab || true
+          ls -la snapshots/* || true
+      - name: Print snapshots
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import base64, glob, os
+          for path in sorted(glob.glob("snapshots/**/*.jpg", recursive=True)):
+              data = base64.b64encode(open(path, "rb").read()).decode()
+              name = os.path.relpath(path, "snapshots")
+              chunks = [data[i:i + 4000] for i in range(0, len(data), 4000)]
+              for index, chunk in enumerate(chunks):
+                  print(f"SNAP {name} {index + 1}/{len(chunks)} {chunk}")
+          PY
+
   android:
     runs-on: ubuntu-latest
     timeout-minutes: 30

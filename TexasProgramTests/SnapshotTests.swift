@@ -503,6 +503,21 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Панель вкладок поверх пёстрой ленты: в покое и с поднятой линзой, из
+    /// прозрачного стекла и из матового. Настоящее стекло — только в прогоне на
+    /// iOS 26 (задача `ios-glass`), на iOS 18 здесь нарисованная панель.
+    @MainActor func testGlassTabBar() throws {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: GlassPreference.storageKey)
+        defer { defaults.set(saved, forKey: GlassPreference.storageKey) }
+        for clear in [true, false] {
+            defaults.set(clear, forKey: GlassPreference.storageKey)
+            let suffix = clear ? "clear" : "regular"
+            try snap("32-glass-tabbar-\(suffix)", height: 420) { GlassTabBarStage(liftedAt: nil) }
+            try snap("33-glass-lens-\(suffix)", height: 420) { GlassTabBarStage(liftedAt: 150) }
+        }
+    }
+
     // MARK: Съёмка
 
     /// Экран рисуется в настоящем окне — так работают прокрутка, навигация и
@@ -539,6 +554,28 @@ final class SnapshotTests: XCTestCase {
         try data.write(to: directory.appendingPathComponent("\(name).jpg"))
         window.isHidden = true
         window.rootViewController = nil
+    }
+}
+
+/// Пёстрые полосы и текст под панелью вкладок: на однотонном фоне прозрачное
+/// стекло от матового не отличить.
+private struct GlassTabBarStage: View {
+    let liftedAt: CGFloat?
+    private let colors: [Color] = [.orange, .white, .blue, .black, .pink, .yellow, .green, .purple]
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                ForEach(colors.indices, id: \.self) { index in
+                    colors[index]
+                        .overlay(Text("Становая тяга 180 × 3").font(.headline).foregroundStyle(.white.opacity(0.9)))
+                }
+            }
+            .ignoresSafeArea()
+            LiquidGlassTabBar(selectedTab: .constant(.workout), liftedAt: liftedAt)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+        }
     }
 }
 

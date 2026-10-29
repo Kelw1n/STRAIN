@@ -1028,29 +1028,37 @@ struct MinimizedWorkoutBar: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background {
-                    Capsule(style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule(style: .continuous)
-                                .fill(Color(red: 0.10, green: 0.10, blue: 0.12).opacity(0.88))
-                        }
-                        .overlay {
-                            Capsule(style: .continuous)
-                                .strokeBorder(
-                                    LinearGradient(
-                                        colors: [Color.white.opacity(0.28), Color.white.opacity(0.06)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        }
-                        .shadow(color: Color.black.opacity(0.55), radius: 12, y: 4)
+                    if !GlassPreference.isSupported { materialBackground }
                 }
+                // На iOS 26 — то же жидкое стекло, что у панели вкладок под ней;
+                // затемнение сильнее обычного: на плашке две строки мелкого текста.
+                .chatGlass(Capsule(style: .continuous), enabled: GlassPreference.isSupported, dimming: 0.42)
                 .padding(.horizontal, 16)
             }
             .buttonStyle(.pressable)
         }
+    }
+
+    /// До iOS 26 — тёмное матовое стекло с бликом по кромке.
+    private var materialBackground: some View {
+        Capsule(style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                Capsule(style: .continuous)
+                    .fill(Color(red: 0.10, green: 0.10, blue: 0.12).opacity(0.88))
+            }
+            .overlay {
+                Capsule(style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.28), Color.white.opacity(0.06)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(color: Color.black.opacity(0.55), radius: 12, y: 4)
     }
 }
 

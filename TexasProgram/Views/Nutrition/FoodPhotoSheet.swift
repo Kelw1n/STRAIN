@@ -94,7 +94,8 @@ struct FoodPhotoSheet: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: Capsule())
+        // Плашка лежит поверх снятого фото — то же стекло, что у кнопок поверх экрана.
+        .chatGlass(Capsule())
     }
 
     private func failureCard(_ message: String) -> some View {

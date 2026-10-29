@@ -78,7 +78,7 @@ struct AvatarViewer: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
-                    .chatGlass(Circle())
+                    .chatGlass(Circle(), interactive: true)
             }
             .accessibilityLabel("Закрыть")
         }

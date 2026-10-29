@@ -173,6 +173,7 @@ struct SettingsView: View {
     @State private var shareItem: ShareItem?
     @State private var backupMessage: String?
     @AppStorage("rest_timer_sound_enabled") private var restTimerSoundEnabled = true
+    @AppStorage(GlassPreference.storageKey) private var clearGlass = true
 
     var body: some View {
         NavigationStack {
@@ -444,6 +445,17 @@ struct SettingsView: View {
                     Text("Таймер отдыха")
                 } footer: {
                     Text("Короткий звуковой отсчёт за 3, 2, 1 секунды до окончания отдыха и сигнал завершения.")
+                }
+
+                // Только там, где стекло настоящее: до iOS 26 оно нарисовано и не меняется.
+                if GlassPreference.isSupported {
+                    Section {
+                        Toggle("Прозрачное стекло, как в iOS 26", isOn: $clearGlass)
+                    } header: {
+                        Text("Оформление")
+                    } footer: {
+                        Text("Панель вкладок, поле ввода в переписке и кнопки поверх фото — из прозрачного жидкого стекла: сквозь него видно, что под ним, а края преломляют свет. Выключишь — стекло станет матовым, как в iOS 27.")
+                    }
                 }
 
                 if HealthKitService.shared.deviceSupportsHealth && !HealthKitService.shared.isAvailable {
