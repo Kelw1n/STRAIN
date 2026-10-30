@@ -366,6 +366,16 @@ fun SettingsScreen(
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
+                val context = androidx.compose.ui.platform.LocalContext.current
+                SegmentedControl(
+                    options = listOf("С разминкой", "Без разминки"),
+                    selectedIndex = if (com.texasprogram.app.model.WarmUp.enabled(context)) 0 else 1
+                ) { com.texasprogram.app.model.WarmUp.setEnabled(context, it == 0) }
+                Text(
+                    "Перед рабочим весом в упражнениях со штангой — разминка: пустой гриф, 40, 60 и 80% от рабочего. В записи тренировки, объём и рекорды она не идёт.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
             }
         }
 

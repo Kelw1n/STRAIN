@@ -174,6 +174,7 @@ struct SettingsView: View {
     @State private var backupMessage: String?
     @AppStorage("rest_timer_sound_enabled") private var restTimerSoundEnabled = true
     @AppStorage(GlassPreference.storageKey) private var clearGlass = true
+    @AppStorage(WarmUp.settingKey) private var warmUpEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -445,6 +446,14 @@ struct SettingsView: View {
                     Text("Таймер отдыха")
                 } footer: {
                     Text("Короткий звуковой отсчёт за 3, 2, 1 секунды до окончания отдыха и сигнал завершения.")
+                }
+
+                Section {
+                    Toggle("Разминочные подходы", isOn: $warmUpEnabled)
+                } header: {
+                    Text("Разминка")
+                } footer: {
+                    Text("Перед рабочим весом в упражнениях со штангой — разминка: пустой гриф, 40, 60 и 80% от рабочего. В записи тренировки, объём и рекорды она не идёт.")
                 }
 
                 Section {

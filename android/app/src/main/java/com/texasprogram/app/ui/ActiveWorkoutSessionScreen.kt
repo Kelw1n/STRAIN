@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Size
@@ -841,7 +842,63 @@ private fun ExerciseSessionCard(
     ) {
         ExerciseHeader(exercise, index, count, compact, lifted, actions)
         if (!compact) {
+            // Разминка — пока не сделан первый рабочий подход.
+            val context = LocalContext.current
+            val working = exercise.sets.maxOfOrNull { it.weight } ?: 0.0
+            val warmUp = remember(exercise.prescription.name, working) {
+                com.texasprogram.app.model.WarmUp.steps(exercise.prescription.name, working)
+            }
+            if (com.texasprogram.app.model.WarmUp.enabled(context) && exercise.doneCount == 0 && warmUp.isNotEmpty()) {
+                WarmUpRow(warmUp)
+            }
             SetsTable(exercise, index, actions)
+        }
+    }
+}
+
+/// Разминочные подходы перед рабочими: «20×10 · 40×5 · 60×3». Нажатие отмечает
+/// подход — только для себя: в записи тренировки, объём и рекорды разминка не идёт.
+@Composable
+private fun WarmUpRow(steps: List<com.texasprogram.app.model.WarmUp.Step>) {
+    var done by remember(steps) { mutableStateOf(emptySet<com.texasprogram.app.model.WarmUp.Step>()) }
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "РАЗМИНКА",
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp
+        )
+        Row(
+            Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            steps.forEach { step ->
+                val isDone = step in done
+                Row(
+                    Modifier
+                        .height(30.dp)
+                        .pressable {
+                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            done = if (isDone) done - step else done + step
+                        }
+                        .background(if (isDone) Theme.accent else Color.White.copy(alpha = 0.08f), CircleShape)
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isDone) {
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+                    }
+                    Text(
+                        "${formatWeight(step.weight)}×${step.reps}",
+                        color = if (isDone) Color.Black else Color.White.copy(alpha = 0.85f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }

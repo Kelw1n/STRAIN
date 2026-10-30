@@ -427,12 +427,23 @@ private struct ExerciseSessionCard: View {
     @State private var showsDeleteHint = false
     @AppStorage("hint.deleteSet") private var deleteHintsShown = 0
 
+    @AppStorage(WarmUp.settingKey) private var warmUpEnabled = true
+
     private var manager: WorkoutSessionManager { .shared }
     private var doneCount: Int { exercise.sets.filter(\.isDone).count }
+    /// Разминка до самого тяжёлого рабочего подхода.
+    private var warmUp: [WarmUp.Step] {
+        WarmUp.steps(for: exercise.prescription.name, working: exercise.sets.map(\.weight).max() ?? 0)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
+            // Разминка — пока не сделан первый рабочий подход.
+            if !compact, warmUpEnabled, doneCount == 0, !warmUp.isEmpty {
+                WarmUpRow(steps: warmUp)
+                    .transition(.opacity)
+            }
             if !compact {
                 setsTable
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
@@ -1070,6 +1081,60 @@ struct MinimizedWorkoutBar: View {
                     )
             }
             .shadow(color: Color.black.opacity(0.55), radius: 12, y: 4)
+    }
+}
+
+// MARK: - Разминка
+
+/// Разминочные подходы перед рабочими: «20×10 · 40×5 · 60×3». Нажатие отмечает
+/// подход — только для себя: в записи тренировки, объём и рекорды разминка не идёт.
+private struct WarmUpRow: View {
+    let steps: [WarmUp.Step]
+    @State private var done: Set<WarmUp.Step> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("РАЗМИНКА")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(Color.white.opacity(0.45))
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(steps, id: \.self) { step in
+                        chip(step)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func chip(_ step: WarmUp.Step) -> some View {
+        let isDone = done.contains(step)
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(Motion.snappy) {
+                if isDone { done.remove(step) } else { done.insert(step) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                if isDone {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .heavy))
+                }
+                Text("\(WeightFormat.plain(step.weight))×\(step.reps)")
+                    .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(isDone ? Color.black : Color.white.opacity(0.85))
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(isDone ? Theme.accent : Color.white.opacity(0.08), in: Capsule())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Разминка \(WeightFormat.plain(step.weight)) килограммов на \(step.reps)")
+        .accessibilityAddTraits(isDone ? .isSelected : [])
     }
 }
 
