@@ -241,7 +241,7 @@ struct ChatWorkoutCard: View {
                         }
                     }
                     .padding(10)
-                    .background(Color.black.opacity(fromMe ? 0.18 : 0.25), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(fromMe ? Color.black.opacity(0.18) : Color.themed(light: Color.black.opacity(0.05), dark: Color.black.opacity(0.25)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
                 HStack(spacing: 4) {

@@ -290,7 +290,7 @@ internal fun ChatWorkoutCard(workout: SocialChatWorkout, fromMe: Boolean, onOpen
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black.copy(alpha = if (fromMe) 0.18f else 0.25f))
+                    .background(Color.Black.copy(alpha = if (fromMe) 0.18f else if (Theme.isLight) 0.05f else 0.25f))
                     .padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {

@@ -37,6 +37,7 @@ enum EffortScale {
 
 struct EffortSlider: View {
     @Binding var score: Int?
+    @Environment(\.colorScheme) private var scheme
 
     private let barHeight: CGFloat = 30
     private let gap: CGFloat = 8
@@ -139,11 +140,22 @@ struct EffortSlider: View {
         .animation(.easeOut(duration: 0.2), value: active)
     }
 
+    /// На светлом фоне бледные зелёный и жёлтый не читаются: там подпись
+    /// темнее и не так прозрачна.
     private func zoneLabel(_ text: String, color: Color, on: Bool) -> some View {
-        Text(text)
+        let light = scheme == .light
+        return Text(text)
             .font(.system(size: 10, weight: .heavy))
             .tracking(0.4)
-            .foregroundStyle(color.opacity(on ? 1 : 0.35))
+            .foregroundStyle(light ? Self.darker(color) : color)
+            .opacity(on ? 1 : (light ? 0.6 : 0.35))
+    }
+
+    /// Тот же цвет на 22% темнее — для подписи на светлом фоне.
+    private static func darker(_ color: Color) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return Color(red: r * 0.78, green: g * 0.78, blue: b * 0.78, opacity: a)
     }
 
     // MARK: Геометрия

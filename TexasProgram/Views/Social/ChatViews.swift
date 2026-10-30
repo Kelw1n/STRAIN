@@ -1121,7 +1121,7 @@ struct MessageBubble: View {
         .padding(.horizontal, message.image == nil ? 13 : 4)
         .padding(.vertical, message.image == nil ? 8 : 4)
         .background(
-            message.fromMe ? Theme.accent.opacity(failure == nil ? 0.9 : 0.5) : Color.tone(0.16),
+            message.fromMe ? (failure == nil ? Theme.accent.opacity(0.9) : Color.themed(light: Theme.accent.opacity(0.75), dark: Theme.accent.opacity(0.5))) : Color.tone(0.16),
             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
         .overlay(

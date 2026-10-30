@@ -337,7 +337,7 @@ fun ShareCardSection(title: String, durationSeconds: Int, photo: Uri?) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "ПОДЕЛИТЬСЯ",
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = 4.dp)
@@ -346,8 +346,8 @@ fun ShareCardSection(title: String, durationSeconds: Int, photo: Uri?) {
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF161616))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                .background(Theme.tone(0xFF161616))
+                .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -369,11 +369,11 @@ fun ShareCardSection(title: String, durationSeconds: Int, photo: Uri?) {
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Карточка для сторис", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Карточка для сторис", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
                     if (photo == null) "Время, тоннаж, рекорды и упражнения. Добавь фото выше — оно станет фоном."
                     else "Первое фото выше — фоном карточки.",
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = Theme.ink.copy(alpha = 0.55f),
                     fontSize = 12.sp
                 )
                 Row(

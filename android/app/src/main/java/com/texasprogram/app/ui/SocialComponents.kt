@@ -99,7 +99,8 @@ fun RemoteImage(id: String?, modifier: Modifier = Modifier, contentScale: Conten
 }
 
 /// Ровная подложка, пока фото грузится: без анимации, ничего не перерисовывает.
-private val PlaceholderPainter = androidx.compose.ui.graphics.painter.ColorPainter(Color(0xFF1F1F22))
+private val PlaceholderPainter: androidx.compose.ui.graphics.painter.Painter
+    get() = androidx.compose.ui.graphics.painter.ColorPainter(Theme.tone(0xFF1F1F22))
 
 @Composable
 private fun ImagePlaceholder(modifier: Modifier, loading: Boolean) {

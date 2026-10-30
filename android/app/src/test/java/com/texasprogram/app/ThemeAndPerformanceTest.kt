@@ -12,9 +12,25 @@ import java.time.LocalDate
 
 class ThemeAndPerformanceTest {
 
-    /// Тема одна — REBRN: чёрный OLED-фон, графитовые карточки, оранжевый акцент.
+    /// Тёмная тема — REBRN: чёрный OLED-фон, графитовые карточки, оранжевый акцент.
+    /// Светлая — светло-серый фон, белые карточки, почти чёрный текст.
     @Test
     fun testRebrnPalette() {
+        val was = Theme.isLight
+        try {
+            Theme.isLight = true
+            assertEquals("light card is white", Color.White, Theme.card)
+            assertEquals("light background", Color(0xFFF2F2F6), Theme.base)
+            assertEquals("light text", Color(0xFF0D0D0E), Theme.textPrimary)
+            assertEquals("light graphite becomes white", Color(1f, 1f, 1f), Theme.tone(0xFF161617))
+            Theme.isLight = false
+            darkPalette()
+        } finally {
+            Theme.isLight = was
+        }
+    }
+
+    private fun darkPalette() {
         assertEquals("Theme.card must match Theme.surface", Theme.surface, Theme.card)
         assertEquals("Theme.base must be OLED black", Color(0xFF000000), Theme.base)
         assertEquals("Theme.surface must be dark graphite", Color(0xFF161617), Theme.surface)

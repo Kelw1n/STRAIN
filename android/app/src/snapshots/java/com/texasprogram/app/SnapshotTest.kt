@@ -530,6 +530,58 @@ class SnapshotTest {
         }
     }
 
+    /// Главные вкладки без сети: «Тренировка», «Активность» и настройки.
+    @Test
+    fun mainTabs() {
+        tall(2800)
+        paparazzi.snapshot("40-workout-hub") {
+            Screen { com.texasprogram.app.ui.WorkoutHubScreen(profile, padding, onStartWorkout = {}, onOpenPlan = {}) }
+        }
+        paparazzi.snapshot("41-progress") {
+            Screen { com.texasprogram.app.ui.ProgressScreen(profile, padding) }
+        }
+        tall(4200)
+        paparazzi.snapshot("42-settings") {
+            Screen {
+                com.texasprogram.app.ui.SettingsScreen(
+                    profile, listOf(profile), onUpdate = {}, onSwitchProfile = {}, onAddProfile = {}, onDeleteProfile = {},
+                    onExportBackup = {}, onImportBackup = {}, onExportCsv = {}, backupMessage = null, onClose = {}, onOpenGuide = {},
+                    contentPadding = padding
+                )
+            }
+        }
+    }
+
+    /// «Главное» с сегодняшней тренировкой.
+    @Test
+    fun today() {
+        tall(2800)
+        paparazzi.snapshot("43-today") {
+            Screen {
+                val timer = com.texasprogram.app.service.RestTimer.get(androidx.compose.ui.platform.LocalContext.current)
+                com.texasprogram.app.ui.TodayScreen(
+                    profile, timer, onToggleDay = { _, _ -> }, onToggleSet = { _, _, _ -> }, onSelectRest = {}, onOpenBench = null,
+                    onOpenDay = { _, _ -> }, onCustomize = { _, _ -> }, onHoldSet = { _, _, _ -> }, onUpdateProfile = {},
+                    onOpenHistory = {}, onSettings = {}, contentPadding = padding
+                )
+            }
+        }
+    }
+
+    /// Экран идущей тренировки: подходы, разминка, отдых.
+    @Test
+    fun activeWorkout() {
+        tall(2400)
+        val workout = profile.schedule(LocalDate.now()).focus ?: return
+        com.texasprogram.app.service.WorkoutSessionManager.startWorkout(workout, profile)
+        paparazzi.snapshot("44-active-workout") {
+            Screen {
+                val timer = com.texasprogram.app.service.RestTimer.get(androidx.compose.ui.platform.LocalContext.current)
+                com.texasprogram.app.ui.ActiveWorkoutSessionScreen({ profile }, timer, onUpdateProfile = {})
+            }
+        }
+    }
+
     @Test
     fun summary() {
         tall()

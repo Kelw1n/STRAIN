@@ -118,7 +118,7 @@ private object ProgressionText {
 
 /// Номер уровня в кольце: заполнение — путь до следующего.
 @Composable
-fun LevelRing(level: Int, fraction: Float, size: Dp = 64.dp, stroke: Dp = 6.dp) {
+fun LevelRing(level: Int, fraction: Float, size: Dp = 64.dp, stroke: Dp = 6.dp, ink: Color = Theme.ink) {
     val accent = Theme.accent
     val deep = Theme.accentDeep
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
@@ -126,7 +126,7 @@ fun LevelRing(level: Int, fraction: Float, size: Dp = 64.dp, stroke: Dp = 6.dp) 
             val width = stroke.toPx()
             val inset = width / 2
             val arc = Size(this.size.width - width, this.size.height - width)
-            drawArc(Theme.ink.copy(alpha = 0.1f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(width))
+            drawArc(ink.copy(alpha = 0.1f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(width))
             rotate(-90f) {
                 drawArc(
                     Brush.sweepGradient(listOf(accent, deep, accent)),
@@ -140,8 +140,8 @@ fun LevelRing(level: Int, fraction: Float, size: Dp = 64.dp, stroke: Dp = 6.dp) 
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$level", color = Theme.ink, fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.Black, lineHeight = (size.value * 0.38f).sp)
-            Text("УР.", color = Theme.ink.copy(alpha = 0.5f), fontSize = maxOf(9f, size.value * 0.13f).sp, fontWeight = FontWeight.ExtraBold)
+            Text("$level", color = ink, fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.Black, lineHeight = (size.value * 0.38f).sp)
+            Text("УР.", color = ink.copy(alpha = 0.5f), fontSize = maxOf(9f, size.value * 0.13f).sp, fontWeight = FontWeight.ExtraBold)
         }
     }
 }
@@ -491,7 +491,7 @@ fun LevelUpOverlay(gain: ProgressionEvents.Gain, onClose: () -> Unit) {
         ) {
             Box(Modifier.height(140.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (reached != null) ConfettiBurst()
-                LevelRing(barLevel, bar.value, size = 120.dp, stroke = 10.dp)
+                LevelRing(barLevel, bar.value, size = 120.dp, stroke = 10.dp, ink = Color.White)
             }
             Text("+${shown.value.toInt()} опыта", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black)
             val reachedLevel = reached

@@ -1186,7 +1186,7 @@ internal fun MessageBubble(
                     Modifier
                         .widthIn(max = 290.dp)
                         .clip(RoundedCornerShape(18.dp))
-                        .background(if (message.fromMe) Theme.accent.copy(alpha = if (failure == null) 0.9f else 0.5f) else Theme.tone(0xFF292929))
+                        .background(if (message.fromMe) Theme.accent.copy(alpha = if (failure == null) 0.9f else if (Theme.isLight) 0.75f else 0.5f) else Theme.tone(0xFF292929))
                         .background(bubbleInk.copy(alpha = if (highlighted) 0.18f else 0f))
                         .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },

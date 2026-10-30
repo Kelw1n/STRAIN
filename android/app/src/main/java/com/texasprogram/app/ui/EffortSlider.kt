@@ -197,8 +197,11 @@ fun EffortSlider(score: Int?, onChange: (Int?) -> Unit, modifier: Modifier = Mod
 
 @Composable
 private fun ZoneLabel(text: String, color: Color, on: Boolean) {
-    val alpha by animateFloatAsState(if (on) 1f else 0.35f, tween(200), label = "zone")
-    Text(text, color = color.copy(alpha = alpha), fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 0.4.sp)
+    // На светлом фоне бледные зелёный и жёлтый не читаются: там подпись темнее
+    // и не так прозрачна.
+    val alpha by animateFloatAsState(if (on) 1f else if (Theme.isLight) 0.6f else 0.35f, tween(200), label = "zone")
+    val ink = if (Theme.isLight) androidx.compose.ui.graphics.lerp(color, Color.Black, 0.22f) else color
+    Text(text, color = ink.copy(alpha = alpha), fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 0.4.sp)
 }
 
 /// Клинья по ширине зон (3 : 4 : 3) с зазорами между ними.
