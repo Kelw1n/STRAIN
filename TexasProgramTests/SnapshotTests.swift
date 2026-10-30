@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import XCTest
+import SwiftData
 @testable import TexasProgram
 
 /// Снимки экранов ленты и профиля: по ним на CI видно вёрстку — ничего не
@@ -43,7 +44,6 @@ final class SnapshotTests: XCTestCase {
                 .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
     }
 
@@ -81,7 +81,6 @@ final class SnapshotTests: XCTestCase {
                     .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
         try snap("05-profile-full", height: 2600) {
             NavigationStack {
@@ -89,7 +88,6 @@ final class SnapshotTests: XCTestCase {
                     .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
     }
 
@@ -100,7 +98,6 @@ final class SnapshotTests: XCTestCase {
                     .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
     }
 
@@ -131,6 +128,15 @@ final class SnapshotTests: XCTestCase {
         let workout = try XCTUnwrap(profile.schedule.focus)
         try snap("11-summary", height: 2600) {
             WorkoutCompletionSummaryView(profile: profile, workout: workout)
+        }
+    }
+
+    /// Настройки: системный список, выбор темы и стекла.
+    @MainActor func testSettings() throws {
+        let profile = ProgramProfile(input: .demo)
+        try snap("38-settings", height: 2600) {
+            SettingsView(profile: profile, onAddProfile: {}, onDeleteProfile: {})
+                .modelContainer(for: [ProgramProfile.self], inMemory: true)
         }
     }
 
@@ -200,7 +206,6 @@ final class SnapshotTests: XCTestCase {
                 .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
         try snap("16-chat-screen") {
             NavigationStack { ChatView(username: "bro.lifts", path: .constant(NavigationPath())) }
@@ -240,7 +245,6 @@ final class SnapshotTests: XCTestCase {
                 .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
     }
 
@@ -323,7 +327,6 @@ final class SnapshotTests: XCTestCase {
                 .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
     }
 

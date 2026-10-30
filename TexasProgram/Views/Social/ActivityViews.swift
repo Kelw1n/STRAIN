@@ -508,8 +508,9 @@ struct LeaderboardRow: View {
     private var placeColor: Color {
         guard metric.value(entry.stats) > 0 else { return Color.ink.opacity(0.4) }
         switch place {
-        case 1: return Color(red: 1, green: 0.8, blue: 0.25)
-        case 2: return Color.tone(0.78)
+        // На светлом фоне золото и серебро темнее: яркие на белом не видны.
+        case 1: return Color.themed(light: Color(red: 0.86, green: 0.62, blue: 0.0), dark: Color(red: 1, green: 0.8, blue: 0.25))
+        case 2: return Color.themed(light: Color(white: 0.55), dark: Color(white: 0.78))
         case 3: return Color(red: 0.85, green: 0.55, blue: 0.3)
         default: return Color.ink.opacity(0.5)
         }

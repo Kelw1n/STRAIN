@@ -125,7 +125,7 @@ struct AmountField: View {
             }
             .padding(.horizontal, 10)
             .frame(height: 44)
-            .background(Color(white: focused ? 0.17 : 0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(Color.tone(focused ? 0.17 : 0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.accent.opacity(focused ? 1 : 0), lineWidth: 1.5))
             .animation(.easeOut(duration: 0.15), value: focused)
         }

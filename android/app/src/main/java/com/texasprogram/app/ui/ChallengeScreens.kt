@@ -98,8 +98,9 @@ val ChallengeKind.icon: ImageVector
 
 object ChallengePlace {
     fun color(place: Int?): Color = when (place) {
-        1 -> Color(0xFFFFCC40)
-        2 -> Color(0xFFCCCCCC)
+        // На светлом фоне золото и серебро темнее: яркие на белом не видны.
+        1 -> if (Theme.isLight) Color(0xFFDB9E00) else Color(0xFFFFCC40)
+        2 -> if (Theme.isLight) Color(0xFF8C8C8C) else Color(0xFFCCCCCC)
         3 -> Color(0xFFD98C4D)
         else -> Theme.ink.copy(alpha = 0.5f)
     }

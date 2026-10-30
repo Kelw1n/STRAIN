@@ -450,7 +450,7 @@ private struct ExerciseSessionCard: View {
         }
         .padding(compact ? 12 : 16)
         .frame(height: compact ? ExerciseReorder.rowHeight : nil, alignment: .top)
-        .background(Color(white: lifted ? 0.12 : 0.086), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(Color.tone(lifted ? 0.12 : 0.086), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .strokeBorder(Theme.accent.opacity(lifted ? 0.7 : 0), lineWidth: 1.5)
@@ -1166,7 +1166,7 @@ private struct SetNumberField: View {
             .foregroundStyle(isDone || focused ? Color.ink : Color.ink.opacity(0.6))
             .focused($focused)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Color(white: focused ? 0.19 : 0.14), in: shape)
+            .background(Color.tone(focused ? 0.19 : 0.14), in: shape)
             .overlay(shape.strokeBorder(Theme.accent, lineWidth: 1.5).opacity(focused ? 1 : 0))
             .animation(.easeOut(duration: 0.15), value: focused)
             .accessibilityLabel(accessibilityName)

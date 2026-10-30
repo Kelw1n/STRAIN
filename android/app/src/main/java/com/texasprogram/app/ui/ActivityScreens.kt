@@ -493,8 +493,8 @@ private fun LeaderboardRow(place: Int, entry: SocialLeaderboardEntry, metric: Le
     val scored = metric.value(entry.stats) > 0
     val placeColor = when {
         !scored -> Theme.ink.copy(alpha = 0.4f)
-        place == 1 -> Color(0xFFFFCC40)
-        place == 2 -> Color(0xFFC7C7C7)
+        place == 1 -> if (Theme.isLight) Color(0xFFDB9E00) else Color(0xFFFFCC40)
+        place == 2 -> if (Theme.isLight) Color(0xFF8C8C8C) else Color(0xFFC7C7C7)
         place == 3 -> Color(0xFFD98C4D)
         else -> Theme.ink.copy(alpha = 0.5f)
     }

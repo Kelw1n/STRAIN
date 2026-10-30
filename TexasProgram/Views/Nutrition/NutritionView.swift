@@ -561,7 +561,7 @@ struct NutritionView: View {
                     .foregroundStyle(.ink)
                     .padding(.horizontal, 14)
                     .frame(height: 50)
-                    .background(Color(white: typingWeight ? 0.17 : 0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(Color.tone(typingWeight ? 0.17 : 0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.accent.opacity(typingWeight ? 1 : 0), lineWidth: 1.5))
                     .animation(.easeOut(duration: 0.15), value: typingWeight)
                 Button(action: recordWeight) {

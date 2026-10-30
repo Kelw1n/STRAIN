@@ -168,7 +168,7 @@ enum Motion {
 /// Чистый OLED-чёрный фон: акцент живёт только в элементах.
 struct AppBackground: View {
     var body: some View {
-        Color.black.ignoresSafeArea()
+        Color.canvas.ignoresSafeArea()
     }
 }
 
