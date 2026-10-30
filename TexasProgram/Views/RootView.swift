@@ -6,7 +6,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\ProgramProfile.createdAt)]) private var profiles: [ProgramProfile]
     @AppStorage("activeProfileID") private var activeProfileID = ""
-    @AppStorage("app_theme_style") private var themeStyle = AppThemeStyle.rebrnBlack.rawValue
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.dark
     @State private var isAddingProfile = false
 
     private var activeProfile: ProgramProfile? {
@@ -40,13 +40,16 @@ struct RootView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: activeProfile?.profileID)
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: isAddingProfile)
         .tint(Theme.accent)
-        .preferredColorScheme(ThemeManager.shared.current.preferredColorScheme)
+        .preferredColorScheme(appearance.colorScheme)
+        .onAppear { AppAppearance.apply(appearance) }
+        .onChange(of: appearance) { _, value in AppAppearance.apply(value) }
     }
 
     /// Восстановление с первого экрана: после переустановки профилей нет,
     /// и до настроек без новой программы не добраться.
     private func restore(_ archive: BackupArchive) {
         BackupService.restore(archive, into: modelContext, existing: profiles)
+        NutritionStore.shared.reload()
         SocialService.shared.adoptBackupToken(archive.socialToken)
         if let first = archive.profiles.first { activeProfileID = first.id }
         isAddingProfile = false
@@ -58,9 +61,19 @@ struct RootView: View {
 
     private func delete(_ profile: ProgramProfile) {
         let fallback = profiles.first { $0.profileID != profile.profileID }
+        // Начатая тренировка удаляемого профиля уходит вместе с ним.
+        WorkoutSessionManager.shared.forgetProfile(profile.profileID)
+        NutritionStore.delete(profile.profileID)
+        CoachHistory.delete(profile.profileID)
         modelContext.delete(profile)
         try? modelContext.save()
         activeProfileID = fallback?.profileID.uuidString ?? ""
+        if fallback == nil {
+            // Профилей не осталось: раньше напоминания приходили и дальше,
+            // а виджет показывал тренировку удалённого профиля.
+            ReminderScheduler.cancel()
+            WidgetBridge.clear()
+        }
     }
 }
 
@@ -268,7 +281,7 @@ struct ProgramOptionCard: View {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: symbol)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .frame(width: 46, height: 46)
                     .background(gradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 VStack(alignment: .leading, spacing: 6) {

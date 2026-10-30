@@ -11,6 +11,7 @@ import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialProgramBuilder
 import com.texasprogram.app.model.SocialUser
 import com.texasprogram.app.service.SocialService
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonObject
@@ -162,5 +163,297 @@ class SocialTest {
         val date = Instant.parse(archive.exportedAt)
         assertEquals(0, date.nano)
         assertNull(BackupService.parse(BackupService.export(listOf(texas()))).socialToken)
+    }
+
+    // MARK: Копирование и ответы
+
+    @Test
+    fun copyWorkoutTakesWorkingWeight() {
+        val workout = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialWorkout>(
+            """{"exercises":[{"name":"Присед","sets":[{"reps":5,"weight":100},{"reps":3,"weight":140},{"reps":3,"weight":140}]},
+               {"name":"Подтягивания","sets":[{"reps":10,"weight":0},{"reps":8,"weight":0}]}]}"""
+        )
+        val program = com.texasprogram.app.model.ProgramCopy.program(workout, "Тяжёлая пятница", "Пятница")
+        assertEquals(1, program.days.size)
+        val squat = program.days[0].exercises[0]
+        assertEquals(3, squat.sets)
+        assertEquals("3", squat.reps)
+        assertEquals(140.0, squat.kilograms!!, 0.0)
+        val pullups = program.days[0].exercises[1]
+        assertNull(pullups.kilograms)
+        assertEquals("свой вес", pullups.loadText)
+        assertTrue(program.isRunnable)
+    }
+
+    @Test
+    fun copyProgramDaysParsesLoads() {
+        val copy = com.texasprogram.app.model.ProgramCopy
+        assertEquals(100.0, copy.kilograms("100 кг")!!, 0.0)
+        assertEquals(82.5, copy.kilograms("82,5 кг")!!, 0.0)
+        assertEquals(100.0, copy.kilograms("220 lbs")!!, 0.0)
+        assertNull(copy.kilograms("RPE 8"))
+        val days = SocialProgramBuilder.days(texas())
+        val program = copy.program(days, "Программа @tim")
+        assertEquals(days.size, program.days.size)
+        assertEquals((1..days.size).toList(), program.days.map { it.number })
+        assertTrue(program.isRunnable)
+        assertTrue(ProgramProfile.custom(program).workoutPlan.weeks.isNotEmpty())
+    }
+
+    @Test
+    fun commentThreadsGroupReplies() {
+        val comments = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialComment>>(
+            """[{"id":"a","author":{"id":"1","username":"a"},"text":"вопрос","createdAt":1},
+               {"id":"b","author":{"id":"2","username":"b"},"text":"ответ","createdAt":2,"replyTo":"a","replyToUsername":"a"},
+               {"id":"c","author":{"id":"3","username":"c"},"text":"просто","createdAt":3},
+               {"id":"d","author":{"id":"1","username":"a"},"text":"спасибо","createdAt":4,"replyTo":"a","replyToUsername":"b"},
+               {"id":"e","author":{"id":"1","username":"a"},"text":"сирота","createdAt":5,"replyTo":"x"}]"""
+        )
+        val threads = com.texasprogram.app.model.SocialComment.threads(comments)
+        assertEquals(listOf("a", "c", "e"), threads.map { it.root.id })
+        assertEquals(listOf("b", "d"), threads[0].replies.map { it.id })
+    }
+
+    // MARK: Переписка
+
+    @Test
+    fun reactionToggleKeepsOnePerPerson() {
+        val reaction = com.texasprogram.app.model.SocialReaction
+        val fire = reaction.toggled(emptyList(), "🔥")
+        assertEquals(listOf(com.texasprogram.app.model.SocialReaction("🔥", 1, true)), fire)
+        assertEquals(emptyList<com.texasprogram.app.model.SocialReaction>(), reaction.toggled(fire, "🔥"))
+        val shared = listOf(com.texasprogram.app.model.SocialReaction("🔥", 2, true), com.texasprogram.app.model.SocialReaction("💪", 1, false))
+        assertEquals(
+            listOf(com.texasprogram.app.model.SocialReaction("🔥", 1, false), com.texasprogram.app.model.SocialReaction("💪", 2, true)),
+            reaction.toggled(shared, "💪")
+        )
+    }
+
+    @Test
+    fun mergedMessagesReplaceAndRemove() {
+        val message = com.texasprogram.app.model.SocialMessage
+        val current = listOf(
+            com.texasprogram.app.model.SocialMessage("a", "раз", fromMe = true, createdAt = 1.0),
+            com.texasprogram.app.model.SocialMessage("b", "два", createdAt = 2.0)
+        )
+        val incoming = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialMessage>>(
+            """[{"id":"c","text":"три","createdAt":3,"replyTo":{"id":"a","text":"раз","fromMe":true}},
+               {"id":"b","deleted":true,"createdAt":2,"text":""},
+               {"id":"a","text":"раз","fromMe":true,"createdAt":1,"read":true,"reactions":[{"emoji":"🔥","count":1,"mine":false}]}]"""
+        )
+        val merged = message.merged(current, incoming)
+        assertEquals(listOf("a", "c"), merged.map { it.id })
+        assertTrue(merged[0].read)
+        assertEquals("🔥", merged[0].reactions.first().emoji)
+        assertEquals("раз", merged[1].replyTo?.preview)
+    }
+
+    @Test
+    fun chatPageDecodesPresence() {
+        val page = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialChatPage>(
+            """{"user":{"id":"u","username":"bro"},"messages":[],"next":null,"serverTime":1000,"typing":true,"lastSeen":900,
+               "live":{"title":"День 1","exercise":"Присед","done":3,"total":5,"setsDone":3,"setsTotal":15,"startedAt":100}}"""
+        )
+        assertEquals(1000.0, page.serverTime!!, 0.0)
+        assertTrue(page.typing)
+        assertEquals("Присед · 3/5", page.live?.line)
+        val now = Instant.ofEpochSecond(1_000_000)
+        assertEquals("в сети", SocialFormat.lastSeen(now.minusSeconds(30), now, ZoneOffset.UTC))
+        assertEquals("был(а) 10 минут назад", SocialFormat.lastSeen(now.minusSeconds(600), now, ZoneOffset.UTC))
+    }
+
+    // MARK: Совместная тренировка
+
+    @Test
+    fun togetherDecodes() {
+        val state = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialTogetherState>(
+            """{"incoming":[{"id":"t1","status":"pending","fromMe":false,"partner":{"id":"2","username":"sem"},"createdAt":5}],
+               "outgoing":[],
+               "active":{"id":"t2","status":"accepted","fromMe":true,"partner":{"id":"3","username":"tim"},
+                         "partnerLive":{"title":"День 1","exercise":"Жим","done":2,"total":4,"setsDone":6,"setsTotal":16}}}"""
+        )
+        assertEquals("sem", state.incoming.first().partner.username)
+        assertEquals("Жим · 2/4", state.active?.partnerLive?.line)
+        val message = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"m","text":"Го","createdAt":1,"invite":{"id":"t1","status":"pending","fromMe":false}}"""
+        )
+        assertTrue(message.invite!!.isPending)
+        assertEquals("Зовёт тренироваться вместе", message.invite!!.statusText)
+        val post = SocialService.json.decodeFromString<SocialPost>(
+            """{"id":"p","author":{"id":"1","username":"a"},"partner":{"id":"2","username":"b"}}"""
+        )
+        assertEquals("b", post.partner?.username)
+    }
+
+    // MARK: Активность и рейтинг
+
+    @Test
+    fun activityDecodes() {
+        val page = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialActivityPage>(
+            """{"items":[{"kind":"like","actor":{"id":"1","username":"tim"},"postId":"p","postTitle":"День 1","createdAt":5,"unseen":true},
+                         {"kind":"follow","actor":{"id":"2","username":"sem"},"createdAt":4}],"unseen":1}"""
+        )
+        assertEquals(1, page.unseen)
+        assertEquals(listOf("like", "follow"), page.items.map { it.kind })
+        assertEquals("поставил(а) лайк тренировке «День 1»", page.items[0].action)
+        assertFalse(page.items[1].unseen)
+    }
+
+    @Test
+    fun weeklyStatsCountThisWeekOnly() {
+        val base = texas()
+        val squat = base.workoutPlan.weeks[0].days[0].exercises.first()
+        val later = base.workoutPlan.weeks[1].days[0].exercises.first { it.name == squat.name }
+        val logged = base.recordSet(1, 1, squat, 0, reps = 5, weight = 100.0).recordSet(2, 1, later, 0, reps = 5, weight = 105.0)
+        // Отметки напрямую: «выполнено» дописало бы плановые подходы всего дня.
+        val profile = logged.copy(
+            completionLog = listOf(
+                com.texasprogram.app.model.CompletionRecord(logged.dayKey(1, 1), day(-7).toEpochDay(), 1, 1),
+                com.texasprogram.app.model.CompletionRecord(logged.dayKey(2, 1), day(0).toEpochDay(), 2, 1)
+            )
+        )
+        val stats = com.texasprogram.app.model.WeeklyStatsBuilder.stats(profile, day(2))
+        assertEquals("2026-W42", stats.week)
+        assertEquals(1, stats.workouts)
+        assertEquals(525.0, stats.volumeKg, 0.01)
+        assertEquals(1, stats.records)
+        assertEquals(2, stats.streakWeeks)
+        // Опыт и уровень едут в сводке — по ним сервер ставит уровень у ника.
+        assertEquals(com.texasprogram.app.model.Progression.xp(profile), stats.xp)
+        assertEquals(com.texasprogram.app.model.Progression.level(profile).level, stats.level)
+        assertTrue((stats.xp ?: 0) > 0)
+    }
+
+    @Test
+    fun currentStreakWaitsForWeekToEnd() {
+        val builder = com.texasprogram.app.model.WeeklyStatsBuilder
+        assertEquals(2, builder.currentStreak(listOf(day(-14), day(-7)), day(2)))
+        assertEquals(2, builder.currentStreak(listOf(day(0), day(-7)), day(2)))
+        assertEquals(0, builder.currentStreak(listOf(day(-14)), day(2)))
+    }
+
+    @Test
+    fun leaderboardIgnoresStaleWeeks() {
+        val entries = SocialService.json.decodeFromString<List<com.texasprogram.app.model.SocialLeaderboardEntry>>(
+            """[{"user":{"id":"1","username":"old"},"stats":{"week":"2026-W40","workouts":5,"volumeKg":20000,"records":3,"streakWeeks":9,"level":12,"xp":8000}},
+               {"user":{"id":"2","username":"last","level":9},"stats":{"week":"2026-W41","workouts":2,"volumeKg":9000,"records":1,"streakWeeks":4}},
+               {"user":{"id":"3","username":"now","isMe":true},"stats":{"week":"2026-W42","workouts":2,"volumeKg":6000,"records":2,"streakWeeks":3}},
+               {"user":{"id":"4","username":"empty"},"stats":{}}]"""
+        )
+        val metric = com.texasprogram.app.model.LeaderboardMetric
+        val byVolume = metric.ranked(entries, com.texasprogram.app.model.LeaderboardMetric.VOLUME, day(2))
+        assertEquals("now", byVolume.first().user.username)
+        assertTrue(byVolume.first().user.isMe)
+        val byStreak = metric.ranked(entries, com.texasprogram.app.model.LeaderboardMetric.STREAK, day(2))
+        assertEquals(listOf("last", "now", "empty", "old"), byStreak.map { it.user.username })
+        assertEquals("6 т", com.texasprogram.app.model.LeaderboardMetric.VOLUME.format(byVolume[0].stats))
+        // Уровень копится за всю историю — со старой неделей не обнуляется.
+        assertEquals(12, byStreak.first { it.user.username == "old" }.stats.level)
+        assertEquals(9, byStreak.first { it.user.username == "last" }.user.level)
+        assertEquals(null, byStreak.first { it.user.username == "empty" }.user.level)
+    }
+
+    @Test
+    fun voiceMessageDecodesAndPreviews() {
+        val message = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"v1","text":"🎤 Голосовое сообщение","fromMe":true,"createdAt":1,
+               "voice":{"id":"abc","durationMs":4200,"waveform":"0f8"},
+               "replyTo":{"id":"q","text":"","voice":true,"fromMe":false}}"""
+        )
+        assertEquals(4200, message.voice?.durationMs)
+        assertEquals(listOf(0f, 1f, 8f / 15), message.voice?.levels)
+        assertEquals(com.texasprogram.app.model.SocialVoice.PREVIEW, message.preview)
+        assertEquals(com.texasprogram.app.model.SocialVoice.PREVIEW, message.replyTo?.preview)
+        assertEquals("1:05", com.texasprogram.app.model.SocialVoice.format(65_900))
+    }
+
+    @Test
+    fun voiceWaveformBars() {
+        // 80 уровней в 40 столбиков: в каждом — громкий кусочек, цифрой от 0 до f.
+        val levels = List(80) { if (it % 2 == 0) 0f else 1f }
+        val wave = com.texasprogram.app.service.VoiceRecorder.waveform(levels)
+        assertEquals(40, wave.length)
+        assertTrue(wave.all { it == 'f' })
+        assertEquals("", com.texasprogram.app.service.VoiceRecorder.waveform(emptyList()))
+        assertEquals("8888", com.texasprogram.app.service.VoiceRecorder.waveform(listOf(0.5f), bars = 4))
+    }
+
+    /// Подтверждённое сообщение остаётся той же строкой: ключ не меняется ни
+    /// при подтверждении, ни при следующих обновлениях с сервера.
+    @Test
+    fun mergedKeepsRowKey() {
+        val merge = com.texasprogram.app.model.SocialMessage
+        val confirmed = com.texasprogram.app.model.SocialMessage("srv", "Го", fromMe = true, createdAt = 2.0, rowKey = "local-1")
+        val current = merge.merged(emptyList(), listOf(confirmed))
+        assertEquals("local-1", current.first().key)
+        val read = com.texasprogram.app.model.SocialMessage("srv", "Го", fromMe = true, createdAt = 2.0, read = true)
+        val updated = merge.merged(current, listOf(read))
+        assertEquals("local-1", updated.first().key)
+        assertTrue(updated.first().read)
+        assertEquals("x", com.texasprogram.app.model.SocialMessage("x").key)
+    }
+
+    // MARK: Очередь, правка, пересылка, тренировка
+
+    /// Сообщение из очереди уступает место пришедшему с сервера с тем же
+    /// clientId — на той же строке, даже если ответ на отправку потерялся.
+    @Test
+    fun pendingReplacedByServerCopy() {
+        val pending = com.texasprogram.app.model.ChatPending(clientId = "c1", username = "bro", createdAt = 5.0, text = "Го")
+        val local = pending.message
+        assertTrue(local.isLocal)
+        assertEquals("local-c1", local.key)
+        val server = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"srv","clientId":"c1","text":"Го","fromMe":true,"createdAt":6,"edited":true}"""
+        )
+        assertEquals("local-c1", server.key)
+        val merged = com.texasprogram.app.model.SocialMessage.merged(listOf(local), listOf(server))
+        assertEquals(listOf("srv"), merged.map { it.id })
+        assertEquals("local-c1", merged.first().key)
+        assertTrue(merged.first().edited)
+    }
+
+    @Test
+    fun forwardAndWorkoutDecode() {
+        val message = SocialService.json.decodeFromString<com.texasprogram.app.model.SocialMessage>(
+            """{"id":"m","text":"🏋️ День 1","fromMe":false,"createdAt":1,"forwarded":{"username":"tim"},
+               "workout":{"title":"День 1","durationSeconds":3600,"volumeKg":5200,"sets":15,
+                          "workout":{"exercises":[{"name":"Присед","sets":[{"reps":5,"weight":100,"record":true},{"reps":5,"weight":100}]}]}}}"""
+        )
+        assertEquals("Переслано от @tim", message.forwarded?.title)
+        assertEquals(1, message.workout?.records)
+        assertEquals("🏋️ День 1", message.preview)
+        assertFalse(message.canEdit)
+        assertTrue(message.canForward)
+        assertEquals("🏋️ День 1", message.quote.text)
+        assertEquals("Пересланное сообщение", com.texasprogram.app.model.SocialForward(null).title)
+    }
+
+    @Test
+    fun onlyOwnPlainMessagesAreEditable() {
+        val own = com.texasprogram.app.model.SocialMessage("a", "Жму 100", fromMe = true)
+        assertTrue(own.canEdit)
+        val voice = own.copy(id = "b", voice = com.texasprogram.app.model.SocialVoice("v", 1000))
+        assertFalse(voice.canEdit)
+        val forwarded = own.copy(id = "c", forwarded = com.texasprogram.app.model.SocialForward("tim"))
+        assertFalse(forwarded.canEdit)
+        assertFalse(com.texasprogram.app.model.ChatPending(clientId = "p", username = "bro", text = "в пути").message.canEdit)
+    }
+
+    /// Своё фото и голосовое грузятся из очереди; у пересланного они уже на сервере.
+    @Test
+    fun pendingKnowsWhatToUpload() {
+        val photo = com.texasprogram.app.model.ChatPending(clientId = "a", username = "bro", image = "local")
+        assertTrue(photo.hasPhotoFile)
+        val voice = com.texasprogram.app.model.ChatPending(clientId = "c", username = "bro", voice = com.texasprogram.app.model.SocialVoice("local-c", 900))
+        assertTrue(voice.hasVoiceFile)
+        val forwarded = com.texasprogram.app.model.ChatPending(clientId = "f", username = "bro", image = "0123456789abcdef01234567", forward = "m")
+        assertFalse(forwarded.hasPhotoFile)
+        assertFalse(forwarded.hasVoiceFile)
+        // Очередь на диске переживает перезапуск: запись и чтение без потерь.
+        val restored = SocialService.json.decodeFromString<com.texasprogram.app.model.ChatPending>(SocialService.json.encodeToString(voice))
+        assertEquals(voice, restored)
+        assertTrue(com.texasprogram.app.service.SocialException("Нет связи").isRetryable)
+        assertFalse(com.texasprogram.app.service.SocialException("Фото не найдено", 400).isRetryable)
     }
 }

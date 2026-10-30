@@ -1,6 +1,7 @@
 package com.texasprogram.app
 
 import com.texasprogram.app.model.AccessoryHint
+import com.texasprogram.app.model.CompletionRecord
 import com.texasprogram.app.model.ExercisePrescription
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.ProgramInput
@@ -327,5 +328,16 @@ class HistoryAndExtrasTest {
         val next = ReminderScheduler.nextOccurrence(4, 18, 0, monday)
 
         assertEquals(monday.toLocalDate().plusDays(2), next.toLocalDate())
+    }
+
+    /// Утром потренировался — вечером напоминание молчит, а на следующий день снова работает.
+    @Test
+    fun noReminderTonightAfterMorningWorkout() {
+        val monday = LocalDate.of(2026, 10, 19)
+        val profile = texas().copy(completionLog = listOf(CompletionRecord("1-1", monday.toEpochDay(), 1, 1)))
+
+        assertTrue(ReminderScheduler.trainedOn(profile, monday))
+        assertFalse(ReminderScheduler.trainedOn(profile, monday.plusDays(1)))
+        assertFalse(ReminderScheduler.trainedOn(texas(), monday))
     }
 }

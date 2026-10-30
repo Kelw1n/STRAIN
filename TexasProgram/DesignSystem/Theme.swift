@@ -2,136 +2,161 @@ import SwiftUI
 
 // MARK: - Палитра
 
+/// Две темы — тёмная REBRN (чистый OLED-чёрный, графитовые карточки) и светлая
+/// (светло-серый фон, белые карточки) с одним пламенным оранжевым акцентом.
+/// Экраны красятся динамическими цветами ниже: `ink` — текст и значки,
+/// `canvas` — фон экрана, `tone(_:)` — серые ступени тёмной темы, которые в
+/// светлой зеркалятся. Каждая сама берёт вид из текущей темы.
 enum Theme {
-    static var style: AppThemeStyle { ThemeManager.shared.current }
+    /// Гарнитура цифр и заголовков — плотный гротеск без скруглений.
+    static let fontDesign: Font.Design = .default
 
-    /// Гарнитура цифр и заголовков. У REBRN плотный гротеск без скруглений,
-    /// у остальных тем — прежний скруглённый.
-    static var fontDesign: Font.Design { style.isRebrn ? .default : .rounded }
+    /// Фирменный пламенный оранжевый (#FF6029).
+    static let accent = Color(red: 1.0, green: 0.38, blue: 0.16)
+    /// Глубокий тлеющий янтарно-оранжевый.
+    static let accentDeep = Color(red: 0.88, green: 0.28, blue: 0.10)
+    /// Мятно-зелёный индикатор выполнения.
+    static let success = Color(red: 0.18, green: 0.82, blue: 0.45)
+    static let warning = Color(red: 1.0, green: 0.65, blue: 0.20)
+    static let record = Color(red: 1.0, green: 0.32, blue: 0.32)
 
-    static var accent: Color {
-        if style.isRebrn {
-            // Фирменный неоново-пламенный оранжевый REBRN (#FF6029)
-            return Color(red: 1.0, green: 0.38, blue: 0.16)
-        } else if style.isClaude {
-            // Фирменный теплый терракотово-оранжевый Claude (#D97757)
-            return Color(red: 0.851, green: 0.467, blue: 0.341)
-        } else {
-            return Color(red: 0.16, green: 0.84, blue: 0.76)
-        }
-    }
+    static let accentGradient = LinearGradient(colors: [accent, accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let deepGradient = LinearGradient(colors: [accentDeep, accent], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let successGradient = LinearGradient(colors: [success, accent], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let recordGradient = LinearGradient(colors: [warning, record], startPoint: .topLeading, endPoint: .bottomTrailing)
 
-    static var accentDeep: Color {
-        if style.isRebrn {
-            // Глубокий тлеющий янтарно-оранжевый
-            return Color(red: 0.88, green: 0.28, blue: 0.10)
-        } else if style.isClaude {
-            // Глубокий оттенок теплой глины / янтаря (#C16141)
-            return Color(red: 0.757, green: 0.380, blue: 0.255)
-        } else {
-            return Color(red: 0.35, green: 0.47, blue: 0.98)
-        }
-    }
-
-    static var success: Color {
-        if style.isRebrn {
-            // Мятно-зеленый индикатор выполнения
-            return Color(red: 0.18, green: 0.82, blue: 0.45)
-        } else if style.isClaude {
-            // Мягкий шалфейный зеленый (#4CB079)
-            return Color(red: 0.298, green: 0.686, blue: 0.475)
-        } else {
-            return Color(red: 0.27, green: 0.85, blue: 0.53)
-        }
-    }
-
-    static var warning: Color {
-        if style.isRebrn {
-            return Color(red: 1.0, green: 0.65, blue: 0.20)
-        } else if style.isClaude {
-            // Тёплый янтарь (#EBA048)
-            return Color(red: 0.922, green: 0.627, blue: 0.282)
-        } else {
-            return Color(red: 1.00, green: 0.64, blue: 0.26)
-        }
-    }
-
-    static var record: Color {
-        if style.isRebrn {
-            return Color(red: 1.0, green: 0.32, blue: 0.32)
-        } else if style.isClaude {
-            // Благородная ржавчина (#E25E4C)
-            return Color(red: 0.886, green: 0.369, blue: 0.298)
-        } else {
-            return Color(red: 1.00, green: 0.42, blue: 0.52)
-        }
-    }
-
-    static var accentGradient: LinearGradient {
-        LinearGradient(colors: [accent, accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    static var deepGradient: LinearGradient {
-        LinearGradient(colors: [accentDeep, accent], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    static var successGradient: LinearGradient {
-        LinearGradient(colors: [success, accent], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    static var recordGradient: LinearGradient {
-        LinearGradient(colors: [warning, record], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
+    /// Карточки держатся на контрасте с чёрным фоном, без обводки.
     static func hairline(_ scheme: ColorScheme) -> LinearGradient {
-        if style.isRebrn {
-            // У REBRN карточки держатся на контрасте с чёрным фоном, без обводки.
-            return LinearGradient(colors: [.clear], startPoint: .top, endPoint: .bottom)
-        } else if style.isClaude {
-            return LinearGradient(
-                colors: scheme == .dark
-                    ? [Color(red: 0.35, green: 0.33, blue: 0.31).opacity(0.8), Color(red: 0.25, green: 0.23, blue: 0.21).opacity(0.4)]
-                    : [Color(red: 0.88, green: 0.84, blue: 0.80), Color(red: 0.93, green: 0.90, blue: 0.87).opacity(0.6)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        } else {
-            return LinearGradient(
-                colors: scheme == .dark
-                    ? [.white.opacity(0.16), .white.opacity(0.04)]
-                    : [.white.opacity(0.95), .white.opacity(0.30)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+        LinearGradient(colors: [.clear], startPoint: .top, endPoint: .bottom)
+    }
+
+    /// Заливка карточки: графитовая (#161617) в тёмной теме, белая в светлой.
+    static func surface(_ scheme: ColorScheme) -> Color {
+        .card
+    }
+
+    /// Серая ступень тёмной темы в светлой. Фон (почти чёрный) становится
+    /// светло-серым, карточки (графит) — белыми, а поля и кнопки на карточках
+    /// (светлее графита) — чуть темнее белого: в обеих темах они отделяются от
+    /// карточки, на которой лежат. Средние и светлые серые — значки, заглушки
+    /// картинок — одинаковы в обеих темах.
+    static func lightTone(_ white: Double) -> Double {
+        switch white {
+        case ..<0.03: return 0.949
+        case ..<0.115: return 1
+        case ..<0.3: return max(0.82, 1 - (white - 0.08) * 0.9)
+        default: return white
+        }
+    }
+}
+
+// MARK: - Оформление
+
+/// Тема приложения на выбор в настройках. По умолчанию тёмная — как было.
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case dark, light, system
+
+    static let storageKey = "app_appearance"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .dark: return "Тёмная"
+        case .light: return "Светлая"
+        case .system: return "Как в системе"
         }
     }
 
-    /// Заливка карточки в зависимости от темы и цветовой схемы.
-    static func surface(_ scheme: ColorScheme) -> Color {
-        if style.isRebrn {
-            // Графитовые карточки REBRN (#161617) на чистом чёрном
-            return Color(red: 0.086, green: 0.086, blue: 0.09)
-        } else if style.isClaude {
-            return scheme == .dark
-                ? Color(red: 0.155, green: 0.147, blue: 0.140)
-                : Color(red: 1.0, green: 0.996, blue: 0.992)
-        } else {
-            return scheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.78)
+    /// `nil` — как в настройках iPhone.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .dark: return .dark
+        case .light: return .light
+        case .system: return nil
         }
+    }
+
+    var interfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .dark: return .dark
+        case .light: return .light
+        case .system: return .unspecified
+        }
+    }
+
+    static var current: AppAppearance {
+        AppAppearance(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .dark
+    }
+
+    /// Тема — всем окнам приложения: листам, меню и системным окнам тоже.
+    /// `preferredColorScheme(nil)` после явной темы не возвращает системную до
+    /// перезапуска, а стиль окна — сразу.
+    @MainActor
+    static func apply(_ appearance: AppAppearance = .current) {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let scene = scene as? UIWindowScene else { continue }
+            for window in scene.windows {
+                window.overrideUserInterfaceStyle = appearance.interfaceStyle
+            }
+        }
+    }
+}
+
+// MARK: - Цвета, которые меняются с темой
+
+private func dynamic(light: UIColor, dark: UIColor) -> Color {
+    Color(UIColor { $0.userInterfaceStyle == .light ? light : dark })
+}
+
+private let inkColor = dynamic(light: UIColor(white: 0.05, alpha: 1), dark: .white)
+private let canvasColor = dynamic(light: UIColor(red: 0.949, green: 0.949, blue: 0.965, alpha: 1), dark: .black)
+private let cardColor = dynamic(light: .white, dark: UIColor(red: 0.086, green: 0.086, blue: 0.09, alpha: 1))
+
+extension ShapeStyle where Self == Color {
+    /// Текст и значки: белые в тёмной теме, почти чёрные в светлой.
+    static var ink: Color { inkColor }
+    /// Фон экрана: чёрный в тёмной теме, светло-серый в светлой.
+    static var canvas: Color { canvasColor }
+    /// Карточка: графитовая в тёмной теме, белая в светлой.
+    static var card: Color { cardColor }
+
+    /// Серый тёмной темы (`Color(white:)`) и его пара в светлой — `Theme.lightTone`.
+    static func tone(_ white: Double, opacity: Double = 1) -> Color {
+        dynamic(
+            light: UIColor(white: Theme.lightTone(white), alpha: opacity),
+            dark: UIColor(white: white, alpha: opacity)
+        )
+    }
+
+    /// Свой цвет для каждой темы.
+    static func themed(light: Color, dark: Color) -> Color {
+        dynamic(light: UIColor(light), dark: UIColor(dark))
     }
 }
 
 // MARK: - Анимации
 
+/// Пружины почти без перелёта: экран не качается и не «дёргается»
+/// после движения, а быстро встаёт на место.
 enum Motion {
-    static let card = Animation.spring(response: 0.46, dampingFraction: 0.86)
-    static let snappy = Animation.spring(response: 0.32, dampingFraction: 0.78)
-    static let bouncy = Animation.spring(response: 0.42, dampingFraction: 0.62)
-    static let smooth = Animation.easeInOut(duration: 0.28)
+    static let card = Animation.spring(response: 0.36, dampingFraction: 0.92)
+    static let snappy = Animation.spring(response: 0.28, dampingFraction: 0.9)
+    /// Чуть живее — для отметок и наград, но без заметного качания.
+    static let bouncy = Animation.spring(response: 0.34, dampingFraction: 0.78)
+    static let smooth = Animation.easeInOut(duration: 0.22)
     /// Появление и уход крупных панелей: тренировка, листы, плашки.
-    static let sheet = Animation.spring(response: 0.42, dampingFraction: 0.86)
-    /// Перестановка и отклик на палец: быстро, с лёгким качанием.
-    static let reorder = Animation.spring(response: 0.3, dampingFraction: 0.78)
+    static let sheet = Animation.spring(response: 0.36, dampingFraction: 0.92)
+    /// Перестановка и отклик на палец.
+    static let reorder = Animation.spring(response: 0.26, dampingFraction: 0.86)
+    /// Переключение вкладок.
+    static let tab = Animation.easeOut(duration: 0.2)
+    /// Сообщение в переписке: вылетает с лёгким отскоком, переписка едет следом.
+    static let chat = Animation.spring(response: 0.4, dampingFraction: 0.74)
+    /// Нажатие: кнопка прижимается сразу, без задержки.
+    static let press = Animation.spring(response: 0.16, dampingFraction: 0.95)
+    /// Отпускание: мягко пружинит назад с едва заметным отскоком.
+    static let release = Animation.spring(response: 0.34, dampingFraction: 0.68)
 
     static func maybe(_ animation: Animation, reduce: Bool) -> Animation? {
         reduce ? nil : animation
@@ -140,59 +165,10 @@ enum Motion {
 
 // MARK: - Фон приложения
 
+/// Чистый OLED-чёрный фон: акцент живёт только в элементах.
 struct AppBackground: View {
-    @Environment(\.colorScheme) private var scheme
-
-    private var base: Color {
-        if Theme.style.isRebrn {
-            // Чистый OLED-чёрный, как у REBRN
-            return .black
-        } else if Theme.style.isClaude {
-            // Тёплый молочный пергамент (#FAF7F2) в светлой, и тёплый матовый уголь (#151413) в тёмной
-            return scheme == .dark ? Color(red: 0.086, green: 0.082, blue: 0.078) : Color(red: 0.980, green: 0.969, blue: 0.949)
-        } else {
-            return scheme == .dark ? Color(red: 0.043, green: 0.055, blue: 0.075) : Color(red: 0.945, green: 0.957, blue: 0.973)
-        }
-    }
-
-    private var glow: Double {
-        if Theme.style.isRebrn {
-            return 0.08
-        } else if Theme.style.isClaude {
-            return scheme == .dark ? 0.18 : 0.12
-        } else {
-            return scheme == .dark ? 0.26 : 0.20
-        }
-    }
-
     var body: some View {
-        ZStack {
-            base
-            if Theme.style.isRebrn {
-                // Без свечения: у REBRN фон пустой, акцент живёт только в элементах.
-                EmptyView()
-            } else {
-                RadialGradient(
-                    colors: [Theme.accent.opacity(glow), .clear],
-                    center: UnitPoint(x: 0.08, y: 0.02),
-                    startRadius: 0,
-                    endRadius: 430
-                )
-                RadialGradient(
-                    colors: [Theme.accentDeep.opacity(glow * 0.8), .clear],
-                    center: UnitPoint(x: 0.98, y: 1.0),
-                    startRadius: 0,
-                    endRadius: 470
-                )
-                RadialGradient(
-                    colors: [Theme.record.opacity(glow * 0.4), .clear],
-                    center: UnitPoint(x: 1.0, y: 0.12),
-                    startRadius: 0,
-                    endRadius: 320
-                )
-            }
-        }
-        .ignoresSafeArea()
+        Color.canvas.ignoresSafeArea()
     }
 }
 
@@ -200,5 +176,13 @@ extension View {
     /// Общий фон экрана.
     func screenBackground() -> some View {
         background(AppBackground())
+    }
+}
+
+extension View {
+    /// Всегда в тёмной теме: фото и аватарка на весь экран, «Итоги» историями,
+    /// карточки для сторис — они задуманы на чёрном и одинаковы в любой теме.
+    func alwaysDark() -> some View {
+        environment(\.colorScheme, .dark)
     }
 }

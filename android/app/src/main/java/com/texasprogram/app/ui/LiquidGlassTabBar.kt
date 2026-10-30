@@ -23,15 +23,18 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -75,8 +78,42 @@ enum class MainTabItem(val title: String, val icon: ImageVector, val outlinedIco
     TODAY("Главное", Icons.Filled.Home, Icons.Outlined.Home),
     WORKOUT("Тренировка", Icons.Filled.FitnessCenter, Icons.Outlined.FitnessCenter),
     PROGRESS("Активность", Icons.Filled.BarChart, Icons.Outlined.BarChart),
+    NUTRITION("Питание", Icons.Filled.Restaurant, Icons.Outlined.Restaurant),
     COMMUNITY("Друзья", Icons.Filled.Groups, Icons.Outlined.Groups),
     PROFILE("Профиль", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle)
+}
+
+/// Повторное нажатие на открытую вкладку, как в iOS-версии: открытый внутри
+/// экран закрывается, а начальный экран едет наверх. Вкладки слушают свой
+/// счётчик и сами решают, что для них «начало».
+object TabReselect {
+    private val counts = mutableStateMapOf<MainTabItem, Int>()
+
+    fun fire(tab: MainTabItem) {
+        counts[tab] = (counts[tab] ?: 0) + 1
+    }
+
+    fun count(tab: MainTabItem): Int = counts[tab] ?: 0
+}
+
+/// Повторное нажатие на эту вкладку. Первый показ экрана — не нажатие.
+@Composable
+fun OnTabReselect(tab: MainTabItem, action: suspend () -> Unit) {
+    val count = TabReselect.count(tab)
+    val handled = remember { intArrayOf(count) }
+    val current by rememberUpdatedState(action)
+    LaunchedEffect(count) {
+        if (count == handled[0]) return@LaunchedEffect
+        handled[0] = count
+        current()
+    }
+}
+
+/// Наверх даже из глубины ленты: прыжок поближе, а последние экраны — плавно.
+/// Иначе прокрутка с сотого поста собирала бы по пути все промежуточные.
+suspend fun androidx.compose.foundation.lazy.LazyListState.scrollToTop() {
+    if (firstVisibleItemIndex > 4) scrollToItem(4)
+    animateScrollToItem(0)
 }
 
 private val BAR_HEIGHT = 62.dp
@@ -87,18 +124,18 @@ private const val MAGNIFICATION = 1.28f
 
 /// Пружины с параметрами iOS-версии: stiffness = (2π / response)².
 private fun stiffness(response: Double): Float = ((2 * PI / response) * (2 * PI / response)).toFloat()
-/// Посадка на вкладку: чуть недодемпфирована, чтобы линза качнулась, как капля.
-private val settleSpring = spring<Float>(dampingRatio = 0.66f, stiffness = stiffness(0.42))
+/// Посадка на вкладку: быстро и мягко, с едва заметной каплей в конце.
+private val settleSpring = spring<Float>(dampingRatio = 0.82f, stiffness = stiffness(0.34))
 /// Подъём линзы в момент касания.
-private val liftSpring = spring<Float>(dampingRatio = 0.72f, stiffness = stiffness(0.26))
+private val liftSpring = spring<Float>(dampingRatio = 0.88f, stiffness = stiffness(0.22))
 /// Слежение за пальцем: почти без задержки, но не рывками.
 private val followSpring = spring<Float>(dampingRatio = 0.86f, stiffness = stiffness(0.18))
 
 /// Плавающая панель вкладок с линзой из жидкого стекла.
 ///
 /// Палец можно поставить и вести: линза поднимается над панелью, едет за ним,
-/// тянется по скорости и увеличивает иконки под собой. Отпустил — линза
-/// с пружиной садится на ближайшую вкладку, и та открывается.
+/// тянется по скорости и увеличивает иконки под собой. Вкладка под пальцем
+/// открывается сразу, пока ведёшь; отпустил — линза садится на неё.
 ///
 /// Иконки нарисованы дважды: нижний слой контурный, в линзе в нём дырка;
 /// верхний залитый, виден только сквозь линзу и увеличен вокруг её центра.
@@ -109,7 +146,11 @@ private val followSpring = spring<Float>(dampingRatio = 0.86f, stiffness = stiff
 fun LiquidGlassTabBar(
     selectedTab: MainTabItem,
     onTabSelected: (MainTabItem) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /// Вкладки с красной точкой: например, «Друзья» с непрочитанными сообщениями.
+    badges: Set<MainTabItem> = emptySet(),
+    /// Нажали на уже открытую вкладку — вернуть её к началу.
+    onReselect: (MainTabItem) -> Unit = {}
 ) {
     val haptics = rememberHapticEngine()
     val scope = rememberCoroutineScope()
@@ -118,6 +159,7 @@ fun LiquidGlassTabBar(
     val selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0)
     val currentSelected by rememberUpdatedState(selectedIndex)
     val currentOnSelect by rememberUpdatedState(onTabSelected)
+    val currentOnReselect by rememberUpdatedState(onReselect)
 
     val lensX = remember { Animatable(Float.NaN) }
     val lift = remember { Animatable(0f) }
@@ -167,15 +209,15 @@ fun LiquidGlassTabBar(
         Spacer(
             Modifier
                 .matchParentSize()
-                .shadow(22.dp, CircleShape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
-                .background(Color(0xF0141417), CircleShape)
+                .shadow(if (Theme.isLight) 14.dp else 22.dp, CircleShape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
+                .background(Theme.tone(0xF0141417), CircleShape)
                 .border(
                     1.dp,
                     Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = 0.28f),
-                        0.35f to Color.White.copy(alpha = 0.06f),
+                        0f to glassEdge(0.28f),
+                        0.35f to glassEdge(0.06f),
                         0.65f to Color.Transparent,
-                        1f to Color.White.copy(alpha = 0.14f)
+                        1f to glassEdge(0.14f)
                     ),
                     CircleShape
                 )
@@ -191,7 +233,15 @@ fun LiquidGlassTabBar(
                         val tracker = VelocityTracker()
                         tracker.addPosition(down.uptimeMillis, down.position)
                         var index = indexAt(down.position.x)
+                        // Нажали на открытую вкладку и не уводили палец — это «к началу».
+                        val startIndex = index
+                        val startedOnSelected = startIndex == currentSelected
+                        var wandered = false
+                        var released = false
                         var lastX = down.position.x
+                        // Какую вкладку уже открыли этим жестом: ведёшь пальцем —
+                        // вкладки листаются сразу, а не после того, как отпустишь.
+                        var shown = currentSelected
                         haptics.light()
                         scope.launch {
                             if (lensX.value.isNaN()) lensX.snapTo(center(currentSelected))
@@ -204,6 +254,7 @@ fun LiquidGlassTabBar(
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                 if (!change.pressed) {
                                     lastX = change.position.x
+                                    released = true
                                     break
                                 }
                                 change.consume()
@@ -217,19 +268,27 @@ fun LiquidGlassTabBar(
                                 val next = indexAt(lastX)
                                 if (next != index) {
                                     index = next
+                                    wandered = true
                                     haptics.selection()
+                                    if (next != shown) {
+                                        shown = next
+                                        currentOnSelect(tabs[next])
+                                    }
                                 }
                             }
                         } finally {
                             touching[0] = false
                             val target = indexAt(lastX)
-                            if (target != currentSelected) {
+                            if (target != shown) {
                                 haptics.medium()
                                 currentOnSelect(tabs[target])
                             }
                             scope.launch { lensX.animateTo(center(target), settleSpring) }
                             scope.launch { lift.animateTo(0f, settleSpring) }
                             scope.launch { stretch.animateTo(0f, settleSpring) }
+                            if (released && startedOnSelected && !wandered && target == startIndex) {
+                                currentOnReselect(tabs[target])
+                            }
                         }
                     }
                 }
@@ -239,7 +298,7 @@ fun LiquidGlassTabBar(
                 tabs = tabs,
                 filled = false,
                 selectedIndex = selectedIndex,
-                onSelect = { currentOnSelect(it) },
+                onSelect = { if (it == tabs[currentSelected]) currentOnReselect(it) else currentOnSelect(it) },
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
@@ -247,7 +306,7 @@ fun LiquidGlassTabBar(
                         drawContent()
                         val r = lensRect(size.height)
                         drawRoundRect(
-                            color = Color.Black,
+                            color = Theme.canvas,
                             topLeft = r.topLeft,
                             size = r.size,
                             cornerRadius = CornerRadius(r.height / 2),
@@ -283,6 +342,22 @@ fun LiquidGlassTabBar(
                         }
                     }
             )
+
+            // Красные точки поверх иконок.
+            if (badges.isNotEmpty()) {
+                Spacer(
+                    Modifier
+                        .matchParentSize()
+                        .drawBehind {
+                            tabs.forEachIndexed { index, tab ->
+                                if (tab !in badges) return@forEachIndexed
+                                val dot = Offset(center(index) + 14 * px, size.height / 2 - 12 * px)
+                                drawCircle(Theme.canvas, radius = 7 * px, center = dot)
+                                drawCircle(Theme.record, radius = 5 * px, center = dot)
+                            }
+                        }
+                )
+            }
         }
     }
 }
@@ -317,7 +392,7 @@ private fun IconRow(
                 Icon(
                     imageVector = if (filled) tab.icon else tab.outlinedIcon,
                     contentDescription = null,
-                    tint = if (filled) Color.White else Color.White.copy(alpha = 0.5f),
+                    tint = if (filled) Theme.ink else Theme.ink.copy(alpha = 0.5f),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -330,15 +405,20 @@ private val rimColors = listOf(
     Color(0xFF7AC8FF), Color(0xFFC77AFF), Color(0xFFFF7A7A)
 )
 
+/// Кромка стекла: белый блик на тёмной теме, тонкая тень на светлой —
+/// белое на светлом не видно.
+internal fun glassEdge(alpha: Float): Color =
+    if (Theme.isLight) Color.Black.copy(alpha = alpha * 0.35f) else Color.White.copy(alpha = alpha)
+
 /// В покое линза — тёмная таблетка, как у REBRN; поднятая — прозрачное
 /// стекло с бликом сверху и радужной каймой по краю, как стекло iOS 26.
 private fun DrawScope.drawLens(r: Rect, l: Float) {
     val radius = CornerRadius(r.height / 2)
     if (l < 1f) {
-        drawRoundRect(Color.Black.copy(alpha = 0.55f * (1f - l)), r.topLeft, r.size, radius)
+        drawRoundRect(Color.Black.copy(alpha = (if (Theme.isLight) 0.07f else 0.55f) * (1f - l)), r.topLeft, r.size, radius)
     }
     if (l > 0f) {
-        drawRoundRect(Color.White.copy(alpha = 0.07f * l), r.topLeft, r.size, radius)
+        drawRoundRect(Theme.ink.copy(alpha = 0.07f * l), r.topLeft, r.size, radius)
         val pad = 2.dp.toPx()
         drawRoundRect(
             brush = Brush.verticalGradient(
@@ -362,9 +442,9 @@ private fun DrawScope.drawLens(r: Rect, l: Float) {
     val stroke = lerp(1.dp.toPx(), 1.2.dp.toPx(), l)
     drawRoundRect(
         brush = Brush.verticalGradient(
-            0f to Color.White.copy(alpha = lerp(0.12f, 0.75f, l)),
-            0.45f to Color.White.copy(alpha = lerp(0.04f, 0.12f, l)),
-            1f to Color.White.copy(alpha = lerp(0.06f, 0.35f, l)),
+            0f to glassEdge(lerp(0.12f, 0.75f, l)),
+            0.45f to glassEdge(lerp(0.04f, 0.12f, l)),
+            1f to glassEdge(lerp(0.06f, 0.35f, l)),
             startY = r.top,
             endY = r.bottom
         ),

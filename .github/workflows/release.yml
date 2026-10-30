@@ -1,0 +1,57 @@
+name: Release
+
+# Главный релиз на странице репозитория. Берёт APK и IPA, которые уже лежат в
+# android-latest и ios-latest, и выкладывает их одной версией с описанием из
+# .github/release-notes.md. Ничего не пересобирает: в релизе ровно те файлы,
+# что приложение предлагает обновлением.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/possible-improvements-b00203"]
+    paths:
+      - ".github/workflows/release.yml"
+      - ".github/release-notes.md"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download android-latest --repo "$GITHUB_REPOSITORY" -p STRAIN.apk -p version.json -D dist
+          gh release download ios-latest --repo "$GITHUB_REPOSITORY" -p STRAIN.ipa -D dist
+          NAME="$(jq -r .versionName dist/version.json)"
+          TAG="v$NAME"
+
+          # Тег — на коммите, из которого собран APK.
+          SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/android-latest" -q .sha)"
+          IOS_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/ios-latest" -q .sha)"
+          if [ "$SHA" != "$IOS_SHA" ]; then
+            echo "::warning::APK и IPA собраны из разных коммитов: ${SHA::7} и ${IOS_SHA::7}"
+          fi
+
+          mv dist/STRAIN.apk "dist/STRAIN-$NAME.apk"
+          mv dist/STRAIN.ipa "dist/STRAIN-$NAME.ipa"
+          sed "s/{{version}}/$NAME/g" .github/release-notes.md > dist/notes.md
+
+          # Повторный запуск той же версии обновляет файлы и описание.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" "dist/STRAIN-$NAME.apk" "dist/STRAIN-$NAME.ipa" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "STRAIN $NAME" --notes-file dist/notes.md --latest
+          else
+            gh release create "$TAG" "dist/STRAIN-$NAME.apk" "dist/STRAIN-$NAME.ipa" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$SHA" \
+              --title "STRAIN $NAME" \
+              --notes-file dist/notes.md \
+              --latest
+          fi
+          echo "Релиз: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

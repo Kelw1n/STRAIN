@@ -150,7 +150,7 @@ struct DayCustomizeView: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle(scale: 0.985))
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
                         profile.hideExercise(exercise, week: week, day: day.number, scope: scope)
@@ -207,7 +207,7 @@ struct DayCustomizeView: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle(scale: 0.985))
                 .swipeActions {
                     Button(role: .destructive) { profile.removeEdit(item) } label: {
                         Label("Удалить", systemImage: "trash")
@@ -329,7 +329,7 @@ struct DayCustomizeView: View {
 
     private func weightText(of exercise: ExercisePrescription) -> String {
         guard case .kilograms(let value) = exercise.load else { return "" }
-        return WeightFormat.kilogramsPrecise(value).replacingOccurrences(of: " кг", with: "").replacingOccurrences(of: " lbs", with: "")
+        return WeightFormat.kilogramsPrecise(value).replacingOccurrences(of: " кг", with: "")
     }
 
     private func subtitle(of exercise: ExercisePrescription) -> String {
@@ -385,7 +385,7 @@ private struct ExerciseFormView: View {
                         Spacer()
                         Text("Сохранить изменения")
                             .font(.body.weight(.bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Spacer()
                     }
                     .padding(.vertical, 4)

@@ -6,6 +6,8 @@ struct BenchWaveView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var profile: ProgramProfile
     @Binding var focused: Int?
+    /// Открыт поверх вкладок — сверху кнопка «Готово».
+    var onClose: (() -> Void)?
 
     @State private var expanded: Int?
     @State private var pulsing: Int?
@@ -68,6 +70,13 @@ struct BenchWaveView: View {
             }
             .screenBackground()
             .navigationTitle("Жим 14")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    if let onClose {
+                        Button("Готово", action: onClose).font(.body.weight(.semibold))
+                    }
+                }
+            }
             .confirmationDialog(
                 pendingStart.map { "Начать с тренировки \($0.id)?" } ?? "",
                 isPresented: Binding(get: { pendingStart != nil }, set: { if !$0 { pendingStart = nil } }),
@@ -252,17 +261,17 @@ struct BenchWaveChart: View {
                                 .frame(height: grown ? max(12, 96 * ratio(session.topWeight)) : 5)
                                 .opacity(selected == nil || isSelected ? 1 : 0.4)
                                 .overlay(
-                                    Capsule().strokeBorder(Color.white.opacity(isSelected ? 0.9 : 0), lineWidth: 1.5)
+                                    Capsule().strokeBorder(Color.ink.opacity(isSelected ? 0.9 : 0), lineWidth: 1.5)
                                 )
                             if completed.contains(session.id) {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 8, weight: .black))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.ink)
                                     .padding(.top, 4)
                             }
                         }
                         .animation(
-                            Motion.maybe(.spring(response: 0.65, dampingFraction: 0.78).delay(Double(index) * 0.035), reduce: reduceMotion),
+                            Motion.maybe(.spring(response: 0.42, dampingFraction: 0.9).delay(Double(index) * 0.03), reduce: reduceMotion),
                             value: grown
                         )
                         Text("\(session.id)")
@@ -271,7 +280,7 @@ struct BenchWaveChart: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Тренировка \(session.id), до \(Int(session.topWeight)) кг")
             }
         }
@@ -412,7 +421,7 @@ struct BenchSessionCard: View {
             if isDone {
                 Image(systemName: "checkmark")
                     .font(.system(size: 16, weight: .black))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .transition(.scale.combined(with: .opacity))
             } else {
                 Text("\(session.id)")

@@ -1,7 +1,22 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.draw.drawWithCache
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,6 +48,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -49,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
@@ -58,15 +77,35 @@ import kotlin.math.abs
 // MARK: - Модификаторы
 
 /// Каскадное появление: прозрачность и сдвиг вверх с задержкой по индексу.
+/// Только для первого экрана и один раз: список помнит, что карточку уже
+/// показали, и при прокрутке назад она не проявляется заново.
 fun Modifier.appearIn(index: Int): Modifier = composed {
-    val progress = remember { Animatable(0f) }
+    var shown by rememberSaveable { mutableStateOf(false) }
+    val progress = remember { Animatable(if (shown || index > 7) 1f else 0f) }
     LaunchedEffect(Unit) {
-        delay(index.coerceAtMost(12) * Motion.STAGGER_MS.toLong())
-        progress.animateTo(1f, Motion.appear())
+        if (progress.value < 1f) {
+            delay(index * Motion.STAGGER_MS.toLong())
+            progress.animateTo(1f, Motion.appear())
+        }
+        shown = true
     }
     graphicsLayer {
         alpha = progress.value
-        translationY = (1f - progress.value) * 18.dp.toPx()
+        translationY = (1f - progress.value) * 10.dp.toPx()
+    }
+}
+
+/// Появление окна поверх экрана: проявляется и чуть приближается, как
+/// всплывающие окна в iOS. Только слоем — компоновку не трогает.
+fun Modifier.popIn(): Modifier = composed {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, Motion.sheet()) }
+    graphicsLayer {
+        val p = progress.value
+        alpha = p.coerceIn(0f, 1f)
+        val scale = 0.92f + 0.08f * p
+        scaleX = scale
+        scaleY = scale
     }
 }
 
@@ -74,7 +113,11 @@ fun Modifier.appearIn(index: Int): Modifier = composed {
 fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.snappy(), label = "press")
+    val scale by animateFloatAsState(
+        if (pressed) 0.96f else 1f,
+        if (pressed) Motion.press() else Motion.release(),
+        label = "press"
+    )
     graphicsLayer { scaleX = scale; scaleY = scale }
         .clickable(
             interactionSource = interaction,
@@ -89,7 +132,11 @@ fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier =
 fun Modifier.combinedPressable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.snappy(), label = "press")
+    val scale by animateFloatAsState(
+        if (pressed) 0.96f else 1f,
+        if (pressed) Motion.press() else Motion.release(),
+        label = "press"
+    )
     graphicsLayer { scaleX = scale; scaleY = scale }
         .combinedClickable(
             interactionSource = interaction,
@@ -97,6 +144,67 @@ fun Modifier.combinedPressable(onClick: () -> Unit, onLongClick: (() -> Unit)? =
             onLongClick = onLongClick,
             onClick = onClick
         )
+}
+
+/// Число, которое при смене прокатывается: больше — новое въезжает снизу,
+/// меньше — сверху. Как `contentTransition(.numericText())` в SwiftUI.
+@Composable
+fun RollingNumber(
+    value: Int,
+    color: Color,
+    fontSize: TextUnit,
+    fontWeight: FontWeight = FontWeight.Bold
+) {
+    AnimatedContent(
+        targetState = value,
+        transitionSpec = {
+            val up = targetState > initialState
+            val enter = slideInVertically(Motion.snappy()) { if (up) it else -it } + fadeIn(tween(160))
+            val exit = slideOutVertically(Motion.snappy()) { if (up) -it else it } + fadeOut(tween(120))
+            (enter togetherWith exit).using(SizeTransform(clip = false))
+        },
+        label = "rollingNumber"
+    ) { number ->
+        Text("$number", color = color, fontSize = fontSize, fontWeight = fontWeight)
+    }
+}
+
+/// Заливка выбранного: при смене выбора цвет плавно перетекает, а не
+/// перескакивает. Прогресс читается только в отрисовке — без перекомпоновки.
+fun Modifier.selectionFill(selected: Boolean, fill: Brush, idle: Color, shape: Shape): Modifier = composed {
+    val progress = animateFloatAsState(if (selected) 1f else 0f, Motion.fade(200), label = "selection")
+    drawWithCache {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        onDrawBehind {
+            val p = progress.value
+            if (p < 1f && idle.alpha > 0f) drawOutline(outline, idle)
+            if (p > 0f) drawOutline(outline, fill, alpha = p)
+        }
+    }
+}
+
+fun Modifier.selectionFill(selected: Boolean, fill: Color, idle: Color, shape: Shape): Modifier =
+    selectionFill(selected, SolidColor(fill), idle, shape)
+
+/// Кружок с галочкой: при выборе галочка выпрыгивает с отскоком.
+@Composable
+fun CheckDot(selected: Boolean, size: Dp = 20.dp, iconSize: Dp = 12.dp) {
+    val pop by animateFloatAsState(if (selected) 1f else 0f, Motion.bouncy(), label = "check")
+    Box(
+        Modifier.size(size).selectionFill(selected, Theme.accent, Theme.surfaceSoft, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Filled.Check,
+            contentDescription = null,
+            tint = Theme.ink,
+            modifier = Modifier.size(iconSize).graphicsLayer {
+                scaleX = pop
+                scaleY = pop
+                alpha = pop.coerceIn(0f, 1f)
+            }
+        )
+    }
 }
 
 /// Мягкое затухание у краёв экрана. Состояние читается в фазе отрисовки,
@@ -112,8 +220,8 @@ fun Modifier.softScroll(state: LazyListState, index: Int): Modifier = graphicsLa
     if (half <= 0f) return@graphicsLayer
     val distance = (abs(itemCenter - viewportCenter) / half).coerceIn(0f, 1f)
     val fade = ((distance - 0.72f) / 0.28f).coerceIn(0f, 1f)
-    alpha = 1f - fade * 0.7f
-    val shrink = 1f - fade * 0.06f
+    alpha = 1f - fade * 0.45f
+    val shrink = 1f - fade * 0.02f
     scaleX = shrink
     scaleY = shrink
 }
@@ -257,7 +365,7 @@ fun TagBadge(
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
         }
-        Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = Theme.ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -330,8 +438,8 @@ fun TopBar(
                 Modifier
                     .align(Alignment.CenterStart)
                     .size(40.dp)
-                    .clip(CircleShape)
-                    .pressable(onClick = onBack),
+                    .pressable(onClick = onBack)
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -359,7 +467,8 @@ fun TopBar(
 // MARK: - Сегментный переключатель
 
 /// Нейтральный серый, как системный segmented control в iOS,
-/// а не акцентный градиент.
+/// а не акцентный градиент. Подложка выбранного едет к новому сегменту
+/// с пружиной; её положение читается только в отрисовке.
 @Composable
 fun SegmentedControl(
     options: List<String>,
@@ -367,13 +476,32 @@ fun SegmentedControl(
     modifier: Modifier = Modifier,
     onSelect: (Int) -> Unit
 ) {
+    val position by animateFloatAsState(selectedIndex.toFloat(), Motion.snappy(), label = "segment")
+    val card = Theme.card
+    val hairline = Theme.hairline
     Row(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(Theme.surfaceSoft)
             .border(1.dp, Theme.hairline, RoundedCornerShape(10.dp))
-            .padding(3.dp),
+            .padding(3.dp)
+            .drawBehind {
+                if (selectedIndex !in options.indices) return@drawBehind
+                val gap = 3.dp.toPx()
+                val width = (size.width - gap * (options.size - 1)) / options.size
+                val left = position * (width + gap)
+                val radius = CornerRadius(8.dp.toPx())
+                val half = 0.5.dp.toPx()
+                drawRoundRect(card, Offset(left, 0f), Size(width, size.height), radius)
+                drawRoundRect(
+                    hairline,
+                    Offset(left + half, half),
+                    Size(width - half * 2, size.height - half * 2),
+                    radius,
+                    style = Stroke(1.dp.toPx())
+                )
+            },
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         options.forEachIndexed { index, title ->
@@ -381,9 +509,6 @@ fun SegmentedControl(
             Box(
                 Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (selected) Theme.card else Color.Transparent)
-                    .then(if (selected) Modifier.border(1.dp, Theme.hairline, RoundedCornerShape(8.dp)) else Modifier)
                     .pressable { onSelect(index) }
                     .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center
@@ -464,9 +589,9 @@ private fun StepCircle(symbol: String, onClick: () -> Unit) {
     Box(
         Modifier
             .size(34.dp)
+            .pressable(onClick = onClick)
             .clip(CircleShape)
-            .background(Theme.accent.copy(alpha = 0.16f))
-            .pressable(onClick = onClick),
+            .background(Theme.accent.copy(alpha = 0.16f)),
         contentAlignment = Alignment.Center
     ) {
         Text(symbol, color = Theme.accent, fontSize = 17.sp, fontWeight = FontWeight.Black)
@@ -487,19 +612,19 @@ fun GradientButton(
     Row(
         modifier
             .fillMaxWidth()
+            .pressable(enabled = enabled, onClick = onClick)
             .clip(RoundedCornerShape(18.dp))
             .background(gradient)
             .alphaIf(!enabled)
-            .pressable(enabled = enabled, onClick = onClick)
             .padding(vertical = 16.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(20.dp))
             Text("  ", fontSize = 16.sp)
         }
-        Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -514,10 +639,10 @@ fun SecondaryButton(
     Row(
         modifier
             .fillMaxWidth()
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(12.dp))
             .background(tint.copy(alpha = 0.12f))
             .border(1.dp, tint.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-            .pressable(onClick = onClick)
             .padding(vertical = 11.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically

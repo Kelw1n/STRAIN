@@ -116,15 +116,15 @@ fun TodayScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(androidx.compose.ui.graphics.Color.White)
-                    .clickable {
+                    .pressable {
                         if (isRunning) {
                             com.texasprogram.app.service.WorkoutSessionManager.expand()
                         } else {
                             onStartWorkout(focus)
                         }
                     }
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Theme.ink)
                     .padding(vertical = 15.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -141,7 +141,7 @@ fun TodayScreen(
                         )
                         Text(
                             text = "ПРОДОЛЖИТЬ ТРЕНИРОВКУ",
-                            color = androidx.compose.ui.graphics.Color.Black,
+                            color = Theme.canvas,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp
@@ -149,7 +149,7 @@ fun TodayScreen(
                     } else {
                         Text(
                             text = "НАЧАТЬ ТРЕНИРОВКУ",
-                            color = androidx.compose.ui.graphics.Color.Black,
+                            color = Theme.canvas,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp
@@ -294,9 +294,9 @@ private fun OverdueCard(
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .pressable { onOpenDay(item.week, item.day.number) }
                     .clip(RoundedCornerShape(11.dp))
                     .background(Theme.warning.copy(alpha = 0.09f))
-                    .pressable { onOpenDay(item.week, item.day.number) }
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -341,7 +341,7 @@ private fun BenchTeaser(
                     .background(plan?.highlight?.gradient ?: Theme.accentGradient),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.MonitorHeart, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.MonitorHeart, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

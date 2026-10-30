@@ -1,8 +1,13 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -62,8 +67,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import com.texasprogram.app.model.AchievementKind
+import com.texasprogram.app.model.CustomProgram
 import com.texasprogram.app.model.SocialBadge
 import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialProgramDay
@@ -80,23 +86,29 @@ fun RemoteImage(id: String?, modifier: Modifier = Modifier, contentScale: Conten
         ImagePlaceholder(modifier, loading = false)
         return
     }
-    SubcomposeAsyncImage(
+    // Лёгкий AsyncImage, а не SubcomposeAsyncImage: тот на каждое фото строил
+    // отдельный кусок интерфейса со спиннером — в ленте это рывки прокрутки.
+    AsyncImage(
         model = url,
         contentDescription = null,
         contentScale = contentScale,
-        modifier = modifier,
-        loading = { ImagePlaceholder(Modifier.fillMaxSize(), loading = true) },
-        error = { ImagePlaceholder(Modifier.fillMaxSize(), loading = false) }
+        placeholder = PlaceholderPainter,
+        error = PlaceholderPainter,
+        modifier = modifier
     )
 }
 
+/// Ровная подложка, пока фото грузится: без анимации, ничего не перерисовывает.
+private val PlaceholderPainter: androidx.compose.ui.graphics.painter.Painter
+    get() = androidx.compose.ui.graphics.painter.ColorPainter(Theme.tone(0xFF1F1F22))
+
 @Composable
 private fun ImagePlaceholder(modifier: Modifier, loading: Boolean) {
-    Box(modifier.background(Color(0xFF1F1F22)), contentAlignment = Alignment.Center) {
+    Box(modifier.background(Theme.tone(0xFF1F1F22)), contentAlignment = Alignment.Center) {
         if (loading) {
-            CircularProgressIndicator(color = Color.White.copy(alpha = 0.4f), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+            CircularProgressIndicator(color = Theme.ink.copy(alpha = 0.4f), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
         } else {
-            Icon(Icons.Filled.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.25f), modifier = Modifier.size(24.dp))
+            Icon(Icons.Filled.Image, contentDescription = null, tint = Theme.ink.copy(alpha = 0.25f), modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -107,7 +119,7 @@ fun Avatar(imageId: String?, username: String, size: Dp = 44.dp, modifier: Modif
         modifier
             .size(size)
             .clip(CircleShape)
-            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape),
+            .border(1.dp, Theme.ink.copy(alpha = 0.08f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         if (imageId != null) {
@@ -150,7 +162,7 @@ fun medalColors(level: Int): List<Color> = when (level) {
     3 -> listOf(Color(0xFFFFD159), Color(0xFFCC8C1A))
     4 -> listOf(Color(0xFF8CEBF2), Color(0xFF338CBF))
     5 -> listOf(Theme.accent, Color(0xFF8C1A73))
-    else -> listOf(Color(0xFF383838), Color(0xFF242424))
+    else -> listOf(Theme.tone(0xFF383838), Theme.tone(0xFF242424))
 }
 
 /// Шестиугольная медаль: цвет — уровень, значок — что за достижение.
@@ -171,12 +183,12 @@ fun MedalView(kind: AchievementKind?, level: Int, size: Dp = 64.dp) {
                 close()
             }
             drawPath(path, Brush.linearGradient(colors, Offset.Zero, Offset(w, h)))
-            drawPath(path, Color.White.copy(alpha = if (level > 0) 0.35f else 0.08f), style = Stroke(width = maxOf(1f, w * 0.03f)))
+            drawPath(path, Theme.ink.copy(alpha = if (level > 0) 0.35f else 0.08f), style = Stroke(width = maxOf(1f, w * 0.03f)))
         }
         Icon(
             kind?.icon ?: Icons.Filled.QuestionMark,
             contentDescription = kind?.let { "${it.title}, уровень $level" },
-            tint = if (level > 0) Color.White else Color.White.copy(alpha = 0.3f),
+            tint = if (level > 0) Theme.ink else Theme.ink.copy(alpha = 0.3f),
             modifier = Modifier.size(size * 0.4f)
         )
     }
@@ -197,23 +209,7 @@ fun PhotoPager(ids: List<String>, modifier: Modifier = Modifier) {
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
             RemoteImage(ids[page], Modifier.fillMaxSize())
         }
-        if (ids.size > 1) {
-            Row(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                repeat(ids.size) { index ->
-                    Box(
-                        Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else 0.45f))
-                    )
-                }
-            }
-        }
+        if (ids.size > 1) PageDots(pager, ids.size, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
     }
 }
 
@@ -222,8 +218,8 @@ fun PhotoPager(ids: List<String>, modifier: Modifier = Modifier) {
 @Composable
 fun SocialStat(value: String, title: String, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(value, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
-        Text(title, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(value, color = Theme.ink, fontSize = 22.sp, fontWeight = FontWeight.Black)
+        Text(title, color = Theme.ink.copy(alpha = 0.55f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -231,22 +227,23 @@ fun SocialStat(value: String, title: String, modifier: Modifier = Modifier) {
 fun FollowButton(isFollowing: Boolean, compact: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val haptics = rememberHapticEngine()
     val shape = RoundedCornerShape(if (compact) 16.dp else 18.dp)
+    val label by animateColorAsState(if (isFollowing) Theme.ink else Theme.canvas, Motion.fade(200), label = "followLabel")
     Box(
         modifier
             .then(if (compact) Modifier else Modifier.fillMaxWidth())
             .height(if (compact) 32.dp else 50.dp)
-            .clip(shape)
-            .background(if (isFollowing) Color(0xFF292929) else Color.White)
             .pressable {
                 haptics.light()
                 onClick()
             }
+            .clip(shape)
+            .selectionFill(isFollowing, Theme.tone(0xFF292929), Theme.ink, shape)
             .padding(horizontal = if (compact) 14.dp else 0.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             if (isFollowing) "Вы подписаны" else "Подписаться",
-            color = if (isFollowing) Color.White else Color.Black,
+            color = label,
             fontSize = if (compact) 13.sp else 16.sp,
             fontWeight = FontWeight.Bold
         )
@@ -259,13 +256,13 @@ fun SocialErrorCard(message: String, retry: (() -> Unit)? = null) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
             .padding(22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(Icons.Filled.WifiOff, contentDescription = null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(26.dp))
-        Text(message, color = Color.White.copy(alpha = 0.65f), fontSize = 14.sp, textAlign = TextAlign.Center)
+        Icon(Icons.Filled.WifiOff, contentDescription = null, tint = Theme.ink.copy(alpha = 0.5f), modifier = Modifier.size(26.dp))
+        Text(message, color = Theme.ink.copy(alpha = 0.65f), fontSize = 14.sp, textAlign = TextAlign.Center)
         if (retry != null) {
             Text(
                 "Повторить",
@@ -282,7 +279,7 @@ fun SocialErrorCard(message: String, retry: (() -> Unit)? = null) {
 fun SectionCaption(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
-        color = Color.White.copy(alpha = 0.45f),
+        color = Theme.ink.copy(alpha = 0.45f),
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.2.sp,
@@ -298,11 +295,22 @@ sealed interface SocialRoute {
     data class User(val username: String) : SocialRoute
     data class Followers(val username: String) : SocialRoute
     data class Following(val username: String) : SocialRoute
-    data class Program(val day: SocialProgramDay) : SocialRoute
+    /// День программы; `all` и `author` — чтобы скопировать к себе день или всю программу.
+    data class Program(val day: SocialProgramDay, val all: List<SocialProgramDay> = emptyList(), val author: String? = null) : SocialRoute
     data class Badges(val badges: List<SocialBadge>) : SocialRoute
     data object Achievements : SocialRoute
     data object EditProfile : SocialRoute
+    data class Chat(val username: String) : SocialRoute
+    data object Activity : SocialRoute
+    /// Пост, который ещё надо загрузить, — из активности.
+    data class PostId(val id: String) : SocialRoute
+    /// Копия чужой тренировки в конструкторе «Своей программы».
+    data class CopyProgram(val program: CustomProgram, val author: String) : SocialRoute
 }
+
+/// Видна ли вкладка, в которой лежит экран: скрытые остаются в памяти,
+/// но не должны отвечать на «Назад».
+val LocalTabActive = androidx.compose.runtime.compositionLocalOf { true }
 
 /// Стек экранов одной вкладки: «Назад» снимает верхний.
 @Stable
@@ -315,26 +323,48 @@ class SocialNavigator {
 @Composable
 fun rememberSocialNavigator(): SocialNavigator = remember { SocialNavigator() }
 
-/// Корень вкладки и поверх него — открытые экраны. Новый въезжает справа.
+/// Корень вкладки и поверх него — открытые экраны. Как в iOS: новый экран
+/// въезжает справа целиком, а прежний в это время чуть уходит влево и темнеет;
+/// «Назад» — то же самое в обратную сторону.
 @Composable
 fun SocialHost(
     navigator: SocialNavigator,
     screen: @Composable (SocialRoute) -> Unit,
     root: @Composable () -> Unit
 ) {
-    BackHandler(enabled = navigator.stack.isNotEmpty()) { navigator.pop() }
+    // Скрытая вкладка живёт в памяти, но «Назад» не перехватывает.
+    BackHandler(enabled = LocalTabActive.current && navigator.stack.isNotEmpty()) { navigator.pop() }
     val covered = navigator.stack.isNotEmpty()
+    // Корень уезжает влево вместе с первым открытым экраном. Когда тот лёг
+    // целиком, корень не рисуется вовсе — его всё равно не видно.
+    val rootShift by animateFloatAsState(
+        if (covered) 1f else 0f,
+        tween(if (covered) 360 else 300, easing = Motion.emphasized),
+        label = "rootShift"
+    )
     Box(Modifier.fillMaxSize()) {
         // Корень под открытым экраном не должен читаться TalkBack.
-        Box(if (covered) Modifier.fillMaxSize().clearAndSetSemantics {} else Modifier.fillMaxSize()) { root() }
+        Box(
+            (if (covered) Modifier.fillMaxSize().clearAndSetSemantics {} else Modifier.fillMaxSize())
+                .graphicsLayer {
+                    translationX = -size.width * 0.22f * rootShift
+                    alpha = if (rootShift >= 0.999f) 0f else 1f - 0.35f * rootShift
+                }
+        ) { root() }
         AnimatedContent(
             targetState = navigator.stack.toList(),
             transitionSpec = {
-                if (targetState.size >= initialState.size) {
-                    (slideInHorizontally(tween(280)) { it / 3 } + fadeIn(tween(200))) togetherWith fadeOut(tween(160))
+                val slide = tween<IntOffset>(360, easing = Motion.emphasized)
+                val back = tween<IntOffset>(300, easing = Motion.emphasized)
+                val transform = if (targetState.size >= initialState.size) {
+                    slideInHorizontally(slide) { it } togetherWith
+                        (slideOutHorizontally(slide) { -it * 22 / 100 } + fadeOut(tween(360), targetAlpha = 0.65f))
                 } else {
-                    fadeIn(tween(180)) togetherWith (slideOutHorizontally(tween(260)) { it / 3 } + fadeOut(tween(200)))
+                    (slideInHorizontally(back) { -it * 22 / 100 } + fadeIn(tween(300), initialAlpha = 0.65f)) togetherWith
+                        slideOutHorizontally(back) { it }
                 }
+                // Верхним рисуется экран, что глубже в стеке: при «Назад» уходящий — над прежним.
+                transform.apply { targetContentZIndex = targetState.size.toFloat() }
             },
             label = "socialStack"
         ) { stack ->
@@ -345,7 +375,7 @@ fun SocialHost(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(Color.Black)
+                        .background(Theme.canvas)
                         .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
                 ) {
                     screen(top)

@@ -22,7 +22,7 @@ struct LaunchReveal: View {
     var body: some View {
         ZStack {
             // Чёрное всё, кроме знака: в нём дырка, сквозь неё видно приложение.
-            Color.black
+            Color.canvas
                 .mask {
                     Rectangle()
                         .overlay { mark.blendMode(.destinationOut) }

@@ -78,7 +78,7 @@ fun LaunchReveal(onFinish: () -> Unit) {
         val dst = IntSize(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1))
 
         // Чёрное всё, кроме знака: в нём дырка, сквозь неё видно приложение.
-        drawRect(Color.Black)
+        drawRect(Theme.canvas)
         drawImage(
             image = image,
             dstOffset = offset,

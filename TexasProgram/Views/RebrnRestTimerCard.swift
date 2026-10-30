@@ -30,7 +30,7 @@ struct RebrnRestTimerCard: View {
 
                     Text(timer.elapsedText)
                         .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(.ink.opacity(0.85))
                 }
 
                 // Средняя строка: иконка упражнения + название + точки подходов и вес
@@ -40,7 +40,7 @@ struct RebrnRestTimerCard: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(timer.exerciseName ?? "Отдых между подходами")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .lineLimit(1)
 
                         HStack(spacing: 5) {
@@ -53,7 +53,7 @@ struct RebrnRestTimerCard: View {
                                             .frame(width: 7, height: 7)
                                     } else {
                                         Circle()
-                                            .fill(idx < timer.completedSets ? Theme.accent : Color.white.opacity(0.25))
+                                            .fill(idx < timer.completedSets ? Theme.accent : Color.ink.opacity(0.25))
                                             .frame(width: 7, height: 7)
                                     }
                                 }
@@ -62,7 +62,7 @@ struct RebrnRestTimerCard: View {
                             if let details = timer.setDetails, !details.isEmpty {
                                 Text(details)
                                     .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.70))
+                                    .foregroundStyle(.ink.opacity(0.70))
                             }
                         }
                     }
@@ -77,9 +77,9 @@ struct RebrnRestTimerCard: View {
                     } label: {
                         Image(systemName: "minus")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .frame(width: 44, height: 44)
-                            .background(Color(white: 0.18), in: Circle())
+                            .background(Color.tone(0.18), in: Circle())
                     }
                     .buttonStyle(.pressable)
 
@@ -100,9 +100,9 @@ struct RebrnRestTimerCard: View {
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .frame(width: 44, height: 44)
-                            .background(Color(white: 0.18), in: Circle())
+                            .background(Color.tone(0.18), in: Circle())
                     }
                     .buttonStyle(.pressable)
 
@@ -121,16 +121,16 @@ struct RebrnRestTimerCard: View {
                 }
             }
             .padding(16)
-            .background(Color(white: 0.07))
+            .background(Color.tone(0.07))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .strokeBorder(
                         LinearGradient(
                             stops: [
-                                .init(color: Color.white.opacity(0.28), location: 0.0),
+                                .init(color: Color.ink.opacity(0.28), location: 0.0),
                                 .init(color: Theme.accent.opacity(0.35), location: 0.5),
-                                .init(color: Color.white.opacity(0.08), location: 1.0)
+                                .init(color: Color.ink.opacity(0.08), location: 1.0)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing

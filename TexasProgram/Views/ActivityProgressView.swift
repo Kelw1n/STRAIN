@@ -4,17 +4,30 @@ import Charts
 struct ActivityProgressView: View {
     @Bindable var profile: ProgramProfile
     let onStartWorkout: () -> Void
+    /// Есть у программ с волной «Жим 14».
+    var onOpenBench: (() -> Void)?
 
     @State private var selectedPeriod = "3 месяца"
     @State private var showingWeightSheet = false
     @State private var showingMuscleSheet = false
+    /// Путь разделов: повторное нажатие на вкладку возвращает к началу.
+    @State private var path = NavigationPath()
+
+    private enum Route: Hashable { case history, notes }
 
     private let periods = ["1 месяц", "3 месяца", "6 месяцев", "Всё время"]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 16) {
+                    // Уровень и награда месяца
+                    LevelCard(profile: profile)
+                    CoachEntryCard(profile: profile)
+
+                    // Итоги месяца и года историями
+                    TrainingRecapEntryCard(profile: profile)
+
                     // Карточка 1: Время, объём и тренировки
                     volumeAndWorkoutsCard
 
@@ -27,13 +40,19 @@ struct ActivityProgressView: View {
                     // Карточка: Сила и Рекорды
                     strengthRecordsCard
 
+                    // История упражнений, заметки и «Жим 14»
+                    linksCard
+
+                    HistoryCard(records: profile.completionLog)
+
                     Spacer(minLength: 90)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
+                .tabScrollAnchor(.progress)
             }
             .scrollIndicators(.hidden)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Активность")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -46,14 +65,14 @@ struct ActivityProgressView: View {
                         HStack(spacing: 4) {
                             Text(selectedPeriod)
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color.white.opacity(0.9))
+                                .foregroundStyle(Color.ink.opacity(0.9))
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .foregroundStyle(Color.ink.opacity(0.5))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
-                        .background(Color(white: 0.14), in: Capsule())
+                        .background(Color.tone(0.14), in: Capsule())
                     }
                 }
             }
@@ -63,8 +82,89 @@ struct ActivityProgressView: View {
             .sheet(isPresented: $showingMuscleSheet) {
                 MuscleGroupsDetailSheet(profile: profile)
             }
+            .navigationDestination(for: Route.self) { route in
+                // Низ списка не прячется под плавающей панелью вкладок.
+                switch route {
+                case .history: ExerciseHistoryList(profile: profile).safeAreaPadding(.bottom, 90)
+                case .notes: NotesListView(profile: profile).safeAreaPadding(.bottom, 90)
+                }
+            }
         }
-        .preferredColorScheme(.dark)
+        .onTabReselect(.progress) {
+            if path.isEmpty { TabReselection.shared.scrollToTop(.progress) } else { path = NavigationPath() }
+        }
+    }
+
+    // MARK: - Разделы
+
+    /// Входы в разделы, которые копят данные. Они были на прежнем экране
+    /// «Прогресс» и пропали вместе с ним: до истории упражнений и заметок
+    /// на iPhone стало не добраться.
+    private var linksCard: some View {
+        VStack(spacing: 0) {
+            NavigationLink(value: Route.history) {
+                // Пока история пустая, а отметки есть, зовём именно достроить её:
+                // иначе про такую возможность никто не узнает.
+                let pending = profile.backfillableWorkouts
+                linkRow("История упражнений",
+                        subtitle: pending > 0
+                        ? "можно заполнить по отметкам"
+                        : Self.countText(profile.loggedExerciseNames.count, "движение", "движения", "движений"),
+                        symbol: "chart.xyaxis.line")
+            }
+            .buttonStyle(.pressable)
+            linkDivider
+            NavigationLink(value: Route.notes) {
+                linkRow("Заметки",
+                        subtitle: Self.countText(profile.workoutNotes.filter { profile.isOwnKey($0.key) }.count,
+                                                 "запись", "записи", "записей"),
+                        symbol: "note.text")
+            }
+            .buttonStyle(.pressable)
+            if let onOpenBench {
+                linkDivider
+                Button(action: onOpenBench) {
+                    let total = UpperLowerCalculator.benchSessionCount
+                    linkRow("Волна «Жим 14»",
+                            subtitle: profile.nextBenchSession.map { "следующая — №\($0), пройдено \(profile.completedBenchCount) из \(total)" }
+                            ?? "волна пройдена — пора тестировать 1ПМ",
+                            symbol: "waveform.path.ecg")
+                }
+                .buttonStyle(.pressable)
+            }
+        }
+        .padding(6)
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var linkDivider: some View {
+        Rectangle().fill(Color.ink.opacity(0.07)).frame(height: 1).padding(.horizontal, 12)
+    }
+
+    private func linkRow(_ title: String, subtitle: String, symbol: String) -> some View {
+        HStack(spacing: 13) {
+            Image(systemName: symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.ink)
+                Text(subtitle).font(.system(size: 12)).foregroundStyle(Color.ink.opacity(0.45))
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Color.ink.opacity(0.3))
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .contentShape(Rectangle())
+    }
+
+    /// «1 запись», «2 записи», «5 записей»; ноль — «пока пусто».
+    static func countText(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
+        count > 0 ? "\(count) " + RuPlural.word(count, one, few, many) : "пока пусто"
     }
 
     // MARK: - Карточка «Время, объём и тренировки»
@@ -86,7 +186,10 @@ struct ActivityProgressView: View {
         let records = periodRecords
         // Объём — из записанных подходов дня, а не из максимумов: раньше столбики
         // считались как «сумма максимумов × 5» и к реальной работе отношения не имели.
-        let tonnages = records.map { profile.tonnage(forDayKey: $0.key) }
+        // Все дни — одним проходом по подходам, а не проходом на каждую тренировку:
+        // «Всё время» на каждую перерисовку перебирало подходы сотни раз.
+        let byDay = profile.tonnageByDay()
+        let tonnages = records.map { byDay[$0.key] ?? 0 }
         let totalTonnage = tonnages.reduce(0, +)
         let totalSeconds = records.compactMap(\.durationSeconds).reduce(0, +)
         let recent = Array(zip(records, tonnages).suffix(8))
@@ -94,12 +197,12 @@ struct ActivityProgressView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Время, объём и тренировки")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Text(records.isEmpty
                      ? (profile.completionLog.isEmpty ? "Появятся после первой тренировки" : "За этот период тренировок нет")
                      : "\(selectedPeriod == "Всё время" ? "За всё время" : "За \(selectedPeriod)")")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
             }
 
             HStack(spacing: 0) {
@@ -127,7 +230,7 @@ struct ActivityProgressView: View {
                             if let raw = value.as(String.self), let idx = Int(raw), idx < recent.count {
                                 Text(RuDate.shortDayMonth(recent[idx].0.date))
                                     .font(.system(size: 10, weight: .semibold, design: Theme.fontDesign))
-                                    .foregroundStyle(Color.white.opacity(0.45))
+                                    .foregroundStyle(Color.ink.opacity(0.45))
                             }
                         }
                     }
@@ -138,7 +241,7 @@ struct ActivityProgressView: View {
                 HStack(alignment: .bottom, spacing: 8) {
                     ForEach(Array([0.4, 0.6, 0.5, 0.8, 0.65, 0.55, 0.75, 0.9, 0.6].enumerated()), id: \.offset) { _, ratio in
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color(white: 0.16))
+                            .fill(Color.tone(0.16))
                             .frame(height: 110 * ratio)
                             .frame(maxWidth: .infinity)
                     }
@@ -155,12 +258,12 @@ struct ActivityProgressView: View {
                 Text("НАЧАТЬ ТРЕНИРОВКУ")
                     .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                     .tracking(1.0)
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
-                    .background(Color.white, in: Capsule())
+                    .background(Color.ink, in: Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .padding(.top, 4)
         }
         .padding(18)
@@ -172,12 +275,12 @@ struct ActivityProgressView: View {
             Text(value)
                 .font(.system(size: 18, weight: .heavy, design: Theme.fontDesign))
                 .monospacedDigit()
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(title)
                 .font(.system(size: 11))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -199,11 +302,11 @@ struct ActivityProgressView: View {
                 HStack {
                     Text("Замеры веса")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.3))
+                        .foregroundStyle(Color.ink.opacity(0.3))
                 }
 
                 // Мини-график последних замеров; пока замеров мало — пунктир.
@@ -223,7 +326,7 @@ struct ActivityProgressView: View {
                         ZStack {
                             Line()
                                 .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                                .foregroundStyle(Color.white.opacity(0.18))
+                                .foregroundStyle(Color.ink.opacity(0.18))
                                 .frame(height: 2)
                             Circle()
                                 .fill(Theme.accent)
@@ -239,17 +342,17 @@ struct ActivityProgressView: View {
                     if let weight = profile.latestBodyWeight {
                         Text(WeightFormat.kilogramsPrecise(weight))
                             .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Text("Текущий вес")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.white.opacity(0.45))
+                            .foregroundStyle(Color.ink.opacity(0.45))
                     } else {
                         Text("— кг")
                             .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Text("Нужен первый замер")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.white.opacity(0.45))
+                            .foregroundStyle(Color.ink.opacity(0.45))
                     }
                 }
             }
@@ -257,7 +360,7 @@ struct ActivityProgressView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.985))
     }
 
     // MARK: - Карточка «Группы мышц» (Радарная диаграмма)
@@ -271,17 +374,17 @@ struct ActivityProgressView: View {
                 HStack {
                     Text("Группы мышц")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.3))
+                        .foregroundStyle(Color.ink.opacity(0.3))
                 }
 
                 // Радарная диаграмма (Spider web) с динамическими данными
                 ZStack {
                     RadarWebShape(levels: 3)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(Color.ink.opacity(0.12), lineWidth: 1)
 
                     RadarDataShape(values: muscleData.radarValues)
                         .fill(Theme.accent.opacity(0.25))
@@ -294,13 +397,13 @@ struct ActivityProgressView: View {
 
                 Text("Баланс нагрузки")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.985))
     }
 
     // MARK: - Карточка «Сила» (Рекорды)
@@ -310,7 +413,7 @@ struct ActivityProgressView: View {
             HStack {
                 Text("Сила")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Spacer()
                 HStack(spacing: 4) {
                     Image(systemName: "medal.fill")
@@ -318,7 +421,7 @@ struct ActivityProgressView: View {
                         .foregroundStyle(Color.yellow)
                     Text("Рекорды")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(Color.ink.opacity(0.85))
                 }
             }
 
@@ -343,15 +446,15 @@ struct ActivityProgressView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.accent)
                 .frame(width: 32, height: 32)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(Color.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(name)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Text(best == nil ? "максимум из настроек" : "лучший подход")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.white.opacity(0.4))
+                    .foregroundStyle(Color.ink.opacity(0.4))
             }
 
             Spacer()
@@ -381,11 +484,11 @@ struct MuscleGroupsDetailSheet: View {
                         VStack(spacing: 16) {
                             Text("Баланс распределения нагрузки")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
 
                             ZStack {
                                 RadarWebShape(levels: 4)
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                    .stroke(Color.ink.opacity(0.12), lineWidth: 1)
 
                                 RadarDataShape(values: data.radarValues)
                                     .fill(Theme.accent.opacity(0.25))
@@ -398,7 +501,7 @@ struct MuscleGroupsDetailSheet: View {
 
                             Text(data.subtitle)
                                 .font(.system(size: 12))
-                                .foregroundStyle(Color.white.opacity(0.6))
+                                .foregroundStyle(Color.ink.opacity(0.6))
                                 .multilineTextAlignment(.center)
                         }
                         .frame(maxWidth: .infinity)
@@ -418,10 +521,10 @@ struct MuscleGroupsDetailSheet: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(group.category.rawValue)
                                             .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(.ink)
                                         Text(group.exercises)
                                             .font(.system(size: 11))
-                                            .foregroundStyle(Color.white.opacity(0.45))
+                                            .foregroundStyle(Color.ink.opacity(0.45))
                                             .lineLimit(1)
                                     }
 
@@ -433,7 +536,7 @@ struct MuscleGroupsDetailSheet: View {
                                             .foregroundStyle(Theme.accent)
                                         Text("\(group.sets) подх.")
                                             .font(.system(size: 11))
-                                            .foregroundStyle(Color.white.opacity(0.45))
+                                            .foregroundStyle(Color.ink.opacity(0.45))
                                     }
                                 }
 
@@ -441,7 +544,7 @@ struct MuscleGroupsDetailSheet: View {
                                 GeometryReader { barProxy in
                                     ZStack(alignment: .leading) {
                                         Capsule()
-                                            .fill(Color.white.opacity(0.08))
+                                            .fill(Color.ink.opacity(0.08))
                                             .frame(height: 6)
 
                                         Capsule()
@@ -459,7 +562,7 @@ struct MuscleGroupsDetailSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Группы мышц")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -470,7 +573,6 @@ struct MuscleGroupsDetailSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 
@@ -572,12 +674,16 @@ struct MuscleGroupAnalytics {
         }
 
         var loggedSetsCount = 0
+        // Группа по названию — один раз на упражнение, а не на каждый подход:
+        // разбор названия — два десятка поисков подстроки.
+        var categories: [String: MuscleCategory] = [:]
         for (key, _) in profile.setLog {
             let parts = key.split(separator: "|")
             guard parts.count >= 2 else { continue }
             let exId = String(parts[1])
             let exName = idToName[exId] ?? exId
-            let cat = MuscleCategory.categorize(exerciseName: exName)
+            let cat = categories[exName] ?? MuscleCategory.categorize(exerciseName: exName)
+            categories[exName] = cat
             groupSets[cat, default: 0] += 1
             groupExercises[cat, default: []].insert(exName)
             loggedSetsCount += 1

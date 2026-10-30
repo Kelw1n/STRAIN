@@ -47,7 +47,7 @@ struct NotesListView: View {
                                     .font(.caption.weight(.bold))
                                     .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                         }
                         Text(note.text)
                             .font(.footnote)

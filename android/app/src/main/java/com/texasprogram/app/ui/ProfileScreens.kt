@@ -8,6 +8,14 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,12 +33,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.CameraAlt
@@ -86,7 +97,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import com.texasprogram.app.model.AchievementCalculator
 import com.texasprogram.app.model.AchievementGroup
 import com.texasprogram.app.model.AchievementKind
@@ -98,12 +108,15 @@ import com.texasprogram.app.model.SocialPost
 import com.texasprogram.app.model.SocialProgramBuilder
 import com.texasprogram.app.model.SocialProgramDay
 import com.texasprogram.app.model.SocialUser
+import com.texasprogram.app.model.PersonalRecords
+import com.texasprogram.app.model.SocialRecord
+import com.texasprogram.app.model.TrainingHeatmap
+import com.texasprogram.app.model.SocialHeatmap
 import com.texasprogram.app.model.formatWeight
 import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.SocialException
 import com.texasprogram.app.service.SocialService
 import kotlinx.coroutines.launch
-import java.io.File
 
 // MARK: - Вкладка «Профиль»
 
@@ -146,11 +159,17 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
 
     val progress = remember(profile) { AchievementCalculator.progress(profile) }
     val programs = remember(profile) { SocialProgramBuilder.days(profile) }
+    val records = remember(profile) { PersonalRecords.records(profile) }
+    val heatmap = remember(profile) { TrainingHeatmap.build(profile) }
+    val listState = rememberLazyListState()
+    OnTabReselect(MainTabItem.PROFILE) {
+        if (navigator.stack.isNotEmpty()) navigator.stack.clear() else listState.scrollToTop()
+    }
 
     SocialHost(navigator, screen = { route ->
         SocialRouteScreen(route, navigator, contentPadding, profile, onPostChange = ::replace)
     }) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.fillMaxSize().background(Theme.canvas)) {
             when {
                 me != null -> ProfileContent(
                     user = me,
@@ -162,6 +181,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                     postsError = postsError,
                     navigator = navigator,
                     contentPadding = contentPadding,
+                    listState = listState,
                     onAchievements = { navigator.push(SocialRoute.Achievements) },
                     onLoadMore = {
                         val cursor = next
@@ -179,22 +199,25 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                         }
                     },
                     onPostChange = ::replace,
+                    levelProfile = profile,
+                    records = records,
+                    heatmap = heatmap,
                     primaryAction = {
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .height(50.dp)
+                                .pressable { navigator.push(SocialRoute.EditProfile) }
                                 .clip(RoundedCornerShape(18.dp))
-                                .background(Color(0xFF212121))
-                                .pressable { navigator.push(SocialRoute.EditProfile) },
+                                .background(Theme.tone(0xFF212121)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Редактировать", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text("Редактировать", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 )
                 SocialService.isSignedIn -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color.White)
+                    CircularProgressIndicator(color = Theme.ink)
                 }
                 else -> SignUpScreen(contentPadding)
             }
@@ -224,7 +247,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
 @Composable
 private fun RoundIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).pressable(onClick = onClick),
+        Modifier.size(40.dp).pressable(onClick = onClick).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -264,7 +287,7 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
     }
     LaunchedEffect(username) { reload() }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().background(Theme.canvas)) {
         val current = user
         when {
             current != null -> ProfileContent(
@@ -297,8 +320,9 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                     if (index >= 0) { if (value != null) posts[index] = value else posts.removeAt(index) }
                 },
                 primaryAction = {
-                    if (!current.isMe && SocialService.isSignedIn) {
-                        FollowButton(current.isFollowing) {
+                    if (!current.isMe && SocialService.isSignedIn) Column {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FollowButton(current.isFollowing, modifier = Modifier.weight(1f)) {
                             if (busy) return@FollowButton
                             busy = true
                             val optimistic = current.copy(
@@ -316,6 +340,21 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                                 }
                             }
                         }
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .pressable { navigator.push(SocialRoute.Chat(username)) }
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Theme.tone(0xFF292929)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Написать", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        // Приглашение уходит карточкой в переписку — туда и переходим.
+                        InviteButton(username) { navigator.push(SocialRoute.Chat(username)) }
                     }
                 }
             )
@@ -323,7 +362,7 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                 SocialTopBar("@$username", onBack = { navigator.pop() })
                 SocialErrorCard(error!!) { scope.launch { reload() } }
             }
-            else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White) }
+            else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Theme.ink) }
         }
         Box(
             Modifier
@@ -348,18 +387,34 @@ fun ProfileContent(
     postsError: String?,
     navigator: SocialNavigator,
     contentPadding: PaddingValues,
+    listState: LazyListState = rememberLazyListState(),
     onAchievements: () -> Unit,
     onLoadMore: () -> Unit,
     onPostChange: (String, SocialPost?) -> Unit,
+    /// Свой профиль программы: по нажатию на уровень — полный экран уровня
+    /// с наградами месяцев. У чужого — его уровень и сравнение со своим.
+    levelProfile: ProgramProfile? = null,
+    /// Свои рекорды считаются на телефоне — свежие сразу после тренировки.
+    /// У чужого — те, что прислало его приложение.
+    records: List<SocialRecord>? = null,
+    /// Своя карта года — с телефона, у чужого — из его профиля.
+    heatmap: SocialHeatmap? = null,
     primaryAction: @Composable () -> Unit
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var viewingAvatar by remember { mutableStateOf(false) }
+    var showingLevel by remember { mutableStateOf(false) }
+    var showingRecords by remember { mutableStateOf(false) }
+    val shownRecords = records ?: user.records
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = contentPadding.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        item(key = "header") { ProfileHeader(user, contentPadding) }
+        item(key = "header") {
+            ProfileHeader(user, contentPadding, onAvatar = { viewingAvatar = true }, onLevel = { showingLevel = true })
+        }
         item(key = "stats") {
             Row(Modifier.fillMaxWidth()) {
                 SocialStat("${user.workouts}", "Тренировки", Modifier.weight(1f))
@@ -368,7 +423,17 @@ fun ProfileContent(
             }
         }
         item(key = "action") { primaryAction() }
+        val shownHeatmap = heatmap ?: user.heatmap
+        if (shownHeatmap != null) {
+            item(key = "heatmap") {
+                val levels = remember(shownHeatmap) { TrainingHeatmap.levels(shownHeatmap) }
+                ProfileHeatmapCard(levels)
+            }
+        }
         item(key = "achievements") { AchievementsCard(badges, achievedCount, onAchievements) }
+        if (user.isMe || shownRecords.isNotEmpty()) {
+            item(key = "records") { ProfileRecordsCard(shownRecords, user.isMe, user.weightKg) { showingRecords = true } }
+        }
         item(key = "tabs") {
             SegmentedControl(options = listOf("Тренировки", "Программы"), selectedIndex = tab) { tab = it }
         }
@@ -378,7 +443,7 @@ fun ProfileContent(
                 item(key = "noPosts") {
                     Text(
                         if (user.isMe) "Опубликуй тренировку в конце занятия — она появится здесь." else "Тренировок пока нет",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Theme.ink.copy(alpha = 0.5f),
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp)
@@ -391,21 +456,22 @@ fun ProfileContent(
                         post = post,
                         onOpen = { navigator.push(SocialRoute.Post(post)) },
                         onOpenAuthor = {},
-                        onChange = { onPostChange(post.id, it) }
+                        onChange = { onPostChange(post.id, it) },
+                        showsWorkout = true
                     )
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
+                    HorizontalDivider(color = Theme.ink.copy(alpha = 0.07f))
                 }
                 if (post.id == posts.lastOrNull()?.id) LaunchedEffect(post.id) { onLoadMore() }
             }
             if (loadingPosts && posts.isEmpty()) {
                 item(key = "postsLoading") {
-                    Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp)) }
+                    Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp)) }
                 }
             }
         } else {
             if (programs.isEmpty()) {
                 item(key = "noPrograms") {
-                    Text("Программа не выбрана", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, modifier = Modifier.padding(vertical = 20.dp))
+                    Text("Программа не выбрана", color = Theme.ink.copy(alpha = 0.5f), fontSize = 14.sp, modifier = Modifier.padding(vertical = 20.dp))
                 }
             }
             items(programs.size, key = { "program-$it" }) { index ->
@@ -413,31 +479,53 @@ fun ProfileContent(
                 Row(
                     Modifier
                         .fillMaxWidth()
+                        .pressable { navigator.push(SocialRoute.Program(day, programs, if (user.isMe) null else user.username)) }
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF161617))
-                        .pressable { navigator.push(SocialRoute.Program(day)) }
+                        .background(Theme.tone(0xFF161617))
                         .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(day.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Black)
-                        if (day.groups.isNotEmpty()) Text(day.groups.joinToString(" · "), color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(day.title, color = Theme.ink, fontSize = 19.sp, fontWeight = FontWeight.Black)
+                        if (day.groups.isNotEmpty()) Text(day.groups.joinToString(" · "), color = Theme.ink.copy(alpha = 0.6f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         Text(
                             "${day.exercises.size} ${RuPlural.word(day.exercises.size, "упражнение", "упражнения", "упражнений")} · " +
                                 "${day.setCount} ${RuPlural.word(day.setCount, "подход", "подхода", "подходов")}",
-                            color = Color.White.copy(alpha = 0.4f),
+                            color = Theme.ink.copy(alpha = 0.4f),
                             fontSize = 14.sp
                         )
                     }
-                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.35f))
+                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.35f))
                 }
             }
+        }
+    }
+    val avatar = user.avatar
+    if (viewingAvatar && avatar != null) AvatarViewer(avatar, user.username) { viewingAvatar = false }
+    if (showingRecords) RecordsSheet(user.username, shownRecords, user.weightKg, levelProfile) { showingRecords = false }
+    if (showingLevel) {
+        if (levelProfile != null) {
+            LevelSheet(levelProfile) { showingLevel = false }
+        } else {
+            UserLevelSheet(user, SocialService.me?.level) { showingLevel = false }
         }
     }
 }
 
 @Composable
-private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
+private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues, onAvatar: () -> Unit, onLevel: () -> Unit) {
+    val haptics = rememberHapticEngine()
+    var pressingAvatar by remember { mutableStateOf(false) }
+    val avatarScale by animateFloatAsState(
+        if (pressingAvatar) 0.94f else 1f,
+        animationSpec = if (pressingAvatar) spring(stiffness = Spring.StiffnessHigh) else spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
+        label = "avatarPress"
+    )
+    fun openAvatar() {
+        if (user.avatar == null) return
+        haptics.medium()
+        onAvatar()
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         // Обложка — от края до края экрана, сквозь боковые отступы списка.
         Box(Modifier.bleed(16.dp).fillMaxWidth().height(contentPadding.calculateTopPadding() + 230.dp)) {
@@ -447,19 +535,64 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues) {
                     .fillMaxWidth()
                     .height(contentPadding.calculateTopPadding() + 170.dp)
             )
+            // Аватарка как в Telegram: зажми — и она откроется на весь экран.
+            // Обычное нажатие тоже открывает. Без фото открывать нечего.
             Avatar(
                 user.avatar,
                 user.username,
                 118.dp,
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .border(4.dp, Color.Black, CircleShape)
+                    .graphicsLayer {
+                        scaleX = avatarScale
+                        scaleY = avatarScale
+                    }
+                    .border(4.dp, Theme.canvas, CircleShape)
+                    .pointerInput(user.avatar) {
+                        if (user.avatar == null) return@pointerInput
+                        detectTapGestures(
+                            onPress = {
+                                pressingAvatar = true
+                                tryAwaitRelease()
+                                pressingAvatar = false
+                            },
+                            onTap = { openAvatar() },
+                            onLongPress = {
+                                pressingAvatar = false
+                                openAvatar()
+                            }
+                        )
+                    }
+                    .semantics { if (user.avatar != null) contentDescription = "Аватарка @${user.username}, открыть на весь экран" }
             )
         }
-        Text("@${user.username}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
-        user.bodyLine?.let { Text(it, color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
+        Text("@${user.username}", color = Theme.ink, fontSize = 28.sp, fontWeight = FontWeight.Black)
+        LevelChip(
+            user.level,
+            large = true,
+            opens = true,
+            modifier = Modifier
+                .pressable {
+                    haptics.light()
+                    onLevel()
+                }
+                .semantics { contentDescription = "Уровень ${user.level ?: ""}, открыть" }
+        )
+        if (user.challengeWins > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = ChallengePlace.color(1), modifier = Modifier.size(15.dp))
+                Text(
+                    "${user.challengeWins} ${RuPlural.word(user.challengeWins, "победа", "победы", "побед")} в челленджах",
+                    color = ChallengePlace.color(1),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        user.live?.let { LiveBadge(it) }
+        user.bodyLine?.let { Text(it, color = Theme.ink.copy(alpha = 0.55f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         if (user.bio.isNotBlank()) {
-            Text(user.bio, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp, textAlign = TextAlign.Center)
+            Text(user.bio, color = Theme.ink.copy(alpha = 0.75f), fontSize = 15.sp, textAlign = TextAlign.Center)
         }
     }
 }
@@ -481,7 +614,7 @@ fun ProfileCover(imageId: String?, modifier: Modifier = Modifier) {
             RemoteImage(imageId, Modifier.fillMaxSize(), ContentScale.Crop)
         } else {
             Column(
-                Modifier.fillMaxSize().background(Color.Black).padding(top = 12.dp),
+                Modifier.fillMaxSize().background(Theme.canvas).padding(top = 12.dp),
                 horizontalAlignment = Alignment.End
             ) {
                 repeat(4) { row ->
@@ -504,7 +637,7 @@ fun ProfileCover(imageId: String?, modifier: Modifier = Modifier) {
                 }
             }
         }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f))))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Theme.canvas.copy(alpha = 0.85f))))
     }
 }
 
@@ -513,26 +646,26 @@ private fun AchievementsCard(badges: List<SocialBadge>, achievedCount: Int, onCl
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161617))
             .pressable(onClick = onClick)
+            .clip(RoundedCornerShape(22.dp))
+            .background(Theme.tone(0xFF161617))
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("ДОСТИЖЕНИЯ", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
-            Text("Все $achievedCount", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+            Text("ДОСТИЖЕНИЯ", color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
+            Text("Все $achievedCount", color = Theme.ink.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
         }
         if (badges.isEmpty()) {
-            Text("Первая медаль — за первую тренировку", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text("Первая медаль — за первую тренировку", color = Theme.ink.copy(alpha = 0.5f), fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         } else {
             Row(Modifier.fillMaxWidth()) {
                 badges.forEach { badge ->
                     val kind = AchievementKind.byId(badge.id)
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         MedalView(kind, badge.level, 62.dp)
-                        Text(kind?.title ?: badge.id, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(kind?.title ?: badge.id, color = Theme.ink.copy(alpha = 0.65f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
             }
@@ -559,7 +692,7 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                 ProfileCover(null, Modifier.fillMaxSize())
                 Text(
                     "Профиль STRAIN",
-                    color = Color.White,
+                    color = Theme.ink,
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Black,
                     modifier = Modifier.align(Alignment.BottomStart).padding(18.dp)
@@ -569,7 +702,7 @@ fun SignUpScreen(contentPadding: PaddingValues) {
         item {
             Text(
                 "Публикуй тренировки с фото, подписывайся на друзей, ставь лайки и пиши комментарии. Свои веса и программа видны в профиле.",
-                color = Color.White.copy(alpha = 0.65f),
+                color = Theme.ink.copy(alpha = 0.65f),
                 fontSize = 15.sp
             )
         }
@@ -581,26 +714,26 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                         .fillMaxWidth()
                         .height(54.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF1F1F1F))
+                        .background(Theme.tone(0xFF1F1F1F))
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("@", color = Color.White.copy(alpha = 0.4f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("@", color = Theme.ink.copy(alpha = 0.4f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(4.dp))
                     Box(Modifier.weight(1f)) {
-                        if (username.isEmpty()) Text("kelw1n", color = Color.White.copy(alpha = 0.3f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        if (username.isEmpty()) Text("kelw1n", color = Theme.ink.copy(alpha = 0.3f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         BasicTextField(
                             value = username,
                             onValueChange = { username = it.take(24) },
                             singleLine = true,
-                            textStyle = TextStyle(color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold),
+                            textStyle = TextStyle(color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold),
                             cursorBrush = SolidColor(Theme.accent),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, autoCorrectEnabled = false),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
-                Text("Латиница, цифры, точка и подчёркивание, от 3 до 24 символов. Поменять можно потом.", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                Text("Латиница, цифры, точка и подчёркивание, от 3 до 24 символов. Поменять можно потом.", color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
             }
         }
         item {
@@ -608,8 +741,6 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                 Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .clip(CircleShape)
-                    .background(if (valid) Color.White else Color(0xFF666666))
                     .pressable(enabled = valid && !busy) {
                         busy = true
                         error = null
@@ -622,11 +753,13 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                                 busy = false
                             }
                         }
-                    },
+                    }
+                    .clip(CircleShape)
+                    .background(if (valid) Theme.ink else Color(0xFF666666)),
                 contentAlignment = Alignment.Center
             ) {
-                if (busy) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                else Text("Создать профиль", color = Color.Black, fontSize = 17.sp, fontWeight = FontWeight.Black)
+                if (busy) CircularProgressIndicator(color = Theme.canvas, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                else Text("Создать профиль", color = Theme.canvas, fontSize = 17.sp, fontWeight = FontWeight.Black)
             }
         }
         error?.let { message -> item { Text(message, color = Theme.warning, fontSize = 14.sp) } }
@@ -634,7 +767,7 @@ fun SignUpScreen(contentPadding: PaddingValues) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     if (showingCode) "У меня уже есть профиль ▴" else "У меня уже есть профиль ▾",
-                    color = Color.White,
+                    color = Theme.ink,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.pressable { showingCode = !showingCode }
@@ -642,21 +775,21 @@ fun SignUpScreen(contentPadding: PaddingValues) {
                 if (showingCode) {
                     Text(
                         "Код входа есть в профиле на старом телефоне («Редактировать» → «Код входа»). Он же лежит в резервной копии STRAIN.",
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = Theme.ink.copy(alpha = 0.55f),
                         fontSize = 13.sp
                     )
                     Box(
                         Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF1F1F1F))
+                            .background(Theme.tone(0xFF1F1F1F))
                             .padding(12.dp)
                     ) {
-                        if (code.isEmpty()) Text("Код входа", color = Color.White.copy(alpha = 0.3f), fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                        if (code.isEmpty()) Text("Код входа", color = Theme.ink.copy(alpha = 0.3f), fontSize = 14.sp, fontFamily = FontFamily.Monospace)
                         BasicTextField(
                             value = code,
                             onValueChange = { code = it.take(80) },
-                            textStyle = TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace),
+                            textStyle = TextStyle(color = Theme.ink, fontSize = 14.sp, fontFamily = FontFamily.Monospace),
                             cursorBrush = SolidColor(Theme.accent),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -704,8 +837,6 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
     var showingCode by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    // Камера — другое приложение: пока оно открыто, наш экран могут пересоздать.
-    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     fun upload(uri: Uri, avatar: Boolean) {
         uploading = true
@@ -724,10 +855,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
 
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { upload(it, avatar = true) } }
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { upload(it, avatar = false) } }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val uri = cameraUri
-        if (ok && uri != null) upload(uri, avatar = true)
-    }
+    val camera = rememberCameraLauncher { upload(it, avatar = true) }
 
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
@@ -782,15 +910,15 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                         .fillMaxWidth()
                         .height(160.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                        .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                 )
                 Row(
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(10.dp)
+                        .pressable { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.55f))
-                        .pressable { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -800,18 +928,18 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                 }
                 Box(Modifier.align(Alignment.BottomCenter)) {
                     Box(Modifier.pressable { avatarMenu = true }) {
-                        Avatar(me?.avatar, me?.username ?: "s", 104.dp, Modifier.border(4.dp, Color.Black, CircleShape))
-                        if (uploading) CircularProgressIndicator(color = Color.White, modifier = Modifier.align(Alignment.Center).size(28.dp))
+                        Avatar(me?.avatar, me?.username ?: "s", 104.dp, Modifier.border(4.dp, Theme.canvas, CircleShape))
+                        if (uploading) CircularProgressIndicator(color = Theme.ink, modifier = Modifier.align(Alignment.Center).size(28.dp))
                         Box(
                             Modifier
                                 .align(Alignment.BottomEnd)
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF262626))
-                                .border(3.dp, Color.Black, CircleShape),
+                                .background(Theme.tone(0xFF262626))
+                                .border(3.dp, Theme.canvas, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Filled.CameraAlt, contentDescription = "Сменить фото", tint = Color.White, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Filled.CameraAlt, contentDescription = "Сменить фото", tint = Theme.ink, modifier = Modifier.size(16.dp))
                         }
                     }
                     DropdownMenu(expanded = avatarMenu, onDismissRequest = { avatarMenu = false }) {
@@ -820,9 +948,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                             leadingIcon = { Icon(Icons.Filled.CameraAlt, contentDescription = null) },
                             onClick = {
                                 avatarMenu = false
-                                val uri = cameraFileUri(context)
-                                cameraUri = uri
-                                runCatching { camera.launch(uri) }.onFailure { error = "Камера недоступна" }
+                                camera.launch()
                             }
                         )
                         DropdownMenuItem(
@@ -858,7 +984,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF161617))
+                    .background(Theme.tone(0xFF161617))
             ) {
                 EditRow(Icons.Filled.AlternateEmail, "Юзернейм") {
                     InlineField(username, "юзернейм", KeyboardType.Ascii) { username = it.take(24) }
@@ -873,15 +999,27 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                 }
                 EditDivider()
                 EditRow(Icons.Filled.MonitorWeight, "Вес") {
-                    Text(profile.latestBodyWeight?.let { "${formatWeight(it)} кг" } ?: "из «Замеров веса»", color = Color.White.copy(alpha = 0.55f), fontSize = 16.sp)
+                    Text(profile.latestBodyWeight?.let { "${formatWeight(it)} кг" } ?: "из «Замеров веса»", color = Theme.ink.copy(alpha = 0.55f), fontSize = 16.sp)
                 }
                 EditDivider()
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Показывать рост и вес", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Text("В шапке профиля. Сила к весу в достижениях видна всегда.", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                        Text("Показывать рост и вес", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("В шапке профиля. Сила к весу в достижениях видна всегда.", color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
                     }
                     Switch(checked = showBody, onCheckedChange = { showBody = it }, colors = SwitchDefaults.colors(checkedTrackColor = Theme.accent))
+                }
+                EditDivider()
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Показывать, что я тренируюсь", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Подписчики увидят упражнение и подходы, пока идёт тренировка.", color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = SocialService.sharesLive,
+                        onCheckedChange = { SocialService.updateSharesLive(it) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = Theme.accent)
+                    )
                 }
             }
         }
@@ -890,7 +1028,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF161617))
+                    .background(Theme.tone(0xFF161617))
             ) {
                 Row(
                     Modifier.fillMaxWidth().pressable { showingCode = !showingCode }.padding(16.dp),
@@ -898,12 +1036,12 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                 ) {
                     Icon(Icons.Filled.Key, contentDescription = null, tint = Theme.accent)
                     Spacer(Modifier.width(12.dp))
-                    Text("Код входа на другом телефоне", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text("Код входа на другом телефоне", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 }
                 val token = SocialService.token
                 if (showingCode && token != null) {
                     Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(token, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                        Text(token, color = Theme.ink, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
                         Row(
                             Modifier.pressable {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -917,7 +1055,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                         }
                         Text(
                             "С этим кодом в профиль может войти кто угодно — не публикуй его. Он также сохраняется в резервной копии.",
-                            color = Color.White.copy(alpha = 0.45f),
+                            color = Theme.ink.copy(alpha = 0.45f),
                             fontSize = 12.sp
                         )
                     }
@@ -925,7 +1063,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
                 EditDivider()
                 Text(
                     "Выйти из профиля",
-                    color = Color.White,
+                    color = Theme.ink,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().pressable { confirmSignOut = true }.padding(16.dp)
@@ -945,6 +1083,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
 
     if (confirmSignOut) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmSignOut = false },
             containerColor = Theme.dialog,
             title = { Text("Выйти из профиля на этом телефоне?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -961,6 +1100,7 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
     }
     if (confirmDelete) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirmDelete = false },
             containerColor = Theme.dialog,
             title = { Text("Удалить профиль навсегда?", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
@@ -983,19 +1123,12 @@ fun EditProfileScreen(profile: ProgramProfile, contentPadding: PaddingValues, na
     }
 }
 
-/// Файл для снимка камеры: камера пишет в него сама, а мы потом читаем и сжимаем.
-fun cameraFileUri(context: Context): Uri {
-    val dir = File(context.cacheDir, "camera").apply { mkdirs() }
-    val file = File(dir, "photo-${System.currentTimeMillis()}.jpg")
-    return FileProvider.getUriForFile(context, "${context.packageName}.files", file)
-}
-
 @Composable
 private fun EditRow(icon: ImageVector, title: String, content: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = Theme.ink.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
-        Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(12.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { content() }
     }
@@ -1004,12 +1137,12 @@ private fun EditRow(icon: ImageVector, title: String, content: @Composable () ->
 @Composable
 private fun InlineField(value: String, placeholder: String, type: KeyboardType, onChange: (String) -> Unit) {
     Box(contentAlignment = Alignment.CenterEnd) {
-        if (value.isEmpty()) Text(placeholder, color = Color.White.copy(alpha = 0.35f), fontSize = 16.sp)
+        if (value.isEmpty()) Text(placeholder, color = Theme.ink.copy(alpha = 0.35f), fontSize = 16.sp)
         BasicTextField(
             value = value,
             onValueChange = onChange,
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 16.sp, textAlign = TextAlign.End),
+            textStyle = TextStyle(color = Theme.ink, fontSize = 16.sp, textAlign = TextAlign.End),
             cursorBrush = SolidColor(Theme.accent),
             keyboardOptions = KeyboardOptions(keyboardType = type),
             modifier = Modifier.fillMaxWidth()
@@ -1019,7 +1152,7 @@ private fun InlineField(value: String, placeholder: String, type: KeyboardType, 
 
 @Composable
 private fun EditDivider() {
-    HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 50.dp))
+    HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 50.dp))
 }
 
 // MARK: - Достижения
@@ -1033,14 +1166,14 @@ fun AchievementsScreen(progress: List<AchievementProgress>, contentPadding: Padd
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF161617))
+                    .background(Theme.tone(0xFF161617))
                     .padding(20.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
-                Text("${progress.count { it.level > 0 }}", color = Color.White, fontSize = 52.sp, fontWeight = FontWeight.Black)
-                Text(" из ${progress.size}", color = Color.White.copy(alpha = 0.5f), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
+                Text("${progress.count { it.level > 0 }}", color = Theme.ink, fontSize = 52.sp, fontWeight = FontWeight.Black)
+                Text(" из ${progress.size}", color = Theme.ink.copy(alpha = 0.5f), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
                 Spacer(Modifier.weight(1f))
-                Text("ВЗЯТО", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp, modifier = Modifier.padding(bottom = 12.dp))
+                Text("ВЗЯТО", color = Theme.ink.copy(alpha = 0.4f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp, modifier = Modifier.padding(bottom = 12.dp))
             }
         }
         AchievementGroup.entries.forEach { group ->
@@ -1048,13 +1181,13 @@ fun AchievementsScreen(progress: List<AchievementProgress>, contentPadding: Padd
             item(key = group.name) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row {
-                        Text(group.title, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
-                        Text("${items.count { it.level > 0 }}/${items.size}", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(group.title, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
+                        Text("${items.count { it.level > 0 }}/${items.size}", color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xFF161617))) {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Theme.tone(0xFF161617))) {
                         items.forEachIndexed { index, item ->
                             AchievementRow(item)
-                            if (index < items.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 92.dp))
+                            if (index < items.size - 1) HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 92.dp))
                         }
                     }
                 }
@@ -1070,11 +1203,11 @@ private fun AchievementRow(item: AchievementProgress) {
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(item.kind.title, color = if (item.level > 0) Color.White else Color.White.copy(alpha = 0.6f), fontSize = 18.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-                Text(if (item.level > 0) "${item.level}/${item.kind.thresholds.size}" else "—", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(item.kind.title, color = if (item.level > 0) Theme.ink else Theme.ink.copy(alpha = 0.6f), fontSize = 18.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                Text(if (item.level > 0) "${item.level}/${item.kind.thresholds.size}" else "—", color = Theme.ink.copy(alpha = 0.7f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
             LevelTrack(item.kind.thresholds.size, item.level, item.segmentFraction.toFloat())
-            Text(item.caption, color = Color.White.copy(alpha = 0.45f), fontSize = 13.sp)
+            Text(item.caption, color = Theme.ink.copy(alpha = 0.45f), fontSize = 13.sp)
         }
     }
 }
@@ -1086,13 +1219,13 @@ private fun LevelTrack(levels: Int, reached: Int, fraction: Float) {
     androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(12.dp)) {
         val step = size.width / levels
         val y = size.height / 2
-        drawLine(Color.White.copy(alpha = 0.1f), androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawLine(Theme.ink.copy(alpha = 0.1f), androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
         val filled = step * (reached + if (reached < levels) fraction else 0f)
         if (filled > 0) drawLine(accent, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(filled, y), strokeWidth = 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
         for (index in 1..levels) {
             val radius = if (index == reached) 6.dp.toPx() else 4.dp.toPx()
             val x = (step * index).coerceAtMost(size.width - radius)
-            drawCircle(if (index <= reached) accent else Color(0xFF404040), radius, androidx.compose.ui.geometry.Offset(x, y))
+            drawCircle(if (index <= reached) accent else Theme.tone(0xFF404040), radius, androidx.compose.ui.geometry.Offset(x, y))
         }
     }
 }
@@ -1102,15 +1235,15 @@ private fun LevelTrack(levels: Int, reached: Int, fraction: Float) {
 fun BadgeListScreen(badges: List<SocialBadge>, contentPadding: PaddingValues, navigator: SocialNavigator) {
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { SocialTopBar("Достижения", onBack = { navigator.pop() }) }
-        if (badges.isEmpty()) item { Text("Медалей пока нет", color = Color.White.copy(alpha = 0.5f), fontSize = 15.sp) }
+        if (badges.isEmpty()) item { Text("Медалей пока нет", color = Theme.ink.copy(alpha = 0.5f), fontSize = 15.sp) }
         items(badges.chunked(3)) { row ->
             Row(Modifier.fillMaxWidth()) {
                 row.forEach { badge ->
                     val kind = AchievementKind.byId(badge.id)
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         MedalView(kind, badge.level, 76.dp)
-                        Text(kind?.title ?: badge.id, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text("Уровень ${badge.level}", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                        Text(kind?.title ?: badge.id, color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text("Уровень ${badge.level}", color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp)
                     }
                 }
                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -1122,25 +1255,35 @@ fun BadgeListScreen(badges: List<SocialBadge>, contentPadding: PaddingValues, na
 // MARK: - День программы
 
 @Composable
-fun ProgramDayScreen(day: SocialProgramDay, contentPadding: PaddingValues, navigator: SocialNavigator) {
+fun ProgramDayScreen(
+    day: SocialProgramDay,
+    contentPadding: PaddingValues,
+    navigator: SocialNavigator,
+    allDays: List<SocialProgramDay> = emptyList(),
+    /// Чья программа; `null` — своя, копировать нечего.
+    author: String? = null
+) {
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SocialTopBar(day.title, onBack = { navigator.pop() }) }
-        if (day.groups.isNotEmpty()) item { Text(day.groups.joinToString(" · "), color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
+        if (day.groups.isNotEmpty()) item { Text(day.groups.joinToString(" · "), color = Theme.ink.copy(alpha = 0.6f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         item {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xFF161617))) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Theme.tone(0xFF161617))) {
                 day.exercises.forEachIndexed { index, exercise ->
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         ExerciseThumb(exercise.name, 44.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(exercise.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text("${exercise.sets} × ${exercise.reps}", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
+                            Text(exercise.name, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text("${exercise.sets} × ${exercise.reps}", color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp)
                         }
-                        Text(exercise.load, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+                        Text(exercise.load, color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
                     }
-                    if (index < day.exercises.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 70.dp))
+                    if (index < day.exercises.size - 1) HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 70.dp))
                 }
             }
+        }
+        if (author != null) {
+            item { CopyProgramButton(allDays.ifEmpty { listOf(day) }, author, navigator) }
         }
     }
 }

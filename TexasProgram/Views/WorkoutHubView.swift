@@ -59,6 +59,7 @@ struct WorkoutHubView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                    .tabScrollAnchor(.workout)
                 }
                 .scrollIndicators(.hidden)
                 .screenBackground()
@@ -87,11 +88,11 @@ struct WorkoutHubView: View {
                             }
                             .font(.system(size: 16, weight: .black, design: Theme.fontDesign))
                             .tracking(1.2)
-                            .foregroundStyle(.black)
+                            .foregroundStyle(.canvas)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
-                            .background(Color.white, in: Capsule())
-                            .shadow(color: Color.white.opacity(0.18), radius: 14, y: 4)
+                            .background(Color.ink, in: Capsule())
+                            .shadow(color: Color.ink.opacity(0.18), radius: 14, y: 4)
                             .contentTransition(.opacity)
                         }
                         .buttonStyle(.pressable)
@@ -111,7 +112,7 @@ struct WorkoutHubView: View {
                     } label: {
                         Image(systemName: "list.bullet.rectangle.portrait")
                             .font(.system(size: 19, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                     }
                     .accessibilityLabel("План на сегодня")
                 }
@@ -147,7 +148,6 @@ struct WorkoutHubView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Карточка «Серия активностей» (Скриншот 4)
@@ -159,14 +159,14 @@ struct WorkoutHubView: View {
             HStack {
                 Text("Серия активностей")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Spacer()
                 Text("Этот месяц")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.3))
+                    .foregroundStyle(Color.ink.opacity(0.3))
             }
 
             HStack(alignment: .center, spacing: 20) {
@@ -174,15 +174,15 @@ struct WorkoutHubView: View {
                 VStack(spacing: 2) {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 38))
-                        .foregroundStyle(streak.current > 0 ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.white.opacity(0.2)))
+                        .foregroundStyle(streak.current > 0 ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.ink.opacity(0.2)))
 
                     Text("\(streak.current)")
                         .font(.system(size: 20, weight: .black, design: Theme.fontDesign))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
 
                     Text(streakWord(streak.current))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(Color.ink.opacity(0.45))
                 }
                 .frame(width: 80)
 
@@ -192,7 +192,7 @@ struct WorkoutHubView: View {
 
             Text(streak.current > 0 ? "Серия активна! Продолжай в том же духе." : "Запиши тренировку, чтобы начать серию")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
         }
         .padding(18)
         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -260,11 +260,11 @@ struct WorkoutHubView: View {
             HStack {
                 Text("Цель")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.3))
+                    .foregroundStyle(Color.ink.opacity(0.3))
             }
 
             // Как у REBRN: кольцо из стольких частей, сколько тренировок в неделе;
@@ -276,7 +276,7 @@ struct WorkoutHubView: View {
 
                 Image(systemName: goal.done >= goal.target ? "checkmark" : "calendar")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(goal.done >= goal.target ? Theme.accent : Color.white.opacity(0.85))
+                    .foregroundStyle(goal.done >= goal.target ? Theme.accent : Color.ink.opacity(0.85))
                     .contentTransition(.symbolEffect(.replace))
             }
             .padding(.vertical, 2)
@@ -285,11 +285,11 @@ struct WorkoutHubView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(goal.done >= goal.target ? "Цель недели есть" : "На этой неделе")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(1)
                 Text("\(min(goal.done, 99)) из \(goal.target) \(RuPlural.word(goal.target, "тренировки", "тренировок", "тренировок"))")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                     .lineLimit(1)
                     .contentTransition(.numericText())
             }
@@ -304,32 +304,32 @@ struct WorkoutHubView: View {
             HStack {
                 Text("Программы")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.3))
+                    .foregroundStyle(Color.ink.opacity(0.3))
             }
 
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.12))
+                    .fill(Color.ink.opacity(0.12))
                     .frame(width: 44, height: 44)
 
                 Image(systemName: "square.stack.3d.up.fill")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(Color.ink.opacity(0.85))
             }
             .padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(profile.programKind.rawValue)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(1)
                 Text("Свои и каталог")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
             }
         }
         .padding(16)
@@ -349,7 +349,7 @@ struct WorkoutHubView: View {
                         .foregroundStyle(Theme.accent)
                     Text(workout.fullTitle)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                 }
                 Spacer()
             }
@@ -365,14 +365,14 @@ struct WorkoutHubView: View {
 
                         Text(ex.name)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .lineLimit(1)
 
                         Spacer()
 
                         Text(ex.sets > 0 ? "\(ex.sets) × \(ex.reps)" : ex.reps)
                             .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(Color.white.opacity(0.65))
+                            .foregroundStyle(Color.ink.opacity(0.65))
                     }
                     .padding(.vertical, 4)
                 }
@@ -389,10 +389,10 @@ struct WorkoutHubView: View {
                 .foregroundStyle(Theme.accent)
             Text("Сегодня отдых")
                 .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             Text("Восстановление — неотъемлемая часть прогресса.")
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
                 .multilineTextAlignment(.center)
         }
         .padding(24)
@@ -417,7 +417,7 @@ struct SegmentedRing: View {
                 let end = Double(index + 1) / Double(count) - gap / 2
                 Circle()
                     .trim(from: start, to: max(start, end))
-                    .stroke(index < filled ? Theme.accent : Color.white.opacity(0.14),
+                    .stroke(index < filled ? Theme.accent : Color.ink.opacity(0.14),
                             style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
@@ -441,10 +441,10 @@ private struct MonthDot: View {
                 if isDone {
                     Circle().fill(Theme.accent)
                 } else if date < today {
-                    Circle().fill(Color.white.opacity(0.16))
+                    Circle().fill(Color.ink.opacity(0.16))
                 } else {
                     Circle().strokeBorder(
-                        isTrainingDay ? Theme.accent : Color.white.opacity(0.18),
+                        isTrainingDay ? Theme.accent : Color.ink.opacity(0.18),
                         lineWidth: 1.6
                     )
                 }
@@ -454,7 +454,7 @@ private struct MonthDot: View {
         .overlay(alignment: .bottom) {
             if date == today {
                 Capsule()
-                    .fill(Color.white)
+                    .fill(Color.ink)
                     .frame(width: 8, height: 2)
                     .offset(y: 5)
             }

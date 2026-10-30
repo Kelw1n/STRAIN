@@ -37,6 +37,7 @@ enum EffortScale {
 
 struct EffortSlider: View {
     @Binding var score: Int?
+    @Environment(\.colorScheme) private var scheme
 
     private let barHeight: CGFloat = 30
     private let gap: CGFloat = 8
@@ -48,8 +49,8 @@ struct EffortSlider: View {
             labels
         }
         .padding(18)
-        .background(Color(white: 0.086), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+        .background(Color.tone(0.086), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.ink.opacity(0.08), lineWidth: 1))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Усилие")
         .accessibilityValue(score.map { "\($0) из 10, \(EffortScale.titles[$0] ?? "")" } ?? "не указано")
@@ -71,22 +72,22 @@ struct EffortSlider: View {
                     Text("\(score)")
                         .font(.system(size: 30, weight: .heavy, design: Theme.fontDesign))
                         .monospacedDigit()
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .contentTransition(.numericText(value: Double(score)))
                     Text("/10")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.35))
+                        .foregroundStyle(Color.ink.opacity(0.35))
                 }
             } else {
                 Capsule()
-                    .fill(Color.white.opacity(0.15))
+                    .fill(Color.ink.opacity(0.15))
                     .frame(width: 22, height: 4)
                     .frame(height: 36)
             }
             Spacer()
             Text(score.flatMap { EffortScale.titles[$0] } ?? "Можно пропустить")
                 .font(.system(size: 14, weight: score == nil ? .medium : .semibold))
-                .foregroundStyle(score.map { EffortScale.color($0) } ?? Color.white.opacity(0.4))
+                .foregroundStyle(score.map { EffortScale.color($0) } ?? Color.ink.opacity(0.4))
                 .contentTransition(.opacity)
                 .id(score ?? 0)
                 .transition(.opacity)
@@ -104,7 +105,7 @@ struct EffortSlider: View {
                 ForEach(segments.indices, id: \.self) { index in
                     let frame = segments[index]
                     WedgeShape(left: wedgeHeight(frame.minX, width: width), right: wedgeHeight(frame.maxX, width: width), total: barHeight)
-                        .fill(Color.white.opacity(0.07))
+                        .fill(Color.ink.opacity(0.07))
                         .frame(width: frame.width, height: barHeight)
                         .offset(x: frame.minX)
                     WedgeShape(left: wedgeHeight(frame.minX, width: width), right: wedgeHeight(frame.maxX, width: width), total: barHeight)
@@ -139,11 +140,22 @@ struct EffortSlider: View {
         .animation(.easeOut(duration: 0.2), value: active)
     }
 
+    /// На светлом фоне бледные зелёный и жёлтый не читаются: там подпись
+    /// темнее и не так прозрачна.
     private func zoneLabel(_ text: String, color: Color, on: Bool) -> some View {
-        Text(text)
+        let light = scheme == .light
+        return Text(text)
             .font(.system(size: 10, weight: .heavy))
             .tracking(0.4)
-            .foregroundStyle(color.opacity(on ? 1 : 0.35))
+            .foregroundStyle(light ? Self.darker(color) : color)
+            .opacity(on ? 1 : (light ? 0.6 : 0.35))
+    }
+
+    /// Тот же цвет на 22% темнее — для подписи на светлом фоне.
+    private static func darker(_ color: Color) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return Color(red: r * 0.78, green: g * 0.78, blue: b * 0.78, opacity: a)
     }
 
     // MARK: Геометрия

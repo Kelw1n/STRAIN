@@ -15,6 +15,7 @@ struct ProfileTabView: View {
     @State private var loadingPosts = false
     @State private var postsError: String?
     @State private var showingEdit = false
+    @State private var statsCache = ProfileStatsCache()
 
     private var social: SocialService { .shared }
 
@@ -23,12 +24,12 @@ struct ProfileTabView: View {
             Group {
                 if let me = social.me {
                     ScrollView {
-                        let progress = AchievementCalculator.progress(for: profile)
+                        let stats = statsCache.stats(for: profile)
                         ProfileContent(
                             user: me,
-                            badges: AchievementCalculator.badges(from: progress),
-                            achievedCount: progress.filter { $0.level > 0 }.count,
-                            programs: SocialProgramBuilder.days(for: profile),
+                            badges: stats.badges,
+                            achievedCount: stats.achievedCount,
+                            programs: stats.programs,
                             posts: posts,
                             loadingPosts: loadingPosts,
                             postsError: postsError,
@@ -37,17 +38,21 @@ struct ProfileTabView: View {
                                 Button { showingEdit = true } label: {
                                     Text("Редактировать")
                                         .font(.system(size: 16, weight: .bold))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(.ink)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 50)
-                                        .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                        .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 }
                                 .buttonStyle(.pressable)
                             },
                             onAchievements: { path.append(ProfileRoute.achievements) },
                             onLoadMore: { Task { await loadMore(me.username) } },
-                            onPostChange: replace
+                            onPostChange: replace,
+                            levelProfile: profile,
+                            records: stats.records,
+                            heatmap: stats.heatmap
                         )
+                        .tabScrollAnchor(.profile)
                     }
                     .refreshable {
                         await social.refreshMe()
@@ -55,7 +60,7 @@ struct ProfileTabView: View {
                     }
                     .task(id: "\(me.username)-\(social.feedVersion)") { await reloadPosts() }
                 } else if social.isSignedIn {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(.ink)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .task { await social.refreshMe() }
                 } else {
@@ -63,14 +68,14 @@ struct ProfileTabView: View {
                 }
             }
             .scrollIndicators(.hidden)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .toolbar {
                 if let me = social.me {
                     ToolbarItem(placement: .topBarTrailing) {
                         ShareLink(item: "Я тренируюсь в STRAIN — найди меня: @\(me.username)") {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                         }
                     }
                 }
@@ -78,7 +83,7 @@ struct ProfileTabView: View {
                     Button(action: onSettings) {
                         Image(systemName: "gearshape")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                     }
                     .accessibilityLabel("Настройки")
                 }
@@ -90,15 +95,17 @@ struct ProfileTabView: View {
             .navigationDestination(for: ProfileRoute.self) { route in
                 switch route {
                 case .achievements:
-                    AchievementsView(progress: AchievementCalculator.progress(for: profile))
+                    AchievementsView(progress: statsCache.stats(for: profile).progress)
                 }
             }
             .sheet(isPresented: $showingEdit) {
                 EditProfileView(profile: profile)
             }
         }
-        .preferredColorScheme(.dark)
         .onAppear { social.scheduleSync(from: profile) }
+        .onTabReselect(.profile) {
+            if path.isEmpty { TabReselection.shared.scrollToTop(.profile) } else { path = NavigationPath() }
+        }
     }
 
     private func replace(_ id: String, _ value: SocialPost?) {
@@ -136,6 +143,78 @@ enum ProfileRoute: Hashable {
     case achievements
 }
 
+/// Свои медали, программа, рекорды и карта года — посчитанные один раз.
+///
+/// Каждая цифра здесь — проход по всей истории подходов и плану, а `body`
+/// вкладки перевычисляется на каждую отметку подхода, даже когда вкладка
+/// скрыта за тренировкой. Поэтому пересчитываем, только когда поменялось то,
+/// от чего цифры зависят, и в том же проходе — без пустого кадра. Сравнение
+/// дешёвое: массивы и словари модели сначала сравниваются по общему буферу.
+final class ProfileStatsCache {
+    struct Stats {
+        let progress: [AchievementProgress]
+        let badges: [SocialBadge]
+        let achievedCount: Int
+        let programs: [SocialProgramDay]
+        let records: [SocialRecord]
+        let heatmap: SocialHeatmap
+    }
+
+    /// Всё, что читают медали, программа недели, рекорды и карта года.
+    struct Key: Equatable {
+        let profile: ObjectIdentifier
+        let plan: WorkoutPlan
+        let log: [CompletionRecord]
+        let sets: [String: SetEntry]
+        let completed: [String]
+        let skipped: [SkippedWorkout]
+        let edits: [PlanEdit]
+        let custom: CustomProgram?
+        let bodyWeight: [BodyWeightEntry]
+        let maxes: [Double]
+        let cycle: Int
+        let peaking: Bool
+        /// Карта года кончается сегодняшним днём — с новым днём она другая.
+        let day: Date
+
+        init(_ profile: ProgramProfile, now: Date, calendar: Calendar) {
+            self.profile = ObjectIdentifier(profile)
+            plan = profile.workoutPlan
+            log = profile.completionLog
+            sets = profile.setLog
+            completed = profile.completedDayKeys
+            skipped = profile.skipped
+            edits = profile.planEdits
+            custom = profile.customProgram
+            bodyWeight = profile.bodyWeightLog
+            maxes = [profile.squat5RM, profile.bench5RM, profile.deadlift5RM]
+            cycle = profile.cycleNumber
+            peaking = profile.isPeaking
+            day = calendar.startOfDay(for: now)
+        }
+    }
+
+    private var key: Key?
+    private var cached: Stats?
+
+    func stats(for profile: ProgramProfile, now: Date = Date(), calendar: Calendar = .current) -> Stats {
+        let current = Key(profile, now: now, calendar: calendar)
+        if let cached, key == current { return cached }
+        let progress = AchievementCalculator.progress(for: profile, now: now)
+        let fresh = Stats(
+            progress: progress,
+            badges: AchievementCalculator.badges(from: progress),
+            achievedCount: progress.filter { $0.level > 0 }.count,
+            programs: SocialProgramBuilder.days(for: profile),
+            records: PersonalRecords.records(for: profile),
+            heatmap: TrainingHeatmap.build(for: profile, today: now)
+        )
+        key = current
+        cached = fresh
+        return fresh
+    }
+}
+
 // MARK: - Чужой профиль
 
 struct UserProfileView: View {
@@ -163,8 +242,23 @@ struct UserProfileView: View {
                     path: $path,
                     primaryAction: {
                         if !user.isMe && SocialService.shared.isSignedIn {
-                            FollowButton(isFollowing: user.isFollowing) { toggleFollow(user) }
-                                .disabled(busy)
+                            VStack(spacing: 10) {
+                                HStack(spacing: 10) {
+                                    FollowButton(isFollowing: user.isFollowing) { toggleFollow(user) }
+                                        .disabled(busy)
+                                    Button { path.append(FeedRoute.chat(user.username)) } label: {
+                                        Text("Написать")
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundStyle(.ink)
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 50)
+                                            .background(Color.tone(0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    }
+                                    .buttonStyle(.pressable)
+                                }
+                                // Приглашение уходит карточкой в переписку — туда и переходим.
+                                InviteButton(username: user.username) { path.append(FeedRoute.chat(user.username)) }
+                            }
                         }
                     },
                     onAchievements: { path.append(FeedRoute.badges(user.achievements)) },
@@ -177,15 +271,14 @@ struct UserProfileView: View {
             } else if let error {
                 SocialErrorCard(message: error) { Task { await reload() } }.padding(16)
             } else {
-                ProgressView().tint(.white).padding(40)
+                ProgressView().tint(.ink).padding(40)
             }
         }
         .refreshable { await reload() }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.canvas.ignoresSafeArea())
         .navigationTitle("@\(username)")
         .navigationBarTitleDisplayMode(.inline)
         .task { await reload() }
-        .preferredColorScheme(.dark)
     }
 
     private func reload() async {
@@ -247,8 +340,20 @@ struct ProfileContent<Action: View>: View {
     var onAchievements: () -> Void
     var onLoadMore: () -> Void
     var onPostChange: (String, SocialPost?) -> Void
+    /// Свой профиль программы: по нажатию на уровень — полный экран уровня
+    /// с наградами месяцев. У чужого — его уровень и сравнение со своим.
+    var levelProfile: ProgramProfile? = nil
+    /// Свои рекорды считаются на телефоне — свежие сразу после тренировки.
+    /// У чужого — те, что прислало его приложение.
+    var records: [SocialRecord]? = nil
+    /// Своя карта года — с телефона, у чужого — из его профиля.
+    var heatmap: SocialHeatmap? = nil
 
     @State private var tab = 0
+    @State private var showingRecords = false
+    @State private var viewingAvatar = false
+    @State private var pressingAvatar = false
+    @State private var showingLevel = false
 
     var body: some View {
         VStack(spacing: 18) {
@@ -258,14 +363,18 @@ struct ProfileContent<Action: View>: View {
                 Button { path.append(FeedRoute.followers(user.username)) } label: {
                     SocialStat(value: "\(user.followers)", title: "Подписчики")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 Button { path.append(FeedRoute.following(user.username)) } label: {
                     SocialStat(value: "\(user.following)", title: "Подписки")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             primaryAction()
+            if let shown = heatmap ?? user.heatmap {
+                ProfileHeatmapCard(levels: TrainingHeatmap.levels(shown))
+            }
             achievementsCard
+            recordsCard
             Picker("", selection: $tab) {
                 Text("Тренировки").tag(0)
                 Text("Программы").tag(1)
@@ -285,26 +394,89 @@ struct ProfileContent<Action: View>: View {
                     .frame(maxWidth: .infinity)
                     .clipped()
                     .padding(.horizontal, -16)
-                AvatarView(imageId: user.avatar, username: user.username, size: 118)
-                    .overlay(Circle().strokeBorder(Color.black, lineWidth: 4))
+                avatar
                     .offset(y: 58)
             }
             .padding(.bottom, 58)
 
             Text("@\(user.username)")
                 .font(.system(size: 28, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
+            if user.level != nil {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    showingLevel = true
+                } label: {
+                    LevelChip(level: user.level, large: true, opens: true)
+                }
+                .buttonStyle(.pressable)
+                .accessibilityHint("Открыть уровень")
+            }
+            if user.challengeWins > 0 {
+                Label("\(user.challengeWins) \(RuPlural.word(user.challengeWins, "победа", "победы", "побед")) в челленджах", systemImage: "trophy.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(ChallengePlace.color(1))
+            }
+            if let live = user.live {
+                LiveBadge(live: live)
+            }
             if let body = user.bodyLine {
                 Text(body)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(Color.ink.opacity(0.55))
             }
             if !user.bio.isEmpty {
                 Text(user.bio)
                     .font(.system(size: 15))
-                    .foregroundStyle(Color.white.opacity(0.75))
+                    .foregroundStyle(Color.ink.opacity(0.75))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Аватарка как в Telegram: зажми — и она откроется на весь экран.
+    /// Обычное нажатие тоже открывает. Без фото открывать нечего.
+    private var avatar: some View {
+        AvatarView(imageId: user.avatar, username: user.username, size: 118)
+            .overlay(Circle().strokeBorder(Color.canvas, lineWidth: 4))
+            .scaleEffect(pressingAvatar ? 0.94 : 1)
+            .animation(pressingAvatar ? Motion.press : Motion.release, value: pressingAvatar)
+            .contentShape(Circle())
+            .onTapGesture { openAvatar() }
+            .onLongPressGesture(minimumDuration: 0.3, perform: openAvatar) { pressing in
+                pressingAvatar = pressing && user.avatar != nil
+            }
+            .accessibilityAddTraits(user.avatar == nil ? [] : .isButton)
+            .accessibilityLabel(user.avatar == nil ? "" : "Аватарка @\(user.username)")
+            .accessibilityHint(user.avatar == nil ? "" : "Открыть на весь экран")
+            .avatarViewer(isPresented: $viewingAvatar, imageId: user.avatar, username: user.username)
+            .sheet(isPresented: $showingLevel) {
+                if let levelProfile {
+                    LevelSheet(profile: levelProfile)
+                } else {
+                    UserLevelSheet(user: user, myLevel: SocialService.shared.me?.level)
+                }
+            }
+    }
+
+    private func openAvatar() {
+        guard user.avatar != nil, !viewingAvatar else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        pressingAvatar = false
+        presentWithoutAnimation { viewingAvatar = true }
+    }
+
+    @ViewBuilder
+    private var recordsCard: some View {
+        let shown = records ?? user.records
+        if user.isMe || !shown.isEmpty {
+            ProfileRecordsCard(records: shown, isMe: user.isMe, bodyWeight: user.weightKg) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                showingRecords = true
+            }
+            .sheet(isPresented: $showingRecords) {
+                RecordsSheet(username: user.username, records: shown, bodyWeight: user.weightKg, profile: levelProfile)
             }
         }
     }
@@ -316,19 +488,19 @@ struct ProfileContent<Action: View>: View {
                     Text("ДОСТИЖЕНИЯ")
                         .font(.system(size: 13, weight: .bold))
                         .tracking(1.4)
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                     Spacer()
                     Text("Все \(achievedCount)")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.6))
+                        .foregroundStyle(Color.ink.opacity(0.6))
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                 }
                 if badges.isEmpty {
                     Text("Первая медаль — за первую тренировку")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 } else {
@@ -338,7 +510,7 @@ struct ProfileContent<Action: View>: View {
                                 MedalView(kind: AchievementKind(rawValue: badge.id), level: badge.level, size: 62)
                                 Text(AchievementKind(rawValue: badge.id)?.title ?? badge.id)
                                     .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.65))
+                                    .foregroundStyle(Color.ink.opacity(0.65))
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: .infinity)
@@ -359,7 +531,7 @@ struct ProfileContent<Action: View>: View {
         } else if posts.isEmpty && !loadingPosts {
             Text(user.isMe ? "Опубликуй тренировку в конце занятия — она появится здесь." : "Тренировок пока нет")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
                 .multilineTextAlignment(.center)
                 .padding(.vertical, 20)
         }
@@ -369,14 +541,15 @@ struct ProfileContent<Action: View>: View {
                     post: post,
                     onOpen: { path.append(FeedRoute.post(post)) },
                     onOpenAuthor: {},
-                    onChange: { onPostChange(post.id, $0) }
+                    onChange: { onPostChange(post.id, $0) },
+                    showsWorkout: true
                 )
-                Divider().overlay(Color.white.opacity(0.07))
+                Divider().overlay(Color.ink.opacity(0.07))
                     .onAppear { if post.id == posts.last?.id { onLoadMore() } }
             }
         }
         if loadingPosts && posts.isEmpty {
-            ProgressView().tint(.white).padding(20)
+            ProgressView().tint(.ink).padding(20)
         }
     }
 
@@ -385,33 +558,33 @@ struct ProfileContent<Action: View>: View {
         if programs.isEmpty {
             Text("Программа не выбрана")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
                 .padding(.vertical, 20)
         }
         VStack(spacing: 12) {
             ForEach(Array(programs.enumerated()), id: \.offset) { _, day in
                 Button {
-                    path.append(FeedRoute.program(day))
+                    path.append(FeedRoute.program(day, all: programs, author: user.isMe ? nil : user.username))
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(day.title)
                                 .font(.system(size: 19, weight: .heavy, design: Theme.fontDesign))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .multilineTextAlignment(.leading)
                             if !day.groups.isEmpty {
                                 Text(day.groups.joined(separator: " · "))
                                     .font(.system(size: 15, weight: .medium))
-                                    .foregroundStyle(Color.white.opacity(0.6))
+                                    .foregroundStyle(Color.ink.opacity(0.6))
                             }
                             Text("\(day.exercises.count) \(RuPlural.word(day.exercises.count, "упражнение", "упражнения", "упражнений")) · \(day.setCount) \(RuPlural.word(day.setCount, "подход", "подхода", "подходов"))")
                                 .font(.system(size: 14))
-                                .foregroundStyle(Color.white.opacity(0.4))
+                                .foregroundStyle(Color.ink.opacity(0.4))
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.35))
+                            .foregroundStyle(Color.ink.opacity(0.35))
                     }
                     .padding(18)
                     .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -431,7 +604,7 @@ struct ProfileCover: View {
     let imageId: String?
 
     var body: some View {
-        Color.black
+        Color.canvas
             .overlay {
                 if imageId != nil {
                     RemoteImage(id: imageId)
@@ -440,7 +613,7 @@ struct ProfileCover: View {
                 }
             }
             .overlay {
-                LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .center, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .canvas.opacity(0.85)], startPoint: .center, endPoint: .bottom)
             }
             .clipped()
     }
@@ -464,7 +637,7 @@ struct ProfileCover: View {
                         .offset(x: CGFloat(row) * 26 + 90)
                 }
             }
-            .mask(LinearGradient(colors: [.black, .black.opacity(0.15)], startPoint: .top, endPoint: .bottom))
+            .mask(LinearGradient(colors: [.canvas, .black.opacity(0.15)], startPoint: .top, endPoint: .bottom))
         }
     }
 }
@@ -489,48 +662,48 @@ struct SignUpView: View {
                     .overlay(alignment: .bottomLeading) {
                         Text("Профиль STRAIN")
                             .font(.system(size: 30, weight: .heavy, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .padding(18)
                     }
 
                 Text("Публикуй тренировки с фото, подписывайся на друзей, ставь лайки и пиши комментарии. Свои веса и программа видны в профиле.")
                     .font(.system(size: 15))
-                    .foregroundStyle(Color.white.opacity(0.65))
+                    .foregroundStyle(Color.ink.opacity(0.65))
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("ЮЗЕРНЕЙМ")
                         .font(.system(size: 12, weight: .bold))
                         .tracking(1.2)
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(Color.ink.opacity(0.45))
                     HStack(spacing: 4) {
-                        Text("@").font(.system(size: 18, weight: .bold)).foregroundStyle(Color.white.opacity(0.4))
+                        Text("@").font(.system(size: 18, weight: .bold)).foregroundStyle(Color.ink.opacity(0.4))
                         TextField("kelw1n", text: $username)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .submitLabel(.done)
                             .onSubmit(register)
                     }
                     .padding(.horizontal, 16)
                     .frame(height: 54)
-                    .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     Text("Латиница, цифры, точка и подчёркивание, от 3 до 24 символов. Поменять можно потом.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(Color.ink.opacity(0.45))
                 }
 
                 Button(action: register) {
                     HStack {
-                        if busy { ProgressView().tint(.black) }
+                        if busy { ProgressView().tint(.canvas) }
                         Text("Создать профиль")
                     }
                     .font(.system(size: 17, weight: .heavy, design: Theme.fontDesign))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(SocialFormat.isValidUsername(normalized) ? Color.white : Color(white: 0.4), in: Capsule())
+                    .background(SocialFormat.isValidUsername(normalized) ? Color.ink : Color.tone(0.4), in: Capsule())
                 }
                 .buttonStyle(.pressable)
                 .disabled(busy || !SocialFormat.isValidUsername(normalized))
@@ -546,14 +719,14 @@ struct SignUpView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Код входа есть в настройках профиля на старом телефоне («Редактировать» → «Код входа»). Он же лежит в резервной копии STRAIN.")
                             .font(.system(size: 13))
-                            .foregroundStyle(Color.white.opacity(0.55))
+                            .foregroundStyle(Color.ink.opacity(0.55))
                             .fixedSize(horizontal: false, vertical: true)
                         TextField("Код входа", text: $code)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(size: 14, design: .monospaced))
                             .padding(12)
-                            .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         Button("Войти по коду", action: signIn)
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(Theme.accent)
@@ -563,9 +736,9 @@ struct SignUpView: View {
                 } label: {
                     Text("У меня уже есть профиль")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                 }
-                .tint(.white)
+                .tint(.ink)
                 Spacer(minLength: 110)
             }
             .padding(.horizontal, 16)
@@ -642,7 +815,7 @@ struct EditProfileView: View {
                 .padding(.bottom, 30)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Профиль")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -684,7 +857,6 @@ struct EditProfileView: View {
                 Text("Пропадут все посты, фото, лайки и комментарии. Тренировки в приложении останутся.")
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var covers: some View {
@@ -695,13 +867,13 @@ struct EditProfileView: View {
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 // Тонкая рамка: чёрная обложка на чёрном фоне иначе сливается с экраном.
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                .overlay { if uploading == "cover" { ProgressView().tint(.white) } }
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.ink.opacity(0.08), lineWidth: 1))
+                .overlay { if uploading == "cover" { ProgressView().tint(.ink) } }
                 .overlay(alignment: .topTrailing) {
                     PhotosPicker(selection: $coverItem, matching: .images) {
                         Label("Изменить обложку", systemImage: "photo")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(.ultraThinMaterial, in: Capsule())
@@ -720,16 +892,16 @@ struct EditProfileView: View {
             } label: {
                 ZStack(alignment: .bottomTrailing) {
                     AvatarView(imageId: social.me?.avatar, username: social.me?.username ?? "s", size: 104)
-                        .overlay(Circle().strokeBorder(Color.black, lineWidth: 4))
+                        .overlay(Circle().strokeBorder(Color.canvas, lineWidth: 4))
                         .overlay {
-                            if uploading == "avatar" { ProgressView().tint(.white) }
+                            if uploading == "avatar" { ProgressView().tint(.ink) }
                         }
                     Image(systemName: "camera.fill")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .frame(width: 36, height: 36)
-                        .background(Color(white: 0.15), in: Circle())
-                        .overlay(Circle().strokeBorder(Color.black, lineWidth: 3))
+                        .background(Color.tone(0.15), in: Circle())
+                        .overlay(Circle().strokeBorder(Color.canvas, lineWidth: 3))
                 }
             }
             .offset(y: 50)
@@ -760,7 +932,7 @@ struct EditProfileView: View {
             divider
             row(icon: "scalemass", title: "Вес") {
                 Text(profile.latestBodyWeight.map { WeightFormat.kilogramsPrecise($0) } ?? "из «Замеров веса»")
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(Color.ink.opacity(0.55))
             }
             divider
             Toggle(isOn: $showBody) {
@@ -769,7 +941,20 @@ struct EditProfileView: View {
                         .font(.system(size: 16, weight: .semibold))
                     Text("В шапке профиля. Сила к весу в достижениях видна всегда.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(Color.ink.opacity(0.45))
+                }
+            }
+            .tint(Theme.accent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            divider
+            Toggle(isOn: Binding(get: { social.sharesLive }, set: { social.sharesLive = $0 })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Показывать, что я тренируюсь")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Подписчики увидят упражнение и подходы, пока идёт тренировка.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.ink.opacity(0.45))
                 }
             }
             .tint(Theme.accent)
@@ -784,20 +969,20 @@ struct EditProfileView: View {
             Button { withAnimation(Motion.snappy) { showingCode.toggle() } } label: {
                 HStack {
                     Image(systemName: "key.fill").foregroundStyle(Theme.accent).frame(width: 26)
-                    Text("Код входа на другом телефоне").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                    Text("Код входа на другом телефоне").font(.system(size: 16, weight: .semibold)).foregroundStyle(.ink)
                     Spacer()
                     Image(systemName: showingCode ? "chevron.up" : "chevron.down")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                 }
                 .padding(16)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.985))
             if showingCode, let token = social.token {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(token)
                         .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .textSelection(.enabled)
                     Button {
                         UIPasteboard.general.string = token
@@ -809,7 +994,7 @@ struct EditProfileView: View {
                     }
                     Text("С этим кодом в профиль может войти кто угодно — не публикуй его. Он также сохраняется в резервной копии.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(Color.ink.opacity(0.45))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 16)
@@ -817,33 +1002,33 @@ struct EditProfileView: View {
             }
             divider
             Button { confirmSignOut = true } label: {
-                Text("Выйти из профиля").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                Text("Выйти из профиля").font(.system(size: 16, weight: .semibold)).foregroundStyle(.ink)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.985))
             divider
             Button { confirmDelete = true } label: {
                 Text("Удалить профиль").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.record)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(scale: 0.985))
         }
         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var divider: some View {
-        Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 56)
+        Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 56)
     }
 
     private func row<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.6))
+                .foregroundStyle(Color.ink.opacity(0.6))
                 .frame(width: 26)
             Text(title).font(.system(size: 16, weight: .semibold))
             Spacer(minLength: 12)
-            content().font(.system(size: 16)).foregroundStyle(.white)
+            content().font(.system(size: 16)).foregroundStyle(.ink)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -949,15 +1134,15 @@ struct AchievementsView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("\(progress.filter { $0.level > 0 }.count)")
                         .font(.system(size: 52, weight: .heavy, design: Theme.fontDesign))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Text("из \(progress.count)")
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                     Spacer()
                     Text("ВЗЯТО")
                         .font(.system(size: 13, weight: .bold))
                         .tracking(1.6)
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                 }
                 .padding(20)
                 .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -969,17 +1154,17 @@ struct AchievementsView: View {
                             Text(group.rawValue)
                                 .font(.system(size: 13, weight: .bold))
                                 .tracking(1.4)
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .foregroundStyle(Color.ink.opacity(0.5))
                             Spacer()
                             Text("\(items.filter { $0.level > 0 }.count)/\(items.count)")
                                 .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .foregroundStyle(Color.ink.opacity(0.5))
                         }
                         VStack(spacing: 0) {
                             ForEach(items) { item in
                                 AchievementRow(item: item)
                                 if item.id != items.last?.id {
-                                    Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 92)
+                                    Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 92)
                                 }
                             }
                         }
@@ -990,10 +1175,9 @@ struct AchievementsView: View {
             }
             .padding(.horizontal, 16)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.canvas.ignoresSafeArea())
         .navigationTitle("Достижения")
         .navigationBarTitleDisplayMode(.inline)
-        .preferredColorScheme(.dark)
     }
 }
 
@@ -1007,16 +1191,16 @@ struct AchievementRow: View {
                 HStack {
                     Text(item.kind.title)
                         .font(.system(size: 18, weight: .heavy, design: Theme.fontDesign))
-                        .foregroundStyle(item.level > 0 ? .white : Color.white.opacity(0.6))
+                        .foregroundStyle(item.level > 0 ? .ink : Color.ink.opacity(0.6))
                     Spacer()
                     Text(item.level > 0 ? "\(item.level)/\(item.kind.thresholds.count)" : "—")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.7))
+                        .foregroundStyle(Color.ink.opacity(0.7))
                 }
                 LevelTrack(levels: item.kind.thresholds.count, reached: item.level, fraction: item.segmentFraction)
                 Text(item.caption)
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -1036,13 +1220,13 @@ struct LevelTrack: View {
             let width = proxy.size.width
             let step = width / CGFloat(levels)
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.1)).frame(height: 4)
+                Capsule().fill(Color.ink.opacity(0.1)).frame(height: 4)
                 Capsule()
                     .fill(Theme.accent)
                     .frame(width: max(0, step * (CGFloat(reached) + (reached < levels ? CGFloat(fraction) : 0))), height: 4)
                 ForEach(1...levels, id: \.self) { index in
                     Circle()
-                        .fill(index <= reached ? Theme.accent : Color(white: 0.25))
+                        .fill(index <= reached ? Theme.accent : Color.tone(0.25))
                         .frame(width: index == reached ? 12 : 8, height: index == reached ? 12 : 8)
                         .position(x: step * CGFloat(index) - (index == levels ? 6 : 0), y: 6)
                 }
@@ -1064,23 +1248,22 @@ struct BadgeListView: View {
                         MedalView(kind: AchievementKind(rawValue: badge.id), level: badge.level, size: 76)
                         Text(AchievementKind(rawValue: badge.id)?.title ?? badge.id)
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Text("Уровень \(badge.level)")
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.ink.opacity(0.5))
                     }
                 }
             }
             .padding(16)
             if badges.isEmpty {
-                Text("Медалей пока нет").foregroundStyle(Color.white.opacity(0.5)).padding(30)
+                Text("Медалей пока нет").foregroundStyle(Color.ink.opacity(0.5)).padding(30)
             }
             Spacer(minLength: 120)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.canvas.ignoresSafeArea())
         .navigationTitle("Достижения")
         .navigationBarTitleDisplayMode(.inline)
-        .preferredColorScheme(.dark)
     }
 }
 
@@ -1088,6 +1271,9 @@ struct BadgeListView: View {
 
 struct ProgramDayView: View {
     let day: SocialProgramDay
+    var allDays: [SocialProgramDay] = []
+    /// Чья программа; `nil` — своя, копировать нечего.
+    var author: String?
 
     var body: some View {
         ScrollView {
@@ -1095,7 +1281,7 @@ struct ProgramDayView: View {
                 if !day.groups.isEmpty {
                     Text(day.groups.joined(separator: " · "))
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.6))
+                        .foregroundStyle(Color.ink.opacity(0.6))
                 }
                 VStack(spacing: 0) {
                     ForEach(Array(day.exercises.enumerated()), id: \.offset) { index, exercise in
@@ -1104,31 +1290,35 @@ struct ProgramDayView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(exercise.name)
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.ink)
                                 Text("\(exercise.sets) × \(exercise.reps)")
                                     .font(.system(size: 13))
-                                    .foregroundStyle(Color.white.opacity(0.5))
+                                    .foregroundStyle(Color.ink.opacity(0.5))
                             }
                             Spacer()
                             Text(exercise.load)
                                 .font(.system(size: 14, weight: .bold, design: Theme.fontDesign))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .multilineTextAlignment(.trailing)
                         }
                         .padding(14)
                         if index < day.exercises.count - 1 {
-                            Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 70)
+                            Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 70)
                         }
                     }
                 }
                 .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+                if let author {
+                    CopyProgramButton(days: allDays.isEmpty ? [day] : allDays, author: author)
+                        .padding(.top, 6)
+                }
             }
             .padding(16)
             .padding(.bottom, 110)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.canvas.ignoresSafeArea())
         .navigationTitle(day.title)
         .navigationBarTitleDisplayMode(.inline)
-        .preferredColorScheme(.dark)
     }
 }

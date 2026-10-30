@@ -3,6 +3,11 @@ import WidgetKit
 
 /// Складывает состояние профиля в общий контейнер и просит виджеты обновиться.
 enum WidgetBridge {
+    static func clear() {
+        WidgetStore.clear()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     static func publish(_ profile: ProgramProfile, now: Date = Date()) {
         let schedule = profile.schedule
         let calendar = WorkoutScheduler.trainingCalendar()
@@ -38,7 +43,8 @@ enum WidgetBridge {
             doneDays: profile.completedDayCount,
             totalDays: profile.totalDays,
             isRestToday: schedule.isRestDay,
-            updatedAt: now
+            updatedAt: now,
+            focusDate: focus.date
         ))
         WidgetCenter.shared.reloadAllTimelines()
     }

@@ -13,6 +13,8 @@ struct FeedView: View {
     @State private var error: String?
     @State private var path = NavigationPath()
     @State private var confirmDiscard = false
+    /// Обновление по повторному нажатию на «Главное» — с крутилкой сверху.
+    @State private var tabRefreshing = false
 
     private var social: SocialService { .shared }
 
@@ -20,8 +22,23 @@ struct FeedView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    if tabRefreshing {
+                        ProgressView().tint(.ink)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .transition(.opacity)
+                    }
                     if !social.isSignedIn {
                         signUpTeaser.padding(.bottom, 8)
+                    }
+                    if let active = social.together.active {
+                        TogetherCard(together: active)
+                            .padding(.top, 8)
+                    }
+                    if social.isSignedIn && !social.liveFriends.isEmpty {
+                        LiveFriendsStrip(friends: social.liveFriends) { path.append(FeedRoute.user($0)) }
+                            .padding(.top, 8)
+                            .padding(.bottom, 6)
                     }
                     outbox
                     if let error, posts.isEmpty {
@@ -37,28 +54,47 @@ struct FeedView: View {
                             onOpenAuthor: { path.append(FeedRoute.user(post.author.username)) },
                             onChange: { replace(post.id, with: $0) }
                         )
-                        Divider().overlay(Color.white.opacity(0.07))
+                        Divider().overlay(Color.ink.opacity(0.07))
                             .onAppear { if post.id == posts.last?.id { Task { await loadMore() } } }
                     }
                     if loadingMore || (loading && posts.isEmpty) {
-                        ProgressView().tint(.white).frame(maxWidth: .infinity).padding(24)
+                        ProgressView().tint(.ink).frame(maxWidth: .infinity).padding(24)
                     }
                     Spacer(minLength: 110)
                 }
                 .padding(.horizontal, 16)
+                .tabScrollAnchor(.today)
             }
             .scrollIndicators(.hidden)
             .refreshable { await reload() }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { scopeMenu }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: onFindPeople) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
+                    HStack(spacing: 18) {
+                        if social.isSignedIn {
+                            Button { path.append(FeedRoute.activity) } label: {
+                                Image(systemName: "bell")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.ink)
+                                    .overlay(alignment: .topTrailing) {
+                                        if social.unseenActivity > 0 {
+                                            Circle()
+                                                .fill(Theme.record)
+                                                .frame(width: 9, height: 9)
+                                                .offset(x: 3, y: -2)
+                                        }
+                                    }
+                            }
+                            .accessibilityLabel(social.unseenActivity > 0 ? "Активность, есть новое" : "Активность")
+                        }
+                        Button(action: onFindPeople) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.ink)
+                        }
+                        .accessibilityLabel("Найти людей")
                     }
-                    .accessibilityLabel("Найти людей")
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -66,8 +102,29 @@ struct FeedView: View {
                 route.destination(path: $path) { id, value in replace(id, with: value) }
             }
         }
-        .preferredColorScheme(.dark)
+        // Повторное нажатие на «Главное»: из поста или профиля — назад к ленте,
+        // в самой ленте — наверх и свежие тренировки.
+        .onTabReselect(.today) {
+            guard path.isEmpty else {
+                path = NavigationPath()
+                return
+            }
+            TabReselection.shared.scrollToTop(.today)
+            guard !loading else { return }
+            Task {
+                withAnimation(Motion.snappy) { tabRefreshing = true }
+                await reload()
+                withAnimation(Motion.snappy) { tabRefreshing = false }
+            }
+        }
         .task(id: "\(scope.rawValue)-\(social.feedVersion)") { await reload() }
+        // Кто в зале — раз в минуту, пока лента на экране.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await social.refreshLive()
+            }
+        }
         .onChange(of: scope) { _, value in
             // Другая лента — сразу показываем её прошлую версию, если она была.
             posts = social.feedCache[value]?.posts ?? []
@@ -89,12 +146,12 @@ struct FeedView: View {
             HStack(spacing: 6) {
                 Text(scope == .all ? "Главное" : "Подписки")
                     .font(.system(size: 30, weight: .heavy, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 // Без профиля подписок нет — и выбирать нечего.
                 if social.isSignedIn {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                 }
             }
             .fixedSize()
@@ -107,7 +164,7 @@ struct FeedView: View {
         if !social.outbox.isEmpty {
             HStack(spacing: 12) {
                 if social.isFlushing {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(.ink)
                 } else {
                     Image(systemName: "icloud.and.arrow.up")
                         .font(.system(size: 18, weight: .semibold))
@@ -116,11 +173,11 @@ struct FeedView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(social.isFlushing ? "Публикую тренировку…" : "Тренировка ждёт отправки")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     if let message = social.outboxError, !social.isFlushing {
                         Text(message)
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.white.opacity(0.55))
+                            .foregroundStyle(Color.ink.opacity(0.55))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -134,7 +191,7 @@ struct FeedView: View {
                         if social.outboxError != nil {
                             Button("Удалить") { confirmDiscard = true }
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .foregroundStyle(Color.ink.opacity(0.5))
                         }
                     }
                 }
@@ -157,18 +214,18 @@ struct FeedView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Делись тренировками")
                 .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             Text("Создай профиль: в конце тренировки сделаешь фото — и оно появится здесь вместе с весами и подходами. Друзья поставят лайк или напишут комментарий.")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.6))
+                .foregroundStyle(Color.ink.opacity(0.6))
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onCreateProfile) {
                 Text("Создать профиль")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .padding(.horizontal, 18)
                     .frame(height: 44)
-                    .background(Color.white, in: Capsule())
+                    .background(Color.ink, in: Capsule())
             }
             .buttonStyle(.pressable)
         }
@@ -182,16 +239,16 @@ struct FeedView: View {
         VStack(spacing: 10) {
             Image(systemName: scope == .all ? "figure.strengthtraining.traditional" : "person.2")
                 .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.35))
+                .foregroundStyle(Color.ink.opacity(0.35))
             Text(scope == .all ? "В ленте пока пусто" : "Здесь появятся тренировки тех, на кого ты подписан")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .multilineTextAlignment(.center)
             Text(scope == .all
                  ? "Закончи тренировку и опубликуй её — будешь первым."
                  : "Найди друзей по юзернейму и подпишись.")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.55))
+                .foregroundStyle(Color.ink.opacity(0.55))
                 .multilineTextAlignment(.center)
             if scope == .following {
                 Button("Найти людей", action: onFindPeople)
@@ -219,6 +276,10 @@ struct FeedView: View {
         loading = true
         defer { loading = false }
         social.flushOutbox()
+        Task {
+            await social.refreshLive()
+            await social.refreshTogether()
+        }
         do {
             let page = try await social.feed(scope)
             next = page.next
@@ -247,8 +308,13 @@ enum FeedRoute: Hashable {
     case user(String)
     case followers(String)
     case following(String)
-    case program(SocialProgramDay)
+    /// День программы; `all` и `author` — чтобы скопировать к себе один день или всю программу.
+    case program(SocialProgramDay, all: [SocialProgramDay], author: String?)
     case badges([SocialBadge])
+    case chat(String)
+    case activity
+    /// Пост, который ещё надо загрузить, — из активности.
+    case postId(String)
 
     @MainActor @ViewBuilder
     func destination(path: Binding<NavigationPath>, onPostChange: @escaping (String, SocialPost?) -> Void) -> some View {
@@ -265,10 +331,16 @@ enum FeedRoute: Hashable {
             PeopleListView(title: "Подписчики", load: { try await SocialService.shared.followers(of: username) }, path: path)
         case .following(let username):
             PeopleListView(title: "Подписки", load: { try await SocialService.shared.following(of: username) }, path: path)
-        case .program(let day):
-            ProgramDayView(day: day)
+        case .program(let day, let all, let author):
+            ProgramDayView(day: day, allDays: all, author: author)
         case .badges(let badges):
             BadgeListView(badges: badges)
+        case .chat(let username):
+            ChatView(username: username, path: path)
+        case .activity:
+            ActivityView(path: path)
+        case .postId(let id):
+            PostLoaderView(id: id, path: path)
         }
     }
 }

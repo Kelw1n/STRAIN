@@ -17,9 +17,16 @@ final class ExerciseArt {
 
     @ObservationIgnored private let cache = NSCache<NSString, UIImage>()
     @ObservationIgnored private let fileManager = FileManager.default
+    /// Файлы своих картинок, которых нет. Миниатюра упражнения рисуется в каждой
+    /// карточке ленты, тренировки и рекордов, и без этого списка каждая
+    /// перерисовка заново искала на диске файл, которого нет.
+    @ObservationIgnored private var missingCustom: Set<String> = []
+    @ObservationIgnored private let customDirectory: URL
 
     private init() {
         cache.countLimit = 80
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        customDirectory = base.appendingPathComponent("ExerciseImages", isDirectory: true)
     }
 
     // MARK: - Подбор стандартной картинки
@@ -96,11 +103,6 @@ final class ExerciseArt {
 
     // MARK: - Своя картинка
 
-    private var customDirectory: URL {
-        let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("ExerciseImages", isDirectory: true)
-    }
-
     private func customURL(for name: String) -> URL {
         // Имя файла — из названия без символов, которые нельзя в пути.
         let safe = name.lowercased()
@@ -112,9 +114,14 @@ final class ExerciseArt {
 
     private func customImage(for name: String) -> UIImage? {
         let url = customURL(for: name)
-        let id = "custom:" + url.lastPathComponent
+        let file = url.lastPathComponent
+        let id = "custom:" + file
         if let hit = cache.object(forKey: id as NSString) { return hit }
-        guard let image = UIImage(contentsOfFile: url.path) else { return nil }
+        guard !missingCustom.contains(file) else { return nil }
+        guard let image = UIImage(contentsOfFile: url.path) else {
+            missingCustom.insert(file)
+            return nil
+        }
         cache.setObject(image, forKey: id as NSString)
         return image
     }
@@ -128,6 +135,7 @@ final class ExerciseArt {
         let url = customURL(for: name)
         try? data.write(to: url, options: .atomic)
         cache.removeObject(forKey: ("custom:" + url.lastPathComponent) as NSString)
+        missingCustom.remove(url.lastPathComponent)
         revision += 1
     }
 
@@ -135,6 +143,7 @@ final class ExerciseArt {
         let url = customURL(for: name)
         try? fileManager.removeItem(at: url)
         cache.removeObject(forKey: ("custom:" + url.lastPathComponent) as NSString)
+        missingCustom.insert(url.lastPathComponent)
         revision += 1
     }
 

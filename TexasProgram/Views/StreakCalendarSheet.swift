@@ -20,7 +20,7 @@ struct StreakCalendarSheet: View {
             HStack {
                 Text(Self.monthTitle(month, calendar: calendar))
                     .font(.system(size: 26, weight: .heavy, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .contentTransition(.opacity)
                 Spacer()
                 arrow("chevron.left", enabled: true) { shift(-1) }
@@ -37,7 +37,7 @@ struct StreakCalendarSheet: View {
                     ForEach(["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"], id: \.self) { title in
                         Text(title)
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .foregroundStyle(Color.ink.opacity(0.4))
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -65,28 +65,27 @@ struct StreakCalendarSheet: View {
 
             Text("Неделя засчитана, если в ней была хотя бы одна тренировка. Начатая неделя серию не обрывает: у тебя есть время до воскресенья.")
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 22)
         .padding(.top, 28)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(white: 0.07).ignoresSafeArea())
+        .background(Color.tone(0.07).ignoresSafeArea())
         .presentationDetents([.fraction(0.82), .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(32)
-        .preferredColorScheme(.dark)
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.55))
+                .foregroundStyle(Color.ink.opacity(0.55))
             Text(value)
                 .font(.system(size: 24, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .contentTransition(.numericText())
         }
     }
@@ -95,9 +94,9 @@ struct StreakCalendarSheet: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(Color.white.opacity(enabled ? 1 : 0.25))
+                .foregroundStyle(Color.ink.opacity(enabled ? 1 : 0.25))
                 .frame(width: 40, height: 40)
-                .background(Color.white.opacity(enabled ? 0.1 : 0.04), in: Circle())
+                .background(Color.ink.opacity(enabled ? 0.1 : 0.04), in: Circle())
         }
         .buttonStyle(.pressable)
         .disabled(!enabled)
@@ -158,7 +157,7 @@ private struct DayCell: View {
                 .foregroundStyle(textColor)
             if isToday {
                 Circle()
-                    .fill(isDone ? Color.black : Color.white)
+                    .fill(isDone ? Color.canvas : Color.ink)
                     .frame(width: 5, height: 5)
                     .offset(y: 13)
             }
@@ -172,23 +171,23 @@ private struct DayCell: View {
     @ViewBuilder
     private var background: some View {
         if !inMonth {
-            Circle().fill(Color.white.opacity(0.05))
+            Circle().fill(Color.ink.opacity(0.05))
         } else if isDone {
             Circle().fill(Theme.accent)
         } else if isToday {
             Circle().strokeBorder(Theme.accent, lineWidth: 2.5)
         } else if isPast {
-            Circle().fill(Color.white.opacity(0.12))
+            Circle().fill(Color.ink.opacity(0.12))
         } else if isTrainingDay {
             Circle().strokeBorder(Theme.accent, lineWidth: 2)
         } else {
-            Circle().strokeBorder(Color.white.opacity(0.15), lineWidth: 1.5)
+            Circle().strokeBorder(Color.ink.opacity(0.15), lineWidth: 1.5)
         }
     }
 
     private var textColor: Color {
-        if !inMonth { return Color.white.opacity(0.22) }
-        if isDone { return .black }
-        return .white.opacity(isPast && !isToday ? 0.85 : 1)
+        if !inMonth { return Color.ink.opacity(0.22) }
+        if isDone { return .canvas }
+        return .ink.opacity(isPast && !isToday ? 0.85 : 1)
     }
 }

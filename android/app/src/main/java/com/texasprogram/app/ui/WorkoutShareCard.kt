@@ -301,10 +301,10 @@ object WorkoutShareCard {
 
     /// Картинка — во временную папку, оттуда системное «Поделиться» отдаёт её
     /// в Instagram, Telegram или галерею. Разрешение на память не нужно.
-    fun share(context: Context, bitmap: Bitmap) {
+    fun share(context: Context, bitmap: Bitmap, title: String = "Поделиться тренировкой", fileName: String = "strain-workout.png") {
         runCatching {
             val dir = File(context.cacheDir, "share").apply { mkdirs() }
-            val file = File(dir, "strain-workout.png")
+            val file = File(dir, fileName)
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
             val send = Intent(Intent.ACTION_SEND)
@@ -312,7 +312,7 @@ object WorkoutShareCard {
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             context.startActivity(
-                Intent.createChooser(send, "Поделиться тренировкой").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }
     }
@@ -337,7 +337,7 @@ fun ShareCardSection(title: String, durationSeconds: Int, photo: Uri?) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "ПОДЕЛИТЬСЯ",
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = 4.dp)
@@ -346,8 +346,8 @@ fun ShareCardSection(title: String, durationSeconds: Int, photo: Uri?) {
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF161616))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                .background(Theme.tone(0xFF161616))
+                .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -369,21 +369,21 @@ fun ShareCardSection(title: String, durationSeconds: Int, photo: Uri?) {
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Карточка для сторис", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Карточка для сторис", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
                     if (photo == null) "Время, тоннаж, рекорды и упражнения. Добавь фото выше — оно станет фоном."
                     else "Первое фото выше — фоном карточки.",
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = Theme.ink.copy(alpha = 0.55f),
                     fontSize = 12.sp
                 )
                 Row(
                     Modifier
-                        .background(Theme.accent, CircleShape)
-                        .clip(CircleShape)
                         .pressable(enabled = card != null) {
                             haptics.medium()
                             card?.let { WorkoutShareCard.share(context, it.first) }
                         }
+                        .background(Theme.accent, CircleShape)
+                        .clip(CircleShape)
                         .padding(horizontal = 16.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)

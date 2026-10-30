@@ -65,7 +65,7 @@ struct WorkoutShareCard: View {
 
                 Text(summary.title.uppercased())
                     .font(.system(size: 26, weight: .black, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
 
@@ -76,7 +76,7 @@ struct WorkoutShareCard: View {
                         Text("\(summary.records) \(RuPlural.word(summary.records, "рекорд", "рекорда", "рекордов"))")
                             .font(.system(size: 13, weight: .heavy))
                     }
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Theme.accent, in: Capsule())
@@ -116,7 +116,7 @@ struct WorkoutShareCard: View {
                     )
                 }
         } else {
-            Color.black
+            Color.canvas
                 .overlay(alignment: .topLeading) {
                     RadialGradient(
                         colors: [Theme.accent.opacity(0.45), .clear],
@@ -143,7 +143,7 @@ struct WorkoutShareCard: View {
             Spacer()
             Text(RuDate.dayMonth(summary.date))
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(.ink.opacity(0.75))
         }
     }
 
@@ -154,8 +154,8 @@ struct WorkoutShareCard: View {
             stat("\(summary.sets)", RuPlural.word(summary.sets, "подход", "подхода", "подходов"))
         }
         .padding(.vertical, 14)
-        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+        .background(Color.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.ink.opacity(0.1), lineWidth: 1))
     }
 
     private func stat(_ value: String, _ title: String) -> some View {
@@ -163,12 +163,12 @@ struct WorkoutShareCard: View {
             Text(value)
                 .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
                 .monospacedDigit()
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.ink.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
     }
@@ -181,11 +181,11 @@ struct WorkoutShareCard: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(line.name)
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .lineLimit(1)
                         Text(RuPlural.sets(line.doneSets))
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.ink.opacity(0.5))
                     }
                     Spacer(minLength: 6)
                     if line.isRecord {
@@ -196,14 +196,14 @@ struct WorkoutShareCard: View {
                     Text(line.best)
                         .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                         .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(.ink.opacity(0.9))
                 }
             }
             if summary.lines.count > Self.maxLines {
                 let rest = summary.lines.count - Self.maxLines
                 Text("и ещё \(RuPlural.exercises(rest))")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.ink.opacity(0.5))
             }
         }
     }

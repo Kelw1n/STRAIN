@@ -2,277 +2,6 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-// MARK: - Прогресс
-
-struct ProgressScreen: View {
-    @Bindable var profile: ProgramProfile
-    private var plan: WorkoutPlan { profile.workoutPlan }
-    private var completed: Int { profile.completedDayCount }
-
-    private var ratio: Double {
-        guard profile.totalDays > 0 else { return 0 }
-        return Double(completed) / Double(profile.totalDays)
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    hero.appearIn(0)
-                    streak.appearIn(0)
-                    ProgressChartView(records: profile.completionLog).appearIn(1).softScroll()
-                    BodyWeightCard(profile: profile).appearIn(1).softScroll()
-                    links.appearIn(1)
-                    maxes.appearIn(1)
-                    if profile.programKind.hasBenchWave { benchCard.appearIn(2) }
-                    heatmap.appearIn(3).softScroll()
-                    HistoryCard(records: profile.completionLog).appearIn(4).softScroll()
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 28)
-            }
-            .scrollIndicators(.hidden)
-            .screenBackground()
-            .navigationTitle("Прогресс")
-        }
-    }
-
-    /// Входы в разделы, которые копят данные: история движений и заметки.
-    private var links: some View {
-        CardView(padding: 6, spacing: 0) {
-            NavigationLink { ExerciseHistoryList(profile: profile) } label: {
-                // Пока история пустая, а отметки есть, зовём именно достроить её:
-                // иначе про такую возможность никто не узнает.
-                let pending = profile.backfillableWorkouts
-                linkRow("История упражнений",
-                        subtitle: pending > 0
-                        ? "можно заполнить по отметкам"
-                        : countText(profile.loggedExerciseNames.count, "движение", "движения", "движений"),
-                        symbol: "chart.xyaxis.line")
-            }
-            .buttonStyle(.pressable)
-            Divider().overlay(Color.primary.opacity(0.07)).padding(.horizontal, 12)
-            NavigationLink { NotesListView(profile: profile) } label: {
-                linkRow("Заметки",
-                        subtitle: countText(profile.workoutNotes.filter { profile.isOwnKey($0.key) }.count,
-                                            "запись", "записи", "записей"),
-                        symbol: "note.text")
-            }
-            .buttonStyle(.pressable)
-        }
-    }
-
-    private func linkRow(_ title: String, subtitle: String, symbol: String) -> some View {
-        HStack(spacing: 13) {
-            Image(systemName: symbol)
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(width: 32, height: 32)
-                .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 6)
-            Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 9)
-        .padding(.horizontal, 12)
-        .contentShape(Rectangle())
-    }
-
-    /// Русский счёт: одна запись, две записи, пять записей.
-    private func countText(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
-        guard count > 0 else { return "пока пусто" }
-        let last = count % 10, hundred = count % 100
-        if hundred >= 11 && hundred <= 14 { return "\(count) \(many)" }
-        if last == 1 { return "\(count) \(one)" }
-        if last >= 2 && last <= 4 { return "\(count) \(few)" }
-        return "\(count) \(many)"
-    }
-
-    private var hero: some View {
-        HighlightCard {
-            HStack(spacing: 20) {
-                RingProgress(value: ratio, lineWidth: 12) {
-                    VStack(spacing: 0) {
-                        Text("\(Int((ratio * 100).rounded()))")
-                            .font(.system(size: 24, weight: .bold, design: Theme.fontDesign))
-                            .contentTransition(.numericText())
-                        Text("%").font(.caption2).foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: 96, height: 96)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("ЦИКЛ")
-                        .font(.caption2.weight(.bold)).tracking(1.3)
-                        .foregroundStyle(Theme.accentGradient)
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text("\(completed)")
-                            .font(.system(size: 40, weight: .bold, design: Theme.fontDesign))
-                            .contentTransition(.numericText())
-                        Text("из \(profile.totalDays)").foregroundStyle(.secondary)
-                    }
-                    Text("тренировочных дней отмечено")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-        }
-    }
-
-    /// Серия закрытых недель. Показываем только когда есть что показать:
-    /// нули на пустом профиле выглядят как упрёк.
-    @ViewBuilder
-    private var streak: some View {
-        let streakValue = profile.weekStreak
-        if streakValue.best > 0 {
-            CardView {
-                HStack(spacing: 18) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("СЕРИЯ")
-                            .font(.caption2.weight(.bold)).tracking(1.3)
-                            .foregroundStyle(Theme.accentGradient)
-                        HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Text("\(streakValue.current)")
-                                .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
-                                .contentTransition(.numericText())
-                            Text(weekWord(streakValue.current)).foregroundStyle(.secondary)
-                        }
-                        Text("подряд без пропусков")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("ЛУЧШАЯ").font(.caption2.weight(.bold)).tracking(1.3)
-                            .foregroundStyle(.secondary)
-                        Text("\(streakValue.best)")
-                            .font(.system(size: 22, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(streakValue.current >= streakValue.best ? AnyShapeStyle(Theme.success) : AnyShapeStyle(.secondary))
-                    }
-                }
-            }
-        }
-    }
-
-    /// «1 неделя», «2 недели», «5 недель» — без этого счётчик читается коряво.
-    private func weekWord(_ count: Int) -> String {
-        let tens = count % 100
-        if (11...14).contains(tens) { return "недель" }
-        switch count % 10 {
-        case 1: return "неделя"
-        case 2, 3, 4: return "недели"
-        default: return "недель"
-        }
-    }
-
-    private var maxes: some View {
-        CardView {
-            Text("Текущие \(profile.maximumLabel)").font(.title3.weight(.bold))
-            PRRow(title: "Приседания", value: profile.squat5RM, symbol: "figure.strengthtraining.functional")
-            PRRow(title: "Жим лёжа", value: profile.bench5RM, symbol: "figure.strengthtraining.traditional")
-            PRRow(title: "Становая тяга", value: profile.deadlift5RM, symbol: "figure.stand")
-        }
-    }
-
-    private var benchCard: some View {
-        let total = UpperLowerCalculator.benchSessionCount
-        let done = profile.completedBenchCount
-        return CardView {
-            HStack {
-                Label("Волна «Жим 14»", systemImage: "waveform.path.ecg")
-                    .font(.headline)
-                Spacer()
-                Text("\(done)/\(total)")
-                    .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
-                    .foregroundStyle(Theme.recordGradient)
-                    .contentTransition(.numericText())
-            }
-            LineMeter(value: total > 0 ? Double(done) / Double(total) : 0, gradient: Theme.recordGradient)
-            if let next = profile.nextBenchSession {
-                Text("Следующая жимовая тренировка — №\(next)")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                Text("Волна пройдена. Пора тестировать новый 1ПМ.")
-                    .font(.caption).foregroundStyle(Theme.success)
-            }
-        }
-    }
-
-    private var heatmap: some View {
-        CardView {
-            Text("Недели").font(.title3.weight(.bold))
-            VStack(spacing: 6) {
-                ForEach(Array(plan.weeks.enumerated()), id: \.element.id) { weekIndex, week in
-                    let done = week.days.filter { profile.isCompleted(week: week.number, day: $0.number) }.count
-                    HStack(spacing: 6) {
-                        Text("\(week.number)")
-                            .font(.system(size: 11, weight: .bold, design: Theme.fontDesign).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 18, alignment: .trailing)
-                        ForEach(week.days) { day in
-                            HeatCell(
-                                isDone: profile.isCompleted(week: week.number, day: day.number),
-                                delay: Double(weekIndex) * 0.03
-                            )
-                        }
-                        Spacer(minLength: 6)
-                        Text("\(done)/\(week.days.count)")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(done == week.days.count ? Theme.success : .secondary)
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct HeatCell: View {
-    let isDone: Bool
-    let delay: Double
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var shown = false
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(isDone ? AnyShapeStyle(Theme.successGradient) : AnyShapeStyle(Color.primary.opacity(0.08)))
-            .frame(height: 20)
-            .frame(maxWidth: 46)
-            .scaleEffect(shown ? 1 : 0.6)
-            .opacity(shown ? 1 : 0)
-            .animation(Motion.maybe(Motion.bouncy, reduce: reduceMotion), value: isDone)
-            .onAppear {
-                guard !shown else { return }
-                if reduceMotion { shown = true } else {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.75).delay(delay)) { shown = true }
-                }
-            }
-    }
-}
-
-struct PRRow: View {
-    let title: String
-    let value: Double
-    var symbol: String = "dumbbell.fill"
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.accent)
-                .frame(width: 32, height: 32)
-                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text(title).font(.subheadline)
-            Spacer()
-            Text(WeightFormat.kilogramsPrecise(value))
-                .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-        }
-    }
-}
-
 // MARK: - Инструкция
 
 private struct GuideItem: Identifiable {
@@ -284,6 +13,8 @@ private struct GuideItem: Identifiable {
 
 struct InstructionsView: View {
     let programKind: TrainingProgramKind
+    /// Открыта из настроек поверх них — сверху кнопка «Готово».
+    var onClose: (() -> Void)?
     @State private var opened: String?
 
     private var items: [GuideItem] {
@@ -292,7 +23,7 @@ struct InstructionsView: View {
                 id: "start",
                 icon: "flag.checkered",
                 title: "Как начать",
-                text: programKind == .texas
+                text: programKind.usesFiveRepMax
                     ? "Протестируй настоящий пятиповторный максимум в приседаниях, жиме лёжа и становой тяге. Введи именно проверенные значения — программа рассчитает рабочие веса и постепенное увеличение нагрузки."
                     : "Протестируй 1ПМ в приседаниях, жиме лёжа и становой тяге. Программа рассчитает базовые веса с округлением к 5 кг. Для остальных упражнений подбирай вес по указанному RPE."
             )
@@ -349,6 +80,13 @@ struct InstructionsView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle("Инструкция")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    if let onClose {
+                        Button("Готово", action: onClose).font(.body.weight(.semibold))
+                    }
+                }
+            }
         }
     }
 
@@ -428,19 +166,21 @@ struct SettingsView: View {
     let onDeleteProfile: () -> Void
     @Environment(\.modelContext) private var modelContext
     @State private var showPeaking = false
+    @State private var showGuide = false
     @State private var showNewCycle = false
     @State private var showReset = false
     @State private var showImporter = false
     @State private var shareItem: ShareItem?
     @State private var backupMessage: String?
     @AppStorage("rest_timer_sound_enabled") private var restTimerSoundEnabled = true
-    @AppStorage("weight_unit_preference") private var weightUnitPreference = WeightUnit.kg.rawValue
+    @AppStorage(GlassPreference.storageKey) private var clearGlass = true
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.dark
+    @AppStorage(WarmUp.settingKey) private var warmUpEnabled = true
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Имя профиля", text: $profile.name)
                     ForEach(profiles) { item in
                         Button {
                             guard item.profileID != profile.profileID else { return }
@@ -478,6 +218,17 @@ struct SettingsView: View {
                 Section("Имя профиля") {
                     TextField("Твоё имя или псевдоним", text: $profile.name)
                         .autocorrectionDisabled()
+                }
+
+                // Инструкция была отдельной вкладкой и пропала вместе со старой панелью.
+                Section {
+                    Button {
+                        showGuide = true
+                    } label: {
+                        Label("Как устроена программа", systemImage: "book.closed.fill")
+                    }
+                } footer: {
+                    Text("С чего начать, сколько отдыхать, что такое RPE и особенности твоей программы.")
                 }
 
                 Section(profile.maximumLabel) {
@@ -691,25 +442,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("Стиль оформления", selection: Binding(
-                        get: { ThemeManager.shared.current },
-                        set: { newStyle in
-                            withAnimation(Motion.snappy) {
-                                ThemeManager.shared.current = newStyle
-                            }
-                        }
-                    )) {
-                        ForEach(AppThemeStyle.allCases) { style in
-                            Text(style.displayName).tag(style)
-                        }
-                    }
-                } header: {
-                    Text("Оформление")
-                } footer: {
-                    Text(ThemeManager.shared.current.description)
-                }
-
-                Section {
                     Toggle("Звуковой сигнал отдыха", isOn: $restTimerSoundEnabled)
                 } header: {
                     Text("Таймер отдыха")
@@ -718,14 +450,49 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("Единицы веса", selection: $weightUnitPreference) {
-                        ForEach(WeightUnit.allCases) { unit in
-                            Text(unit == .kg ? "Килограммы (кг)" : "Фунты (lbs)").tag(unit.rawValue)
+                    Toggle("Разминочные подходы", isOn: $warmUpEnabled)
+                } header: {
+                    Text("Разминка")
+                } footer: {
+                    Text("Перед рабочим весом в упражнениях со штангой — разминка: пустой гриф, 40, 60 и 80% от рабочего. В записи тренировки, объём и рекорды она не идёт.")
+                }
+
+                Section {
+                    AppVersionRow()
+                } header: {
+                    Text("Приложение")
+                }
+
+                Section {
+                    Picker("Тема", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { option in
+                            Text(option.title).tag(option)
                         }
                     }
                     .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    // Только там, где стекло настоящее: до iOS 26 оно нарисовано и не меняется.
+                    if GlassPreference.isSupported {
+                        Toggle("Прозрачное стекло, как в iOS 26", isOn: $clearGlass)
+                    }
                 } header: {
-                    Text("Единицы измерения")
+                    Text("Оформление")
+                } footer: {
+                    Text(GlassPreference.isSupported
+                         ? "«Как в системе» — тема меняется вместе с iPhone. Прозрачное стекло: панель вкладок, поле ввода в переписке и кнопки поверх фото — сквозь него видно, что под ним, а края преломляют свет. Выключишь — стекло станет матовым, как в iOS 27."
+                         : "«Как в системе» — тема меняется вместе с iPhone: днём светлая, вечером тёмная, если так настроено.")
+                }
+
+                if HealthKitService.shared.deviceSupportsHealth && !HealthKitService.shared.isAvailable {
+                    Section {
+                        Label("Недоступно в этой сборке", systemImage: "heart.slash")
+                            .foregroundStyle(.secondary)
+                    } header: {
+                        Text("Apple Здоровье")
+                    } footer: {
+                        Text("Приложение установлено с бесплатным Apple ID, а «Здоровье» Apple открывает только приложениям с платным аккаунтом разработчика. Тренировки, рекорды и вес тела всё равно хранятся в STRAIN.")
+                    }
                 }
 
                 if HealthKitService.shared.isAvailable {
@@ -766,6 +533,9 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showPeaking) { PeakingView(profile: profile) }
+        .sheet(isPresented: $showGuide) {
+            InstructionsView(programKind: profile.programKind, onClose: { showGuide = false })
+        }
         .sheet(isPresented: $showNewCycle) { NewCycleView(profile: profile) }
         .sheet(item: $shareItem) { item in
             ShareSheet(url: item.url).presentationDetents([.medium])
@@ -830,6 +600,7 @@ struct SettingsView: View {
                 return
             }
             let count = BackupService.restore(archive, into: modelContext, existing: profiles)
+            NutritionStore.shared.reload()
             SocialService.shared.adoptBackupToken(archive.socialToken)
             // Сразу открываем восстановленный профиль: иначе после переустановки
             // на экране остаётся новый пустой, и кажется, что копия не применилась.

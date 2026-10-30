@@ -9,7 +9,15 @@ import androidx.compose.runtime.setValue
 import com.texasprogram.app.model.ExercisePrescription
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.undoSwaps
+import com.texasprogram.app.model.swapExercise
+import com.texasprogram.app.model.isProgramLift
+import com.texasprogram.app.model.SwapUndo
+import com.texasprogram.app.model.SwapScope
+import com.texasprogram.app.model.ExerciseSwap
+import com.texasprogram.app.model.Progression
 import com.texasprogram.app.model.SetEntry
+import com.texasprogram.app.model.SocialLive
 import com.texasprogram.app.model.formatWeight
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -95,7 +103,9 @@ private data class SavedSession(
     val note: String,
     val exercises: List<SavedExercise>,
     val snapshotProgress: Map<String, Int> = emptyMap(),
-    val snapshotLog: Map<String, SetEntry> = emptyMap()
+    val snapshotLog: Map<String, SetEntry> = emptyMap(),
+    /// Замены упражнений в этой тренировке: отмена тренировки их откатывает.
+    val swapUndo: SwapUndo = SwapUndo()
 )
 
 // MARK: - Менеджер
@@ -127,6 +137,10 @@ object WorkoutSessionManager {
     var lastRecord by mutableStateOf<RecordNotice?>(null)
     /// Упражнение, чью картинку сейчас меняют.
     var artTarget by mutableStateOf<String?>(null)
+    /// Номер упражнения, которое меняют на другое: тренажёр занят.
+    var swapTarget by mutableStateOf<Int?>(null)
+    /// Правки дня, которые сделали замены: отмена тренировки их откатывает.
+    private var swapUndo = SwapUndo()
 
     /// Отметки дня на момент старта: отмена возвращает к ним, а не стирает день.
     private var snapshotProgress: Map<String, Int> = emptyMap()
@@ -154,6 +168,21 @@ object WorkoutSessionManager {
 
     val totalCompletedSets: Int get() = exercises.sumOf { it.doneCount }
     val totalSetsCount: Int get() = exercises.sumOf { it.sets.size }
+    /// Что видят друзья: день, текущее упражнение и его подходы — «Присед · 3/5».
+    val liveStatus: SocialLive?
+        get() {
+            val workout = activeWorkout ?: return null
+            val current = exercises.firstOrNull { exercise -> exercise.sets.any { !it.isDone } } ?: exercises.lastOrNull()
+            return SocialLive(
+                title = workout.day.title,
+                exercise = current?.prescription?.name.orEmpty(),
+                done = current?.doneCount ?: 0,
+                total = current?.sets?.size ?: 0,
+                setsDone = totalCompletedSets,
+                setsTotal = totalSetsCount,
+                startedAt = startMillis.toDouble()
+            )
+        }
     val totalTonnage: Double
         get() = exercises.sumOf { ex -> ex.sets.filter { it.isDone }.sumOf { it.weight * it.reps } }
     val density: Double
@@ -197,6 +226,8 @@ object WorkoutSessionManager {
         showingNoteSheet = false
         customRestTargetExerciseIndex = null
         lastRecord = null
+        swapTarget = null
+        swapUndo = SwapUndo()
 
         val prefix = profile.dayKey(workout.week, workout.day.number) + "|"
         snapshotProgress = profile.setProgress.filterKeys { it.startsWith(prefix) }
@@ -208,22 +239,30 @@ object WorkoutSessionManager {
         isPresented = true
     }
 
-    private fun buildExercise(presc: ExercisePrescription, profile: ProgramProfile, workout: ScheduledWorkout): ActiveExerciseState {
+    private fun buildExercise(
+        presc: ExercisePrescription,
+        profile: ProgramProfile,
+        workout: ScheduledWorkout,
+        weight: Double? = null,
+        repsOverride: Int? = null,
+        countOverride: Int? = null,
+        rest: Int? = null
+    ): ActiveExerciseState {
         // История — один проход на упражнение: раньше её пересобирали по всему
         // плану для каждого подхода и ещё раз для веса.
         val history = profile.history(presc.name)
             .filterNot { it.week == workout.week && it.day == workout.day.number }
         val last = history.lastOrNull { it.entries.isNotEmpty() }?.entries.orEmpty()
         val best = history.maxOfOrNull { it.best } ?: 0.0
-        val planned = plannedWeight(presc, profile, workout, last)
-        val reps = presc.plannedReps ?: 10
+        val planned = weight ?: plannedWeight(presc, profile, workout, last)
+        val reps = repsOverride ?: presc.plannedReps ?: 10
         // Подходы этого дня, уже записанные до старта (точками на «Главном»
         // или в прошлой сессии), приходят отмеченными. Раньше они показывались
         // пустыми, и казалось, что сделанное пропало.
         val logged = (0 until maxOf(presc.sets, 0) + ProgramProfile.EXTRA_SET_ALLOWANCE)
             .mapNotNull { index -> profile.setEntry(workout.week, workout.day.number, presc, index)?.let { index to it } }
             .toMap()
-        val count = maxOf(presc.sets, 1, (logged.keys.maxOrNull() ?: -1) + 1)
+        val count = maxOf(countOverride ?: presc.sets, 1, (logged.keys.maxOrNull() ?: -1) + 1)
         // Сколько подходов в плане, столько и строк: два — значит два.
         val sets = (0 until count).map { index ->
             val entry = logged[index]
@@ -237,10 +276,51 @@ object WorkoutSessionManager {
         }
         return ActiveExerciseState(
             prescription = presc,
-            restSeconds = if (presc.benchSession != null) 180 else profile.defaultRestSeconds,
+            restSeconds = rest ?: if (presc.benchSession != null) 180 else profile.defaultRestSeconds,
             sets = sets,
             bestBefore = best
         )
+    }
+
+    /// Тренажёр занят — меняем упражнение на похожее прямо в тренировке.
+    /// Отмеченные подходы старого упражнения снимаются: их место займёт новое.
+    fun swapExercise(
+        exIdx: Int,
+        suggestion: ExerciseSwap.Suggestion,
+        scope: SwapScope,
+        profile: ProgramProfile,
+        onUpdateProfile: (ProgramProfile) -> Unit
+    ) {
+        val workout = activeWorkout ?: return
+        val old = exercises.getOrNull(exIdx) ?: return
+        val name = suggestion.name.trim()
+        if (name.isEmpty() || ProgramProfile.weightStepKey(name) == ProgramProfile.weightStepKey(old.prescription.name)) return
+        var next = profile
+        for (set in old.sets) {
+            if (set.isDone) next = next.clearSetEntry(workout.week, workout.day.number, old.prescription, set.index)
+        }
+        next = next.updateCompletedSets(workout.week, workout.day.number, old.prescription, 0)
+        val result = next.swapExercise(
+            old.prescription,
+            name,
+            workout.week,
+            workout.day.number,
+            if (next.isProgramLift(old.prescription)) SwapScope.TODAY else scope,
+            swapUndo
+        )
+        swapUndo = result.undo
+        onUpdateProfile(result.profile)
+        exercises[exIdx] = buildExercise(
+            result.prescription,
+            result.profile,
+            workout,
+            weight = suggestion.weight ?: old.sets.firstOrNull { !it.isDone }?.weight ?: old.sets.firstOrNull()?.weight,
+            repsOverride = suggestion.reps ?: old.sets.firstOrNull()?.reps,
+            countOverride = old.sets.size,
+            rest = old.restSeconds
+        )
+        swapTarget = null
+        save()
     }
 
     private fun plannedWeight(
@@ -315,6 +395,7 @@ object WorkoutSessionManager {
         onUpdateProfile: (ProgramProfile) -> Unit
     ) {
         val workout = activeWorkout ?: return
+        val xpBefore = Progression.xp(profile)
         var next = profile
         for (ex in exercises) {
             for (set in ex.sets) {
@@ -335,14 +416,17 @@ object WorkoutSessionManager {
         }
         onUpdateProfile(next)
         reset()
+        ProgressionEvents.celebrate(xpBefore, Progression.xp(next))
     }
 
     /// Отмена возвращает день к отметкам на момент старта. Возвращает профиль
     /// после отмены — замена тренировки начинает новую уже от него.
     fun discardWorkout(profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit): ProgramProfile {
         val workout = activeWorkout ?: return profile
-        val snapshot = profile.copy(setProgress = snapshotProgress, setLog = snapshotLog)
-        val restored = profile.restoreDay(snapshot, workout.week, workout.day.number)
+        // Замены упражнений — тоже назад: тренировки не было.
+        val base = profile.undoSwaps(swapUndo)
+        val snapshot = base.copy(setProgress = snapshotProgress, setLog = snapshotLog)
+        val restored = base.restoreDay(snapshot, workout.week, workout.day.number)
         onUpdateProfile(restored)
         reset()
         return restored
@@ -357,6 +441,8 @@ object WorkoutSessionManager {
         profileId = null
         snapshotProgress = emptyMap()
         snapshotLog = emptyMap()
+        swapUndo = SwapUndo()
+        swapTarget = null
         exercises.clear()
         clearSaved()
     }
@@ -536,13 +622,26 @@ object WorkoutSessionManager {
                 })
             },
             snapshotProgress = snapshotProgress,
-            snapshotLog = snapshotLog
+            snapshotLog = snapshotLog,
+            swapUndo = swapUndo
         )
     }
 
     fun clearSaved() {
         saveJob?.cancel()
         storeFile?.let { runCatching { it.delete() } }
+    }
+
+    /// Профиль удалён: его тренировка — и идущая, и отложенная при смене
+    /// профиля — больше никогда не продолжится.
+    fun forgetProfile(id: String) {
+        if (activeWorkout != null && profileId == id) {
+            reset()
+            return
+        }
+        val file = storeFile?.takeIf { it.exists() } ?: return
+        val session = runCatching { json.decodeFromString(SavedSession.serializer(), file.readText()) }.getOrNull()
+        if (session?.profileId == id) clearSaved()
     }
 
     /// Для тестов: забыть тренировку в памяти, не трогая файл, — как после выгрузки.
@@ -599,6 +698,7 @@ object WorkoutSessionManager {
         noteText = session.note
         snapshotProgress = session.snapshotProgress
         snapshotLog = session.snapshotLog
+        swapUndo = session.swapUndo
         exercises.clear()
         exercises.addAll(restored)
         isPresented = false

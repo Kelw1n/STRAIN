@@ -1,5 +1,15 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -67,6 +77,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Scale
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -92,6 +103,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -138,11 +151,11 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 // Цвета экрана — как в iOS-версии: чистый чёрный фон и карточки чуть светлее.
-private val ScreenBlack = Color(0xFF000000)
-private val CardColor = Color(0xFF161616)
-private val CardLifted = Color(0xFF1F1F1F)
-private val FieldColor = Color(0xFF242424)
-private val FieldFocused = Color(0xFF303030)
+private val ScreenBlack: Color get() = Theme.tone(0xFF000000)
+private val CardColor: Color get() = Theme.tone(0xFF161616)
+private val CardLifted: Color get() = Theme.tone(0xFF1F1F1F)
+private val FieldColor: Color get() = Theme.tone(0xFF242424)
+private val FieldFocused: Color get() = Theme.tone(0xFF303030)
 
 /// Высота свёрнутой карточки при перестановке и зазор между ними.
 private val ROW_HEIGHT = 76.dp
@@ -156,7 +169,7 @@ private val ROW_SPACING = 10.dp
 fun SessionClock(
     modifier: Modifier = Modifier,
     fontSize: TextUnit = 26.sp,
-    color: Color = Color.White,
+    color: Color = Theme.ink,
     rolling: Boolean = false
 ) {
     val start = WorkoutSessionManager.startMillis
@@ -210,21 +223,21 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
+            .pressable {
+                haptics.medium()
+                WorkoutSessionManager.expand()
+            }
             .graphicsLayer {
                 shadowElevation = 12.dp.toPx()
                 this.shape = shape
                 clip = true
             }
-            .background(Color(0xF21A1A1E))
+            .background(Theme.tone(0xF21A1A1E))
             .border(
                 1.dp,
-                Brush.linearGradient(listOf(Color.White.copy(alpha = 0.28f), Color.White.copy(alpha = 0.06f))),
+                Brush.linearGradient(listOf(Theme.ink.copy(alpha = 0.28f), Theme.ink.copy(alpha = 0.06f))),
                 shape
             )
-            .pressable {
-                haptics.medium()
-                WorkoutSessionManager.expand()
-            }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -249,7 +262,7 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
         Column(Modifier.weight(1f)) {
             Text(
                 text = workout.fullTitle,
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -258,7 +271,7 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
             Text(
                 text = "${WorkoutSessionManager.totalCompletedSets} из $total " +
                     RuPlural.word(total, "подхода", "подходов", "подходов"),
-                color = Color.White.copy(alpha = 0.55f),
+                color = Theme.ink.copy(alpha = 0.55f),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -282,7 +295,7 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
         Icon(
             Icons.Filled.KeyboardArrowUp,
             contentDescription = "Развернуть",
-            tint = Color.White.copy(alpha = 0.7f),
+            tint = Theme.ink.copy(alpha = 0.7f),
             modifier = Modifier.size(20.dp)
         )
     }
@@ -343,6 +356,17 @@ private class SessionActions(
     fun chooseArt(name: String) {
         manager.artTarget = name
     }
+
+    fun chooseSwap(ex: Int) {
+        manager.swapTarget = ex
+    }
+
+    fun swap(ex: Int, suggestion: com.texasprogram.app.model.ExerciseSwap.Suggestion, scope: com.texasprogram.app.model.SwapScope) = withProfile {
+        haptics.success()
+        manager.swapExercise(ex, suggestion, scope, it, update)
+    }
+
+    fun currentProfile(): ProgramProfile? = profile()
 
     fun step(name: String): Double = profile()?.weightStep(name) ?: com.texasprogram.app.model.AccessoryHint.STEP
 
@@ -579,6 +603,10 @@ fun ActiveWorkoutSessionScreen(
                 }
             )
 
+            // Совместная тренировка: что сейчас делает напарник. Над списком,
+            // чтобы не сбивать перетаскивание упражнений.
+            PartnerStrip(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+
             LazyColumn(
                 state = listState,
                 userScrollEnabled = !compact,
@@ -696,6 +724,19 @@ fun ActiveWorkoutSessionScreen(
         WorkoutSessionManager.artTarget?.let { name ->
             ExerciseArtDialog(name = name, onDismiss = { WorkoutSessionManager.artTarget = null })
         }
+
+        WorkoutSessionManager.swapTarget?.let { index ->
+            val current = actions.currentProfile()
+            if (current != null) {
+                ExerciseSwapSheet(
+                    profile = current,
+                    workout = workout,
+                    index = index,
+                    onSwap = { suggestion, scope -> actions.swap(index, suggestion, scope) },
+                    onDismiss = { WorkoutSessionManager.swapTarget = null }
+                )
+            }
+        }
     }
 }
 
@@ -721,11 +762,11 @@ private fun SessionHeader(topInset: Dp, onMinimize: () -> Unit, onFinish: () -> 
             DropdownMenu(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
-                modifier = Modifier.background(Color(0xFF1C1C1F))
+                modifier = Modifier.background(Theme.tone(0xFF1C1C1F))
             ) {
                 DropdownMenuItem(
-                    text = { Text("Заметка к тренировке", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Filled.Notes, null, tint = Color.White) },
+                    text = { Text("Заметка к тренировке", color = Theme.ink) },
+                    leadingIcon = { Icon(Icons.Filled.Notes, null, tint = Theme.ink) },
                     onClick = {
                         menuExpanded = false
                         WorkoutSessionManager.showingNoteSheet = true
@@ -747,13 +788,13 @@ private fun SessionHeader(topInset: Dp, onMinimize: () -> Unit, onFinish: () -> 
         Box(
             Modifier
                 .height(36.dp)
-                .background(Color.White, CircleShape)
-                .clip(CircleShape)
                 .pressable(onClick = onFinish)
+                .background(Theme.ink, CircleShape)
+                .clip(CircleShape)
                 .padding(horizontal = 18.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("Завершить", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text("Завершить", color = Theme.canvas, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -763,12 +804,12 @@ private fun CircleIconButton(icon: ImageVector, description: String, onClick: ()
     Box(
         Modifier
             .size(36.dp)
-            .background(Color.White.copy(alpha = 0.12f), CircleShape)
-            .clip(CircleShape)
-            .pressable(onClick = onClick),
+            .pressable(onClick = onClick)
+            .background(Theme.ink.copy(alpha = 0.12f), CircleShape)
+            .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = description, tint = Theme.ink, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -801,7 +842,63 @@ private fun ExerciseSessionCard(
     ) {
         ExerciseHeader(exercise, index, count, compact, lifted, actions)
         if (!compact) {
+            // Разминка — пока не сделан первый рабочий подход.
+            val context = LocalContext.current
+            val working = exercise.sets.maxOfOrNull { it.weight } ?: 0.0
+            val warmUp = remember(exercise.prescription.name, working) {
+                com.texasprogram.app.model.WarmUp.steps(exercise.prescription.name, working)
+            }
+            if (com.texasprogram.app.model.WarmUp.enabled(context) && exercise.doneCount == 0 && warmUp.isNotEmpty()) {
+                WarmUpRow(warmUp)
+            }
             SetsTable(exercise, index, actions)
+        }
+    }
+}
+
+/// Разминочные подходы перед рабочими: «20×10 · 40×5 · 60×3». Нажатие отмечает
+/// подход — только для себя: в записи тренировки, объём и рекорды разминка не идёт.
+@Composable
+private fun WarmUpRow(steps: List<com.texasprogram.app.model.WarmUp.Step>) {
+    var done by remember(steps) { mutableStateOf(emptySet<com.texasprogram.app.model.WarmUp.Step>()) }
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "РАЗМИНКА",
+            color = Theme.ink.copy(alpha = 0.45f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp
+        )
+        Row(
+            Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            steps.forEach { step ->
+                val isDone = step in done
+                Row(
+                    Modifier
+                        .height(30.dp)
+                        .pressable {
+                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            done = if (isDone) done - step else done + step
+                        }
+                        .background(if (isDone) Theme.accent else Theme.ink.copy(alpha = 0.08f), CircleShape)
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isDone) {
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.canvas, modifier = Modifier.size(12.dp))
+                    }
+                    Text(
+                        "${formatWeight(step.weight)}×${step.reps}",
+                        color = if (isDone) Theme.canvas else Theme.ink.copy(alpha = 0.85f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
@@ -827,14 +924,14 @@ private fun ExerciseHeader(
         Icon(
             Icons.Filled.DragHandle,
             contentDescription = "Удерживайте, чтобы переставить",
-            tint = Color.White.copy(alpha = if (lifted) 0.9f else 0.3f),
+            tint = Theme.ink.copy(alpha = if (lifted) 0.9f else 0.3f),
             modifier = Modifier.size(18.dp)
         )
         ExerciseThumb(name = name, size = if (compact) 48.dp else 52.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 text = name,
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = if (compact) 1 else 2,
@@ -845,17 +942,17 @@ private fun ExerciseHeader(
                 // и длинные названия рвались посреди слова.
                 Row(
                     Modifier
-                        .background(Color.White.copy(alpha = 0.10f), CircleShape)
-                        .clip(CircleShape)
                         .pressable { actions.chooseRest(index) }
+                        .background(Theme.ink.copy(alpha = 0.10f), CircleShape)
+                        .clip(CircleShape)
                         .padding(horizontal = 9.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    Icon(Icons.Filled.Timer, "Время отдыха", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(13.dp))
+                    Icon(Icons.Filled.Timer, "Время отдыха", tint = Theme.ink.copy(alpha = 0.85f), modifier = Modifier.size(13.dp))
                     Text(
                         text = String.format(Locale.US, "%02d:%02d", exercise.restSeconds / 60, exercise.restSeconds % 60),
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = Theme.ink.copy(alpha = 0.85f),
                         style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
                     )
                 }
@@ -863,7 +960,7 @@ private fun ExerciseHeader(
             if (compact) {
                 Text(
                     text = "${exercise.doneCount} из ${RuPlural.sets(exercise.sets.size)}",
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = Theme.ink.copy(alpha = 0.45f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -875,20 +972,24 @@ private fun ExerciseHeader(
                 Box(
                     Modifier
                         .size(30.dp)
-                        .clip(CircleShape)
-                        .clickable { menuExpanded = true },
+                        .pressable { menuExpanded = true },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.MoreHoriz, "Действия с упражнением", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.MoreHoriz, "Действия с упражнением", tint = Theme.ink.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(Color(0xFF1C1C1F))
+                    modifier = Modifier.background(Theme.tone(0xFF1C1C1F))
                 ) {
                     MenuItem("Добавить подход", Icons.Filled.Add) {
                         menuExpanded = false
                         actions.addSet(index)
+                    }
+                    // Тренажёр занят — похожее упражнение с весом по истории.
+                    MenuItem("Заменить упражнение", Icons.Filled.SwapHoriz) {
+                        menuExpanded = false
+                        actions.chooseSwap(index)
                     }
                     MenuItem("Картинка упражнения", Icons.Filled.Image) {
                         menuExpanded = false
@@ -929,7 +1030,7 @@ private fun ExerciseHeader(
 }
 
 @Composable
-private fun MenuItem(title: String, icon: ImageVector, color: Color = Color.White, onClick: () -> Unit) {
+private fun MenuItem(title: String, icon: ImageVector, color: Color = Theme.ink, onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(title, color = color) },
         leadingIcon = { Icon(icon, null, tint = color) },
@@ -951,6 +1052,18 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
             Spacer(Modifier.width(40.dp))
         }
 
+        // Только что добавленный подход: его номер пару секунд пульсирует, а под
+        // кнопкой — подсказка, как убрать лишний (первые три раза).
+        val context = LocalContext.current
+        var justAdded by remember { mutableStateOf<Long?>(null) }
+        var showsHint by remember { mutableStateOf(false) }
+        LaunchedEffect(justAdded) {
+            if (justAdded == null) return@LaunchedEffect
+            delay(3_000)
+            justAdded = null
+            showsHint = false
+        }
+
         val sets = exercise.sets
         sets.forEachIndexed { position, set ->
             androidx.compose.runtime.key(set.id) {
@@ -960,6 +1073,7 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
                     exIndex = exIndex,
                     isCurrent = !set.isDone && (0 until position).all { sets[it].isDone },
                     canDelete = sets.size > 1,
+                    highlighted = set.id == justAdded,
                     actions = actions
                 )
             }
@@ -969,25 +1083,52 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
             Modifier
                 .padding(top = 4.dp)
                 .fillMaxWidth()
+                .pressable {
+                    actions.addSet(exIndex)
+                    justAdded = WorkoutSessionManager.exercises.getOrNull(exIndex)?.sets?.lastOrNull()?.id
+                    val hints = context.getSharedPreferences(HINTS, Context.MODE_PRIVATE)
+                    val shown = hints.getInt(HINT_DELETE_SET, 0)
+                    if (shown < 3) {
+                        showsHint = true
+                        hints.edit().putInt(HINT_DELETE_SET, shown + 1).apply()
+                    }
+                }
                 .background(FieldColor, RoundedCornerShape(14.dp))
                 .clip(RoundedCornerShape(14.dp))
-                .pressable { actions.addSet(exIndex) }
                 .padding(vertical = 11.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Filled.Add, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(15.dp))
+            Icon(Icons.Filled.Add, null, tint = Theme.ink.copy(alpha = 0.85f), modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Добавить подход", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("Добавить подход", color = Theme.ink.copy(alpha = 0.85f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+
+        AnimatedVisibility(
+            visible = showsHint,
+            enter = fadeIn(tween(220)) + expandVertically(Motion.snappy()),
+            exit = fadeOut(tween(180)) + shrinkVertically(Motion.snappy())
+        ) {
+            Text(
+                "Лишний подход? Смахни его влево или нажми на номер",
+                color = Theme.ink.copy(alpha = 0.55f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+            )
         }
     }
 }
+
+private const val HINTS = "strain_hints"
+private const val HINT_DELETE_SET = "delete_set"
 
 @Composable
 private fun ColumnTitle(text: String, modifier: Modifier) {
     Text(
         text = text,
-        color = Color.White.copy(alpha = 0.4f),
+        color = Theme.ink.copy(alpha = 0.4f),
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
@@ -1002,6 +1143,29 @@ private fun SetRow(
     exIndex: Int,
     isCurrent: Boolean,
     canDelete: Boolean,
+    highlighted: Boolean,
+    actions: SessionActions
+) {
+    SwipeToDelete(
+        enabled = canDelete,
+        onDelete = {
+            // По идентификатору: пока строка уезжала, номера могли сдвинуться.
+            val at = WorkoutSessionManager.exercises.getOrNull(exIndex)?.sets?.indexOfFirst { it.id == set.id } ?: -1
+            if (at >= 0) actions.delete(exIndex, at)
+        }
+    ) {
+        SetRowContent(set, position, exIndex, isCurrent, canDelete, highlighted, actions)
+    }
+}
+
+@Composable
+private fun SetRowContent(
+    set: ActiveSetState,
+    position: Int,
+    exIndex: Int,
+    isCurrent: Boolean,
+    canDelete: Boolean,
+    highlighted: Boolean,
     actions: SessionActions
 ) {
     Row(
@@ -1009,20 +1173,20 @@ private fun SetRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        SetNumber(set, position, exIndex, isCurrent, canDelete, actions)
+        SetNumber(set, position, exIndex, isCurrent, canDelete, highlighted, actions)
 
         // «БЫЛО»: нажал — подставилось то, что было в прошлый раз.
         Box(
             Modifier
                 .width(62.dp)
                 .height(44.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .pressable(enabled = set.previous != null) { actions.previous(exIndex, position) },
+                .pressable(enabled = set.previous != null) { actions.previous(exIndex, position) }
+                .clip(RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = set.previousText,
-                color = Color.White.copy(alpha = if (set.previous == null) 0.25f else 0.45f),
+                color = Theme.ink.copy(alpha = if (set.previous == null) 0.25f else 0.45f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -1056,9 +1220,19 @@ private fun SetNumber(
     exIndex: Int,
     isCurrent: Boolean,
     canDelete: Boolean,
+    highlighted: Boolean,
     actions: SessionActions
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val fill by animateColorAsState(
+        when {
+            set.isRecord -> Theme.accent
+            highlighted -> Theme.accent.copy(alpha = 0.35f)
+            else -> Theme.tone(0xFF262626)
+        },
+        Motion.fade(220),
+        label = "setNumber"
+    )
     val currentAlpha by animateFloatAsState(if (isCurrent) 1f else 0f, Motion.snappy(), label = "current")
     val recordScale by animateFloatAsState(if (set.isRecord) 1f else 0f, Motion.bouncy(), label = "record")
     val hasMenu = set.previous != null || canDelete
@@ -1073,17 +1247,18 @@ private fun SetNumber(
                 .graphicsLayer { alpha = currentAlpha }
                 .background(Theme.accent, CircleShape)
         )
+        if (highlighted) NewSetRing()
         Box(
             Modifier
                 .size(34.dp)
-                .background(if (set.isRecord) Theme.accent else Color(0xFF262626), CircleShape)
-                .clip(CircleShape)
-                .pressable(enabled = hasMenu) { menuExpanded = true },
+                .pressable(enabled = hasMenu) { menuExpanded = true }
+                .background(fill, CircleShape)
+                .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "${position + 1}",
-                color = if (set.isRecord) Color.Black else Color.White,
+                color = if (set.isRecord) Theme.canvas else Theme.ink,
                 style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
             )
         }
@@ -1098,17 +1273,17 @@ private fun SetNumber(
                         alpha = recordScale.coerceIn(0f, 1f)
                     }
                     .size(16.dp)
-                    .background(Color.Black, CircleShape),
+                    .background(Theme.canvas, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.EmojiEvents, null, tint = Color.White, modifier = Modifier.size(10.dp))
+                Icon(Icons.Filled.EmojiEvents, null, tint = Theme.ink, modifier = Modifier.size(10.dp))
             }
         }
 
         DropdownMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
-            modifier = Modifier.background(Color(0xFF1C1C1F))
+            modifier = Modifier.background(Theme.tone(0xFF1C1C1F))
         ) {
             if (set.previous != null) {
                 MenuItem("Как в прошлый раз", Icons.Filled.History) {
@@ -1126,6 +1301,126 @@ private fun SetNumber(
     }
 }
 
+/// Кольцо, что расходится от номера только что добавленного подхода: «вот он, новый».
+@Composable
+private fun NewSetRing() {
+    val pulse = rememberInfiniteTransition(label = "newSet")
+    val progress by pulse.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearOutSlowInEasing)),
+        label = "newSetRing"
+    )
+    Box(
+        Modifier
+            .size(34.dp)
+            .graphicsLayer {
+                val scale = 1f + 0.4f * progress
+                scaleX = scale
+                scaleY = scale
+                alpha = 1f - progress
+            }
+            .border(2.dp, Theme.accent, CircleShape)
+    )
+}
+
+/// Смахни подход влево — справа проступает красное «Удалить». Дотянул до
+/// порога — короткий щелчок, отпустил — подход уезжает и удаляется. Не
+/// дотянул — строка с пружиной возвращается. Прокрутку списка жест не трогает:
+/// он берёт только движение по горизонтали.
+@Composable
+private fun SwipeToDelete(
+    enabled: Boolean,
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val haptics = rememberHapticEngine()
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val offset = remember { Animatable(0f) }
+    var width by remember { mutableIntStateOf(0) }
+    var armed by remember { mutableStateOf(false) }
+    val currentOnDelete by rememberUpdatedState(onDelete)
+    val iconScale by animateFloatAsState(if (armed) 1.12f else 0.9f, Motion.bouncy(), label = "deleteIcon")
+    val red = Theme.record
+    val minThreshold = with(density) { 90.dp.toPx() }
+    val radius = with(density) { 12.dp.toPx() }
+    val labelStart = with(density) { 28.dp.toPx() }
+    val labelFade = with(density) { 40.dp.toPx() }
+
+    Box(Modifier.fillMaxWidth().onSizeChanged { width = it.width }) {
+        // Красная полоса — ровно на открытую часть, от правого края.
+        Box(
+            Modifier
+                .matchParentSize()
+                .drawBehind {
+                    val revealed = -offset.value
+                    if (revealed <= 0f) return@drawBehind
+                    drawRoundRect(
+                        red.copy(alpha = if (armed) 1f else 0.78f),
+                        topLeft = Offset(size.width - revealed, 0f),
+                        size = Size(revealed, size.height),
+                        cornerRadius = CornerRadius(radius)
+                    )
+                },
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Row(
+                Modifier
+                    .padding(end = 16.dp)
+                    .graphicsLayer {
+                        alpha = ((-offset.value - labelStart) / labelFade).coerceIn(0f, 1f)
+                        scaleX = iconScale
+                        scaleY = iconScale
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Delete, null, tint = Theme.ink, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Удалить", color = Theme.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Box(
+            Modifier
+                .graphicsLayer { translationX = offset.value }
+                .then(
+                    if (enabled) Modifier.pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (armed) {
+                                    scope.launch {
+                                        offset.animateTo(-width.toFloat(), tween(170))
+                                        currentOnDelete()
+                                        // Удалённая строка уйдёт вместе с этой корутиной; если
+                                        // подход почему-то остался — вернём строку на место.
+                                        delay(400)
+                                        armed = false
+                                        offset.animateTo(0f, Motion.bouncy())
+                                    }
+                                } else {
+                                    scope.launch { offset.animateTo(0f, Motion.bouncy()) }
+                                }
+                            },
+                            onDragCancel = {
+                                armed = false
+                                scope.launch { offset.animateTo(0f, Motion.bouncy()) }
+                            }
+                        ) { change, dragAmount ->
+                            val next = (offset.value + dragAmount).coerceIn(-width.toFloat(), 0f)
+                            change.consume()
+                            scope.launch { offset.snapTo(next) }
+                            val nowArmed = -next > maxOf(width * 0.38f, minThreshold)
+                            if (nowArmed != armed) {
+                                armed = nowArmed
+                                if (nowArmed) haptics.medium() else haptics.light()
+                            }
+                        }
+                    } else Modifier
+                )
+        ) { content() }
+    }
+}
+
 @Composable
 private fun CheckButton(done: Boolean, onClick: () -> Unit) {
     val progress by animateFloatAsState(if (done) 1f else 0f, Motion.bouncy(), label = "check")
@@ -1136,15 +1431,17 @@ private fun CheckButton(done: Boolean, onClick: () -> Unit) {
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                onClickLabel = if (done) "Снять отметку" else "Отметить подход",
                 onClick = onClick
-            ),
+            )
+            .semantics { contentDescription = if (done) "Подход сделан" else "Отметить подход" },
         contentAlignment = Alignment.Center
     ) {
         Box(
             Modifier
                 .size(30.dp)
                 .graphicsLayer { alpha = 1f - progress.coerceIn(0f, 1f) }
-                .border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                .border(2.dp, Theme.ink.copy(alpha = 0.35f), CircleShape)
         )
         Box(
             Modifier
@@ -1204,7 +1501,7 @@ private fun SetNumberField(
         singleLine = true,
         textStyle = TextStyle(
             // План — приглушённым, факт — белым, как у REBRN.
-            color = if (isDone || focused) Color.White else Color.White.copy(alpha = 0.6f),
+            color = if (isDone || focused) Theme.ink else Theme.ink.copy(alpha = 0.6f),
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -1272,6 +1569,7 @@ private fun RecordBanner(record: RecordNotice?, modifier: Modifier = Modifier) {
             Modifier
                 .padding(horizontal = 24.dp)
                 .fillMaxWidth()
+                .pressable { WorkoutSessionManager.lastRecord = null }
                 .graphicsLayer {
                     shadowElevation = 16.dp.toPx()
                     this.shape = shape
@@ -1279,21 +1577,20 @@ private fun RecordBanner(record: RecordNotice?, modifier: Modifier = Modifier) {
                     spotShadowColor = Theme.accent
                     ambientShadowColor = Theme.accent
                 }
-                .background(Color(0xFF1F1F1F))
+                .background(Theme.tone(0xFF1F1F1F))
                 .border(1.dp, Theme.accent.copy(alpha = 0.6f), shape)
-                .clickable { WorkoutSessionManager.lastRecord = null }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(Modifier.size(30.dp).background(Theme.accent, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.EmojiEvents, null, tint = Color.Black, modifier = Modifier.size(17.dp))
+                Icon(Icons.Filled.EmojiEvents, null, tint = Theme.canvas, modifier = Modifier.size(17.dp))
             }
             Column {
-                Text("Новый рекорд", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                Text("Новый рекорд", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Black)
                 Text(
                     "${notice.exercise} · ${formatWeight(notice.weight)} кг",
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = Theme.ink.copy(alpha = 0.65f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -1319,8 +1616,8 @@ private fun ZeroSetsAlertOverlay(onConfirm: () -> Unit, onDismiss: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 28.dp)
-                .background(Color(0xFF1F1F1F), RoundedCornerShape(26.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(26.dp))
+                .background(Theme.tone(0xFF1F1F1F), RoundedCornerShape(26.dp))
+                .border(1.dp, Theme.ink.copy(alpha = 0.1f), RoundedCornerShape(26.dp))
                 // Нажатие по самой карточке не закрывает окно.
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                 .padding(24.dp),
@@ -1330,14 +1627,14 @@ private fun ZeroSetsAlertOverlay(onConfirm: () -> Unit, onDismiss: () -> Unit) {
             Icon(Icons.Filled.Delete, null, tint = Color(0xFFFF4757), modifier = Modifier.size(46.dp))
             Text(
                 text = if (WorkoutSessionManager.totalCompletedSets == 0) "Ни одного подхода не отмечено" else "Отменить тренировку?",
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Text(
                 text = "Тренировка удалится вместе с введёнными значениями и счётчиком времени.",
-                color = Color.White.copy(alpha = 0.65f),
+                color = Theme.ink.copy(alpha = 0.65f),
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp
@@ -1345,12 +1642,11 @@ private fun ZeroSetsAlertOverlay(onConfirm: () -> Unit, onDismiss: () -> Unit) {
             SlideToConfirm(title = "УДАЛИТЬ", onConfirmed = onConfirm)
             Text(
                 text = "Вернуться к тренировке",
-                color = Color.White.copy(alpha = 0.85f),
+                color = Theme.ink.copy(alpha = 0.85f),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable { onDismiss() }
+                    .pressable { onDismiss() }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             )
         }
@@ -1405,7 +1701,7 @@ private fun SlideToConfirm(title: String, onConfirmed: () -> Unit) {
                 },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Delete, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(Icons.Filled.Delete, null, tint = Theme.ink, modifier = Modifier.size(22.dp))
         }
     }
 }
@@ -1415,9 +1711,10 @@ private fun SlideToConfirm(title: String, onConfirmed: () -> Unit) {
 @Composable
 private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1C1C1F),
-        title = { Text("Время отдыха", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+        containerColor = Theme.tone(0xFF1C1C1F),
+        title = { Text("Время отдыха", color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(60, 90, 120, 150, 180, 240).forEach { seconds ->
@@ -1425,15 +1722,15 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
-                            .clip(RoundedCornerShape(14.dp))
                             .pressable { onSelect(seconds) }
+                            .background(Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .padding(vertical = 13.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             "$minutes мин (${String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60)})",
-                            color = Color.White,
+                            color = Theme.ink,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -1442,7 +1739,7 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена", color = Color.White.copy(alpha = 0.6f)) }
+            TextButton(onClick = onDismiss) { Text("Отмена", color = Theme.ink.copy(alpha = 0.6f)) }
         }
     )
 }
@@ -1453,19 +1750,20 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
 private fun WorkoutNoteDialog(initialNote: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialNote) }
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1C1C1F),
-        title = { Text("Заметка к тренировке", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+        containerColor = Theme.tone(0xFF1C1C1F),
+        title = { Text("Заметка к тренировке", color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 placeholder = { Text("Как прошла тренировка? Самочувствие, сон...", color = Color.Gray) },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
+                    focusedTextColor = Theme.ink,
+                    unfocusedTextColor = Theme.ink,
                     focusedBorderColor = Theme.accent,
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    unfocusedBorderColor = Theme.ink.copy(alpha = 0.2f),
                     cursorColor = Theme.accent
                 ),
                 modifier = Modifier
@@ -1479,7 +1777,7 @@ private fun WorkoutNoteDialog(initialNote: String, onSave: (String) -> Unit, onD
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена", color = Color.White.copy(alpha = 0.6f)) }
+            TextButton(onClick = onDismiss) { Text("Отмена", color = Theme.ink.copy(alpha = 0.6f)) }
         }
     )
 }

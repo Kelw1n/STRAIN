@@ -320,6 +320,8 @@ final class ProgramProfile {
     var workoutNotes: [String: String] = [:]
     /// Замеры веса тела, по одному на дату.
     var bodyWeightLog: [BodyWeightEntry] = []
+    /// Опыт за места в законченных челленджах: один раз за каждый челлендж.
+    var challengeAwards: [ChallengeAward] = []
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
     var accessoryProgressionEnabled: Bool = true
     /// Шаг прибавки по упражнениям: ключ — нормализованное название.
@@ -439,11 +441,44 @@ final class ProgramProfile {
     /// Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
     /// правки подставляют свои упражнения. Наоборот задержка стёрла бы то,
     /// что пользователь вписал руками.
-    var workoutPlan: WorkoutPlan { applySteps(to: applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan)))) }
+    ///
+    /// Расчёт всех недель дорогой, а план читают десятки раз за одну
+    /// перерисовку: медали, история упражнений, расписание. Поэтому готовый
+    /// план берём из кэша, пока не поменялось ничего из того, от чего он зависит.
+    var workoutPlan: WorkoutPlan {
+        PlanCache.plan(for: planInputs, kind: .full) {
+            applySteps(to: applyEdits(to: applyAutoregulation(to: applyHolds(to: generatedPlan))))
+        }
+    }
+
+    /// Всё, от чего зависит план. Сравниваются сами значения, а не хэш:
+    /// устаревший план из кэша невозможен.
+    fileprivate var planInputs: PlanInputs {
+        PlanInputs(
+            kind: programKindRaw,
+            peaking: isPeaking,
+            input: input,
+            peakingInput: peakingInput,
+            fullBodyLevel: fullBodyLevelRaw,
+            euthanasia: euthanasiaInput,
+            custom: customProgram,
+            edits: planEdits,
+            skipped: skipped,
+            reports: liftReports,
+            autoregulation: autoregulationEnabled,
+            cycle: cycleNumber,
+            steps: weightSteps,
+            defaultStep: defaultWeightStep
+        )
+    }
 
     /// Чистый расчёт без правок — нужен экрану настройки, чтобы показать,
     /// что именно программа предлагала до вмешательства.
     var generatedPlan: WorkoutPlan {
+        PlanCache.plan(for: planInputs, kind: .generated) { calculatedPlan }
+    }
+
+    private var calculatedPlan: WorkoutPlan {
         switch programKind {
         case .texas:
             return isPeaking
@@ -483,6 +518,13 @@ final class ProgramProfile {
                 }
                 for edit in edits where edit.kind == .add {
                     list.append(edit.prescription)
+                }
+                // Своё добавленное меняют прямо в тренировке («тренажёр занят») —
+                // такая замена находит цель только теперь. Уже применённые
+                // свою цель здесь не найдут и ничего не тронут.
+                for edit in edits where edit.kind == .replace {
+                    guard let index = list.firstIndex(where: { $0.id == edit.targetID }) else { continue }
+                    list[index] = edit.prescription
                 }
                 // Порядок применяем последним: к этому моменту состав дня уже
                 // окончательный. Упражнения, которых нет в списке, идут в конец —
@@ -828,9 +870,15 @@ final class ProgramProfile {
     static let extraSetAllowance = 12
 
     /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана.
+    ///
+    /// Самый частый вызов в приложении: им читают историю, медали, рекорды и
+    /// подсказки весов. Поэтому ключ дня и упражнения собираем один раз, а не на
+    /// каждый из двадцати номеров, и записи модели читаем тоже один раз.
     func entries(week: Int, day: Int, exercise: ExercisePrescription) -> [(index: Int, entry: SetEntry)] {
-        (0..<(max(exercise.sets, 0) + Self.extraSetAllowance)).compactMap { index in
-            setEntry(week: week, day: day, exercise: exercise, index: index).map { (index, $0) }
+        let base = setKey(week: week, day: day, exercise: exercise) + "|"
+        let log = setLog
+        return (0..<(max(exercise.sets, 0) + Self.extraSetAllowance)).compactMap { index in
+            log[base + String(index)].map { (index, $0) }
         }
     }
 
@@ -849,6 +897,18 @@ final class ProgramProfile {
         return setLog.reduce(0) { sum, item in
             item.key.hasPrefix(prefix) ? sum + item.value.tonnage : sum
         }
+    }
+
+    /// Тоннаж всех дней за один проход по записям — для списков тренировок:
+    /// `tonnage(forDayKey:)` на каждую строку заново перебирал бы все подходы.
+    /// Подходы складываются в том же порядке, поэтому числа те же до бита.
+    func tonnageByDay() -> [String: Double] {
+        var result: [String: Double] = [:]
+        for (key, entry) in setLog {
+            guard let bar = key.firstIndex(of: "|") else { continue }
+            result[String(key[..<bar]), default: 0] += entry.tonnage
+        }
+        return result
     }
 
     // MARK: - История упражнения
@@ -889,6 +949,30 @@ final class ProgramProfile {
             }
         }
         return points
+    }
+
+    /// История всех движений за один проход по плану: имена — в том же порядке,
+    /// что и у `loggedExerciseNames`, точки — те же, что у `history(forExerciseNamed:)`.
+    /// Медали и сводка недели читают историю каждого движения, а по отдельности
+    /// это десятки проходов по всем неделям на каждую перерисовку профиля.
+    func historyByName() -> (names: [String], points: [String: [ExerciseHistoryPoint]]) {
+        var names: [String] = []
+        var points: [String: [ExerciseHistoryPoint]] = [:]
+        for week in workoutPlan.weeks {
+            for day in week.days {
+                for exercise in day.exercises {
+                    let logged = entries(week: week.number, day: day.number, exercise: exercise).map(\.entry)
+                    guard !logged.isEmpty else { continue }
+                    var planned: Double?
+                    if case .kilograms(let value) = exercise.load { planned = value }
+                    if points[exercise.name] == nil { names.append(exercise.name) }
+                    points[exercise.name, default: []].append(
+                        ExerciseHistoryPoint(week: week.number, day: day.number, planned: planned, entries: logged)
+                    )
+                }
+            }
+        }
+        return (names, points)
     }
 
     // MARK: - Вес тела
@@ -1732,5 +1816,53 @@ final class ProgramProfile {
     /// Считаем только текущий цикл: отметки пикирования лежат в своём пространстве имён.
     var completedDayCount: Int {
         Set(completedDayKeys.filter { isOwnKey($0) }).count
+    }
+}
+
+
+// MARK: - Кэш плана
+
+/// Входные данные плана: одинаковые — значит, и план тот же самый.
+fileprivate struct PlanInputs: Equatable {
+    let kind: String
+    let peaking: Bool
+    let input: ProgramInput
+    let peakingInput: ProgramInput
+    let fullBodyLevel: String
+    let euthanasia: EuthanasiaInput?
+    let custom: CustomProgram?
+    let edits: [PlanEdit]
+    let skipped: [SkippedWorkout]
+    let reports: [LiftReport]
+    let autoregulation: Bool
+    let cycle: Int
+    let steps: [String: Double]
+    let defaultStep: Double
+}
+
+/// Несколько последних посчитанных планов. Ключ — сами входные данные,
+/// поэтому кэш общий для всех профилей и не может отдать чужой или старый план.
+fileprivate enum PlanCache {
+    enum Kind { case full, generated }
+
+    private static let lock = NSLock()
+    private static var entries: [(kind: Kind, inputs: PlanInputs, plan: WorkoutPlan)] = []
+    private static let limit = 6
+
+    static func plan(for inputs: PlanInputs, kind: Kind, build: () -> WorkoutPlan) -> WorkoutPlan {
+        lock.lock()
+        if let hit = entries.first(where: { $0.kind == kind && $0.inputs == inputs }) {
+            lock.unlock()
+            return hit.plan
+        }
+        lock.unlock()
+        // Считаем без замка: внутри расчёт может сам спросить другой план.
+        let plan = build()
+        lock.lock()
+        entries.removeAll { $0.kind == kind && $0.inputs == inputs }
+        entries.insert((kind, inputs, plan), at: 0)
+        if entries.count > limit { entries.removeLast(entries.count - limit) }
+        lock.unlock()
+        return plan
     }
 }

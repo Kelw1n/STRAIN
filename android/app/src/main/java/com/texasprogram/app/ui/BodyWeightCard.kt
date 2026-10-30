@@ -221,15 +221,15 @@ private fun EntryCard(onRecord: (Double) -> Unit) {
             Box(
                 Modifier
                     .height(50.dp)
+                    .pressable(enabled = parsed != null) { record() }
                     .clip(RoundedCornerShape(14.dp))
                     .background(if (parsed == null) Theme.surfaceSoft else Theme.accent)
-                    .pressable(enabled = parsed != null) { record() }
                     .padding(horizontal = 18.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     "Записать",
-                    color = if (parsed == null) Theme.textTertiary else Color.Black,
+                    color = if (parsed == null) Theme.textTertiary else Theme.canvas,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -419,8 +419,8 @@ private fun EntryMenu(onDelete: () -> Unit) {
         Box(
             Modifier
                 .size(34.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .pressable { open = true },
+                .pressable { open = true }
+                .clip(RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Filled.MoreHoriz, contentDescription = "Действия с замером", tint = Theme.textTertiary, modifier = Modifier.size(18.dp))

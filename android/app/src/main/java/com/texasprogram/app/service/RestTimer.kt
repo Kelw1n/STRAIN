@@ -78,6 +78,10 @@ class RestTimer private constructor(context: Context) {
     var liveNotification by mutableStateOf(prefs.getBoolean("live", true))
         private set
 
+    /// Отсчёт 3-2-1 и сигнал конца отдыха. Выключается в настройках, как на iOS.
+    var soundEnabled by mutableStateOf(prefs.getBoolean("sound", true))
+        private set
+
     private var toneGenerator: android.media.ToneGenerator? = null
     private var lastBeepSecond: Long = -1L
 
@@ -156,6 +160,11 @@ class RestTimer private constructor(context: Context) {
         cancelAlarm()
         persist()
         cancelLive()
+    }
+
+    fun updateSound(enabled: Boolean) {
+        soundEnabled = enabled
+        runCatching { prefs.edit().putBoolean("sound", enabled).apply() }
     }
 
     fun updateLiveNotification(enabled: Boolean) {
@@ -270,7 +279,9 @@ class RestTimer private constructor(context: Context) {
                 .addAction(0, "Пропустить", actionIntent(ACTION_SKIP, 13))
             exerciseName?.let { ExerciseArt.cached(it) }?.let { builder.setLargeIcon(it) }
             val notification: Notification = builder.build()
-            NotificationManagerCompat.from(context).notify(LIVE_ID, notification)
+            // Уведомления запрещены — часть прошивок бросает исключение; отдых
+            // при этом идёт дальше на экране, приложение не падает.
+            runCatching { NotificationManagerCompat.from(context).notify(LIVE_ID, notification) }
         }
     }
 
@@ -279,6 +290,7 @@ class RestTimer private constructor(context: Context) {
     }
 
     private fun playCountdownBeep() {
+        if (!soundEnabled) return
         try {
             if (toneGenerator == null) {
                 toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80)
@@ -288,6 +300,7 @@ class RestTimer private constructor(context: Context) {
     }
 
     private fun playFinishTone() {
+        if (!soundEnabled) return
         try {
             if (toneGenerator == null) {
                 toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 90)

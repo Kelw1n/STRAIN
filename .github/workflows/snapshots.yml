@@ -43,10 +43,11 @@ jobs:
             -project TexasProgram.xcodeproj -scheme TexasProgram \
             -destination "platform=iOS Simulator,id=$PRO" \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO
-          for pair in "pro:$PRO" "se:$SE"; do
-            slug="${pair%%:*}"; udid="${pair#*:}"
+          # Светлая тема — на большом iPhone, тёмная — на обоих.
+          for pair in "pro:$PRO:dark" "pro-light:$PRO:light" "se:$SE:dark"; do
+            slug="${pair%%:*}"; rest="${pair#*:}"; udid="${rest%%:*}"; theme="${rest#*:}"
             [ -n "$udid" ] || continue
-            TEST_RUNNER_SNAPSHOTS=1 TEST_RUNNER_SNAPSHOT_DIR="$PWD/snapshots/ios-$slug" \
+            TEST_RUNNER_SNAPSHOTS=1 TEST_RUNNER_THEME="$theme" TEST_RUNNER_SNAPSHOT_DIR="$PWD/snapshots/ios-$slug" \
               xcodebuild test-without-building \
                 -project TexasProgram.xcodeproj -scheme TexasProgram \
                 -destination "platform=iOS Simulator,id=$udid" \
@@ -57,6 +58,71 @@ jobs:
       - name: Print snapshots
         if: always()
         run: |
+          # Уменьшаем до 520 точек в ширину: три набора снимков в полном размере
+          # не помещаются в лог, который потом читают.
+          for f in $(find snapshots -name '*.jpg' 2>/dev/null); do
+            sips -s format jpeg -s formatOptions 55 --resampleWidth 520 "$f" --out "$f" >/dev/null 2>&1 || true
+          done
+          python3 - <<'PY'
+          import base64, glob, os
+          for path in sorted(glob.glob("snapshots/**/*.jpg", recursive=True)):
+              data = base64.b64encode(open(path, "rb").read()).decode()
+              name = os.path.relpath(path, "snapshots")
+              chunks = [data[i:i + 4000] for i in range(0, len(data), 4000)]
+              for index, chunk in enumerate(chunks):
+                  print(f"SNAP {name} {index + 1}/{len(chunks)} {chunk}")
+          PY
+
+  # Настоящее жидкое стекло есть только в сборке Xcode 26 на iOS 26: здесь
+  # снимается панель вкладок из прозрачного и матового стекла. Нет Xcode 26
+  # или симулятора iOS 26 на раннере — задача просто ничего не снимет.
+  ios-glass:
+    runs-on: macos-15
+    timeout-minutes: 50
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshots on iOS 26
+        run: |
+          set -euo pipefail
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          [ -n "$XCODE" ] || { echo "::warning::Нет Xcode 26"; exit 0; }
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          UDID="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          ids = [d["udid"] for runtime, items in sorted(devices.items()) if "iOS-26" in runtime
+                 for d in items if d["name"].startswith("iPhone") and "Pro" in d["name"]]
+          print(ids[-1] if ids else "")
+          ')"
+          [ -n "$UDID" ] || { echo "::warning::Нет симулятора iOS 26"; exit 0; }
+          TEST_RUNNER_SNAPSHOTS=1 TEST_RUNNER_SNAPSHOT_DIR="$PWD/snapshots/ios26" \
+            xcodebuild test \
+              -project TexasProgram.xcodeproj -scheme TexasProgram \
+              -destination "platform=iOS Simulator,id=$UDID" \
+              -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+              -only-testing:TexasProgramTests/SnapshotTests/testGlassTabBar \
+              -only-testing:TexasProgramTests/SnapshotTests/testChat \
+              -only-testing:TexasProgramTests/SnapshotTests/testFeedTab || true
+          # Стекло в светлой теме: уже собранное, только тесты.
+          TEST_RUNNER_SNAPSHOTS=1 TEST_RUNNER_THEME=light TEST_RUNNER_SNAPSHOT_DIR="$PWD/snapshots/ios26-light" \
+            xcodebuild test-without-building \
+              -project TexasProgram.xcodeproj -scheme TexasProgram \
+              -destination "platform=iOS Simulator,id=$UDID" \
+              -derivedDataPath build \
+              -only-testing:TexasProgramTests/SnapshotTests/testGlassTabBar \
+              -only-testing:TexasProgramTests/SnapshotTests/testChat \
+              -only-testing:TexasProgramTests/SnapshotTests/testFeedTab || true
+          ls -la snapshots/* || true
+      - name: Print snapshots
+        if: always()
+        run: |
+          # Уменьшаем до 520 точек в ширину: три набора снимков в полном размере
+          # не помещаются в лог, который потом читают.
+          for f in $(find snapshots -name '*.jpg' 2>/dev/null); do
+            sips -s format jpeg -s formatOptions 55 --resampleWidth 520 "$f" --out "$f" >/dev/null 2>&1 || true
+          done
           python3 - <<'PY'
           import base64, glob, os
           for path in sorted(glob.glob("snapshots/**/*.jpg", recursive=True)):
@@ -69,7 +135,7 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -79,27 +145,21 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Record snapshots
+      - run: pip install --quiet pillow
+      # Тёмная тема, потом светлая: Paparazzi пишет снимки в одну папку,
+      # поэтому печатаем их после каждого прогона.
+      - name: Record snapshots (dark)
         working-directory: android
         run: gradle -Psnapshots recordPaparazziDebug --continue --stacktrace
-      - name: Print snapshots
+      - name: Print snapshots (dark)
         if: always()
-        run: |
-          pip install --quiet pillow
-          python3 - <<'PY'
-          import base64, glob, io, os
-          from PIL import Image
-          for path in sorted(glob.glob("android/app/src/test/snapshots/images/*.png")):
-              image = Image.open(path).convert("RGB")
-              width = 540
-              image = image.resize((width, round(image.height * width / image.width)))
-              buffer = io.BytesIO()
-              image.save(buffer, "JPEG", quality=60)
-              data = base64.b64encode(buffer.getvalue()).decode()
-              name = "android/" + os.path.basename(path).replace(".png", ".jpg")
-              chunks = [data[i:i + 4000] for i in range(0, len(data), 4000)]
-              for index, chunk in enumerate(chunks):
-                  print(f"SNAP {name} {index + 1}/{len(chunks)} {chunk}")
-          PY
+        run: python3 .github/scripts/print_paparazzi.py android
+      - name: Record snapshots (light)
+        if: always()
+        working-directory: android
+        run: gradle -Psnapshots -PsnapshotTheme=light recordPaparazziDebug --continue --stacktrace
+      - name: Print snapshots (light)
+        if: always()
+        run: python3 .github/scripts/print_paparazzi.py android-light
 
-# Повторный прогон — любая правка этого файла в ветке. Прогон 4.
+# Повторный прогон — любая правка этого файла в ветке. Прогон 7.

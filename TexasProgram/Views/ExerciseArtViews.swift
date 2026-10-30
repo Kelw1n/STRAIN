@@ -15,11 +15,11 @@ struct ExerciseThumb: View {
                     .interpolation(.high)
                     .scaledToFill()
             } else {
-                Color(white: 0.85)
+                Color.tone(0.85)
                     .overlay {
                         Image(systemName: "dumbbell.fill")
                             .font(.system(size: size * 0.42, weight: .semibold))
-                            .foregroundStyle(Color(white: 0.4))
+                            .foregroundStyle(Color.tone(0.4))
                     }
             }
         }
@@ -47,20 +47,20 @@ struct ExerciseArtSheet: View {
     var body: some View {
         VStack(spacing: 18) {
             Capsule()
-                .fill(Color.white.opacity(0.25))
+                .fill(Color.ink.opacity(0.25))
                 .frame(width: 40, height: 5)
                 .padding(.top, 10)
 
             Text(name)
                 .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
             ExerciseThumb(name: name, size: 240)
                 .overlay {
                     if loading {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(.ink)
                     }
                 }
                 .shadow(color: .black.opacity(0.5), radius: 20, y: 10)
@@ -69,7 +69,7 @@ struct ExerciseArtSheet: View {
 
             Text("Стандартная иллюстрация подбирается по названию. Можно поставить свою — она будет у этого упражнения во всех тренировках.")
                 .font(.footnote)
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 28)
 
@@ -77,10 +77,10 @@ struct ExerciseArtSheet: View {
                 PhotosPicker(selection: $pick, matching: .images) {
                     Label("Выбрать из галереи", systemImage: "photo.on.rectangle")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                        .background(Color.white, in: Capsule())
+                        .background(Color.ink, in: Capsule())
                 }
                 .buttonStyle(.pressable)
 
@@ -101,10 +101,9 @@ struct ExerciseArtSheet: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
-        .background(Color(white: 0.07).ignoresSafeArea())
+        .background(Color.tone(0.07).ignoresSafeArea())
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
-        .preferredColorScheme(.dark)
         .onChange(of: pick) { _, item in
             guard let item else { return }
             loading = true

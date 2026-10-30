@@ -6,6 +6,9 @@ enum MainLift: String, CaseIterable, Identifiable, Codable, Sendable {
     case bench = "Жим лёжа"
     case deadlift = "Становая тяга"
 
+    /// В копии с Android здесь имя константы, а не подпись.
+    init(from decoder: Decoder) throws { self = try BackupEnum.decode(decoder) }
+
     var id: String { rawValue }
 
     /// Верх тела прибавляет медленнее — шаг у него меньше.
@@ -21,6 +24,9 @@ enum LiftOutcome: String, CaseIterable, Identifiable, Codable, Sendable {
     case solid = "Нормально"
     case grind = "На пределе"
     case missed = "Не добил"
+
+    /// В копии с Android здесь имя константы, а не подпись.
+    init(from decoder: Decoder) throws { self = try BackupEnum.decode(decoder) }
 
     var id: String { rawValue }
 

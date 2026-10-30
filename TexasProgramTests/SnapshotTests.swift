@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import XCTest
+import SwiftData
 @testable import TexasProgram
 
 /// Снимки экранов ленты и профиля: по ним на CI видно вёрстку — ничего не
@@ -35,15 +36,14 @@ final class SnapshotTests: XCTestCase {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(posts) { post in
                             PostCardView(post: post, onOpen: {}, onOpenAuthor: {}, onChange: { _ in })
-                            Divider().overlay(Color.white.opacity(0.07))
+                            Divider().overlay(Color.ink.opacity(0.07))
                         }
                     }
                     .padding(.horizontal, 16)
                 }
-                .background(Color.black.ignoresSafeArea())
+                .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
     }
 
@@ -78,18 +78,16 @@ final class SnapshotTests: XCTestCase {
         try snap("04-profile") {
             NavigationStack {
                 ScrollView { content() }
-                    .background(Color.black.ignoresSafeArea())
+                    .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
         try snap("05-profile-full", height: 2600) {
             NavigationStack {
                 VStack { content(); Spacer(minLength: 0) }
-                    .background(Color.black.ignoresSafeArea())
+                    .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
     }
 
@@ -97,10 +95,9 @@ final class SnapshotTests: XCTestCase {
         try snap("06-signup") {
             NavigationStack {
                 SignUpView()
-                    .background(Color.black.ignoresSafeArea())
+                    .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
-            .preferredColorScheme(.dark)
         }
     }
 
@@ -134,6 +131,15 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Настройки: системный список, выбор темы и стекла.
+    @MainActor func testSettings() throws {
+        let profile = ProgramProfile(input: .demo)
+        try snap("38-settings", height: 2600) {
+            SettingsView(profile: profile, onAddProfile: {}, onDeleteProfile: {})
+                .modelContainer(for: [ProgramProfile.self], inMemory: true)
+        }
+    }
+
     @MainActor func testWorkoutHub() throws {
         let profile = ProgramProfile(input: .demo)
         try snap("12-workout-hub") {
@@ -143,8 +149,9 @@ final class SnapshotTests: XCTestCase {
 
     @MainActor func testProgress() throws {
         let profile = ProgramProfile(input: .demo)
-        try snap("13-progress") {
-            ActivityProgressView(profile: profile, onStartWorkout: {})
+        // Во всю высоту: внизу разделы «История упражнений», «Заметки» и «Жим 14».
+        try snap("13-progress", height: 2400) {
+            ActivityProgressView(profile: profile, onStartWorkout: {}, onOpenBench: {})
         }
     }
 
@@ -161,6 +168,385 @@ final class SnapshotTests: XCTestCase {
         }
         try snap("14-active-workout", wait: 2) {
             ActiveWorkoutSessionView(profile: profile, workout: workout)
+        }
+    }
+
+    /// Переписка: пузыри своих и чужих сообщений, список переписок и экран чата.
+    @MainActor func testChat() throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let messages: [SocialMessage] = [
+            SocialMessage(id: "1", text: "Го сегодня в зал?", fromMe: false, createdAt: now - 3_600_000),
+            SocialMessage(id: "2", text: "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", fromMe: true, createdAt: now - 3_500_000, read: true),
+            SocialMessage(id: "3", text: "Конечно 💪", fromMe: false, createdAt: now - 3_400_000,
+                          reactions: [SocialReaction(emoji: "🔥", count: 1, mine: true)],
+                          replyTo: SocialMessageQuote(id: "2", text: "Давай в 7. Сегодня присед 140 на 5, подстрахуешь?", image: nil, fromMe: true)),
+            SocialMessage(id: "4", text: "Возьми пояс", fromMe: true, createdAt: now - 60_000,
+                          reactions: [SocialReaction(emoji: "👍", count: 1, mine: false), SocialReaction(emoji: "💪", count: 2, mine: true)]),
+            SocialMessage(id: "5", text: "Вот так стоял", image: "0123456789abcdef01234567", fromMe: false, createdAt: now - 30_000)
+        ]
+        let chats: [SocialChat] = try Fixtures.decode("""
+        [{"user":{"id":"u2","username":"bro.lifts"},"last":{"id":"m1","text":"Возьми пояс","fromMe":false,"createdAt":\(now - 60_000)},"unread":2},
+         {"user":{"id":"u3","username":"heavy.anna"},"last":{"id":"m2","text":"Скинь программу","fromMe":true,"createdAt":\(now - 86_400_000)},"unread":0,
+          "live":{"title":"День 2","exercise":"Становая тяга","done":2,"total":5,"startedAt":\(now - 1_800_000)}}]
+        """)
+        try snap("15-chat-bubbles") {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(messages) { MessageBubble(message: $0, username: "bro.lifts", onDelete: {}) }
+                        TypingBubble()
+                    }
+                    .padding(12)
+                    VStack(spacing: 0) {
+                        ForEach(chats) { ChatRow(chat: $0) }
+                    }
+                    .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .padding(16)
+                }
+                .background(Color.canvas.ignoresSafeArea())
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+        try snap("16-chat-screen") {
+            NavigationStack { ChatView(username: "bro.lifts", path: .constant(NavigationPath())) }
+        }
+    }
+
+    /// Новое в переписке: пересланное, изменённое, тренировка карточкой,
+    /// непрослушанное голосовое, сообщение в очереди и не ушедшее.
+    @MainActor func testChatExtras() throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let messages: [SocialMessage] = try Fixtures.decode("""
+        [{"id":"1","text":"Смотри, как надо","fromMe":false,"createdAt":\(now - 3_600_000),"forwarded":{"username":"heavy.anna"}},
+         {"id":"2","text":"Жму 105 на 5","fromMe":true,"createdAt":\(now - 3_500_000),"read":true,"edited":true},
+         {"id":"3","text":"🏋️ День 1 · Объём","fromMe":false,"createdAt":\(now - 3_000_000),
+          "workout":{"title":"День 1 · Объём","durationSeconds":4380,"volumeKg":12850,"sets":18,"effort":8,
+                     "workout":{"exercises":[{"name":"Приседания","sets":[{"reps":5,"weight":140,"record":true},{"reps":5,"weight":140}]},
+                                             {"name":"Жим лёжа","sets":[{"reps":5,"weight":100}]},
+                                             {"name":"Тяга в наклоне","sets":[{"reps":8,"weight":70}]},
+                                             {"name":"Подъём на бицепс","sets":[{"reps":12,"weight":30}]}]}}},
+         {"id":"4","text":"🏋️ День 2","fromMe":true,"createdAt":\(now - 2_000_000),"read":false,
+          "workout":{"title":"День 2 · Восстановление","durationSeconds":2700,"volumeKg":6400,"sets":12,"workout":{"exercises":[{"name":"Жим стоя","sets":[{"reps":5,"weight":60}]}]}}},
+         {"id":"5","text":"🎤 Голосовое сообщение","fromMe":false,"createdAt":\(now - 120_000),"heard":false,
+          "voice":{"id":"v1","durationMs":14200,"waveform":"2468ace8642468aceca8642"}}]
+        """)
+        let pending = ChatPending(clientId: "c1", username: "bro.lifts", createdAt: now - 30_000, text: "Уже в зале, жду")
+        let failed = ChatPending(clientId: "c2", username: "bro.lifts", createdAt: now - 10_000, text: "Ответ на удалённое")
+        try snap("18-chat-extras", height: 1500) {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(messages) { MessageBubble(message: $0, username: "bro.lifts", onDelete: {}) }
+                        MessageBubble(message: pending.message, username: "bro.lifts", onDelete: {})
+                        MessageBubble(message: failed.message, username: "bro.lifts", failure: "Сообщение удалено", onDelete: {})
+                    }
+                    .padding(12)
+                }
+                .background(Color.canvas.ignoresSafeArea())
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+
+    /// Итоги месяца: первый слайд историй и карточка для сторис.
+    @MainActor func testRecap() throws {
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let now = Date()
+        let parts = calendar.dateComponents([.year, .month], from: now)
+        func day(_ offset: Int) -> Date { calendar.date(byAdding: .day, value: -offset, to: now) ?? now }
+        let log = (0..<9).map { index in
+            CompletionRecord(key: "1-\(index)", date: day(index * 3), week: 1, day: index, durationSeconds: 3600 + index * 120)
+        }
+        var sets: [String: SetEntry] = [:]
+        for index in 0..<9 {
+            sets["1-\(index)|Приседания|0"] = SetEntry(reps: 5, weight: 120 + Double(index) * 2.5)
+            sets["1-\(index)|Жим лёжа|0"] = SetEntry(reps: 5, weight: 90 + Double(index))
+            sets["1-\(index)|Становая тяга|0"] = SetEntry(reps: 3, weight: 160)
+        }
+        let recap = TrainingRecap.build(log: log, setLog: sets, period: .month(year: parts.year ?? 2026, month: parts.month ?? 1), calendar: calendar)
+        try snap("19-recap-intro", wait: 2.5) { TrainingRecapView(recap: recap) }
+        try snap("20-recap-card") {
+            ZStack { Color.canvas.ignoresSafeArea(); TrainingRecapCard(recap: recap) }
+        }
+    }
+
+    /// Тренируются сейчас, колокольчик активности и рейтинг недели.
+    @MainActor func testSocialExtras() throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let week = WeeklyStatsBuilder.weekKey(for: Date())
+        let live: [SocialLiveFriend] = try Fixtures.decode("""
+        [{"user":{"id":"u2","username":"bro.lifts"},"live":{"title":"День 1 · Объём","exercise":"Приседания","done":3,"total":5,"setsDone":3,"setsTotal":18,"startedAt":\(now - 1_560_000)}},
+         {"user":{"id":"u3","username":"heavy.anna"},"live":{"title":"День 2","exercise":"Жим лёжа с очень длинным названием","done":1,"total":8,"startedAt":\(now - 300_000)}}]
+        """)
+        let activity: SocialActivityPage = try Fixtures.decode("""
+        {"items":[
+          {"kind":"like","actor":{"id":"u2","username":"bro.lifts"},"postId":"p1","postTitle":"День 1 · Объём","createdAt":\(now - 120_000),"unseen":true},
+          {"kind":"reply","actor":{"id":"u3","username":"heavy.anna"},"postId":"p1","postTitle":"День 1","text":"Спасибо, попробую с поясом!","createdAt":\(now - 3_600_000),"unseen":true},
+          {"kind":"comment","actor":{"id":"u4","username":"semobsessed"},"postId":"p2","postTitle":"День 3 · Сила","text":"Мощно 🔥 сколько отдыхал между подходами?","createdAt":\(now - 7_200_000)},
+          {"kind":"follow","actor":{"id":"u5","username":"tim"},"createdAt":\(now - 90_000_000)}],"unseen":2}
+        """)
+        let board: [SocialLeaderboardEntry] = try Fixtures.decode("""
+        [{"user":{"id":"u1","username":"kelw1n","isMe":true},"stats":{"week":"\(week)","workouts":3,"volumeKg":14250,"records":2,"streakWeeks":6}},
+         {"user":{"id":"u2","username":"bro.lifts"},"stats":{"week":"\(week)","workouts":4,"volumeKg":18900,"records":1,"streakWeeks":3}},
+         {"user":{"id":"u3","username":"heavy.anna"},"stats":{"week":"\(week)","workouts":2,"volumeKg":7300,"records":3,"streakWeeks":12}},
+         {"user":{"id":"u4","username":"semobsessed"},"stats":{}}]
+        """)
+        let together: SocialTogetherState = try Fixtures.decode("""
+        {"incoming":[{"id":"t1","status":"pending","fromMe":false,"partner":{"id":"u3","username":"heavy.anna"}}],
+         "active":{"id":"t2","status":"accepted","fromMe":true,"partner":{"id":"u2","username":"bro.lifts"},
+                   "partnerLive":{"title":"День 1","exercise":"Приседания","done":3,"total":5,"setsDone":8,"setsTotal":18,"startedAt":\(now - 1_500_000)}}}
+        """)
+        let invite: SocialMessage = try Fixtures.decode("""
+        {"id":"m9","text":"Го тренироваться вместе 💪","fromMe":false,"createdAt":\(now),"invite":{"id":"t1","status":"pending","fromMe":false}}
+        """)
+        try snap("17-social-extras", height: 2600) {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let first = together.incoming.first { TogetherInviteBanner(invite: first).padding(.horizontal, -12) }
+                        if let active = together.active { TogetherCard(together: active) }
+                        if let inviteCard = invite.invite {
+                            InviteBubble(message: invite, invite: inviteCard, username: "heavy.anna") { _ in }
+                        }
+                        LiveFriendsStrip(friends: live) { _ in }
+                        LiveBadge(live: live[0].live)
+                        VStack(spacing: 0) {
+                            ForEach(activity.items) { ActivityRow(item: $0, onOpenActor: {}, onOpen: {}) }
+                        }
+                        .padding(.horizontal, -16)
+                        VStack(spacing: 0) {
+                            let ranked = LeaderboardMetric.ranked(board, by: .volume)
+                            ForEach(Array(ranked.enumerated()), id: \.element.id) { index, entry in
+                                LeaderboardRow(place: index + 1, entry: entry, metric: .volume) {}
+                            }
+                        }
+                        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    }
+                    .padding(16)
+                }
+                .background(Color.canvas.ignoresSafeArea())
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+
+    // MARK: Питание
+
+    private func meal(_ name: String, daysAgo: Int, hour: Int, grams: Double?, _ nutrients: Nutrients, photo: Bool = false) -> FoodEntry {
+        let calendar = Calendar.current
+        let date = calendar.date(byAdding: DateComponents(day: -daysAgo, hour: hour), to: calendar.startOfDay(for: Date()))!
+        return FoodEntry(date: date, name: name, grams: grams, nutrients: nutrients, fromPhoto: photo)
+    }
+
+    private func dayOfMeals(_ daysAgo: Int) -> [FoodEntry] {
+        [
+            meal("Овсянка с бананом", daysAgo: daysAgo, hour: 9, grams: 320, Nutrients(kcal: 430, protein: 14, fat: 9, carbs: 74)),
+            meal("Куриная грудка с рисом", daysAgo: daysAgo, hour: 14, grams: 350, Nutrients(kcal: 560, protein: 52, fat: 7, carbs: 70), photo: true),
+            meal("Творог 5%", daysAgo: daysAgo, hour: 18, grams: 200, Nutrients(kcal: 242, protein: 34, fat: 10, carbs: 6))
+        ]
+    }
+
+    /// Неделя наблюдения на четвёртом дне: точки дней, еда и вес за сегодня.
+    @MainActor func testNutritionObservation() throws {
+        let profile = ProgramProfile(input: .demo)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var diary = NutritionData(entries: (0...3).flatMap { dayOfMeals($0) })
+        diary.plan = NutritionPlan(observationStart: calendar.date(byAdding: .day, value: -3, to: today)!)
+        for daysAgo in 1...3 {
+            profile.recordBodyWeight(82.4 + Double(daysAgo) * 0.1, on: calendar.date(byAdding: .day, value: -daysAgo, to: today)!)
+        }
+        NutritionStore.write(diary, for: profile.profileID)
+        defer { NutritionStore.delete(profile.profileID) }
+        try snap("20-nutrition-observe", height: 2000) { NutritionView(profile: profile) }
+    }
+
+    /// Набор: норма на день и недельная проверка с советом «+30 г углеводов».
+    @MainActor func testNutritionGoal() throws {
+        let profile = ProgramProfile(input: .demo)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let maintenance = Nutrients(kcal: 2600, protein: 160, fat: 85, carbs: 300)
+        var plan = NutritionPlan(observationStart: calendar.date(byAdding: .day, value: -14, to: today)!)
+        plan.goal = .bulk
+        plan.maintenance = maintenance
+        plan.target = LimarMethod.startingNorm(for: .bulk, maintenance: maintenance)
+        plan.stepStart = calendar.date(byAdding: .day, value: -7, to: today)
+        for daysAgo in 1...14 {
+            profile.recordBodyWeight(82 + (daysAgo % 2 == 0 ? 0.1 : 0), on: calendar.date(byAdding: .day, value: -daysAgo, to: today)!)
+        }
+        NutritionStore.write(NutritionData(entries: dayOfMeals(0), plan: plan), for: profile.profileID)
+        defer { NutritionStore.delete(profile.profileID) }
+        try snap("21-nutrition-goal", height: 2000) { NutritionView(profile: profile) }
+    }
+
+    @MainActor func testNutritionGuide() throws {
+        try snap("22-nutrition-guide", height: 2000) { NutritionGuideView() }
+    }
+
+    @MainActor func testNutritionEntry() throws {
+        let entry = dayOfMeals(0)[1]
+        try snap("23-nutrition-entry") {
+            FoodEntrySheet(original: entry, day: Date(), onSave: { _ in }, onDelete: {})
+        }
+    }
+
+    // MARK: Уровни
+
+    /// Три тренировки в неделю за десять недель, жим и присед растут.
+    private func levelProfile() -> ProgramProfile {
+        let profile = ProgramProfile(input: .demo)
+        let calendar = WorkoutScheduler.trainingCalendar()
+        var log: [CompletionRecord] = []
+        var sets: [String: SetEntry] = [:]
+        for index in 0..<30 {
+            let date = calendar.date(byAdding: .day, value: -(index * 7 / 3) - 1, to: Date()) ?? Date()
+            let key = "\(index / 3 + 1)-\(index % 3 + 1)"
+            log.append(CompletionRecord(key: key, date: date, week: index / 3 + 1, day: index % 3 + 1))
+            for set in 0..<5 {
+                sets["\(key)|Приседания|\(set)"] = SetEntry(reps: 5, weight: 140 - Double(index) * 1.25)
+                sets["\(key)|Жим лёжа|\(set)"] = SetEntry(reps: 5, weight: 100 - Double(index))
+            }
+        }
+        profile.completionLog = log
+        profile.setLog = sets
+        return profile
+    }
+
+    @MainActor func testLevels() throws {
+        let profile = levelProfile()
+        try snap("24-level-card") {
+            VStack { LevelCard(profile: profile); Spacer() }
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.canvas)
+        }
+        try snap("25-level-sheet", height: 2200) { LevelSheet(profile: profile) }
+        let xp = Progression.xp(for: profile)
+        let gain = ProgressionEvents.Gain(before: Progression.threshold(for: Progression.level(forXP: xp).level) - 40, after: xp)
+        try snap("26-level-up", wait: 3) { LevelUpOverlay(gain: gain) {} }
+        try snap("27-level-share") {
+            ZStack { Color.canvas.ignoresSafeArea(); LevelShareCard(level: Progression.level(forXP: xp)) }
+        }
+    }
+
+    @MainActor func testUserLevelAndAvatar() throws {
+        let user = try Fixtures.user(isMe: false)
+        try snap("34-user-level", height: 1800) { UserLevelSheet(user: user, myLevel: 9) }
+        try snap("36-records", height: 1400) {
+            RecordsSheet(username: user.username, records: user.records, bodyWeight: user.weightKg)
+        }
+        try snap("37-heatmap-records") {
+            VStack(spacing: 18) {
+                if let heatmap = user.heatmap { ProfileHeatmapCard(levels: TrainingHeatmap.levels(heatmap)) }
+                ProfileRecordsCard(records: user.records, isMe: false, bodyWeight: user.weightKg) {}
+                Spacer()
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.canvas)
+        }
+        try snap("35-avatar-viewer", wait: 1) {
+            AvatarViewer(imageId: "0123456789abcdef01234567", username: user.username) {}
+        }
+    }
+
+    // MARK: ИИ-тренер
+
+    @MainActor func testCoach() throws {
+        let profile = levelProfile()
+        let messages = [
+            CoachMessage(role: .user, text: "Почему встал жим?"),
+            CoachMessage(
+                role: .coach,
+                text: "Жим три тренировки подряд на **100 кг** без прибавки в повторах, а тяжёлый день ты отметил как «тяжело». Это застой.\n\n- Сбрось максимум на 10% и набери заново.\n- Спи 8 часов и добавь 20 г белка.",
+                actions: [CoachAction(type: "stall_reset", lift: "bench"), CoachAction(type: "weight_step", exercise: "Жим лёжа", step: 1.25)]
+            ),
+            CoachMessage(role: .user, text: Coach.reviewPrompt, reviewWeek: "2026-W43"),
+            CoachMessage(role: .coach, text: "Неделя закрыта: 3 из 3 тренировок, присед +2,5 кг. Тяга отстаёт — на этой неделе держи вес.", reviewWeek: "2026-W43")
+        ]
+        CoachHistory.write(messages, for: profile.profileID)
+        defer { CoachHistory.delete(profile.profileID) }
+        try snap("32-coach", height: 1700, wait: 2) { CoachView(profile: profile) }
+        try snap("33-coach-entry") {
+            VStack { CoachEntryCard(profile: profile); Spacer() }
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.canvas)
+        }
+    }
+
+    // MARK: Челленджи
+
+    @MainActor func testChallenges() throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let day = 86_400_000.0
+        func member(_ id: String, _ name: String, _ place: Int, _ score: Int, _ detail: String, me: Bool = false, level: Int? = nil) -> String {
+            let levelPart = level.map { ",\"level\":\($0)" } ?? ""
+            return #"{"user":{"id":"\#(id)","username":"\#(name)","isMe":\#(me)\#(levelPart)},"status":"joined","score":\#(score),"detail":"\#(detail)","place":\#(place)}"#
+        }
+        let json = """
+        [{"id":"inv","kind":"volume","weeks":2,"startsAt":\(now - day),"endsAt":\(now + 13 * day),"status":"active","myStatus":"invited",
+          "owner":{"id":"u2","username":"bro.lifts"},"members":[\(member("u2", "bro.lifts", 1, 4200, "4200 кг"))]},
+         {"id":"run","kind":"workouts","weeks":2,"startsAt":\(now - 5 * day),"endsAt":\(now + 9 * day),"status":"active","myStatus":"joined",
+          "members":[\(member("u2", "bro.lifts", 1, 4, "4 тренировки", level: 12)),\(member("u1", "kelw1n", 2, 3, "3 тренировки", me: true, level: 9)),
+                     \(member("u3", "heavy.anna", 3, 1, "1 тренировка", level: 21)),{"user":{"id":"u4","username":"slowpoke"},"status":"invited"}]},
+         {"id":"fin","kind":"strength","weeks":4,"startsAt":\(now - 33 * day),"endsAt":\(now - 5 * day),"status":"finished","myStatus":"joined",
+          "members":[\(member("u1", "kelw1n", 1, 6, "+5,2 кг · 6,3% веса", me: true, level: 9)),\(member("u3", "heavy.anna", 2, 4, "+3,1 кг · 4,8% веса"))]}]
+        """
+        let list = try JSONDecoder().decode([SocialChallenge].self, from: Data(json.utf8))
+        ChallengeStore.shared.setForPreview(list)
+        try snap("28-challenges", height: 1800) {
+            ScrollView { ChallengesSection().padding(16) }.background(Color.canvas)
+        }
+        try snap("29-challenge-detail", height: 1800) { ChallengeDetailSheet(id: "fin") }
+        try snap("30-challenge-new", height: 1800) { NewChallengeSheet() }
+        try snap("31-challenge-share") {
+            ZStack { Color.canvas.ignoresSafeArea(); ChallengeShareCard(challenge: list[2]) }
+        }
+    }
+
+    /// Панель вкладок поверх пёстрой ленты: в покое и с поднятой линзой, из
+    /// прозрачного стекла и из матового. Настоящее стекло — только в прогоне на
+    /// iOS 26 (задача `ios-glass`), на iOS 18 здесь нарисованная панель.
+    @MainActor func testGlassTabBar() throws {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: GlassPreference.storageKey)
+        defer { defaults.set(saved, forKey: GlassPreference.storageKey) }
+        for clear in [true, false] {
+            defaults.set(clear, forKey: GlassPreference.storageKey)
+            let suffix = clear ? "clear" : "regular"
+            try snap("32-glass-tabbar-\(suffix)", height: 420) { GlassTabBarStage(liftedAt: nil) }
+            try snap("33-glass-lens-\(suffix)", height: 420) { GlassTabBarStage(liftedAt: 150) }
+        }
+    }
+
+    /// Плашка обновления: свёрнутая и с раскрытым «Что нового», и «STRAIN обновлён».
+    @MainActor func testUpdateBanner() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "SnapshotUpdater"))
+        defaults.removePersistentDomain(forName: "SnapshotUpdater")
+        let release = try JSONDecoder().decode(AppUpdater.Release.self, from: Data("""
+        {"versionCode":1240,"versionName":"3.1.240","notes":"Плашка обновления на iPhone","date":"2026-10-30",
+         "history":[{"versionCode":1240,"versionName":"3.1.240","date":"2026-10-30",
+                     "notes":"Плашка обновления на iPhone\\n• Разминка перед рабочим весом"},
+                    {"versionCode":1235,"versionName":"3.1.235","date":"2026-10-29",
+                     "notes":"Прозрачное стекло, как в iOS 26\\n• Плавнее профиль\\n• Реакции больше не теряются"}]}
+        """.utf8))
+        let offer = AppUpdater()
+        offer.apply(release, installed: 1230, defaults: defaults)
+        let fresh = AppUpdater()
+        fresh.apply(release, installed: 1235, defaults: defaults)
+        fresh.apply(release, installed: 1240, defaults: defaults)
+        try snap("34-update-banner", height: 900) {
+            ZStack(alignment: .top) {
+                Color.canvas.ignoresSafeArea()
+                VStack(spacing: 16) {
+                    AppUpdateBanner(updater: offer)
+                    AppUpdateBanner(updater: offer, startExpanded: true)
+                    AppUpdateBanner(updater: fresh)
+                }
+                .padding(.top, 8)
+            }
         }
     }
 
@@ -183,7 +569,8 @@ final class SnapshotTests: XCTestCase {
         if let height {
             window.frame = CGRect(x: 0, y: 0, width: scene.screen.bounds.width, height: height)
         }
-        window.overrideUserInterfaceStyle = .dark
+        // Тема — из прогона: снимки делаются и в тёмной, и в светлой.
+        window.overrideUserInterfaceStyle = ProcessInfo.processInfo.environment["THEME"] == "light" ? .light : .dark
         // Цвет кнопок — как в приложении: его задаёт RootView.
         window.rootViewController = UIHostingController(rootView: content().tint(Theme.accent).environment(RestTimer()))
         window.makeKeyAndVisible()
@@ -203,6 +590,28 @@ final class SnapshotTests: XCTestCase {
     }
 }
 
+/// Пёстрые полосы и текст под панелью вкладок: на однотонном фоне прозрачное
+/// стекло от матового не отличить.
+private struct GlassTabBarStage: View {
+    let liftedAt: CGFloat?
+    private let colors: [Color] = [.orange, .white, .blue, .black, .pink, .yellow, .green, .purple]
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                ForEach(colors.indices, id: \.self) { index in
+                    colors[index]
+                        .overlay(Text("Становая тяга 180 × 3").font(.headline).foregroundStyle(.white.opacity(0.9)))
+                }
+            }
+            .ignoresSafeArea()
+            LiquidGlassTabBar(selectedTab: .constant(.workout), liftedAt: liftedAt)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+        }
+    }
+}
+
 /// Посты и профиль как с сервера: те же JSON, что отдаёт `/v2`.
 private enum Fixtures {
     static func decode<T: Decodable>(_ json: String) throws -> T {
@@ -213,8 +622,14 @@ private enum Fixtures {
         try decode("""
         {"id":"u1","username":"kelw1n","bio":"Техасская программа, второй месяц. Жим 120 к Новому году.",
          "heightCm":182,"weightKg":86.4,"showBody":true,"workouts":27,"followers":14,"following":9,
-         "isMe":\(isMe),"isFollowing":false,
+         "isMe":\(isMe),"isFollowing":false,"level":12,"xp":8000,
+         "heatmap":{"end":"\(TrainingHeatmap.dayString(Date()))","days":"\(String(repeating: "1030240", count: 53))"},
          "achievements":[{"id":"path","level":2},{"id":"streak","level":3},{"id":"bench","level":1}],
+         "records":[{"name":"Становая тяга","weight":180,"reps":3,"estimate":198,"date":1761000000000,"lift":"deadlift"},
+                    {"name":"Приседания","weight":140,"reps":5,"estimate":163.5,"date":1760000000000,"lift":"squat"},
+                    {"name":"Жим лёжа","weight":100,"reps":5,"estimate":116.5,"date":1761400000000,"lift":"bench"},
+                    {"name":"Жим стоя","weight":60,"reps":5,"estimate":70,"date":1761300000000},
+                    {"name":"Подтягивания","weight":20,"reps":8,"estimate":25.5,"date":1761200000000}],
          "programs":[]}
         """)
     }
@@ -229,7 +644,7 @@ private enum Fixtures {
           "photos":[],
           "workout":{"exercises":[{"name":"Приседания со штангой","sets":[{"reps":8,"weight":120}]}]},
           "likes":12,"comments":4,"liked":false},
-         {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"createdAt":\(now - 25 * 60_000),
+         {"id":"p1","author":{"id":"u2","username":"bro.lifts"},"partner":{"id":"u4","username":"semobsessed"},"createdAt":\(now - 25 * 60_000),
           "title":"Неделя 3 · День 1 — объём","description":"Присед зашёл легко, жим тяжело. Завтра отдых.",
           "durationSeconds":4980,"volumeKg":12450,"sets":18,"effort":8,
           "photos":["0123456789abcdef01234567","0123456789abcdef01234568"],

@@ -38,6 +38,8 @@ private struct SavedSession: Codable {
     var exercises: [ActiveExerciseState]
     var noteText: String
     var snapshot: ProgramProfile.DaySnapshot?
+    /// Замены упражнений в этой тренировке. Необязательное: в сохранённых раньше его нет.
+    var swapUndo: ProgramProfile.SwapUndo?
 }
 
 // MARK: - Менеджер активной тренировки
@@ -68,6 +70,14 @@ final class WorkoutSessionManager {
     /// Упражнение, чью картинку сейчас меняют.
     var artTarget: ExerciseArtTarget? = nil
 
+    /// Упражнение, которое сейчас меняют на другое: тренажёр занят.
+    var swapTarget: SwapTarget? = nil
+
+    struct SwapTarget: Identifiable, Equatable {
+        let id: String
+        let index: Int
+    }
+
     /// Последний побитый рекорд — экран показывает плашку и гасит её сам.
     var lastRecord: RecordNotice? = nil
 
@@ -87,6 +97,8 @@ final class WorkoutSessionManager {
     @ObservationIgnored private var startSnapshot: ProgramProfile.DaySnapshot?
     @ObservationIgnored private var profileID: UUID?
     @ObservationIgnored private var saveScheduled = false
+    /// Правки дня, которые сделали замены: отмена тренировки их откатывает.
+    @ObservationIgnored private var swapUndo = ProgramProfile.SwapUndo()
 
     // MARK: - Время
 
@@ -108,6 +120,21 @@ final class WorkoutSessionManager {
 
     var totalSetsCount: Int {
         exercises.reduce(0) { $0 + $1.sets.count }
+    }
+
+    /// Что видят друзья: день, текущее упражнение и его подходы — «Присед · 3/5».
+    var liveStatus: SocialLive? {
+        guard let workout = activeWorkout else { return nil }
+        let current = exercises.first { $0.sets.contains { !$0.isDone } } ?? exercises.last
+        return SocialLive(
+            title: workout.day.title,
+            exercise: current?.prescription.name ?? "",
+            done: current?.sets.filter(\.isDone).count ?? 0,
+            total: current?.sets.count ?? 0,
+            setsDone: totalCompletedSets,
+            setsTotal: totalSetsCount,
+            startedAt: (startDate.timeIntervalSince1970 * 1000).rounded()
+        )
     }
 
     var totalTonnage: Double {
@@ -175,44 +202,85 @@ final class WorkoutSessionManager {
         showingSummary = false
         showingNoteSheet = false
         lastRecord = nil
+        swapTarget = nil
+        swapUndo = ProgramProfile.SwapUndo()
 
         exercises = profile.exercises(for: workout).map { presc in
-            // История — один проход на упражнение. Раньше её пересобирали
-            // по всему плану для каждого подхода и ещё раз для веса.
-            let history = profile.history(forExerciseNamed: presc.name)
-                .filter { !($0.week == workout.week && $0.day == workout.day.number) }
-            let last = history.last { !$0.entries.isEmpty }?.entries ?? []
-            let best = history.map(\.best).max() ?? 0
-            let plannedWeight = plannedWeight(for: presc, profile: profile, workout: workout, last: last)
-            let plannedReps = presc.plannedReps ?? 10
-            // Подходы этого дня, уже записанные до старта (точками на «Главном»
-            // или в прошлой сессии), приходят отмеченными. Раньше они показывались
-            // пустыми, и казалось, что сделанное пропало.
-            let logged = Dictionary(
-                profile.entries(week: workout.week, day: workout.day.number, exercise: presc).map { ($0.index, $0.entry) },
-                uniquingKeysWith: { first, _ in first }
-            )
-            let count = max(presc.sets, 1, (logged.keys.max() ?? -1) + 1)
-            // Сколько подходов в плане, столько и строк: два — значит два.
-            let sets = (0..<count).map { index in
-                ActiveSetState(
-                    index: index,
-                    previous: index < last.count ? last[index] : last.first,
-                    weight: logged[index]?.weight ?? plannedWeight,
-                    reps: logged[index]?.reps ?? plannedReps,
-                    isDone: logged[index] != nil
-                )
-            }
-            return ActiveExerciseState(
-                prescription: presc,
-                restSeconds: presc.benchSession != nil ? 180 : profile.defaultRestSeconds,
-                sets: sets,
-                bestBefore: best
-            )
+            activeState(for: presc, profile: profile, workout: workout)
         }
 
         save()
         withAnimation(Motion.sheet) { isPresented = true }
+    }
+
+    /// Строки подходов упражнения: прошлый раз, плановый вес и уже записанное за день.
+    private func activeState(for presc: ExercisePrescription, profile: ProgramProfile, workout: ScheduledWorkout,
+                             weight override: Double? = nil, reps overrideReps: Int? = nil,
+                             count overrideCount: Int? = nil, rest: Int? = nil) -> ActiveExerciseState {
+        // История — один проход на упражнение. Раньше её пересобирали
+        // по всему плану для каждого подхода и ещё раз для веса.
+        let history = profile.history(forExerciseNamed: presc.name)
+            .filter { !($0.week == workout.week && $0.day == workout.day.number) }
+        let last = history.last { !$0.entries.isEmpty }?.entries ?? []
+        let best = history.map(\.best).max() ?? 0
+        let plannedWeight = override ?? plannedWeight(for: presc, profile: profile, workout: workout, last: last)
+        let plannedReps = overrideReps ?? presc.plannedReps ?? 10
+        // Подходы этого дня, уже записанные до старта (точками на «Главном»
+        // или в прошлой сессии), приходят отмеченными. Раньше они показывались
+        // пустыми, и казалось, что сделанное пропало.
+        let logged = Dictionary(
+            profile.entries(week: workout.week, day: workout.day.number, exercise: presc).map { ($0.index, $0.entry) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let count = max(overrideCount ?? presc.sets, 1, (logged.keys.max() ?? -1) + 1)
+        // Сколько подходов в плане, столько и строк: два — значит два.
+        let sets = (0..<count).map { index in
+            ActiveSetState(
+                index: index,
+                previous: index < last.count ? last[index] : last.first,
+                weight: logged[index]?.weight ?? plannedWeight,
+                reps: logged[index]?.reps ?? plannedReps,
+                isDone: logged[index] != nil
+            )
+        }
+        return ActiveExerciseState(
+            prescription: presc,
+            restSeconds: rest ?? (presc.benchSession != nil ? 180 : profile.defaultRestSeconds),
+            sets: sets,
+            bestBefore: best
+        )
+    }
+
+    /// Тренажёр занят — меняем упражнение на похожее прямо в тренировке.
+    /// Отмеченные подходы старого упражнения снимаются: их место займёт новое.
+    func swapExercise(exIdx: Int, to suggestion: ExerciseSwap.Suggestion, scope: SwapScope, profile: ProgramProfile) {
+        guard let workout = activeWorkout, exercises.indices.contains(exIdx) else { return }
+        let name = suggestion.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let old = exercises[exIdx]
+        guard !name.isEmpty, ProgramProfile.weightStepKey(name) != ProgramProfile.weightStepKey(old.prescription.name) else { return }
+        for set in old.sets where set.isDone {
+            profile.clearSetEntry(week: workout.week, day: workout.day.number, exercise: old.prescription, index: set.index)
+        }
+        profile.updateCompletedSets(week: workout.week, day: workout.day.number, exercise: old.prescription, count: 0)
+        let presc = profile.swapExercise(
+            old.prescription,
+            to: name,
+            week: workout.week,
+            day: workout.day.number,
+            scope: profile.isProgramLift(old.prescription) ? .today : scope,
+            undo: &swapUndo
+        )
+        exercises[exIdx] = activeState(
+            for: presc,
+            profile: profile,
+            workout: workout,
+            weight: suggestion.weight ?? old.sets.first(where: { !$0.isDone })?.weight ?? old.sets.first?.weight,
+            reps: suggestion.reps ?? old.sets.first?.reps,
+            count: old.sets.count,
+            rest: old.restSeconds
+        )
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        save()
     }
 
     /// Сменили профиль посреди тренировки: она принадлежит прежнему, и подходы
@@ -240,6 +308,8 @@ final class WorkoutSessionManager {
 
     func finishWorkout(profile: ProgramProfile, customDuration: Int? = nil, effort: String? = nil) {
         guard let workout = activeWorkout else { return }
+        // Опыт до и после — разница уйдёт на экран «+N опыта» и новый уровень.
+        let xpBefore = Progression.xp(for: profile)
 
         for ex in exercises {
             for set in ex.sets where set.isDone {
@@ -274,10 +344,13 @@ final class WorkoutSessionManager {
 
         reset()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+        ProgressionEvents.shared.celebrate(before: xpBefore, after: Progression.xp(for: profile))
     }
 
     func discardWorkout(profile: ProgramProfile) {
         guard let workout = activeWorkout else { return }
+        // Замены упражнений — тоже назад: тренировки не было.
+        profile.undoSwaps(swapUndo)
         if let snapshot = startSnapshot {
             profile.restoreDay(snapshot, week: workout.week, day: workout.day.number)
         }
@@ -288,6 +361,8 @@ final class WorkoutSessionManager {
     private func reset() {
         startSnapshot = nil
         profileID = nil
+        swapUndo = ProgramProfile.SwapUndo()
+        swapTarget = nil
         showingZeroSetsAlert = false
         lastRecord = nil
         activeWorkout = nil
@@ -514,7 +589,8 @@ final class WorkoutSessionManager {
             startDate: startDate,
             exercises: exercises,
             noteText: noteText,
-            snapshot: startSnapshot
+            snapshot: startSnapshot,
+            swapUndo: swapUndo
         )
         guard let data = try? JSONEncoder().encode(session) else { return }
         let url = Self.saveURL
@@ -524,6 +600,18 @@ final class WorkoutSessionManager {
 
     func clearSaved() {
         try? FileManager.default.removeItem(at: Self.saveURL)
+    }
+
+    /// Профиль удалён: его тренировка — и идущая, и отложенная при смене
+    /// профиля — больше никогда не продолжится.
+    func forgetProfile(_ id: UUID) {
+        if activeWorkout != nil, profileID == id {
+            reset()
+        } else if let data = try? Data(contentsOf: Self.saveURL),
+                  let session = try? JSONDecoder().decode(SavedSession.self, from: data),
+                  session.profileID == id {
+            clearSaved()
+        }
     }
 
     /// Для тестов: забыть тренировку в памяти, не трогая файл, — как после выгрузки.
@@ -553,6 +641,7 @@ final class WorkoutSessionManager {
         startDate = session.startDate
         exercises = session.exercises
         startSnapshot = session.snapshot
+        swapUndo = session.swapUndo ?? ProgramProfile.SwapUndo()
         noteText = session.noteText
         isPresented = false
     }

@@ -68,6 +68,7 @@ fun SetEntryDialog(
     val weightValue = weight.replace(',', '.').trim().toDoubleOrNull()?.takeIf { it >= 0 }
 
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
         title = { Text("Подход ${target.index + 1}") },
         text = {
@@ -159,6 +160,7 @@ fun SkipCard(
 
     if (asking) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { asking = false },
             title = { Text("Пропустил эту тренировку?") },
             text = {
@@ -246,6 +248,7 @@ fun NewCycleDialog(
     val isReady = number(squat) != null && number(bench) != null && number(deadlift) != null
 
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
         title = { Text("Новый цикл") },
         text = {

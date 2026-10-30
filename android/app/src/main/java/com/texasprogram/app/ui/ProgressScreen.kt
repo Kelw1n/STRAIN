@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,13 +65,18 @@ fun ProgressScreen(
     val total = profile.totalDays
     val ratio = if (total > 0) done.toFloat() / total else 0f
     var showMuscleDialog by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    OnTabReselect(MainTabItem.PROGRESS) { listState.scrollToTop() }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
+        state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item(key = "title") { ScreenTitle("Прогресс") }
+        item(key = "level") { LevelCard(profile) }
+        item(key = "coach") { CoachEntryCard(profile, onUpdate) }
 
         item(key = "hero") {
             HighlightCard(Modifier.appearIn(0)) {
@@ -92,6 +98,11 @@ fun ProgressScreen(
                     }
                 }
             }
+        }
+
+        // Итоги месяца и года историями.
+        item(key = "recap") {
+            TrainingRecapEntryCard(profile, Modifier.appearIn(1))
         }
 
         item(key = "streak") {
@@ -311,7 +322,7 @@ fun MuscleGroupsRadarCard(
     val result = remember(profile) { MuscleGroupAnalytics.calculate(profile) }
 
     CardView(
-        modifier = modifier.clickable { onClick() }
+        modifier = modifier.pressable { onClick() }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -380,7 +391,7 @@ fun RadarWebCanvas(
             val px = center.x + (radius * Math.cos(angle)).toFloat()
             val py = center.y + (radius * Math.sin(angle)).toFloat()
             drawLine(
-                color = Color.White.copy(alpha = 0.12f),
+                color = Theme.ink.copy(alpha = 0.12f),
                 start = center,
                 end = Offset(px, py),
                 strokeWidth = 1.dp.toPx()
@@ -400,7 +411,7 @@ fun RadarWebCanvas(
             path.close()
             drawPath(
                 path = path,
-                color = Color.White.copy(alpha = 0.10f),
+                color = Theme.ink.copy(alpha = 0.10f),
                 style = Stroke(width = 1.dp.toPx())
             )
         }
@@ -441,8 +452,9 @@ fun MuscleGroupsDetailDialog(
     val result = remember(profile) { MuscleGroupAnalytics.calculate(profile) }
 
     AlertDialog(
+        modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF161616),
+        containerColor = Theme.tone(0xFF161616),
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -450,7 +462,7 @@ fun MuscleGroupsDetailDialog(
             ) {
                 Text(
                     text = "Группы мышц",
-                    color = Color.White,
+                    color = Theme.ink,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -460,7 +472,7 @@ fun MuscleGroupsDetailDialog(
                     color = Theme.accent,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onDismiss() }
+                    modifier = Modifier.pressable { onDismiss() }
                 )
             }
         },
@@ -474,14 +486,14 @@ fun MuscleGroupsDetailDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
-                            .background(Color(0xFF1C1C1F))
+                            .background(Theme.tone(0xFF1C1C1F))
                             .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
                             text = "Баланс распределения нагрузки",
-                            color = Color.White,
+                            color = Theme.ink,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -494,7 +506,7 @@ fun MuscleGroupsDetailDialog(
 
                         Text(
                             text = result.subtitle,
-                            color = Color.White.copy(alpha = 0.6f),
+                            color = Theme.ink.copy(alpha = 0.6f),
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center
                         )
@@ -507,7 +519,7 @@ fun MuscleGroupsDetailDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF1C1C1F))
+                            .background(Theme.tone(0xFF1C1C1F))
                             .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -518,13 +530,13 @@ fun MuscleGroupsDetailDialog(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = group.category.displayName,
-                                    color = Color.White,
+                                    color = Theme.ink,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = group.exercises,
-                                    color = Color.White.copy(alpha = 0.45f),
+                                    color = Theme.ink.copy(alpha = 0.45f),
                                     fontSize = 11.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -540,7 +552,7 @@ fun MuscleGroupsDetailDialog(
                                 )
                                 Text(
                                     text = "${group.sets} подх.",
-                                    color = Color.White.copy(alpha = 0.45f),
+                                    color = Theme.ink.copy(alpha = 0.45f),
                                     fontSize = 11.sp
                                 )
                             }
@@ -552,7 +564,7 @@ fun MuscleGroupsDetailDialog(
                                 .fillMaxWidth()
                                 .height(6.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
+                                .background(Theme.ink.copy(alpha = 0.08f))
                         ) {
                             Box(
                                 modifier = Modifier

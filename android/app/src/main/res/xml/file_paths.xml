@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Что FileProvider может отдать наружу: картинка тренировки и файл,
-     в который системная камера пишет снимок. -->
+<!-- Что FileProvider может отдать наружу: картинка тренировки и снимок камеры. -->
 <paths>
     <cache-path name="share" path="share/" />
     <cache-path name="camera" path="camera/" />
+    <!-- Скачанное обновление: его открывает системный установщик. -->
+    <cache-path name="updates" path="updates/" />
 </paths>

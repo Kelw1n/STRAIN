@@ -3,6 +3,11 @@ name: Android build
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      notes:
+        description: "Что нового — покажется на плашке обновления в приложении"
+        required: false
+        default: ""
   push:
     branches: [ "main" ]
     tags: [ "v*" ]
@@ -10,6 +15,9 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    # Запись — чтобы выложить APK в релиз с прямой ссылкой.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +36,23 @@ jobs:
         working-directory: android
         run: gradle testDebugUnitTest --stacktrace
 
+      # Эталонная распечатка планов всех программ: та же есть в тестах iOS,
+      # их сверяют построчно — одни максимумы должны давать одни веса.
+      - name: Golden plans
+        if: always()
+        run: sed 's/^/GOLDEN|/' android/app/build/golden/plans.txt || true
+
+      # Android Lint: вызовы API новее minSdk, утечки, ошибки разрешений.
+      # Только отчёт в лог — сборку не останавливает.
+      - name: Lint
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        working-directory: android
+        run: |
+          gradle lintDebug --stacktrace > /dev/null || true
+          grep -E "Error:|Warning:" app/build/reports/lint.txt | grep -v "GradleDependency\|NewerVersionAvailable\|AndroidGradlePluginVersion" | head -200 || true
+          tail -3 app/build/reports/lint.txt || true
+
       # Постоянный ключ подписи из секретов репозитория: с ним новая версия
       # ставится поверх старой и профили остаются. Секрета нет — отладочный ключ.
       - name: Restore signing key
@@ -41,6 +66,13 @@ jobs:
           else
             echo "::warning::Секрет ANDROID_KEYSTORE_BASE64 не задан — APK подписан случайным отладочным ключом и не встанет поверх прошлой версии"
           fi
+
+      # Номер сборки растёт с каждым запуском — по нему приложение видит, что
+      # вышла новая версия. Тысяча сверху: старые сборки были с номером 25.
+      - name: Version
+        run: |
+          echo "STRAIN_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "STRAIN_VERSION_NAME=3.1.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
 
       # Release с R8: debug-сборка Compose на телефоне заметно лагает.
       - name: Build Android APK
@@ -60,6 +92,46 @@ jobs:
           name: strain-android-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+      # Прямая ссылка на сам APK — без zip-архива и без входа в GitHub:
+      # открыл на Android-телефоне и сразу ставишь. Релиз «android-latest»
+      # пересоздаётся на каждой ручной сборке, ссылка остаётся той же:
+      # https://github.com/<репозиторий>/releases/download/android-latest/STRAIN.apk
+      # Рядом с APK — version.json: номер сборки и «что нового». Его читает само
+      # приложение и предлагает обновиться.
+      - name: Publish APK
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES_INPUT: ${{ github.event.inputs.notes }}
+        run: |
+          set -euo pipefail
+          cp android/app/build/outputs/apk/release/app-release.apk STRAIN.apk
+          NOTES="${NOTES_INPUT:-$(git log -1 --format=%s)}"
+          # История «что нового» за последние версии: кто пропустил несколько
+          # обновлений, увидит изменения каждого. Берём её из прошлого version.json.
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/android-latest/version.json" -o previous.json || echo '{}' > previous.json
+          jq empty previous.json 2>/dev/null || echo '{}' > previous.json
+          jq \
+            --argjson code "$STRAIN_VERSION_CODE" \
+            --arg name "$STRAIN_VERSION_NAME" \
+            --arg notes "$NOTES" \
+            --arg date "$(date -u +%F)" \
+            '(if (.history | type) == "array" then .history
+              elif (.versionCode | type) == "number" then [{versionCode, versionName, notes, date}]
+              else [] end) as $old
+             | {versionCode: $code, versionName: $name, notes: $notes, date: $date,
+                history: ([{versionCode: $code, versionName: $name, notes: $notes, date: $date}]
+                          + ($old | map(select(.versionCode < $code))))[:30]}' previous.json > version.json
+          cat version.json
+          gh release delete android-latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create android-latest STRAIN.apk version.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "STRAIN для Android $STRAIN_VERSION_NAME" \
+            --notes "Открой на Android-телефоне и нажми STRAIN.apk. Если телефон спросит — разреши установку из этого источника. Дальше приложение обновляется само. Что нового: $NOTES"
+          echo "Прямая ссылка: https://github.com/$GITHUB_REPOSITORY/releases/download/android-latest/STRAIN.apk" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test report
         if: failure()

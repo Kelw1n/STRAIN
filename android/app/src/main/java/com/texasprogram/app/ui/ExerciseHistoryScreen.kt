@@ -279,9 +279,9 @@ fun ExerciseHistoryListScreen(
                     Box(
                         Modifier
                             .fillMaxWidth()
+                            .pressable { confirming = true }
                             .clip(RoundedCornerShape(13.dp))
                             .background(Theme.accentGradient)
-                            .pressable { confirming = true }
                             .padding(vertical = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -335,6 +335,7 @@ fun ExerciseHistoryListScreen(
 
     if (confirming) {
         AlertDialog(
+            modifier = Modifier.popIn(),
             onDismissRequest = { confirming = false },
             title = { Text("Заполнить историю плановыми весами?") },
             text = {

@@ -120,7 +120,7 @@ struct WorkoutNoteCard: View {
                     Button("Готово") { typing = false }
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.accent)
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                 }
             }
             TextField("Как прошло, что болело, как спал", text: $text, axis: .vertical)

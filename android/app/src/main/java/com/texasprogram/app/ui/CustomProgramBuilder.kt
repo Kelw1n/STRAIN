@@ -43,10 +43,14 @@ import com.texasprogram.app.model.formatWeight
 fun CustomProgramBuilder(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
+    /// Готовая программа, например скопированная у друга из ленты.
+    initial: CustomProgram? = null,
+    title: String = "Своя программа",
+    saveTitle: String = "Запустить программу",
     onSave: (CustomProgram) -> Unit
 ) {
     var program by remember {
-        mutableStateOf(CustomProgram.skeleton(SplitTemplate.FULL_BODY, "Своя программа", 8))
+        mutableStateOf(initial ?: CustomProgram.skeleton(SplitTemplate.FULL_BODY, "Своя программа", 8))
     }
     var editing by remember { mutableStateOf<Pair<String, CustomExercise?>?>(null) }
 
@@ -83,13 +87,13 @@ fun CustomProgramBuilder(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(key = "title") {
-            ScreenTitle("Своя программа") {
+            ScreenTitle(title) {
                 Box(
                     Modifier
                         .size(40.dp)
+                        .pressable(onClick = onBack)
                         .clip(CircleShape)
-                        .background(Theme.surfaceSoft)
-                        .pressable(onClick = onBack),
+                        .background(Theme.surfaceSoft),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = "Назад", tint = Theme.textPrimary, modifier = Modifier.size(22.dp))
@@ -147,7 +151,7 @@ fun CustomProgramBuilder(
 
         item(key = "start") {
             CardView(Modifier.appearIn(program.days.size + 1)) {
-                GradientButton("Запустить программу", enabled = program.isRunnable) { onSave(program) }
+                GradientButton(saveTitle, enabled = program.isRunnable) { onSave(program) }
                 Text(
                     if (program.isRunnable)
                         "Дни лягут на календарь по настройкам расписания. Программу можно будет править из «Своих упражнений»."
@@ -190,7 +194,7 @@ private fun ExerciseRow(
         Spacer(Modifier.width(8.dp))
         if (canMoveUp) {
             Box(
-                Modifier.size(30.dp).clip(CircleShape).pressable { onMove(-1) },
+                Modifier.size(30.dp).pressable { onMove(-1) }.clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Filled.ArrowUpward, contentDescription = "Выше", tint = Theme.textSecondary, modifier = Modifier.size(16.dp))
@@ -198,7 +202,7 @@ private fun ExerciseRow(
         }
         if (canMoveDown) {
             Box(
-                Modifier.size(30.dp).clip(CircleShape).pressable { onMove(1) },
+                Modifier.size(30.dp).pressable { onMove(1) }.clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Filled.ArrowDownward, contentDescription = "Ниже", tint = Theme.textSecondary, modifier = Modifier.size(16.dp))
