@@ -58,6 +58,11 @@ jobs:
       - name: Print snapshots
         if: always()
         run: |
+          # Уменьшаем до 520 точек в ширину: три набора снимков в полном размере
+          # не помещаются в лог, который потом читают.
+          for f in $(find snapshots -name '*.jpg' 2>/dev/null); do
+            sips -s format jpeg -s formatOptions 55 --resampleWidth 520 "$f" --out "$f" >/dev/null 2>&1 || true
+          done
           python3 - <<'PY'
           import base64, glob, os
           for path in sorted(glob.glob("snapshots/**/*.jpg", recursive=True)):
@@ -113,6 +118,11 @@ jobs:
       - name: Print snapshots
         if: always()
         run: |
+          # Уменьшаем до 520 точек в ширину: три набора снимков в полном размере
+          # не помещаются в лог, который потом читают.
+          for f in $(find snapshots -name '*.jpg' 2>/dev/null); do
+            sips -s format jpeg -s formatOptions 55 --resampleWidth 520 "$f" --out "$f" >/dev/null 2>&1 || true
+          done
           python3 - <<'PY'
           import base64, glob, os
           for path in sorted(glob.glob("snapshots/**/*.jpg", recursive=True)):
