@@ -166,15 +166,22 @@ struct MainTabView: View {
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: showsMinimizedWorkout)
             .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: restTimer.isRunning)
         }
-        // Друг зовёт тренироваться вместе — плашка сверху поверх любой вкладки.
+        // Друг зовёт тренироваться вместе и вышла новая версия — плашки сверху
+        // поверх любой вкладки.
         .overlay(alignment: .top) {
-            if let invite = SocialService.shared.together.incoming.first {
-                TogetherInviteBanner(invite: invite)
-                    .padding(.top, 4)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+            VStack(spacing: 8) {
+                if let invite = SocialService.shared.together.incoming.first {
+                    TogetherInviteBanner(invite: invite)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                AppUpdateBanner()
             }
+            .padding(.top, 4)
         }
         .animation(Motion.maybe(Motion.snappy, reduce: reduceMotion), value: SocialService.shared.together.incoming.first?.id)
+        .animation(Motion.maybe(Motion.sheet, reduce: reduceMotion), value: AppUpdater.shared.available?.versionCode)
+        .animation(Motion.maybe(Motion.sheet, reduce: reduceMotion), value: AppUpdater.shared.whatsNew.count)
+        .task { await AppUpdater.shared.check() }
         // Опыт за тренировку и новый уровень — когда экран тренировки уже закрылся.
         .overlay {
             if let gain = ProgressionEvents.shared.pending, !sessionManager.isPresented {

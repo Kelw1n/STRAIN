@@ -3,6 +3,11 @@ name: iOS build
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      notes:
+        description: "Что нового — покажется на плашке обновления в приложении"
+        required: false
+        default: ""
   push:
     branches: ["main"]
     tags: ["v*"]
@@ -79,6 +84,12 @@ jobs:
           echo "Using $XCODE"
           sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
+      # Номер сборки растёт с каждым запуском — по нему приложение видит, что
+      # вышла новая версия. Тысяча сверху, как у Android.
+      - name: Version
+        run: |
+          echo "STRAIN_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "STRAIN_VERSION_NAME=3.1.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
       - name: Build unsigned app
         run: |
           rm -rf TexasProgram/Assets.xcassets
@@ -90,7 +101,9 @@ jobs:
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            CURRENT_PROJECT_VERSION="$STRAIN_VERSION_CODE" \
+            MARKETING_VERSION="$STRAIN_VERSION_NAME"
       - name: Package IPA
         run: |
           set -euo pipefail
@@ -105,14 +118,32 @@ jobs:
           if-no-files-found: error
       # Прямая ссылка на сам IPA — без zip-архива и без входа в GitHub: её можно
       # открыть на айфоне или вставить в программу установки по ссылке.
+      # Рядом с IPA — version.json: номер сборки и «что нового» за последние
+      # версии. Его читает приложение и показывает плашку обновления.
       - name: Publish IPA
         env:
           GH_TOKEN: ${{ github.token }}
+          NOTES_INPUT: ${{ github.event.inputs.notes }}
         run: |
           set -euo pipefail
           cp TexasProgram-unsigned.ipa STRAIN.ipa
+          NOTES="${NOTES_INPUT:-$(git log -1 --format=%s)}"
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/ios-latest/version.json" -o previous.json || echo '{}' > previous.json
+          jq empty previous.json 2>/dev/null || echo '{}' > previous.json
+          jq \
+            --argjson code "$STRAIN_VERSION_CODE" \
+            --arg name "$STRAIN_VERSION_NAME" \
+            --arg notes "$NOTES" \
+            --arg date "$(date -u +%F)" \
+            '(if (.history | type) == "array" then .history
+              elif (.versionCode | type) == "number" then [{versionCode, versionName, notes, date}]
+              else [] end) as $old
+             | {versionCode: $code, versionName: $name, notes: $notes, date: $date,
+                history: ([{versionCode: $code, versionName: $name, notes: $notes, date: $date}]
+                          + ($old | map(select(.versionCode < $code))))[:30]}' previous.json > version.json
+          cat version.json
           gh release delete ios-latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
-          gh release create ios-latest STRAIN.ipa \
+          gh release create ios-latest STRAIN.ipa version.json \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \

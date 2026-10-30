@@ -518,6 +518,35 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Плашка обновления: свёрнутая и с раскрытым «Что нового», и «STRAIN обновлён».
+    @MainActor func testUpdateBanner() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "SnapshotUpdater"))
+        defaults.removePersistentDomain(forName: "SnapshotUpdater")
+        let release = try JSONDecoder().decode(AppUpdater.Release.self, from: Data("""
+        {"versionCode":1240,"versionName":"3.1.240","notes":"Плашка обновления на iPhone","date":"2026-10-30",
+         "history":[{"versionCode":1240,"versionName":"3.1.240","date":"2026-10-30",
+                     "notes":"Плашка обновления на iPhone\\n• Разминка перед рабочим весом"},
+                    {"versionCode":1235,"versionName":"3.1.235","date":"2026-10-29",
+                     "notes":"Прозрачное стекло, как в iOS 26\\n• Плавнее профиль\\n• Реакции больше не теряются"}]}
+        """.utf8))
+        let offer = AppUpdater()
+        offer.apply(release, installed: 1230, defaults: defaults)
+        let fresh = AppUpdater()
+        fresh.apply(release, installed: 1235, defaults: defaults)
+        fresh.apply(release, installed: 1240, defaults: defaults)
+        try snap("34-update-banner", height: 900) {
+            ZStack(alignment: .top) {
+                Color.black.ignoresSafeArea()
+                VStack(spacing: 16) {
+                    AppUpdateBanner(updater: offer)
+                    AppUpdateBanner(updater: offer, startExpanded: true)
+                    AppUpdateBanner(updater: fresh)
+                }
+                .padding(.top, 8)
+            }
+        }
+    }
+
     // MARK: Съёмка
 
     /// Экран рисуется в настоящем окне — так работают прокрутка, навигация и

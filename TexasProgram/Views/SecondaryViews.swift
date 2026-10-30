@@ -447,6 +447,12 @@ struct SettingsView: View {
                     Text("Короткий звуковой отсчёт за 3, 2, 1 секунды до окончания отдыха и сигнал завершения.")
                 }
 
+                Section {
+                    AppVersionRow()
+                } header: {
+                    Text("Приложение")
+                }
+
                 // Только там, где стекло настоящее: до iOS 26 оно нарисовано и не меняется.
                 if GlassPreference.isSupported {
                     Section {
