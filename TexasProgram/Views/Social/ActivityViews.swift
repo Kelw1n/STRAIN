@@ -55,7 +55,7 @@ struct LiveFriendsStrip: View {
                 Text("СЕЙЧАС ТРЕНИРУЮТСЯ")
                     .font(.system(size: 12, weight: .bold))
                     .tracking(1.2)
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
             }
             ScrollView(.horizontal) {
                 HStack(spacing: 10) {
@@ -79,7 +79,7 @@ struct LiveFriendsStrip: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("@\(friend.user.username)")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .lineLimit(1)
                     // Минуты с начала тренировки тикают сами.
                     TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -91,20 +91,20 @@ struct LiveFriendsStrip: View {
             }
             Text(live.exercise.isEmpty ? live.title : live.exercise)
                 .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .lineLimit(1)
             if live.total > 0 {
                 HStack(spacing: 8) {
                     SetDots(done: live.done, total: live.total)
                     Text("\(live.done)/\(live.total)")
                         .font(.system(size: 12, weight: .bold).monospacedDigit())
-                        .foregroundStyle(Color.white.opacity(0.6))
+                        .foregroundStyle(Color.ink.opacity(0.6))
                 }
             }
             if !live.title.isEmpty && !live.exercise.isEmpty {
                 Text(live.title)
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                     .lineLimit(1)
             }
         }
@@ -124,7 +124,7 @@ private struct SetDots: View {
         HStack(spacing: 4) {
             ForEach(0..<min(total, 10), id: \.self) { index in
                 Capsule()
-                    .fill(index < done ? Theme.success : Color.white.opacity(0.14))
+                    .fill(index < done ? Theme.success : Color.ink.opacity(0.14))
                     .frame(width: total > 6 ? 8 : 14, height: 5)
             }
         }
@@ -155,33 +155,32 @@ struct ActivityView: View {
                         onOpenActor: { path.append(FeedRoute.user(item.actor.username)) },
                         onOpen: { open(item) }
                     )
-                    Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 70)
+                    Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 70)
                 }
                 if loading && items.isEmpty {
-                    ProgressView().tint(.white).padding(24)
+                    ProgressView().tint(.ink).padding(24)
                 }
                 Spacer(minLength: 120)
             }
         }
         .refreshable { await reload() }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.canvas.ignoresSafeArea())
         .navigationTitle("Активность")
         .navigationBarTitleDisplayMode(.inline)
         .task { await reload() }
-        .preferredColorScheme(.dark)
     }
 
     private var empty: some View {
         VStack(spacing: 10) {
             Image(systemName: "bell")
                 .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.35))
+                .foregroundStyle(Color.ink.opacity(0.35))
             Text("Пока тихо")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             Text("Здесь появятся лайки, комментарии, ответы и новые подписчики.")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.55))
+                .foregroundStyle(Color.ink.opacity(0.55))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -227,13 +226,13 @@ struct ActivityRow: View {
                 HStack(alignment: .top, spacing: 8) {
                     VStack(alignment: .leading, spacing: 3) {
                         line
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(SocialFormat.ago(item.date))
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .foregroundStyle(Color.ink.opacity(0.4))
                     }
                     Spacer(minLength: 0)
                     if item.unseen {
@@ -265,10 +264,10 @@ struct ActivityRow: View {
         }()
         return Image(systemName: symbol)
             .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(.ink)
             .frame(width: 21, height: 21)
             .background(color, in: Circle())
-            .overlay(Circle().strokeBorder(Color.black, lineWidth: 2))
+            .overlay(Circle().strokeBorder(Color.canvas, lineWidth: 2))
     }
 }
 
@@ -289,13 +288,12 @@ struct PostLoaderView: View {
                     .padding(16)
                     .frame(maxHeight: .infinity, alignment: .top)
             } else {
-                ProgressView().tint(.white)
+                ProgressView().tint(.ink)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.canvas.ignoresSafeArea())
         .task { if post == nil { await load() } }
-        .preferredColorScheme(.dark)
     }
 
     private func load() async {
@@ -376,10 +374,10 @@ struct LeaderboardView: View {
                         Button { withAnimation(Motion.snappy) { metric = item } } label: {
                             Text(item.rawValue)
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(metric == item ? Color.black : Color.white)
+                                .foregroundStyle(metric == item ? Color.canvas : Color.ink)
                                 .padding(.horizontal, 14)
                                 .frame(height: 34)
-                                .background(metric == item ? Color.white : Color(white: 0.14), in: Capsule())
+                                .background(metric == item ? Color.ink : Color.tone(0.14), in: Capsule())
                         }
                         .buttonStyle(.pressable)
                     }
@@ -391,7 +389,7 @@ struct LeaderboardView: View {
                 Text(Self.weekTitle())
                     .font(.system(size: 12, weight: .bold))
                     .tracking(1.2)
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                 Spacer()
                 Button { showingWinners = true } label: {
                     Label("Победители", systemImage: "crown.fill")
@@ -405,13 +403,13 @@ struct LeaderboardView: View {
             if let error, entries.isEmpty {
                 SocialErrorCard(message: error) { Task { await reload() } }
             } else if loading && entries.isEmpty {
-                ProgressView().tint(.white).frame(maxWidth: .infinity).padding(20)
+                ProgressView().tint(.ink).frame(maxWidth: .infinity).padding(20)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(ranked.enumerated()), id: \.element.id) { index, entry in
                         LeaderboardRow(place: index + 1, entry: entry, metric: metric) { onOpen(entry.user.username) }
                         if entry.id != ranked.last?.id {
-                            Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 98)
+                            Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 98)
                         }
                     }
                 }
@@ -419,12 +417,12 @@ struct LeaderboardView: View {
                 if entries.count < 2 {
                     Text("Подпишись на друзей — и меряйтесь тоннажем, тренировками и рекордами каждую неделю.")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                 }
             }
             Text("Считаются все тренировки в приложении, а не только опубликованные. Неделя — с понедельника. Корона — тому, у кого за прошлую неделю больше всех тренировок.")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.35))
+                .foregroundStyle(Color.ink.opacity(0.35))
         }
         .task { await reload() }
         .sheet(isPresented: $showingWinners) { WeekWinnersSheet() }
@@ -472,7 +470,7 @@ struct LeaderboardRow: View {
                     HStack(spacing: 6) {
                         Text(entry.user.isMe ? "Ты" : "@\(entry.user.username)")
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .lineLimit(1)
                         // Корона — победителю прошлой недели.
                         if entry.crown {
@@ -485,13 +483,13 @@ struct LeaderboardRow: View {
                     }
                     Text(secondary)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(Color.ink.opacity(0.45))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 Text(metric.format(entry.stats))
                     .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign).monospacedDigit())
-                    .foregroundStyle(metric.value(entry.stats) > 0 ? Color.white : Color.white.opacity(0.35))
+                    .foregroundStyle(metric.value(entry.stats) > 0 ? Color.ink : Color.ink.opacity(0.35))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -508,12 +506,12 @@ struct LeaderboardRow: View {
     }
 
     private var placeColor: Color {
-        guard metric.value(entry.stats) > 0 else { return Color.white.opacity(0.4) }
+        guard metric.value(entry.stats) > 0 else { return Color.ink.opacity(0.4) }
         switch place {
         case 1: return Color(red: 1, green: 0.8, blue: 0.25)
-        case 2: return Color(white: 0.78)
+        case 2: return Color.tone(0.78)
         case 3: return Color(red: 0.85, green: 0.55, blue: 0.3)
-        default: return Color.white.opacity(0.5)
+        default: return Color.ink.opacity(0.5)
         }
     }
 }

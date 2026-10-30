@@ -67,7 +67,7 @@ struct CopyProgramButton: View {
         Button(action: open) {
             HStack(spacing: 8) {
                 if loading {
-                    ProgressView().tint(.black)
+                    ProgressView().tint(.canvas)
                 } else {
                     Image(systemName: "square.and.arrow.down.on.square")
                         .font(.system(size: 15, weight: .bold))
@@ -75,10 +75,10 @@ struct CopyProgramButton: View {
                 Text("Скопировать к себе")
                     .font(.system(size: 15, weight: .bold))
             }
-            .foregroundStyle(.black)
+            .foregroundStyle(.canvas)
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color.ink, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.pressable)
         .disabled(loading)
@@ -107,7 +107,6 @@ struct CopyProgramButton: View {
         }
         .sheet(item: $request) { request in
             CopyProgramSheet(request: request)
-                .preferredColorScheme(.dark)
         }
     }
 

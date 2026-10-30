@@ -261,12 +261,12 @@ struct BenchWaveChart: View {
                                 .frame(height: grown ? max(12, 96 * ratio(session.topWeight)) : 5)
                                 .opacity(selected == nil || isSelected ? 1 : 0.4)
                                 .overlay(
-                                    Capsule().strokeBorder(Color.white.opacity(isSelected ? 0.9 : 0), lineWidth: 1.5)
+                                    Capsule().strokeBorder(Color.ink.opacity(isSelected ? 0.9 : 0), lineWidth: 1.5)
                                 )
                             if completed.contains(session.id) {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 8, weight: .black))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.ink)
                                     .padding(.top, 4)
                             }
                         }
@@ -421,7 +421,7 @@ struct BenchSessionCard: View {
             if isDone {
                 Image(systemName: "checkmark")
                     .font(.system(size: 16, weight: .black))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .transition(.scale.combined(with: .opacity))
             } else {
                 Text("\(session.id)")

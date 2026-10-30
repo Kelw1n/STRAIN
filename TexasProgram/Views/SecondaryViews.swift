@@ -174,6 +174,7 @@ struct SettingsView: View {
     @State private var backupMessage: String?
     @AppStorage("rest_timer_sound_enabled") private var restTimerSoundEnabled = true
     @AppStorage(GlassPreference.storageKey) private var clearGlass = true
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.dark
     @AppStorage(WarmUp.settingKey) private var warmUpEnabled = true
 
     var body: some View {
@@ -462,15 +463,25 @@ struct SettingsView: View {
                     Text("Приложение")
                 }
 
-                // Только там, где стекло настоящее: до iOS 26 оно нарисовано и не меняется.
-                if GlassPreference.isSupported {
-                    Section {
-                        Toggle("Прозрачное стекло, как в iOS 26", isOn: $clearGlass)
-                    } header: {
-                        Text("Оформление")
-                    } footer: {
-                        Text("Панель вкладок, поле ввода в переписке и кнопки поверх фото — из прозрачного жидкого стекла: сквозь него видно, что под ним, а края преломляют свет. Выключишь — стекло станет матовым, как в iOS 27.")
+                Section {
+                    Picker("Тема", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    // Только там, где стекло настоящее: до iOS 26 оно нарисовано и не меняется.
+                    if GlassPreference.isSupported {
+                        Toggle("Прозрачное стекло, как в iOS 26", isOn: $clearGlass)
+                    }
+                } header: {
+                    Text("Оформление")
+                } footer: {
+                    Text(GlassPreference.isSupported
+                         ? "«Как в системе» — тема меняется вместе с iPhone. Прозрачное стекло: панель вкладок, поле ввода в переписке и кнопки поверх фото — сквозь него видно, что под ним, а края преломляют свет. Выключишь — стекло станет матовым, как в iOS 27."
+                         : "«Как в системе» — тема меняется вместе с iPhone: днём светлая, вечером тёмная, если так настроено.")
                 }
 
                 if HealthKitService.shared.deviceSupportsHealth && !HealthKitService.shared.isAvailable {

@@ -35,12 +35,12 @@ final class SnapshotTests: XCTestCase {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(posts) { post in
                             PostCardView(post: post, onOpen: {}, onOpenAuthor: {}, onChange: { _ in })
-                            Divider().overlay(Color.white.opacity(0.07))
+                            Divider().overlay(Color.ink.opacity(0.07))
                         }
                     }
                     .padding(.horizontal, 16)
                 }
-                .background(Color.black.ignoresSafeArea())
+                .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
             .preferredColorScheme(.dark)
@@ -78,7 +78,7 @@ final class SnapshotTests: XCTestCase {
         try snap("04-profile") {
             NavigationStack {
                 ScrollView { content() }
-                    .background(Color.black.ignoresSafeArea())
+                    .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
             .preferredColorScheme(.dark)
@@ -86,7 +86,7 @@ final class SnapshotTests: XCTestCase {
         try snap("05-profile-full", height: 2600) {
             NavigationStack {
                 VStack { content(); Spacer(minLength: 0) }
-                    .background(Color.black.ignoresSafeArea())
+                    .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
             .preferredColorScheme(.dark)
@@ -97,7 +97,7 @@ final class SnapshotTests: XCTestCase {
         try snap("06-signup") {
             NavigationStack {
                 SignUpView()
-                    .background(Color.black.ignoresSafeArea())
+                    .background(Color.canvas.ignoresSafeArea())
                     .navigationBarTitleDisplayMode(.inline)
             }
             .preferredColorScheme(.dark)
@@ -197,7 +197,7 @@ final class SnapshotTests: XCTestCase {
                     .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .padding(16)
                 }
-                .background(Color.black.ignoresSafeArea())
+                .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
             .preferredColorScheme(.dark)
@@ -237,7 +237,7 @@ final class SnapshotTests: XCTestCase {
                     }
                     .padding(12)
                 }
-                .background(Color.black.ignoresSafeArea())
+                .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
             .preferredColorScheme(.dark)
@@ -262,7 +262,7 @@ final class SnapshotTests: XCTestCase {
         let recap = TrainingRecap.build(log: log, setLog: sets, period: .month(year: parts.year ?? 2026, month: parts.month ?? 1), calendar: calendar)
         try snap("19-recap-intro", wait: 2.5) { TrainingRecapView(recap: recap) }
         try snap("20-recap-card") {
-            ZStack { Color.black.ignoresSafeArea(); TrainingRecapCard(recap: recap) }
+            ZStack { Color.canvas.ignoresSafeArea(); TrainingRecapCard(recap: recap) }
         }
     }
 
@@ -320,7 +320,7 @@ final class SnapshotTests: XCTestCase {
                     }
                     .padding(16)
                 }
-                .background(Color.black.ignoresSafeArea())
+                .background(Color.canvas.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
             }
             .preferredColorScheme(.dark)
@@ -416,14 +416,14 @@ final class SnapshotTests: XCTestCase {
             VStack { LevelCard(profile: profile); Spacer() }
                 .padding(16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black)
+                .background(Color.canvas)
         }
         try snap("25-level-sheet", height: 2200) { LevelSheet(profile: profile) }
         let xp = Progression.xp(for: profile)
         let gain = ProgressionEvents.Gain(before: Progression.threshold(for: Progression.level(forXP: xp).level) - 40, after: xp)
         try snap("26-level-up", wait: 3) { LevelUpOverlay(gain: gain) {} }
         try snap("27-level-share") {
-            ZStack { Color.black.ignoresSafeArea(); LevelShareCard(level: Progression.level(forXP: xp)) }
+            ZStack { Color.canvas.ignoresSafeArea(); LevelShareCard(level: Progression.level(forXP: xp)) }
         }
     }
 
@@ -441,7 +441,7 @@ final class SnapshotTests: XCTestCase {
             }
             .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black)
+            .background(Color.canvas)
         }
         try snap("35-avatar-viewer", wait: 1) {
             AvatarViewer(imageId: "0123456789abcdef01234567", username: user.username) {}
@@ -469,7 +469,7 @@ final class SnapshotTests: XCTestCase {
             VStack { CoachEntryCard(profile: profile); Spacer() }
                 .padding(16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black)
+                .background(Color.canvas)
         }
     }
 
@@ -494,12 +494,12 @@ final class SnapshotTests: XCTestCase {
         let list = try JSONDecoder().decode([SocialChallenge].self, from: Data(json.utf8))
         ChallengeStore.shared.setForPreview(list)
         try snap("28-challenges", height: 1800) {
-            ScrollView { ChallengesSection().padding(16) }.background(Color.black)
+            ScrollView { ChallengesSection().padding(16) }.background(Color.canvas)
         }
         try snap("29-challenge-detail", height: 1800) { ChallengeDetailSheet(id: "fin") }
         try snap("30-challenge-new", height: 1800) { NewChallengeSheet() }
         try snap("31-challenge-share") {
-            ZStack { Color.black.ignoresSafeArea(); ChallengeShareCard(challenge: list[2]) }
+            ZStack { Color.canvas.ignoresSafeArea(); ChallengeShareCard(challenge: list[2]) }
         }
     }
 
@@ -536,7 +536,7 @@ final class SnapshotTests: XCTestCase {
         fresh.apply(release, installed: 1240, defaults: defaults)
         try snap("34-update-banner", height: 900) {
             ZStack(alignment: .top) {
-                Color.black.ignoresSafeArea()
+                Color.canvas.ignoresSafeArea()
                 VStack(spacing: 16) {
                     AppUpdateBanner(updater: offer)
                     AppUpdateBanner(updater: offer, startExpanded: true)
@@ -566,7 +566,8 @@ final class SnapshotTests: XCTestCase {
         if let height {
             window.frame = CGRect(x: 0, y: 0, width: scene.screen.bounds.width, height: height)
         }
-        window.overrideUserInterfaceStyle = .dark
+        // Тема — из прогона: снимки делаются и в тёмной, и в светлой.
+        window.overrideUserInterfaceStyle = ProcessInfo.processInfo.environment["THEME"] == "light" ? .light : .dark
         // Цвет кнопок — как в приложении: его задаёт RootView.
         window.rootViewController = UIHostingController(rootView: content().tint(Theme.accent).environment(RestTimer()))
         window.makeKeyAndVisible()

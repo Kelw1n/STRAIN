@@ -51,17 +51,16 @@ struct ExerciseSwapSheet: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Заменить упражнение")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") { dismiss() }.foregroundStyle(.white)
+                    Button("Отмена") { dismiss() }.foregroundStyle(.ink)
                 }
             }
             .task { load() }
         }
-        .preferredColorScheme(.dark)
     }
 
     private func header(_ exercise: ActiveExerciseState) -> some View {
@@ -70,11 +69,11 @@ struct ExerciseSwapSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Вместо «\(exercise.prescription.name)»")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(2)
                 Text("\(RuPlural.sets(exercise.sets.count)) по \(exercise.prescription.reps) — схема остаётся")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
             }
         }
     }
@@ -84,7 +83,7 @@ struct ExerciseSwapSheet: View {
             Text(title.uppercased())
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
             VStack(spacing: 0) {
                 ForEach(items) { item in
                     Button { choose(item) } label: {
@@ -93,17 +92,17 @@ struct ExerciseSwapSheet: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name)
                                     .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.ink)
                                     .lineLimit(2)
                                 Text(item.detail)
                                     .font(.system(size: 12))
-                                    .foregroundStyle(item.source == .history ? Theme.accent : Color.white.opacity(0.5))
+                                    .foregroundStyle(item.source == .history ? Theme.accent : Color.ink.opacity(0.5))
                                     .lineLimit(2)
                             }
                             Spacer(minLength: 8)
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color.white.opacity(0.35))
+                                .foregroundStyle(Color.ink.opacity(0.35))
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
@@ -111,7 +110,7 @@ struct ExerciseSwapSheet: View {
                     }
                     .buttonStyle(PressableStyle(scale: 0.985))
                     if item.id != items.last?.id {
-                        Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 68)
+                        Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 68)
                     }
                 }
             }
@@ -124,20 +123,20 @@ struct ExerciseSwapSheet: View {
             Text("СВОЁ УПРАЖНЕНИЕ")
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
             HStack(spacing: 8) {
                 TextField("Название", text: $custom)
                     .focused($typing)
                     .submitLabel(.done)
                     .onSubmit(chooseCustom)
                     .font(.system(size: 16))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .padding(.horizontal, 14)
                     .frame(height: 46)
-                    .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 Button("Заменить", action: chooseCustom)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .padding(.horizontal, 14)
                     .frame(height: 46)
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -152,7 +151,7 @@ struct ExerciseSwapSheet: View {
         if profile.isProgramLift(exercise.prescription) {
             Text("Это основное движение программы — его меняем только на сегодня, в следующий раз оно вернётся.")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: 8) {
@@ -162,7 +161,7 @@ struct ExerciseSwapSheet: View {
                 .pickerStyle(.segmented)
                 Text(scope.explanation)
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

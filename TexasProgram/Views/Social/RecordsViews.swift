@@ -19,21 +19,21 @@ struct ProfileRecordsCard: View {
                     Text("РЕКОРДЫ")
                         .font(.system(size: 13, weight: .bold))
                         .tracking(1.4)
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                     Spacer()
                     if !records.isEmpty {
                         Text("Все \(records.count)")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .foregroundStyle(Color.ink.opacity(0.6))
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .foregroundStyle(Color.ink.opacity(0.4))
                     }
                 }
                 if records.isEmpty {
                     Text(isMe ? "Рекорды появятся после первой тренировки с весами" : "Рекордов пока нет")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 } else {
@@ -63,30 +63,30 @@ private struct RecordTile: View {
         VStack(spacing: 4) {
             Text(lift.title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.6))
+                .foregroundStyle(Color.ink.opacity(0.6))
                 .lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(record.map { WeightFormat.plain($0.estimate) } ?? "—")
                     .font(.system(size: 24, weight: .heavy, design: Theme.fontDesign))
                     .monospacedDigit()
-                    .foregroundStyle(record == nil ? Color.white.opacity(0.3) : .white)
+                    .foregroundStyle(record == nil ? Color.ink.opacity(0.3) : .ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if record != nil {
                     Text("кг")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                 }
             }
             Text(record?.setText ?? "нет подходов")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(record == nil ? Color.white.opacity(0.3) : Theme.accent)
+                .foregroundStyle(record == nil ? Color.ink.opacity(0.3) : Theme.accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
@@ -103,16 +103,16 @@ private struct RecordTotalLine: View {
                 .foregroundStyle(Theme.accent)
             Text("Сумма троеборья")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             Spacer(minLength: 6)
             Text("≈ \(WeightFormat.plain(total)) кг")
                 .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign))
                 .monospacedDigit()
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             if let bodyWeight, bodyWeight > 0 {
                 Text("· ×\(ChallengeScoring.decimal(total / bodyWeight))")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
             }
         }
     }
@@ -148,14 +148,14 @@ struct RecordsSheet: View {
                         ForEach(records) { record in
                             row(record)
                             if record.id != records.last?.id {
-                                Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 16)
+                                Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 16)
                             }
                         }
                     }
                     .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     Text("Число справа — расчётный максимум на один раз по лучшему подходу (формула Эпли). Сумма троеборья — по приседу, жиму лёжа и становой.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 16)
@@ -163,7 +163,7 @@ struct RecordsSheet: View {
                 .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle(profile == nil ? "Рекорды @\(username)" : "Рекорды")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -174,7 +174,6 @@ struct RecordsSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
@@ -198,7 +197,7 @@ struct RecordsSheet: View {
                 HStack(spacing: 6) {
                     Text(record.name)
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     if record.lift != nil {
@@ -209,7 +208,7 @@ struct RecordsSheet: View {
                 }
                 Text(detail(record))
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
             }
             Spacer(minLength: 8)
             Text("≈ \(WeightFormat.plain(record.estimate))")
@@ -219,7 +218,7 @@ struct RecordsSheet: View {
             if opens {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.3))
+                    .foregroundStyle(Color.ink.opacity(0.3))
             }
         }
         .padding(.horizontal, 16)

@@ -77,7 +77,7 @@ struct GradientButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(.white)
+            .foregroundStyle(.ink)
             .padding(.vertical, 16)
             .frame(maxWidth: .infinity)
             .background(gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -172,7 +172,7 @@ struct TagBadge: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .foregroundStyle(.white)
+        .foregroundStyle(.ink)
         .background(gradient, in: Capsule())
     }
 }

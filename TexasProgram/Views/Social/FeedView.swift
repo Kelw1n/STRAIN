@@ -23,7 +23,7 @@ struct FeedView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if tabRefreshing {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(.ink)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .transition(.opacity)
@@ -54,11 +54,11 @@ struct FeedView: View {
                             onOpenAuthor: { path.append(FeedRoute.user(post.author.username)) },
                             onChange: { replace(post.id, with: $0) }
                         )
-                        Divider().overlay(Color.white.opacity(0.07))
+                        Divider().overlay(Color.ink.opacity(0.07))
                             .onAppear { if post.id == posts.last?.id { Task { await loadMore() } } }
                     }
                     if loadingMore || (loading && posts.isEmpty) {
-                        ProgressView().tint(.white).frame(maxWidth: .infinity).padding(24)
+                        ProgressView().tint(.ink).frame(maxWidth: .infinity).padding(24)
                     }
                     Spacer(minLength: 110)
                 }
@@ -67,7 +67,7 @@ struct FeedView: View {
             }
             .scrollIndicators(.hidden)
             .refreshable { await reload() }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { scopeMenu }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -76,7 +76,7 @@ struct FeedView: View {
                             Button { path.append(FeedRoute.activity) } label: {
                                 Image(systemName: "bell")
                                     .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.ink)
                                     .overlay(alignment: .topTrailing) {
                                         if social.unseenActivity > 0 {
                                             Circle()
@@ -91,7 +91,7 @@ struct FeedView: View {
                         Button(action: onFindPeople) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                         }
                         .accessibilityLabel("Найти людей")
                     }
@@ -102,7 +102,6 @@ struct FeedView: View {
                 route.destination(path: $path) { id, value in replace(id, with: value) }
             }
         }
-        .preferredColorScheme(.dark)
         // Повторное нажатие на «Главное»: из поста или профиля — назад к ленте,
         // в самой ленте — наверх и свежие тренировки.
         .onTabReselect(.today) {
@@ -147,12 +146,12 @@ struct FeedView: View {
             HStack(spacing: 6) {
                 Text(scope == .all ? "Главное" : "Подписки")
                     .font(.system(size: 30, weight: .heavy, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 // Без профиля подписок нет — и выбирать нечего.
                 if social.isSignedIn {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                 }
             }
             .fixedSize()
@@ -165,7 +164,7 @@ struct FeedView: View {
         if !social.outbox.isEmpty {
             HStack(spacing: 12) {
                 if social.isFlushing {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(.ink)
                 } else {
                     Image(systemName: "icloud.and.arrow.up")
                         .font(.system(size: 18, weight: .semibold))
@@ -174,11 +173,11 @@ struct FeedView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(social.isFlushing ? "Публикую тренировку…" : "Тренировка ждёт отправки")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     if let message = social.outboxError, !social.isFlushing {
                         Text(message)
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.white.opacity(0.55))
+                            .foregroundStyle(Color.ink.opacity(0.55))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -192,7 +191,7 @@ struct FeedView: View {
                         if social.outboxError != nil {
                             Button("Удалить") { confirmDiscard = true }
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .foregroundStyle(Color.ink.opacity(0.5))
                         }
                     }
                 }
@@ -215,18 +214,18 @@ struct FeedView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Делись тренировками")
                 .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             Text("Создай профиль: в конце тренировки сделаешь фото — и оно появится здесь вместе с весами и подходами. Друзья поставят лайк или напишут комментарий.")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.6))
+                .foregroundStyle(Color.ink.opacity(0.6))
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onCreateProfile) {
                 Text("Создать профиль")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .padding(.horizontal, 18)
                     .frame(height: 44)
-                    .background(Color.white, in: Capsule())
+                    .background(Color.ink, in: Capsule())
             }
             .buttonStyle(.pressable)
         }
@@ -240,16 +239,16 @@ struct FeedView: View {
         VStack(spacing: 10) {
             Image(systemName: scope == .all ? "figure.strengthtraining.traditional" : "person.2")
                 .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.35))
+                .foregroundStyle(Color.ink.opacity(0.35))
             Text(scope == .all ? "В ленте пока пусто" : "Здесь появятся тренировки тех, на кого ты подписан")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .multilineTextAlignment(.center)
             Text(scope == .all
                  ? "Закончи тренировку и опубликуй её — будешь первым."
                  : "Найди друзей по юзернейму и подпишись.")
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.55))
+                .foregroundStyle(Color.ink.opacity(0.55))
                 .multilineTextAlignment(.center)
             if scope == .following {
                 Button("Найти людей", action: onFindPeople)

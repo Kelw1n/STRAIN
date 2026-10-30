@@ -129,6 +129,7 @@ struct LiquidGlassTabBar: View {
     /// В приложении всегда `nil`.
     var liftedAt: CGFloat? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
     /// Прозрачное стекло, как в iOS 26, или матовое системное — по настройке.
     @AppStorage(GlassPreference.storageKey) private var clearGlass = true
     /// Метки подложки и линзы в общем контейнере стекла: по ним система узнаёт
@@ -179,7 +180,7 @@ struct LiquidGlassTabBar: View {
                     ForEach(tabs.filter { badges.contains($0) }) { tab in
                         Circle()
                             .fill(Theme.record)
-                            .overlay(Circle().strokeBorder(Color.black, lineWidth: 2))
+                            .overlay(Circle().strokeBorder(Color.canvas, lineWidth: 2))
                             .frame(width: 11, height: 11)
                             .position(x: layout.center(of: tab.index) + 14, y: barHeight / 2 - 12)
                             .transition(.scale.combined(with: .opacity))
@@ -380,7 +381,7 @@ struct LiquidGlassTabBar: View {
     /// настройкой — системное матовое, как в iOS 27.
     @available(iOS 26.0, *)
     private var dockMaterial: Glass {
-        GlassPreference.glass(clear: clearGlass, dimming: Self.dockDimming)
+        GlassPreference.glass(clear: clearGlass, dimming: Self.dockDimming, light: scheme == .light)
     }
 
     /// В покое линза — подсветка выбранной вкладки: то же стекло, что подложка,
@@ -390,7 +391,8 @@ struct LiquidGlassTabBar: View {
     private func lensMaterial(lifted: Bool) -> Glass {
         if lifted { return Glass.clear }
         let base = clearGlass ? Glass.clear : Glass.regular
-        return base.tint(Color.white.opacity(0.14))
+        // В светлой теме подсветка — лёгкая тень на стекле, а не белёсость.
+        return base.tint(scheme == .light ? Color.black.opacity(0.07) : Color.white.opacity(0.14))
     }
     #endif
 
@@ -419,9 +421,9 @@ struct LiquidGlassTabBar: View {
         let bottom: Double = lifted ? 0.18 : 0.1
         return LinearGradient(
             stops: [
-                .init(color: Color.white.opacity(top), location: 0),
-                .init(color: Color.white.opacity(middle), location: 0.5),
-                .init(color: Color.white.opacity(bottom), location: 1)
+                .init(color: edge(top), location: 0),
+                .init(color: edge(middle), location: 0.5),
+                .init(color: edge(bottom), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -471,7 +473,7 @@ struct LiquidGlassTabBar: View {
     private func lensBody(_ lens: Lens) -> some View {
         let shape = Capsule(style: .continuous)
         return ZStack {
-            shape.fill(Color.black.opacity(0.55))
+            shape.fill(Color.black.opacity(scheme == .light ? 0.07 : 0.55))
                 .opacity(lens.lifted ? 0 : 1)
 
             shape.fill(.ultraThinMaterial)
@@ -490,9 +492,9 @@ struct LiquidGlassTabBar: View {
             shape.strokeBorder(
                 LinearGradient(
                     stops: [
-                        .init(color: Color.white.opacity(lens.lifted ? 0.75 : 0.12), location: 0),
-                        .init(color: Color.white.opacity(lens.lifted ? 0.12 : 0.04), location: 0.45),
-                        .init(color: Color.white.opacity(lens.lifted ? 0.35 : 0.06), location: 1)
+                        .init(color: edge(lens.lifted ? 0.75 : 0.12), location: 0),
+                        .init(color: edge(lens.lifted ? 0.12 : 0.04), location: 0.45),
+                        .init(color: edge(lens.lifted ? 0.35 : 0.06), location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -500,7 +502,7 @@ struct LiquidGlassTabBar: View {
                 lineWidth: lens.lifted ? 1.2 : 1
             )
         }
-        .shadow(color: Color.black.opacity(lens.lifted ? 0.45 : 0), radius: lens.lifted ? 14 : 0, y: lens.lifted ? 8 : 0)
+        .shadow(color: Color.black.opacity(lens.lifted ? (scheme == .light ? 0.18 : 0.45) : 0), radius: lens.lifted ? 14 : 0, y: lens.lifted ? 8 : 0)
         .frame(width: lens.width, height: lens.height)
         .position(x: lens.midX, y: barHeight / 2)
     }
@@ -510,17 +512,17 @@ struct LiquidGlassTabBar: View {
             .fill(.ultraThinMaterial)
             .overlay {
                 Capsule(style: .continuous)
-                    .fill(Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.72))
+                    .fill(Color.tone(0.08).opacity(0.72))
             }
             .overlay {
                 Capsule(style: .continuous)
                     .strokeBorder(
                         LinearGradient(
                             stops: [
-                                .init(color: Color.white.opacity(0.28), location: 0.0),
-                                .init(color: Color.white.opacity(0.06), location: 0.35),
+                                .init(color: edge(0.28), location: 0.0),
+                                .init(color: edge(0.06), location: 0.35),
                                 .init(color: Color.clear, location: 0.65),
-                                .init(color: Color.white.opacity(0.14), location: 1.0)
+                                .init(color: edge(0.14), location: 1.0)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -528,7 +530,13 @@ struct LiquidGlassTabBar: View {
                         lineWidth: 1
                     )
             }
-            .shadow(color: Color.black.opacity(0.6), radius: 24, x: 0, y: 12)
+            .shadow(color: Color.black.opacity(scheme == .light ? 0.14 : 0.6), radius: 24, x: 0, y: 12)
+    }
+
+    /// Кромка стекла: белый блик на тёмной теме, тонкая тень на светлой —
+    /// белое на светлом не видно.
+    private func edge(_ opacity: Double) -> Color {
+        scheme == .light ? Color.black.opacity(opacity * 0.35) : Color.white.opacity(opacity)
     }
 }
 
@@ -546,7 +554,7 @@ private struct TabIconRow: View, Equatable {
             ForEach(MainTabItem.allCases) { tab in
                 Image(systemName: filled ? tab.selectedIcon : tab.icon)
                     .font(.system(size: 21, weight: filled ? .semibold : .regular))
-                    .foregroundStyle(filled ? Color.white : Color.white.opacity(outlineOpacity))
+                    .foregroundStyle(filled ? Color.ink : Color.ink.opacity(outlineOpacity))
                     .frame(maxWidth: .infinity)
                     .frame(height: height)
             }

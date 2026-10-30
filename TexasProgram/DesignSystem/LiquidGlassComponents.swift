@@ -77,11 +77,12 @@ enum GlassPreference {
 @available(iOS 26.0, *)
 extension GlassPreference {
     /// Стекло плавающей плашки или кнопки. Затемнение — только у прозрачного:
-    /// матовое и так глушит то, что под ним.
-    static func glass(clear: Bool, dimming: Double = GlassPreference.dimming, interactive: Bool = false) -> Glass {
+    /// матовое и так глушит то, что под ним. В светлой теме прозрачное стекло
+    /// не темнеет, а чуть белеет: на нём тёмный текст и значки.
+    static func glass(clear: Bool, dimming: Double = GlassPreference.dimming, interactive: Bool = false, light: Bool = false) -> Glass {
         var glass = clear ? Glass.clear : Glass.regular
         if clear && dimming > 0 {
-            glass = glass.tint(Color.black.opacity(dimming))
+            glass = glass.tint(light ? Color.white.opacity(dimming * 0.9) : Color.black.opacity(dimming))
         }
         if interactive {
             glass = glass.interactive()
@@ -99,6 +100,7 @@ struct FloatingGlass<S: Shape>: ViewModifier {
     private let interactive: Bool
     private let dimming: Double
     @AppStorage(GlassPreference.storageKey) private var clearGlass = true
+    @Environment(\.colorScheme) private var scheme
 
     init(shape: S, enabled: Bool, interactive: Bool, dimming: Double) {
         self.shape = shape
@@ -115,7 +117,7 @@ struct FloatingGlass<S: Shape>: ViewModifier {
             #if compiler(>=6.2)
             if #available(iOS 26.0, *) {
                 content.glassEffect(
-                    GlassPreference.glass(clear: clearGlass, dimming: dimming, interactive: interactive),
+                    GlassPreference.glass(clear: clearGlass, dimming: dimming, interactive: interactive, light: scheme == .light),
                     in: shape
                 )
             } else {
@@ -131,7 +133,7 @@ struct FloatingGlass<S: Shape>: ViewModifier {
     private func material(_ content: Content) -> some View {
         content
             .background(.ultraThinMaterial, in: shape)
-            .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
+            .overlay(shape.stroke(Color.ink.opacity(0.12), lineWidth: 1))
     }
 }
 
@@ -202,10 +204,10 @@ struct SlideToConfirmView: View {
             ZStack(alignment: .leading) {
                 // Фоновая подложка слайдера
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color(white: 0.16))
+                    .fill(Color.tone(0.16))
                     .overlay(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(Color.ink.opacity(0.08), lineWidth: 1)
                     )
 
                 // Текст по центру
@@ -214,7 +216,7 @@ struct SlideToConfirmView: View {
                     Text(title)
                         .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                         .tracking(2.0)
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(Color.ink.opacity(0.85))
                     Spacer()
                 }
 
@@ -222,10 +224,10 @@ struct SlideToConfirmView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.right.2")
                         .font(.system(size: 18, weight: .black))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                 }
                 .frame(width: thumbWidth, height: height - 8)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(Color.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .shadow(color: Color.black.opacity(0.35), radius: 8, x: 2, y: 2)
                 .offset(x: 4 + dragOffset)
                 .gesture(

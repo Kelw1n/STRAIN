@@ -48,23 +48,22 @@ struct FoodEntrySheet: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle(original == nil ? "Добавить еду" : "Запись")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Отмена") { dismiss() }
-                        .foregroundStyle(Color.white.opacity(0.7))
+                        .foregroundStyle(Color.ink.opacity(0.7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Сохранить", action: save)
                         .font(.body.weight(.bold))
-                        .foregroundStyle(effectiveKcal > 0 ? Theme.accent : Color.white.opacity(0.3))
+                        .foregroundStyle(effectiveKcal > 0 ? Theme.accent : Color.ink.opacity(0.3))
                         .disabled(effectiveKcal <= 0)
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .onAppear(perform: fill)
     }
 
@@ -73,10 +72,10 @@ struct FoodEntrySheet: View {
             NutritionCaption(text: "Что съел")
             TextField("Например, гречка с курицей", text: $name)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .padding(.horizontal, 14)
                 .frame(height: 50)
-                .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .nutritionCard()
     }
@@ -94,7 +93,7 @@ struct FoodEntrySheet: View {
             }
             Text("Не вписал калории — они посчитаются по Б/Ж/У: 4 ккал в грамме белка и углеводов, 9 — в грамме жира. Порцию можно не писать.")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.4))
+                .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .nutritionCard()
@@ -110,16 +109,16 @@ struct FoodEntrySheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.name)
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .lineLimit(1)
                             Text(NutritionFormat.macros(entry.nutrients))
                                 .font(.system(size: 12))
-                                .foregroundStyle(Color.white.opacity(0.45))
+                                .foregroundStyle(Color.ink.opacity(0.45))
                         }
                         Spacer()
                         Text("\(NutritionFormat.kcal(entry.nutrients.kcal)) ккал")
                             .font(.system(size: 14, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(Color.white.opacity(0.8))
+                            .foregroundStyle(Color.ink.opacity(0.8))
                     }
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())

@@ -19,7 +19,7 @@ struct TrainingRecapEntryCard: View {
                     Text("ИТОГИ")
                         .font(.system(size: 12, weight: .bold))
                         .tracking(1.2)
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.ink.opacity(0.55))
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
@@ -31,10 +31,10 @@ struct TrainingRecapEntryCard: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(period.isYear ? "Год" : "Месяц")
                                         .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(Color.white.opacity(0.75))
+                                        .foregroundStyle(Color.ink.opacity(0.75))
                                     Text(period.title)
                                         .font(.system(size: 16, weight: .heavy, design: Theme.fontDesign))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(.ink)
                                         .lineLimit(1)
                                 }
                                 .padding(.horizontal, 14)
@@ -54,6 +54,7 @@ struct TrainingRecapEntryCard: View {
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .fullScreenCover(item: $opened) { recap in
                 TrainingRecapView(recap: recap)
+                    .preferredColorScheme(.dark)
             }
         }
     }
@@ -110,6 +111,11 @@ struct TrainingRecapView: View {
     }
 
     var body: some View {
+        darkContent.alwaysDark()
+    }
+
+    @ViewBuilder
+    private var darkContent: some View {
         let slide = slides[min(page, slides.count - 1)]
         ZStack {
             LinearGradient(colors: Self.palette(page), startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -161,10 +167,10 @@ struct TrainingRecapView: View {
                         ForEach(slides.indices, id: \.self) { index in
                             GeometryReader { proxy in
                                 Capsule()
-                                    .fill(Color.white.opacity(0.3))
+                                    .fill(Color.ink.opacity(0.3))
                                     .overlay(alignment: .leading) {
                                         Capsule()
-                                            .fill(Color.white)
+                                            .fill(Color.ink)
                                             .frame(width: proxy.size.width * fill(index, now: context.date))
                                     }
                             }
@@ -176,12 +182,12 @@ struct TrainingRecapView: View {
                     Text(recap.period.title.uppercased())
                         .font(.system(size: 12, weight: .heavy))
                         .tracking(1.2)
-                        .foregroundStyle(Color.white.opacity(0.8))
+                        .foregroundStyle(Color.ink.opacity(0.8))
                     Spacer()
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .frame(width: 36, height: 36)
                             .background(Color.black.opacity(0.25), in: Circle())
                     }
@@ -193,7 +199,6 @@ struct TrainingRecapView: View {
             .padding(.top, 8)
             .frame(maxHeight: .infinity, alignment: .top)
         }
-        .preferredColorScheme(.dark)
         .statusBarHidden()
         .sheet(item: $shareImage) { item in
             ShareSheet(items: [item.image])
@@ -243,7 +248,7 @@ struct TrainingRecapView: View {
                 Spacer()
                 Text("Твой \(recap.period.name)")
                     .font(.system(size: 44, weight: .black, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .minimumScaleFactor(0.6)
                     .lineLimit(2)
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -252,23 +257,23 @@ struct TrainingRecapView: View {
                     Text(RuPlural.word(recap.workouts, "тренировка", "тренировки", "тренировок"))
                         .font(.system(size: 24, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 if recap.previousWorkouts > 0 {
                     Text(changeLine(now: recap.workouts, before: recap.previousWorkouts, noun: "тренировок"))
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(Color.ink.opacity(0.85))
                 }
                 Spacer()
                 Label("Нажми, чтобы листать", systemImage: "hand.tap.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.7))
+                    .foregroundStyle(Color.ink.opacity(0.7))
             }
         case .time:
             VStack(alignment: .leading, spacing: 16) {
                 Spacer()
                 Text("Время в зале")
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(Color.ink.opacity(0.85))
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     CountUpText(value: Double(recap.hours)) { "\(Int($0.rounded()))" }
                         .font(.system(size: 88, weight: .black, design: Theme.fontDesign))
@@ -279,12 +284,12 @@ struct TrainingRecapView: View {
                     Text("мин")
                         .font(.system(size: 24, weight: .heavy))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
                 Text("\(RuPlural.sets(recap.sets)) и \(SocialFormat.grouped(Double(recap.reps))) \(RuPlural.word(recap.reps, "повтор", "повтора", "повторов")) \(recap.period.inPhrase)")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(Color.ink.opacity(0.85))
                 RecapBars(values: recap.buckets, labels: barLabels)
                     .frame(height: 150)
                     .padding(.top, 12)
@@ -295,25 +300,25 @@ struct TrainingRecapView: View {
                 Spacer()
                 Text("Поднято \(recap.period.inPhrase)")
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(Color.ink.opacity(0.85))
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     CountUpText(value: recap.volumeKg / 1000) { String(format: "%.1f", $0).replacingOccurrences(of: ".", with: ",") }
                         .font(.system(size: 96, weight: .black, design: Theme.fontDesign))
                     Text("т")
                         .font(.system(size: 36, weight: .heavy))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 if let comparison = recap.volumeComparison {
                     Text("Это \(comparison) 🐘")
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                 }
                 if let change = recap.volumeChange {
                     Text(change >= 0 ? "На \(change)% больше, чем \(previousPhrase)" : "На \(-change)% меньше, чем \(previousPhrase)")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(Color.ink.opacity(0.85))
                 }
                 Spacer()
             }
@@ -322,7 +327,7 @@ struct TrainingRecapView: View {
                 Spacer()
                 Image(systemName: "trophy.fill")
                     .font(.system(size: 54, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .symbolEffect(.bounce, value: page)
                 if recap.records > 0 {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -331,20 +336,20 @@ struct TrainingRecapView: View {
                         Text(RuPlural.word(recap.records, "рекорд", "рекорда", "рекордов"))
                             .font(.system(size: 26, weight: .bold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 } else {
                     Text("Рекордов не было — значит, всё впереди")
                         .font(.system(size: 26, weight: .heavy))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                 }
                 if let heaviest = recap.heaviest {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Самый тяжёлый подход")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.8))
+                            .foregroundStyle(Color.ink.opacity(0.8))
                         Text("\(heaviest.name) · \(WeightFormat.kilogramsPrecise(heaviest.bestWeight)) × \(heaviest.bestReps)")
                             .font(.system(size: 24, weight: .heavy, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -357,19 +362,19 @@ struct TrainingRecapView: View {
                 Spacer()
                 Text("Любимое упражнение")
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(Color.ink.opacity(0.85))
                 if let favorite = recap.favorite {
                     HStack(spacing: 16) {
                         ExerciseThumb(name: favorite.name, size: 74)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(favorite.name)
                                 .font(.system(size: 30, weight: .black, design: Theme.fontDesign))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .lineLimit(2)
                                 .minimumScaleFactor(0.7)
                             Text("\(favorite.sessions) \(RuPlural.word(favorite.sessions, "тренировка", "тренировки", "тренировок"))")
                                 .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.85))
+                                .foregroundStyle(Color.ink.opacity(0.85))
                         }
                     }
                 }
@@ -378,7 +383,7 @@ struct TrainingRecapView: View {
                         Text("БОЛЬШЕ ВСЕГО ПОДНЯТО")
                             .font(.system(size: 12, weight: .heavy))
                             .tracking(1.1)
-                            .foregroundStyle(Color.white.opacity(0.7))
+                            .foregroundStyle(Color.ink.opacity(0.7))
                         ForEach(Array(recap.topByVolume.enumerated()), id: \.offset) { index, stat in
                             HStack {
                                 Text("\(index + 1)")
@@ -392,7 +397,7 @@ struct TrainingRecapView: View {
                                     .font(.system(size: 16, weight: .heavy, design: Theme.fontDesign))
                                     .monospacedDigit()
                             }
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         }
                     }
                     .padding(16)
@@ -405,7 +410,7 @@ struct TrainingRecapView: View {
                 Spacer()
                 Image(systemName: "flame.fill")
                     .font(.system(size: 54, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .symbolEffect(.bounce, value: page)
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     CountUpText(value: Double(recap.longestWeekStreak)) { "\(Int($0.rounded()))" }
@@ -413,17 +418,17 @@ struct TrainingRecapView: View {
                     Text(RuPlural.word(recap.longestWeekStreak, "неделя", "недели", "недель") + " подряд")
                         .font(.system(size: 24, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
                 Text("Самая длинная серия: каждую неделю — хотя бы одна тренировка. Всего недель с тренировками — \(recap.activeWeeks).")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(Color.ink.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
                 if let weekday = recap.busiestWeekday {
                     Text("Чаще всего ты тренировался(-ась) по \(Self.weekdayDative[weekday])")
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
@@ -442,15 +447,15 @@ struct TrainingRecapView: View {
                 } label: {
                     Label("Поделиться в сторис", systemImage: "square.and.arrow.up")
                         .font(.system(size: 16, weight: .heavy))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                        .background(Color.white, in: Capsule())
+                        .background(Color.ink, in: Capsule())
                 }
                 .buttonStyle(.pressable)
                 Button("Сначала") { go(-page) }
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(Color.ink.opacity(0.85))
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
@@ -548,19 +553,19 @@ struct RecapBars: View {
                     if values[index] > 0 {
                         Text("\(values[index])")
                             .font(.system(size: 12, weight: .heavy))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                     }
                     GeometryReader { proxy in
                         VStack {
                             Spacer(minLength: 0)
                             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(Color.white.opacity(values[index] > 0 ? 0.95 : 0.2))
+                                .fill(Color.ink.opacity(values[index] > 0 ? 0.95 : 0.2))
                                 .frame(height: grown ? max(4, proxy.size.height * CGFloat(values[index]) / CGFloat(top)) : 4)
                         }
                     }
                     Text(labels.indices.contains(index) ? labels[index] : "")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.7))
+                        .foregroundStyle(Color.ink.opacity(0.7))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
@@ -579,6 +584,11 @@ struct TrainingRecapCard: View {
     let recap: TrainingRecap
 
     var body: some View {
+        darkContent.alwaysDark()
+    }
+
+    @ViewBuilder
+    private var darkContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("STRAIN")
@@ -588,7 +598,7 @@ struct TrainingRecapCard: View {
                 Text(recap.period.isYear ? "ИТОГИ ГОДА" : "ИТОГИ МЕСЯЦА")
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.2)
-                    .foregroundStyle(Color.white.opacity(0.75))
+                    .foregroundStyle(Color.ink.opacity(0.75))
             }
             Text(recap.period.title)
                 .font(.system(size: 38, weight: .black, design: Theme.fontDesign))
@@ -616,7 +626,7 @@ struct TrainingRecapCard: View {
             }
             Spacer(minLength: 0)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.ink)
         .padding(26)
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
         .background(
@@ -632,7 +642,7 @@ struct TrainingRecapCard: View {
                 .minimumScaleFactor(0.6)
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.75))
+                .foregroundStyle(Color.ink.opacity(0.75))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -644,7 +654,7 @@ struct TrainingRecapCard: View {
             Text(title.uppercased())
                 .font(.system(size: 11, weight: .heavy))
                 .tracking(1.1)
-                .foregroundStyle(Color.white.opacity(0.7))
+                .foregroundStyle(Color.ink.opacity(0.7))
             Text(value)
                 .font(.system(size: 18, weight: .heavy))
                 .lineLimit(1)

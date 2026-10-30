@@ -40,11 +40,11 @@ struct ChatTargetSheet: View {
         NavigationStack {
             List {
                 if loading && shown.isEmpty {
-                    ProgressView().tint(.white).frame(maxWidth: .infinity).listRowBackground(Color.clear)
+                    ProgressView().tint(.ink).frame(maxWidth: .infinity).listRowBackground(Color.clear)
                 } else if shown.isEmpty {
                     Text(searching ? "Никого не нашли" : "Пока не с кем — найди друга по юзернейму")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                         .listRowBackground(Color.clear)
                 }
                 ForEach(shown) { user in
@@ -57,7 +57,7 @@ struct ChatTargetSheet: View {
                             AvatarView(imageId: user.avatar, username: user.username, size: 40)
                             Text("@\(user.username)")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                             Spacer()
                             Image(systemName: "paperplane.fill")
                                 .font(.system(size: 14, weight: .semibold))
@@ -70,7 +70,7 @@ struct ChatTargetSheet: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Юзернейм")
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
@@ -96,7 +96,6 @@ struct ChatTargetSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .preferredColorScheme(.dark)
     }
 }
 
@@ -120,13 +119,13 @@ struct WorkoutRecipientsPicker: View {
             if loaded && friends.isEmpty {
                 Text("Подпишись на друзей или напиши кому-нибудь — и здесь можно будет отправить им тренировку.")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
                         if !loaded {
-                            ProgressView().tint(.white).frame(width: 58, height: 58)
+                            ProgressView().tint(.ink).frame(width: 58, height: 58)
                         }
                         ForEach(friends) { friend in
                             let on = selected.contains(friend.username)
@@ -143,15 +142,15 @@ struct WorkoutRecipientsPicker: View {
                                             if on {
                                                 Image(systemName: "checkmark.circle.fill")
                                                     .font(.system(size: 18))
-                                                    .foregroundStyle(.white, Theme.accent)
-                                                    .background(Circle().fill(Color.black).padding(2))
+                                                    .foregroundStyle(.ink, Theme.accent)
+                                                    .background(Circle().fill(Color.canvas).padding(2))
                                                     .transition(.scale.combined(with: .opacity))
                                             }
                                         }
                                         .scaleEffect(on ? 1.04 : 1)
                                     Text("@\(friend.username)")
                                         .font(.system(size: 11, weight: on ? .bold : .medium))
-                                        .foregroundStyle(on ? .white : Color.white.opacity(0.6))
+                                        .foregroundStyle(on ? .ink : Color.ink.opacity(0.6))
                                         .lineLimit(1)
                                         .frame(width: 66)
                                 }
@@ -181,6 +180,8 @@ struct WorkoutRecipientsPicker: View {
 struct ChatWorkoutCard: View {
     let workout: SocialChatWorkout
     let fromMe: Bool
+    /// На моей карточке (оранжевый пузырь) текст белый в любой теме.
+    private var ink: Color { fromMe ? .white : .ink }
     var onOpen: () -> Void
 
     var body: some View {
@@ -197,11 +198,11 @@ struct ChatWorkoutCard: View {
                     }
                 }
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.7))
+                .foregroundStyle(ink.opacity(0.7))
 
                 Text(workout.title)
                     .font(.system(size: 18, weight: .heavy, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(ink)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
 
@@ -230,13 +231,13 @@ struct ChatWorkoutCard: View {
                                 }
                             }
                             .font(.system(size: 13))
-                            .foregroundStyle(Color.white.opacity(0.85))
+                            .foregroundStyle(ink.opacity(0.85))
                         }
                         if workout.workout.exercises.count > 3 {
                             let rest = workout.workout.exercises.count - 3
                             Text("и ещё \(rest) \(RuPlural.word(rest, "упражнение", "упражнения", "упражнений"))")
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .foregroundStyle(ink.opacity(0.5))
                         }
                     }
                     .padding(10)
@@ -261,12 +262,12 @@ struct ChatWorkoutCard: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(value)
                 .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Text(title)
                 .font(.system(size: 11))
-                .foregroundStyle(Color.white.opacity(0.55))
+                .foregroundStyle(ink.opacity(0.55))
         }
     }
 }
@@ -298,7 +299,7 @@ struct ChatWorkoutDetail: View {
                 }
                 .padding(16)
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle(workout.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -306,7 +307,6 @@ struct ChatWorkoutDetail: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .preferredColorScheme(.dark)
     }
 
     private func stat(_ value: String, unit: String?, title: String) -> some View {
@@ -314,17 +314,17 @@ struct ChatWorkoutDetail: View {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
                     .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(1)
                 if let unit {
                     Text(unit)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                 }
             }
             Text(title)
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
         }
     }
 }

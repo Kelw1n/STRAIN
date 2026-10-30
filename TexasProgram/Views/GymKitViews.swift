@@ -78,7 +78,7 @@ struct SetDotsView: View {
                 if filled {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                 }
             }
             .overlay(Circle().strokeBorder(Theme.accent.opacity(filled ? 0 : 0.28), lineWidth: 1))

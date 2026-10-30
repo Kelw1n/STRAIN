@@ -15,7 +15,7 @@ struct HistoryCard: View {
                 ForEach(recent) { record in
                     HStack(spacing: 10) {
                         Text(RuDate.short(weekday: Calendar.current.component(.weekday, from: record.date)).uppercased())
-                            .font(.caption2.weight(.black))
+                            .font(.caption2.weight(.canvas))
                             .foregroundStyle(Theme.accent)
                             .frame(width: 24, alignment: .leading)
                         Text("Неделя \(record.week) · день \(record.day)")

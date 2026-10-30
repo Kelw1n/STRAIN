@@ -29,7 +29,7 @@ struct NutritionGuideView: View {
                     ])
                     Text("Метод — Лимар, @freedom_limar. Приложение просто ведёт записи и считает за тебя.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                         .padding(.horizontal, 4)
                 }
                 .padding(.horizontal, 16)
@@ -37,7 +37,7 @@ struct NutritionGuideView: View {
                 .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Как это работает")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -48,7 +48,6 @@ struct NutritionGuideView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var steps: some View {
@@ -66,16 +65,16 @@ struct NutritionGuideView: View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(number)")
                 .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.black)
+                .foregroundStyle(.canvas)
                 .frame(width: 28, height: 28)
                 .background(Theme.accent, in: Circle())
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Text(text)
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.white.opacity(0.65))
+                    .foregroundStyle(Color.ink.opacity(0.65))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -92,7 +91,7 @@ struct NutritionGuideView: View {
                         .padding(.top, 8)
                     Text(line)
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.75))
+                        .foregroundStyle(Color.ink.opacity(0.75))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -123,7 +122,7 @@ struct GeminiKeySheet: View {
                         NutritionCaption(text: title, color: Theme.accent)
                         Text(intro)
                             .font(.system(size: 14))
-                            .foregroundStyle(Color.white.opacity(0.75))
+                            .foregroundStyle(Color.ink.opacity(0.75))
                             .fixedSize(horizontal: false, vertical: true)
                         instruction(1, "Открой Google AI Studio и войди в Google-аккаунт.")
                         instruction(2, "Нажми «Create API key» и скопируй ключ.")
@@ -144,10 +143,10 @@ struct GeminiKeySheet: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .padding(.horizontal, 14)
                             .frame(height: 50)
-                            .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         if let message {
                             Text(message)
                                 .font(.system(size: 13, weight: .semibold))
@@ -175,7 +174,7 @@ struct GeminiKeySheet: View {
                         }
                         Text("Если Google пишет, что страна не поддерживается, — включи VPN.")
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .foregroundStyle(Color.ink.opacity(0.4))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .nutritionCard()
@@ -186,7 +185,7 @@ struct GeminiKeySheet: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Ключ Google")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -197,7 +196,6 @@ struct GeminiKeySheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var trimmed: String { key.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -209,7 +207,7 @@ struct GeminiKeySheet: View {
                 .foregroundStyle(Theme.accent)
             Text(text)
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.75))
+                .foregroundStyle(Color.ink.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

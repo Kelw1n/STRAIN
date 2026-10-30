@@ -14,11 +14,11 @@ struct TogetherInviteBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("@\(invite.partner.username)")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(1)
                 Text("зовёт на тренировку")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.65))
+                    .foregroundStyle(Color.ink.opacity(0.65))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -26,18 +26,18 @@ struct TogetherInviteBanner: View {
             Button { respond(accept: false) } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .frame(width: 36, height: 36)
-                    .background(Color.white.opacity(0.12), in: Circle())
+                    .background(Color.ink.opacity(0.12), in: Circle())
             }
             .accessibilityLabel("Отказаться")
             Button { respond(accept: true) } label: {
                 Text("Принять")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .padding(.horizontal, 14)
                     .frame(height: 36)
-                    .background(Color.white, in: Capsule())
+                    .background(Color.ink, in: Capsule())
             }
         }
         .disabled(busy)
@@ -70,17 +70,17 @@ struct PartnerStatus: View {
     var body: some View {
         HStack(spacing: 12) {
             AvatarView(imageId: together.partner.avatar, username: together.partner.username, size: compact ? 34 : 42)
-                .overlay(Circle().strokeBorder(together.partnerLive != nil ? Theme.success : Color.white.opacity(0.2), lineWidth: 2).padding(-3))
+                .overlay(Circle().strokeBorder(together.partnerLive != nil ? Theme.success : Color.ink.opacity(0.2), lineWidth: 2).padding(-3))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Вместе с @\(together.partner.username)")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     if together.partnerLive != nil { LivePulse(size: 6) }
                     Text(line)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(together.partnerLive != nil ? Theme.success : Color.white.opacity(0.5))
+                        .foregroundStyle(together.partnerLive != nil ? Theme.success : Color.ink.opacity(0.5))
                         .lineLimit(1)
                 }
             }
@@ -106,16 +106,16 @@ struct TogetherCard: View {
             Text("СОВМЕСТНАЯ ТРЕНИРОВКА")
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
             HStack(spacing: 10) {
                 PartnerStatus(together: together)
                 Button("Выйти") { confirmLeave = true }
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.6))
+                    .foregroundStyle(Color.ink.opacity(0.6))
             }
             Text("Начни тренировку как обычно — друг увидит твои подходы, а пост выйдет на двоих.")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
@@ -138,7 +138,7 @@ struct PartnerStrip: View {
             if let active = social.together.active {
                 PartnerStatus(together: active, compact: true)
                     .padding(12)
-                    .background(Color(white: 0.086), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .background(Color.tone(0.086), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.success.opacity(0.3), lineWidth: 1))
             }
         }
@@ -176,10 +176,10 @@ struct InviteBubble: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(message.fromMe ? "Ты зовёшь @\(username)" : "Тренируемся вместе?")
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Text(invite.statusText)
                             .font(.system(size: 13))
-                            .foregroundStyle(invite.status == "accepted" ? Theme.success : Color.white.opacity(0.6))
+                            .foregroundStyle(invite.status == "accepted" ? Theme.success : Color.ink.opacity(0.6))
                     }
                 }
                 if invite.isPending {
@@ -198,7 +198,7 @@ struct InviteBubble: View {
             }
             .padding(12)
             .frame(maxWidth: 290, alignment: .leading)
-            .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.success.opacity(0.3), lineWidth: 1))
             .disabled(busy)
             if !message.fromMe { Spacer(minLength: 50) }
@@ -209,10 +209,10 @@ struct InviteBubble: View {
         Button(action: perform) {
             Text(title)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(primary ? Color.black : Color.white)
+                .foregroundStyle(primary ? Color.canvas : Color.ink)
                 .frame(maxWidth: .infinity)
                 .frame(height: 38)
-                .background(primary ? Color.white : Color.white.opacity(0.12), in: Capsule())
+                .background(primary ? Color.ink : Color.ink.opacity(0.12), in: Capsule())
         }
         .buttonStyle(.pressable)
     }
@@ -251,7 +251,7 @@ struct InviteButton: View {
             Button(action: send) {
                 HStack(spacing: 8) {
                     if busy {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(.ink)
                     } else {
                         Image(systemName: "figure.strengthtraining.traditional")
                             .font(.system(size: 16, weight: .bold))
@@ -259,7 +259,7 @@ struct InviteButton: View {
                     Text("Тренироваться вместе")
                         .font(.system(size: 16, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
                 .background(Theme.success.opacity(0.22), in: RoundedRectangle(cornerRadius: 18, style: .continuous))

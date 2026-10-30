@@ -385,7 +385,7 @@ private struct ExerciseFormView: View {
                         Spacer()
                         Text("Сохранить изменения")
                             .font(.body.weight(.bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Spacer()
                     }
                     .padding(.vertical, 4)

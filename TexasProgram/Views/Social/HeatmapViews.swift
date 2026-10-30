@@ -30,7 +30,7 @@ struct ProfileHeatmapCard: View {
         case 2: return Theme.accent.opacity(0.52)
         case 3: return Theme.accent.opacity(0.76)
         case 4: return Theme.accent
-        default: return Color(white: 0.16)
+        default: return Color.tone(0.16)
         }
     }
 
@@ -54,11 +54,11 @@ struct ProfileHeatmapCard: View {
                 Text("ГОД ТРЕНИРОВОК")
                     .font(.system(size: 13, weight: .bold))
                     .tracking(1.4)
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
                 Spacer()
                 Text("\(workouts) \(RuPlural.word(workouts, "тренировка", "тренировки", "тренировок"))")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.75))
+                    .foregroundStyle(Color.ink.opacity(0.75))
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 grid(cells: cells, columns: columns)
@@ -81,7 +81,7 @@ struct ProfileHeatmapCard: View {
         return Canvas { context, _ in
             for label in labels {
                 context.draw(
-                    Text(label.text).font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.45)),
+                    Text(label.text).font(.system(size: 10, weight: .semibold)).foregroundColor(Color.ink.opacity(0.45)),
                     at: CGPoint(x: CGFloat(label.column) * step, y: 0),
                     anchor: .topLeading
                 )
@@ -92,7 +92,7 @@ struct ProfileHeatmapCard: View {
                 let shape = Path(roundedRect: rect, cornerRadius: 3)
                 context.fill(shape, with: .color(Self.color(level)))
                 if index == selected {
-                    context.stroke(Path(roundedRect: rect.insetBy(dx: -1.5, dy: -1.5), cornerRadius: 4), with: .color(.white), lineWidth: 1.5)
+                    context.stroke(Path(roundedRect: rect.insetBy(dx: -1.5, dy: -1.5), cornerRadius: 4), with: .color(.ink), lineWidth: 1.5)
                 }
             }
         }
@@ -119,19 +119,19 @@ struct ProfileHeatmapCard: View {
                 RoundedRectangle(cornerRadius: 3).fill(Self.color(cells[selected])).frame(width: 12, height: 12)
                 Text("\(Self.dayFormatter.string(from: date)) — \(Self.word(cells[selected]))")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
             }
         } else {
             HStack(spacing: 4) {
                 Text("Меньше")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                 ForEach(0..<5, id: \.self) { level in
                     RoundedRectangle(cornerRadius: 3).fill(Self.color(level)).frame(width: 12, height: 12)
                 }
                 Text("Больше")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
             }
         }
     }

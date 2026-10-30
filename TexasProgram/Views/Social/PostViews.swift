@@ -112,7 +112,7 @@ struct PostHeader<MenuContent: View>: View {
                             // Тренировались вместе — аватар напарника рядом.
                             if let partner = post.partner {
                                 AvatarView(imageId: partner.avatar, username: partner.username, size: 24)
-                                    .overlay(Circle().strokeBorder(Color.black, lineWidth: 2))
+                                    .overlay(Circle().strokeBorder(Color.canvas, lineWidth: 2))
                                     .offset(x: 6, y: 4)
                             }
                         }
@@ -120,13 +120,13 @@ struct PostHeader<MenuContent: View>: View {
                         HStack(spacing: 6) {
                             Text(post.partner.map { "@\(post.author.username) и @\($0.username)" } ?? "@\(post.author.username)")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .lineLimit(1)
                             LevelChip(level: post.author.level)
                         }
                         Text(SocialFormat.ago(post.date))
                             .font(.system(size: 13))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.ink.opacity(0.5))
                     }
                 }
             }
@@ -135,7 +135,7 @@ struct PostHeader<MenuContent: View>: View {
             Menu(content: menu) {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(Color.ink.opacity(0.55))
                     .frame(width: 38, height: 38)
                     .contentShape(Rectangle())
             }
@@ -151,12 +151,12 @@ struct PostTitleBlock: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(post.title)
                 .font(.system(size: 22, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .multilineTextAlignment(.leading)
             if !post.description.isEmpty {
                 Text(post.description)
                     .font(.system(size: 15))
-                    .foregroundStyle(Color.white.opacity(0.6))
+                    .foregroundStyle(Color.ink.opacity(0.6))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -195,17 +195,17 @@ struct PostStatsRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
                     .font(.system(size: 18, weight: .heavy, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(1)
                 if let unit {
                     Text(unit)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                 }
             }
             Text(title)
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
         }
     }
 }
@@ -220,7 +220,7 @@ struct PostWorkoutSummary: View {
             if workout.exercises.isEmpty {
                 Text("Без записанных подходов")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
                     .padding(16)
             }
             ForEach(Array(workout.exercises.prefix(limit).enumerated()), id: \.offset) { index, exercise in
@@ -233,35 +233,35 @@ struct PostWorkoutSummary: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(exercise.name)
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .lineLimit(1)
                         Text("\(exercise.sets.count) \(RuPlural.word(exercise.sets.count, "подход", "подхода", "подходов"))")
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.white.opacity(0.45))
+                            .foregroundStyle(Color.ink.opacity(0.45))
                     }
                     Spacer()
                     if let best = exercise.best {
                         Text(best.text)
                             .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .monospacedDigit()
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 if index < min(limit, workout.exercises.count) - 1 {
-                    Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 54)
+                    Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 54)
                 }
             }
             if workout.exercises.count > limit {
                 Text("и ещё \(workout.exercises.count - limit)")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                     .padding(.horizontal, 14)
                     .padding(.bottom, 12)
             }
         }
-        .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Color.tone(0.09), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -279,12 +279,12 @@ struct PostActions: View {
                 HStack(spacing: 6) {
                     Image(systemName: post.liked ? "heart.fill" : "heart")
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(post.liked ? Theme.record : .white)
+                        .foregroundStyle(post.liked ? Theme.record : .ink)
                         .symbolEffect(.bounce, value: post.liked)
                     if post.likes > 0 {
                         Text("\(post.likes)")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .contentTransition(.numericText())
                     }
                 }
@@ -296,11 +296,11 @@ struct PostActions: View {
                 HStack(spacing: 6) {
                     Image(systemName: "bubble.right")
                         .font(.system(size: 23, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     if post.comments > 0 {
                         Text("\(post.comments)")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .contentTransition(.numericText())
                     }
                 }
@@ -367,7 +367,7 @@ struct PostMedia: View {
                                     .padding(.top, 8)
                                     .padding(.bottom, 34)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                                    .background(Color.black)
+                                    .background(Color.canvas)
                             }
                         }
                         .containerRelativeFrame([.horizontal, .vertical])
@@ -390,7 +390,7 @@ struct PostMedia: View {
                         ForEach(0..<count, id: \.self) { index in
                             let active = index == (page ?? 0)
                             Capsule()
-                                .fill(Color.white.opacity(active ? 1 : 0.45))
+                                .fill(Color.ink.opacity(active ? 1 : 0.45))
                                 .frame(width: active ? 16 : 7, height: 7)
                         }
                     }
@@ -415,7 +415,7 @@ struct PostWorkoutSlide: View {
             if workout.exercises.isEmpty {
                 Text("Без записанных подходов")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
             }
             ForEach(Array(workout.exercises.prefix(limit).enumerated()), id: \.offset) { _, exercise in
                 HStack(spacing: 14) {
@@ -424,7 +424,7 @@ struct PostWorkoutSlide: View {
                         HStack(spacing: 6) {
                             Text(exercise.name)
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .lineLimit(2)
                             if exercise.hasRecord {
                                 Image(systemName: "trophy.fill")
@@ -434,7 +434,7 @@ struct PostWorkoutSlide: View {
                         }
                         Text(subtitle(exercise))
                             .font(.system(size: 14))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.ink.opacity(0.5))
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
@@ -444,7 +444,7 @@ struct PostWorkoutSlide: View {
                 let rest = workout.exercises.count - limit
                 Text("ещё \(rest) \(RuPlural.word(rest, "упражнение", "упражнения", "упражнений"))")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
                     .frame(maxWidth: .infinity)
                     .padding(.top, 4)
             }
@@ -468,24 +468,24 @@ struct PostWorkoutSets: View {
             Text(workout.program.map { "ТРЕНИРОВКА · \($0.uppercased())" } ?? "ТРЕНИРОВКА")
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
             ForEach(Array(workout.exercises.enumerated()), id: \.offset) { _, exercise in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {
                         ExerciseThumb(name: exercise.name, size: 40)
                         Text(exercise.name)
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                     }
                     ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
                         HStack {
                             Text("\(index + 1)")
                                 .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
-                                .foregroundStyle(Color.white.opacity(0.4))
+                                .foregroundStyle(Color.ink.opacity(0.4))
                                 .frame(width: 22, alignment: .leading)
                             Text(set.text)
                                 .font(.system(size: 15, weight: .semibold, design: Theme.fontDesign))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .monospacedDigit()
                             if set.record {
                                 Label("рекорд", systemImage: "trophy.fill")
@@ -498,7 +498,7 @@ struct PostWorkoutSets: View {
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(Color.tone(0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
     }
@@ -565,7 +565,7 @@ struct PostDetailView: View {
             // Место под плавающую панель вкладок.
             .padding(.bottom, 120)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.canvas.ignoresSafeArea())
         .sheet(isPresented: $composing) { composer }
         .sheet(isPresented: $sharing) {
             ChatTargetSheet(title: "Отправить другу") { friend in
@@ -575,7 +575,7 @@ struct PostDetailView: View {
         .sheet(isPresented: $showingSets) {
             NavigationStack {
                 ScrollView { PostWorkoutSets(workout: post.workout).padding(16) }
-                    .background(Color.black.ignoresSafeArea())
+                    .background(Color.canvas.ignoresSafeArea())
                     .navigationTitle(post.title)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -583,7 +583,6 @@ struct PostDetailView: View {
                     }
             }
             .presentationDetents([.medium, .large])
-            .preferredColorScheme(.dark)
         }
         .confirmationDialog("Удалить тренировку из ленты?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Удалить", role: .destructive) {
@@ -606,7 +605,6 @@ struct PostDetailView: View {
             if let fresh = try? await social.post(post.id) { update(fresh) }
             await loadComments()
         }
-        .preferredColorScheme(.dark)
     }
 
     private func update(_ value: SocialPost) {
@@ -619,13 +617,13 @@ struct PostDetailView: View {
             Text(comments.isEmpty ? "КОММЕНТАРИИ" : "КОММЕНТАРИИ · \(comments.count)")
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
             if loading && comments.isEmpty {
-                ProgressView().tint(.white).frame(maxWidth: .infinity)
+                ProgressView().tint(.ink).frame(maxWidth: .infinity)
             } else if comments.isEmpty {
                 Text("Пока тихо. Напиши первым — поддержи или спроси про технику.")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
             }
             ForEach(SocialComment.threads(comments)) { thread in
                 commentRow(thread.root)
@@ -652,17 +650,17 @@ struct PostDetailView: View {
                 HStack(spacing: 6) {
                     Text("@\(comment.author.username)")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Text(SocialFormat.ago(comment.date))
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                 }
                 (comment.replyToUsername.map { Text("@\($0) ").foregroundColor(Theme.accent) } ?? Text(""))
-                    + Text(comment.text).foregroundColor(Color.white.opacity(0.88))
+                    + Text(comment.text).foregroundColor(Color.ink.opacity(0.88))
                 if social.isSignedIn {
                     Button("Ответить") { compose(replyTo: comment) }
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                         .padding(.top, 2)
                 }
             }
@@ -698,18 +696,18 @@ struct PostDetailView: View {
                     AvatarView(imageId: social.me?.avatar, username: social.me?.username ?? "s", size: 32)
                     Text("Написать комментарий…")
                         .font(.system(size: 15))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(Color.ink.opacity(0.45))
                     Spacer()
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 50)
-                .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(Color.tone(0.11), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             .buttonStyle(.pressable)
         } else {
             Text("Создай профиль во вкладке «Профиль», чтобы комментировать")
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
         }
@@ -720,14 +718,14 @@ struct PostDetailView: View {
             HStack {
                 Text(replyingTo.map { "Ответ @\($0.author.username)" } ?? "Комментарий")
                     .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(1)
                 Spacer()
                 if replyingTo != nil {
                     Button { replyingTo = nil } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .foregroundStyle(Color.ink.opacity(0.4))
                     }
                     .accessibilityLabel("Не отвечать, а написать к посту")
                 }
@@ -735,7 +733,7 @@ struct PostDetailView: View {
             if let replyingTo {
                 Text(replyingTo.text)
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
                     .lineLimit(1)
             }
             HStack(alignment: .bottom, spacing: 10) {
@@ -745,16 +743,16 @@ struct PostDetailView: View {
                     .font(.system(size: 16))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 Button(action: send) {
                     Group {
-                        if sending { ProgressView().tint(.black) } else {
+                        if sending { ProgressView().tint(.canvas) } else {
                             Image(systemName: "arrow.up").font(.system(size: 17, weight: .heavy))
                         }
                     }
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .frame(width: 44, height: 44)
-                    .background(canSend ? Color.white : Color(white: 0.3), in: Circle())
+                    .background(canSend ? Color.ink : Color.tone(0.3), in: Circle())
                 }
                 .disabled(!canSend)
                 .accessibilityLabel("Отправить")
@@ -767,8 +765,7 @@ struct PostDetailView: View {
         .padding(20)
         .presentationDetents([.height(replyingTo == nil ? 230 : 260)])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Color(white: 0.07))
-        .preferredColorScheme(.dark)
+        .presentationBackground(Color.tone(0.07))
         .onAppear { typing = true }
     }
 

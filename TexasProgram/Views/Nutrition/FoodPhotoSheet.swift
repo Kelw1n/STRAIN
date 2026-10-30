@@ -54,13 +54,13 @@ struct FoodPhotoSheet: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle(title.isEmpty ? "Фото еды" : title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Отмена") { dismiss() }
-                        .foregroundStyle(Color.white.opacity(0.7))
+                        .foregroundStyle(Color.ink.opacity(0.7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Добавить") {
@@ -69,12 +69,11 @@ struct FoodPhotoSheet: View {
                         dismiss()
                     }
                     .font(.body.weight(.bold))
-                    .foregroundStyle(canAdd ? Theme.accent : Color.white.opacity(0.3))
+                    .foregroundStyle(canAdd ? Theme.accent : Color.ink.opacity(0.3))
                     .disabled(!canAdd)
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .task { if items.isEmpty && !working { await recognize() } }
         .sheet(isPresented: $showingKey, onDismiss: {
             if needsKey, GeminiKeychain.load() != nil { Task { await recognize() } }
@@ -87,10 +86,10 @@ struct FoodPhotoSheet: View {
 
     private var workingBadge: some View {
         HStack(spacing: 8) {
-            ProgressView().tint(.white)
+            ProgressView().tint(.ink)
             Text("ИИ разбирает фото…")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -102,7 +101,7 @@ struct FoodPhotoSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(message)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .fixedSize(horizontal: false, vertical: true)
             if needsKey {
                 NutritionButton(title: "Вставить ключ Google", systemImage: "key.fill") { showingKey = true }
@@ -122,25 +121,25 @@ struct FoodPhotoSheet: View {
                 Spacer()
                 Text("точность: \(confidence)")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(confidence == "низкая" ? Theme.warning : Color.white.opacity(0.45))
+                    .foregroundStyle(confidence == "низкая" ? Theme.warning : Color.ink.opacity(0.45))
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(NutritionFormat.kcal(total.kcal))
                     .font(.system(size: 40, weight: .heavy, design: Theme.fontDesign))
                     .monospacedDigit()
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .contentTransition(.numericText())
                 Text("ккал")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
             }
             Text(NutritionFormat.macros(total))
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.75))
+                .foregroundStyle(Color.ink.opacity(0.75))
             if !comment.isEmpty {
                 Text(comment)
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -154,18 +153,18 @@ struct FoodPhotoSheet: View {
                 TextField("Например: там 200 г риса, курица без кожи", text: $note, axis: .vertical)
                     .lineLimit(1...4)
                     .font(.system(size: 15))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 13)
-                    .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 Button {
                     Task { await correct() }
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(sendable ? Color.black : Color.white.opacity(0.4))
+                        .foregroundStyle(sendable ? Color.canvas : Color.ink.opacity(0.4))
                         .frame(width: 48, height: 48)
-                        .background(sendable ? Theme.accent : Color(white: 0.16), in: Circle())
+                        .background(sendable ? Theme.accent : Color.tone(0.16), in: Circle())
                 }
                 .buttonStyle(.pressable)
                 .disabled(!sendable)
@@ -173,7 +172,7 @@ struct FoodPhotoSheet: View {
             }
             Text("ИИ оценивает порцию на глаз и может ошибиться на 20–30%. Для метода это не страшно: главное — считать одинаково каждый день.")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.4))
+                .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .nutritionCard()
@@ -254,11 +253,11 @@ private struct RecognizedFoodEditor: View {
             HStack(spacing: 8) {
                 TextField("Продукт", text: $item.name)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Button(action: onRemove) {
                     Image(systemName: "trash")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }

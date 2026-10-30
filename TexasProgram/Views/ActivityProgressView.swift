@@ -52,7 +52,7 @@ struct ActivityProgressView: View {
                 .tabScrollAnchor(.progress)
             }
             .scrollIndicators(.hidden)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Активность")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -65,14 +65,14 @@ struct ActivityProgressView: View {
                         HStack(spacing: 4) {
                             Text(selectedPeriod)
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color.white.opacity(0.9))
+                                .foregroundStyle(Color.ink.opacity(0.9))
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .foregroundStyle(Color.ink.opacity(0.5))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
-                        .background(Color(white: 0.14), in: Capsule())
+                        .background(Color.tone(0.14), in: Capsule())
                     }
                 }
             }
@@ -90,7 +90,6 @@ struct ActivityProgressView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .onTabReselect(.progress) {
             if path.isEmpty { TabReselection.shared.scrollToTop(.progress) } else { path = NavigationPath() }
         }
@@ -139,7 +138,7 @@ struct ActivityProgressView: View {
     }
 
     private var linkDivider: some View {
-        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.horizontal, 12)
+        Rectangle().fill(Color.ink.opacity(0.07)).frame(height: 1).padding(.horizontal, 12)
     }
 
     private func linkRow(_ title: String, subtitle: String, symbol: String) -> some View {
@@ -150,13 +149,13 @@ struct ActivityProgressView: View {
                 .frame(width: 32, height: 32)
                 .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                Text(subtitle).font(.system(size: 12)).foregroundStyle(Color.white.opacity(0.45))
+                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.ink)
+                Text(subtitle).font(.system(size: 12)).foregroundStyle(Color.ink.opacity(0.45))
             }
             Spacer(minLength: 6)
             Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.3))
+                .foregroundStyle(Color.ink.opacity(0.3))
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
@@ -198,12 +197,12 @@ struct ActivityProgressView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Время, объём и тренировки")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Text(records.isEmpty
                      ? (profile.completionLog.isEmpty ? "Появятся после первой тренировки" : "За этот период тренировок нет")
                      : "\(selectedPeriod == "Всё время" ? "За всё время" : "За \(selectedPeriod)")")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
             }
 
             HStack(spacing: 0) {
@@ -231,7 +230,7 @@ struct ActivityProgressView: View {
                             if let raw = value.as(String.self), let idx = Int(raw), idx < recent.count {
                                 Text(RuDate.shortDayMonth(recent[idx].0.date))
                                     .font(.system(size: 10, weight: .semibold, design: Theme.fontDesign))
-                                    .foregroundStyle(Color.white.opacity(0.45))
+                                    .foregroundStyle(Color.ink.opacity(0.45))
                             }
                         }
                     }
@@ -242,7 +241,7 @@ struct ActivityProgressView: View {
                 HStack(alignment: .bottom, spacing: 8) {
                     ForEach(Array([0.4, 0.6, 0.5, 0.8, 0.65, 0.55, 0.75, 0.9, 0.6].enumerated()), id: \.offset) { _, ratio in
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color(white: 0.16))
+                            .fill(Color.tone(0.16))
                             .frame(height: 110 * ratio)
                             .frame(maxWidth: .infinity)
                     }
@@ -259,10 +258,10 @@ struct ActivityProgressView: View {
                 Text("НАЧАТЬ ТРЕНИРОВКУ")
                     .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                     .tracking(1.0)
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
-                    .background(Color.white, in: Capsule())
+                    .background(Color.ink, in: Capsule())
             }
             .buttonStyle(.pressable)
             .padding(.top, 4)
@@ -276,12 +275,12 @@ struct ActivityProgressView: View {
             Text(value)
                 .font(.system(size: 18, weight: .heavy, design: Theme.fontDesign))
                 .monospacedDigit()
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(title)
                 .font(.system(size: 11))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -303,11 +302,11 @@ struct ActivityProgressView: View {
                 HStack {
                     Text("Замеры веса")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.3))
+                        .foregroundStyle(Color.ink.opacity(0.3))
                 }
 
                 // Мини-график последних замеров; пока замеров мало — пунктир.
@@ -327,7 +326,7 @@ struct ActivityProgressView: View {
                         ZStack {
                             Line()
                                 .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                                .foregroundStyle(Color.white.opacity(0.18))
+                                .foregroundStyle(Color.ink.opacity(0.18))
                                 .frame(height: 2)
                             Circle()
                                 .fill(Theme.accent)
@@ -343,17 +342,17 @@ struct ActivityProgressView: View {
                     if let weight = profile.latestBodyWeight {
                         Text(WeightFormat.kilogramsPrecise(weight))
                             .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Text("Текущий вес")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.white.opacity(0.45))
+                            .foregroundStyle(Color.ink.opacity(0.45))
                     } else {
                         Text("— кг")
                             .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Text("Нужен первый замер")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.white.opacity(0.45))
+                            .foregroundStyle(Color.ink.opacity(0.45))
                     }
                 }
             }
@@ -375,17 +374,17 @@ struct ActivityProgressView: View {
                 HStack {
                     Text("Группы мышц")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.3))
+                        .foregroundStyle(Color.ink.opacity(0.3))
                 }
 
                 // Радарная диаграмма (Spider web) с динамическими данными
                 ZStack {
                     RadarWebShape(levels: 3)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(Color.ink.opacity(0.12), lineWidth: 1)
 
                     RadarDataShape(values: muscleData.radarValues)
                         .fill(Theme.accent.opacity(0.25))
@@ -398,7 +397,7 @@ struct ActivityProgressView: View {
 
                 Text("Баланс нагрузки")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -414,7 +413,7 @@ struct ActivityProgressView: View {
             HStack {
                 Text("Сила")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Spacer()
                 HStack(spacing: 4) {
                     Image(systemName: "medal.fill")
@@ -422,7 +421,7 @@ struct ActivityProgressView: View {
                         .foregroundStyle(Color.yellow)
                     Text("Рекорды")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(Color.ink.opacity(0.85))
                 }
             }
 
@@ -447,15 +446,15 @@ struct ActivityProgressView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.accent)
                 .frame(width: 32, height: 32)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(Color.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(name)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Text(best == nil ? "максимум из настроек" : "лучший подход")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.white.opacity(0.4))
+                    .foregroundStyle(Color.ink.opacity(0.4))
             }
 
             Spacer()
@@ -485,11 +484,11 @@ struct MuscleGroupsDetailSheet: View {
                         VStack(spacing: 16) {
                             Text("Баланс распределения нагрузки")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
 
                             ZStack {
                                 RadarWebShape(levels: 4)
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                    .stroke(Color.ink.opacity(0.12), lineWidth: 1)
 
                                 RadarDataShape(values: data.radarValues)
                                     .fill(Theme.accent.opacity(0.25))
@@ -502,7 +501,7 @@ struct MuscleGroupsDetailSheet: View {
 
                             Text(data.subtitle)
                                 .font(.system(size: 12))
-                                .foregroundStyle(Color.white.opacity(0.6))
+                                .foregroundStyle(Color.ink.opacity(0.6))
                                 .multilineTextAlignment(.center)
                         }
                         .frame(maxWidth: .infinity)
@@ -522,10 +521,10 @@ struct MuscleGroupsDetailSheet: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(group.category.rawValue)
                                             .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(.ink)
                                         Text(group.exercises)
                                             .font(.system(size: 11))
-                                            .foregroundStyle(Color.white.opacity(0.45))
+                                            .foregroundStyle(Color.ink.opacity(0.45))
                                             .lineLimit(1)
                                     }
 
@@ -537,7 +536,7 @@ struct MuscleGroupsDetailSheet: View {
                                             .foregroundStyle(Theme.accent)
                                         Text("\(group.sets) подх.")
                                             .font(.system(size: 11))
-                                            .foregroundStyle(Color.white.opacity(0.45))
+                                            .foregroundStyle(Color.ink.opacity(0.45))
                                     }
                                 }
 
@@ -545,7 +544,7 @@ struct MuscleGroupsDetailSheet: View {
                                 GeometryReader { barProxy in
                                     ZStack(alignment: .leading) {
                                         Capsule()
-                                            .fill(Color.white.opacity(0.08))
+                                            .fill(Color.ink.opacity(0.08))
                                             .frame(height: 6)
 
                                         Capsule()
@@ -563,7 +562,7 @@ struct MuscleGroupsDetailSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Группы мышц")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -574,7 +573,6 @@ struct MuscleGroupsDetailSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 

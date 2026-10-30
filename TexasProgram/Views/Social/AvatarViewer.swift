@@ -26,10 +26,15 @@ struct AvatarViewer: View {
     private var pullProgress: Double { min(1, Double(abs(pull.height)) / 320) }
 
     var body: some View {
+        darkContent.alwaysDark()
+    }
+
+    @ViewBuilder
+    private var darkContent: some View {
         GeometryReader { proxy in
             let side = proxy.size.width
             ZStack {
-                Color.black
+                Color.canvas
                     .opacity(appeared ? 1 - pullProgress * 0.75 : 0)
                     .ignoresSafeArea()
                     .onTapGesture(perform: close)
@@ -45,7 +50,6 @@ struct AvatarViewer: View {
         }
         .ignoresSafeArea()
         .overlay(alignment: .top) { header }
-        .preferredColorScheme(.dark)
         .onAppear {
             withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { appeared = true }
         }
@@ -70,13 +74,13 @@ struct AvatarViewer: View {
         HStack {
             Text("@\(username)")
                 .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .lineLimit(1)
             Spacer()
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .frame(width: 40, height: 40)
                     .chatGlass(Circle(), interactive: true)
             }
@@ -182,6 +186,7 @@ extension View {
                     withTransaction(still) { isPresented.wrappedValue = false }
                 }
                 .presentationBackground(.clear)
+                .preferredColorScheme(.dark)
             }
         }
     }

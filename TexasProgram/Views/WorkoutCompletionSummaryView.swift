@@ -66,7 +66,7 @@ struct WorkoutCompletionSummaryView: View {
                     .padding(.top, 16)
                 }
                 .scrollIndicators(.hidden)
-                .background(Color.black.ignoresSafeArea())
+                .background(Color.canvas.ignoresSafeArea())
 
                 // Нижняя большая белая кнопка «ДАЛЬШЕ»
                 bottomActionButton
@@ -75,9 +75,9 @@ struct WorkoutCompletionSummaryView: View {
                     .background(
                         LinearGradient(
                             colors: [
-                                Color.black.opacity(0),
-                                Color.black.opacity(0.95),
-                                Color.black
+                                Color.canvas.opacity(0),
+                                Color.canvas.opacity(0.95),
+                                Color.canvas
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -96,9 +96,9 @@ struct WorkoutCompletionSummaryView: View {
                     } label: {
                         Image(systemName: "arrow.left")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .frame(width: 38, height: 38)
-                            .background(Color.white.opacity(0.12), in: Circle())
+                            .background(Color.ink.opacity(0.12), in: Circle())
                     }
                     .buttonStyle(.pressable)
                     .accessibilityLabel("Назад")
@@ -108,11 +108,11 @@ struct WorkoutCompletionSummaryView: View {
                     VStack(spacing: 2) {
                         Text("Твоя тренировка")
                             .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
 
                         Text("Время, усилие и заметка — в историю")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.55))
+                            .foregroundStyle(Color.ink.opacity(0.55))
                     }
                 }
             }
@@ -124,7 +124,6 @@ struct WorkoutCompletionSummaryView: View {
                     .presentationDetents([.medium, .large])
             }
         }
-        .preferredColorScheme(.dark)
         .onAppear {
             workoutTitle = workout.fullTitle
             workoutDescription = sessionManager.noteText.isEmpty
@@ -144,7 +143,7 @@ struct WorkoutCompletionSummaryView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("ФОТО (\(selectedImages.count)/5)")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
                 .padding(.leading, 4)
 
             VStack(spacing: 14) {
@@ -152,10 +151,10 @@ struct WorkoutCompletionSummaryView: View {
                     VStack(spacing: 4) {
                         Text("Добавь фото к тренировке")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Text("до 5 штук · первое ляжет на карточку для сторис")
                             .font(.system(size: 13))
-                            .foregroundStyle(Color.white.opacity(0.50))
+                            .foregroundStyle(Color.ink.opacity(0.50))
                     }
                     .padding(.top, 6)
                     HStack(spacing: 10) {
@@ -196,11 +195,11 @@ struct WorkoutCompletionSummaryView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(16)
-            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .background(Color.tone(0.10))
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(Color.ink.opacity(0.08), lineWidth: 1)
             )
             .onChange(of: selectedPhotoItems) { _, newItems in
                 guard !newItems.isEmpty else { return }
@@ -253,14 +252,14 @@ struct WorkoutCompletionSummaryView: View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: large ? 22 : 18, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(.ink.opacity(0.9))
             Text(title)
                 .font(.system(size: large ? 14 : 11, weight: .bold))
-                .foregroundStyle(.white.opacity(large ? 0.9 : 0.6))
+                .foregroundStyle(.ink.opacity(large ? 0.9 : 0.6))
         }
         .frame(maxWidth: large ? .infinity : 80)
         .frame(width: large ? nil : 80, height: large ? 76 : 80)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.ink.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Публикация в ленту
@@ -269,7 +268,7 @@ struct WorkoutCompletionSummaryView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("ЛЕНТА")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
                 .padding(.leading, 4)
             VStack(alignment: .leading, spacing: 6) {
                 if SocialService.shared.isSignedIn {
@@ -277,10 +276,10 @@ struct WorkoutCompletionSummaryView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Опубликовать в ленте STRAIN")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                             Text("Фото, время, объём и все подходы с весами. Друзья смогут поставить лайк и написать комментарий.")
                                 .font(.system(size: 12))
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .foregroundStyle(Color.ink.opacity(0.5))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -292,17 +291,17 @@ struct WorkoutCompletionSummaryView: View {
                             .foregroundStyle(Theme.accent)
                         Text("Создай профиль во вкладке «Профиль» — и тренировки можно будет публиковать в ленту.")
                             .font(.system(size: 13))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .foregroundStyle(Color.ink.opacity(0.6))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .padding(16)
-            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .background(Color.tone(0.10))
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(Color.ink.opacity(0.08), lineWidth: 1)
             )
         }
     }
@@ -312,23 +311,23 @@ struct WorkoutCompletionSummaryView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(recipients.isEmpty ? "ОТПРАВИТЬ ДРУГУ" : "ОТПРАВИТЬ ДРУГУ · \(recipients.count)")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
                 .padding(.leading, 4)
                 .contentTransition(.numericText())
                 .animation(Motion.snappy, value: recipients.count)
             VStack(alignment: .leading, spacing: 8) {
                 Text("Отметь друзей — тренировка уйдёт им в переписку карточкой со всеми подходами.")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
                     .fixedSize(horizontal: false, vertical: true)
                 WorkoutRecipientsPicker(selected: $recipients)
             }
             .padding(16)
-            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .background(Color.tone(0.10))
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(Color.ink.opacity(0.08), lineWidth: 1)
             )
         }
     }
@@ -368,16 +367,16 @@ struct WorkoutCompletionSummaryView: View {
             HStack(spacing: 12) {
                 TextField("Название тренировки", text: $workoutTitle)
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
 
                 Image(systemName: "pencil")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.35))
+                    .foregroundStyle(Color.ink.opacity(0.35))
             }
             .padding(16)
 
             Divider()
-                .background(Color.white.opacity(0.08))
+                .background(Color.ink.opacity(0.08))
 
             // Описание
             HStack(alignment: .top, spacing: 12) {
@@ -385,30 +384,30 @@ struct WorkoutCompletionSummaryView: View {
                     if workoutDescription.isEmpty {
                         Text("Описание")
                             .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(Color.white.opacity(0.35))
+                            .foregroundStyle(Color.ink.opacity(0.35))
                             .padding(.top, 8)
                             .padding(.leading, 4)
                     }
 
                     TextEditor(text: $workoutDescription)
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .frame(minHeight: 70)
                         .scrollContentBackground(.hidden)
                 }
 
                 Image(systemName: "pencil")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.35))
+                    .foregroundStyle(Color.ink.opacity(0.35))
                     .padding(.top, 8)
             }
             .padding(16)
         }
-        .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+        .background(Color.tone(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(Color.ink.opacity(0.08), lineWidth: 1)
         )
     }
 
@@ -418,18 +417,18 @@ struct WorkoutCompletionSummaryView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("ВРЕМЯ")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
                 .padding(.leading, 4)
 
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatDuration(durationSeconds))
                         .font(.system(size: 26, weight: .black, design: Theme.fontDesign))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
 
                     Text("В приложении: \(formatDuration(sessionManager.elapsedSeconds))")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.50))
+                        .foregroundStyle(Color.ink.opacity(0.50))
                 }
 
                 Spacer()
@@ -448,11 +447,11 @@ struct WorkoutCompletionSummaryView: View {
                 .buttonStyle(.pressable)
             }
             .padding(18)
-            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .background(Color.tone(0.10))
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(Color.ink.opacity(0.08), lineWidth: 1)
             )
         }
     }
@@ -463,7 +462,7 @@ struct WorkoutCompletionSummaryView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("УСИЛИЕ")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
                 .padding(.leading, 4)
             EffortSlider(score: $effortScore)
         }
@@ -483,7 +482,7 @@ struct WorkoutCompletionSummaryView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("ПОДЕЛИТЬСЯ")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
                 .padding(.leading, 4)
 
             HStack(alignment: .center, spacing: 16) {
@@ -491,19 +490,19 @@ struct WorkoutCompletionSummaryView: View {
                     .scaleEffect(0.3, anchor: .topLeading)
                     .frame(width: WorkoutShareCard.size.width * 0.3, height: WorkoutShareCard.size.height * 0.3, alignment: .topLeading)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.ink.opacity(0.12), lineWidth: 1))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Карточка для сторис")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Text(selectedImages.isEmpty
                          ? "Время, тоннаж, рекорды и упражнения. Добавь фото выше — оно станет фоном."
                          : "Первое фото выше — фоном карточки.")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.ink.opacity(0.55))
                         .fixedSize(horizontal: false, vertical: true)
 
                     Button {
@@ -524,11 +523,11 @@ struct WorkoutCompletionSummaryView: View {
                 Spacer(minLength: 0)
             }
             .padding(16)
-            .background(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .background(Color.tone(0.10))
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(Color.ink.opacity(0.08), lineWidth: 1)
             )
         }
     }
@@ -541,11 +540,11 @@ struct WorkoutCompletionSummaryView: View {
         } label: {
             Text("ДАЛЬШЕ")
                 .font(.system(size: 16, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.black)
+                .foregroundStyle(.canvas)
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
-                .background(Color.white, in: Capsule())
-                .shadow(color: Color.white.opacity(0.20), radius: 12, y: 3)
+                .background(Color.ink, in: Capsule())
+                .shadow(color: Color.ink.opacity(0.20), radius: 12, y: 3)
         }
         .buttonStyle(.pressable)
     }
@@ -557,7 +556,7 @@ struct WorkoutCompletionSummaryView: View {
             VStack(spacing: 20) {
                 Text("Укажи фактическую длительность тренировки")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.70))
+                    .foregroundStyle(Color.ink.opacity(0.70))
                     .multilineTextAlignment(.center)
                     .padding(.top, 16)
 
@@ -588,16 +587,16 @@ struct WorkoutCompletionSummaryView: View {
                 } label: {
                     Text("Применить")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Color.white, in: Capsule())
+                        .background(Color.ink, in: Capsule())
                 }
                 .buttonStyle(.pressable)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
             }
-            .background(Color(red: 0.08, green: 0.08, blue: 0.10).ignoresSafeArea())
+            .background(Color.tone(0.08).ignoresSafeArea())
             .navigationTitle("Время тренировки")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -115,11 +115,11 @@ struct RemoteImage: View {
     /// Ровная подложка без спиннера: в ленте десятки спиннеров съедали кадры.
     private func placeholder(icon: String?) -> some View {
         ZStack {
-            Color(white: 0.12)
+            Color.tone(0.12)
             if let icon {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.25))
+                    .foregroundStyle(Color.ink.opacity(0.25))
             }
         }
     }
@@ -139,13 +139,13 @@ struct AvatarView: View {
                     LinearGradient(colors: [Theme.accent, Theme.accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
                     Text(String(username.prefix(1)).uppercased())
                         .font(.system(size: size * 0.42, weight: .heavy, design: Theme.fontDesign))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                 }
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(Circle().strokeBorder(Color.ink.opacity(0.08), lineWidth: 1))
         .accessibilityHidden(true)
     }
 }
@@ -181,7 +181,7 @@ struct MedalView: View {
         case 3: return [Color(red: 1.00, green: 0.82, blue: 0.35), Color(red: 0.80, green: 0.55, blue: 0.10)]
         case 4: return [Color(red: 0.55, green: 0.92, blue: 0.95), Color(red: 0.20, green: 0.55, blue: 0.75)]
         case 5: return [Theme.accent, Color(red: 0.55, green: 0.10, blue: 0.45)]
-        default: return [Color(white: 0.22), Color(white: 0.14)]
+        default: return [Color.tone(0.22), Color.tone(0.14)]
         }
     }
 
@@ -190,10 +190,10 @@ struct MedalView: View {
             Hexagon()
                 .fill(LinearGradient(colors: Self.colors(for: level), startPoint: .topLeading, endPoint: .bottomTrailing))
             Hexagon()
-                .strokeBorderCompat(Color.white.opacity(level > 0 ? 0.35 : 0.08), lineWidth: max(1, size * 0.03))
+                .strokeBorderCompat(Color.ink.opacity(level > 0 ? 0.35 : 0.08), lineWidth: max(1, size * 0.03))
             Image(systemName: kind?.symbol ?? "questionmark")
                 .font(.system(size: size * 0.38, weight: .bold))
-                .foregroundStyle(level > 0 ? Color.white : Color.white.opacity(0.3))
+                .foregroundStyle(level > 0 ? Color.ink : Color.ink.opacity(0.3))
                 .shadow(color: .black.opacity(level > 0 ? 0.35 : 0), radius: 2, y: 1)
         }
         .frame(width: size, height: size * 0.9)
@@ -296,6 +296,7 @@ extension View {
             CameraPicker(isPresented: isPresented, onImage: onImage)
                 .ignoresSafeArea()
                 .background(Color.black.ignoresSafeArea())
+                .preferredColorScheme(.dark)
         }
     }
 }
@@ -310,11 +311,11 @@ struct SocialStat: View {
         VStack(spacing: 3) {
             Text(value)
                 .font(.system(size: 22, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .contentTransition(.numericText())
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.55))
+                .foregroundStyle(Color.ink.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
     }
@@ -332,11 +333,11 @@ struct FollowButton: View {
         }) {
             Text(isFollowing ? "Вы подписаны" : "Подписаться")
                 .font(.system(size: compact ? 13 : 16, weight: .bold))
-                .foregroundStyle(isFollowing ? Color.white : Color.black)
+                .foregroundStyle(isFollowing ? Color.ink : Color.canvas)
                 .padding(.horizontal, compact ? 14 : 0)
                 .frame(maxWidth: compact ? nil : .infinity)
                 .frame(height: compact ? 32 : 50)
-                .background(isFollowing ? Color(white: 0.16) : Color.white, in: RoundedRectangle(cornerRadius: compact ? 16 : 18, style: .continuous))
+                .background(isFollowing ? Color.tone(0.16) : Color.ink, in: RoundedRectangle(cornerRadius: compact ? 16 : 18, style: .continuous))
                 // Подписался — кнопка плавно темнеет, а не перескакивает.
                 .animation(Motion.snappy, value: isFollowing)
         }
@@ -353,10 +354,10 @@ struct SocialErrorCard: View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.exclamationmark")
                 .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
             Text(message)
                 .font(.system(size: 14))
-                .foregroundStyle(Color.white.opacity(0.65))
+                .foregroundStyle(Color.ink.opacity(0.65))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             if let retry {

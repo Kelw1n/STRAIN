@@ -60,10 +60,10 @@ private struct UpdateCard: View {
                 Button(action: action.1) {
                     Text(action.0)
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                         .padding(.horizontal, 16)
                         .frame(height: 36)
-                        .background(Color.white, in: Capsule())
+                        .background(Color.ink, in: Capsule())
                 }
                 .buttonStyle(.pressable)
             }
@@ -73,7 +73,7 @@ private struct UpdateCard: View {
                     if let hint {
                         Text(hint)
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.ink.opacity(0.5))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -92,17 +92,17 @@ private struct UpdateCard: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.black)
+                .foregroundStyle(.canvas)
                 .frame(width: 40, height: 40)
                 .background(Theme.accent, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .lineLimit(1)
                 Text(AppUpdater.summary(changes, fallback: fallback))
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.65))
+                    .foregroundStyle(Color.ink.opacity(0.65))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -111,9 +111,9 @@ private struct UpdateCard: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .frame(width: 32, height: 32)
-                        .background(Color.white.opacity(0.12), in: Circle())
+                        .background(Color.ink.opacity(0.12), in: Circle())
                 }
                 .accessibilityLabel("Позже")
             }
@@ -132,7 +132,7 @@ private struct UpdateCard: View {
                     .font(.system(size: 12, weight: .bold))
                     .rotationEffect(.degrees(isExpanded ? 180 : 0))
             }
-            .foregroundStyle(Color.white.opacity(0.85))
+            .foregroundStyle(Color.ink.opacity(0.85))
             .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -155,7 +155,7 @@ struct ChangesList: View {
                     .frame(height: 280)
             }
         }
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var list: some View {
@@ -165,17 +165,17 @@ struct ChangesList: View {
                         Text([change.versionName.isEmpty ? nil : change.versionName, AppUpdater.dayText(change.date)]
                             .compactMap { $0 }.joined(separator: " · "))
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.ink.opacity(0.5))
                         let points = change.points
                         if points.isEmpty {
-                            Text("Исправления и улучшения").font(.system(size: 14)).foregroundStyle(.white)
+                            Text("Исправления и улучшения").font(.system(size: 14)).foregroundStyle(.ink)
                         }
                         ForEach(points.indices, id: \.self) { index in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("•").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.accent)
                                 Text(points[index])
                                     .font(.system(size: 14))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.ink)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }

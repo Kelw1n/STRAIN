@@ -37,7 +37,7 @@ struct LevelRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.1), lineWidth: lineWidth)
+                .stroke(Color.ink.opacity(0.1), lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: max(0.001, min(1, fraction)))
                 .stroke(Theme.accentGradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
@@ -47,10 +47,10 @@ struct LevelRing: View {
                     .font(.system(size: size * 0.36, weight: .black, design: Theme.fontDesign))
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Text("УР.")
                     .font(.system(size: max(9, size * 0.13), weight: .heavy))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.ink.opacity(0.5))
             }
         }
         .frame(width: size, height: size)
@@ -66,7 +66,7 @@ private struct XPBar: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.1))
+                Capsule().fill(Color.ink.opacity(0.1))
                 Capsule()
                     .fill(Theme.accentGradient)
                     .frame(width: max(height, proxy.size.width * min(1, max(0, fraction))))
@@ -80,7 +80,7 @@ private extension Progression.MonthTier {
     var color: Color {
         switch self {
         case .bronze: return Color(red: 0.85, green: 0.55, blue: 0.30)
-        case .silver: return Color(white: 0.80)
+        case .silver: return Color.tone(0.80)
         case .gold: return Color(red: 1.0, green: 0.80, blue: 0.25)
         }
     }
@@ -164,11 +164,11 @@ struct LevelCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(level.title)
                         .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     XPBar(fraction: level.fraction)
                     Text(ProgressionText.toNext(level))
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.ink.opacity(0.5))
                     Text(ProgressionText.month(month.workouts, next: month.next))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(month.next == nil ? Progression.MonthTier.gold.color : Theme.accent)
@@ -178,7 +178,7 @@ struct LevelCard: View {
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.3))
+                    .foregroundStyle(Color.ink.opacity(0.3))
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -214,7 +214,7 @@ struct LevelSheet: View {
                 .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Уровень")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -225,7 +225,6 @@ struct LevelSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private func monthCard(_ month: (workouts: Int, next: Progression.MonthTier?), awards: [Progression.MonthAward]) -> some View {
@@ -233,29 +232,29 @@ struct LevelSheet: View {
             LevelCaption(text: "Награды месяцев")
             Text(ProgressionText.month(month.workouts, next: month.next))
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             HStack(spacing: 8) {
                 ForEach([Progression.MonthTier.bronze, .silver, .gold], id: \.rawValue) { tier in
                     let reached = month.workouts >= tier.workouts
                     VStack(spacing: 4) {
                         Image(systemName: "medal.fill")
                             .font(.system(size: 20))
-                            .foregroundStyle(reached ? tier.color : Color.white.opacity(0.18))
+                            .foregroundStyle(reached ? tier.color : Color.ink.opacity(0.18))
                         Text(tier.title)
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(reached ? .white : Color.white.opacity(0.45))
+                            .foregroundStyle(reached ? .ink : Color.ink.opacity(0.45))
                         Text("\(tier.workouts) трен.")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .foregroundStyle(Color.ink.opacity(0.4))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
             Text("Награду месяца можно взять только в этом месяце — потом она остаётся в коллекции.")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.4))
+                .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
             if !awards.isEmpty {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
@@ -267,17 +266,17 @@ struct LevelSheet: View {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(award.title)
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.ink)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                                 Text("\(award.tier.title) · \(award.workouts) трен.")
                                     .font(.system(size: 11))
-                                    .foregroundStyle(Color.white.opacity(0.5))
+                                    .foregroundStyle(Color.ink.opacity(0.5))
                             }
                             Spacer(minLength: 0)
                         }
                         .padding(10)
-                        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                 }
             }
@@ -313,7 +312,7 @@ struct UserLevelSheet: View {
                 .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Уровень")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -324,7 +323,6 @@ struct UserLevelSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 
@@ -350,24 +348,24 @@ private struct LevelHeroCard: View {
             if let caption {
                 Text(caption)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.7))
+                    .foregroundStyle(Color.ink.opacity(0.7))
             }
             Text(Progression.title(for: level))
                 .font(.system(size: 26, weight: .heavy, design: Theme.fontDesign))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             if let progress {
                 Text(ProgressionText.experience(progress.xp))
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.6))
+                    .foregroundStyle(Color.ink.opacity(0.6))
                 XPBar(fraction: progress.fraction, height: 8)
                     .padding(.horizontal, 24)
                 Text(ProgressionText.toNext(progress))
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(Color.ink.opacity(0.45))
             } else {
                 Text("Уровень \(level)")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.6))
+                    .foregroundStyle(Color.ink.opacity(0.6))
             }
         }
         .frame(maxWidth: .infinity)
@@ -394,10 +392,10 @@ private struct LevelComparisonCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Ты — \(Progression.title(for: mine))")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Text(verdict)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(theirs > mine ? Theme.accent : Color.white.opacity(0.55))
+                    .foregroundStyle(theirs > mine ? Theme.accent : Color.ink.opacity(0.55))
             }
             Spacer(minLength: 0)
         }
@@ -427,7 +425,7 @@ private struct LevelRulesCard: View {
             rule("Место в челлендже", "до +300")
             Text("Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.")
                 .font(.system(size: 12))
-                .foregroundStyle(Color.white.opacity(0.4))
+                .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
@@ -439,7 +437,7 @@ private struct LevelRulesCard: View {
         HStack {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             Spacer()
             Text(value)
                 .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign))
@@ -477,11 +475,11 @@ private struct LevelTitlesCard: View {
                 HStack {
                     Text(item.title)
                         .font(.system(size: 15, weight: current ? .heavy : .semibold))
-                        .foregroundStyle(current ? Theme.accent : (reached ? .white : Color.white.opacity(0.4)))
+                        .foregroundStyle(current ? Theme.accent : (reached ? .ink : Color.ink.opacity(0.4)))
                     Spacer()
                     Text("ур. \(item.levels)")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                     if reached {
                         Image(systemName: current ? "location.fill" : "checkmark")
                             .font(.system(size: 11, weight: .bold))
@@ -507,7 +505,7 @@ private struct LevelCaption: View {
         Text(text.uppercased())
             .font(.system(size: 12, weight: .bold))
             .tracking(1.2)
-            .foregroundStyle(Color.white.opacity(0.45))
+            .foregroundStyle(Color.ink.opacity(0.45))
     }
 }
 
@@ -536,6 +534,11 @@ struct LevelUpOverlay: View {
     private var end: Progression.Level { Progression.level(forXP: gain.after) }
 
     var body: some View {
+        darkContent.alwaysDark()
+    }
+
+    @ViewBuilder
+    private var darkContent: some View {
         ZStack {
             Color.black.opacity(0.62)
                 .ignoresSafeArea()
@@ -550,7 +553,7 @@ struct LevelUpOverlay: View {
                     .font(.system(size: 32, weight: .black, design: Theme.fontDesign))
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 if let reachedLevel {
                     VStack(spacing: 4) {
                         Text("НОВЫЙ УРОВЕНЬ")
@@ -559,13 +562,13 @@ struct LevelUpOverlay: View {
                             .foregroundStyle(Theme.accent)
                         Text("\(reachedLevel) · \(Progression.title(for: reachedLevel))")
                             .font(.system(size: 24, weight: .heavy, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                     }
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
                 } else {
                     Text(ProgressionText.toNext(end))
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.ink.opacity(0.55))
                 }
                 HStack(spacing: 10) {
                     if reachedLevel != nil {
@@ -574,17 +577,17 @@ struct LevelUpOverlay: View {
                         } label: {
                             Label("Поделиться", systemImage: "square.and.arrow.up")
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
-                                .background(Color(white: 0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .background(Color.tone(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .buttonStyle(.pressable)
                     }
                     Button(action: onClose) {
                         Text("Отлично")
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(.canvas)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
                             .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -594,7 +597,7 @@ struct LevelUpOverlay: View {
             }
             .padding(24)
             .frame(maxWidth: 360)
-            .background(Color(white: 0.09), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .background(Color.tone(0.09), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             .padding(.horizontal, 20)
         }
         .task { await play() }
@@ -627,7 +630,7 @@ struct LevelUpOverlay: View {
 /// Вспышка конфетти из-за кольца: разлетается и гаснет.
 private struct ConfettiBurst: View {
     @State private var fired = false
-    private let colors: [Color] = [Theme.accent, Theme.success, Theme.warning, .white, Color(red: 0.36, green: 0.22, blue: 0.95)]
+    private let colors: [Color] = [Theme.accent, Theme.success, Theme.warning, .ink, Color(red: 0.36, green: 0.22, blue: 0.95)]
 
     var body: some View {
         ZStack {
@@ -657,6 +660,11 @@ struct LevelShareCard: View {
     let level: Progression.Level
 
     var body: some View {
+        darkContent.alwaysDark()
+    }
+
+    @ViewBuilder
+    private var darkContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("STRAIN")
@@ -666,7 +674,7 @@ struct LevelShareCard: View {
                 Text("НОВЫЙ УРОВЕНЬ")
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.4)
-                    .foregroundStyle(Color.white.opacity(0.8))
+                    .foregroundStyle(Color.ink.opacity(0.8))
             }
             Spacer(minLength: 0)
             LevelRing(level: level.level, fraction: 1, size: 170, lineWidth: 14)
@@ -674,18 +682,18 @@ struct LevelShareCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Уровень \(level.level)")
                     .font(.system(size: 20, weight: .heavy))
-                    .foregroundStyle(Color.white.opacity(0.8))
+                    .foregroundStyle(Color.ink.opacity(0.8))
                 Text(level.title)
                     .font(.system(size: 44, weight: .black, design: Theme.fontDesign))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                 Text(ProgressionText.experience(level.xp))
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.75))
+                    .foregroundStyle(Color.ink.opacity(0.75))
             }
             Spacer(minLength: 0)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.ink)
         .padding(26)
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
         .background(

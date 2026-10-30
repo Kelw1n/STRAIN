@@ -59,7 +59,7 @@ extension View {
 /// Мелкая заглавная подпись над блоком.
 struct NutritionCaption: View {
     let text: String
-    var color: Color = Color.white.opacity(0.45)
+    var color: Color = Color.ink.opacity(0.45)
 
     var body: some View {
         Text(text.uppercased())
@@ -82,10 +82,10 @@ struct NutritionButton: View {
                 if let systemImage { Image(systemName: systemImage).font(.system(size: 15, weight: .bold)) }
                 Text(title).font(.system(size: 15, weight: .bold))
             }
-            .foregroundStyle(primary ? Color.black : Color.white)
+            .foregroundStyle(primary ? Color.canvas : Color.ink)
             .frame(maxWidth: .infinity)
             .frame(height: 50)
-            .background(primary ? Theme.accent : Color(white: 0.16), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(primary ? Theme.accent : Color.tone(0.16), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.pressable)
     }
@@ -111,17 +111,17 @@ struct AmountField: View {
             Text(title.uppercased())
                 .font(.system(size: 10, weight: .bold))
                 .tracking(0.8)
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
             HStack(spacing: 3) {
                 TextField(placeholder, text: $text)
                     .keyboardType(.decimalPad)
                     .focused($focused)
                     .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                     .monospacedDigit()
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                 Text(unit)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.4))
+                    .foregroundStyle(Color.ink.opacity(0.4))
             }
             .padding(.horizontal, 10)
             .frame(height: 44)

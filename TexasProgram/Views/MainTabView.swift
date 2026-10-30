@@ -336,11 +336,11 @@ struct TodayView: View {
                                         .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                                         .tracking(1.0)
                                 }
-                                .foregroundStyle(.black)
+                                .foregroundStyle(.canvas)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
-                                .background(Color.white, in: Capsule())
-                                .shadow(color: Color.white.opacity(0.18), radius: 12, y: 4)
+                                .background(Color.ink, in: Capsule())
+                                .shadow(color: Color.ink.opacity(0.18), radius: 12, y: 4)
                             }
                             .buttonStyle(.pressable)
                             .appearIn(2)
@@ -448,7 +448,7 @@ struct TodayView: View {
             HStack(spacing: 14) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .frame(width: 42, height: 42)
                     .background(gradient, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
@@ -471,7 +471,7 @@ struct TodayView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Text(item.shortWeekday.uppercased())
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.canvas))
                             .foregroundStyle(Theme.warning)
                             .frame(width: 26, alignment: .leading)
                         Text(item.day.title)
@@ -579,7 +579,7 @@ struct TodayWorkoutPreviewCard: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.06), in: Capsule())
+                    .background(Color.ink.opacity(0.06), in: Capsule())
 
                 Menu {
                     Button {
@@ -649,22 +649,22 @@ struct TodayWorkoutPreviewCard: View {
                                 Text(WeightFormat.kilogramsPrecise(weight))
                                     .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                                     .monospacedDigit()
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.ink)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
-                                    .background(Color.white.opacity(0.08), in: Capsule())
+                                    .background(Color.ink.opacity(0.08), in: Capsule())
                             } else {
                                 Text(exercise.load.displayText)
                                     .font(.system(size: 12, weight: .semibold, design: Theme.fontDesign))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(Color.white.opacity(0.06), in: Capsule())
+                                    .background(Color.ink.opacity(0.06), in: Capsule())
                             }
 
                             Image(systemName: "chevron.right")
                                 .font(.caption2.weight(.bold))
-                                .foregroundStyle(Color.white.opacity(0.25))
+                                .foregroundStyle(Color.ink.opacity(0.25))
                         }
                         .contentShape(Rectangle())
                     }
@@ -843,7 +843,7 @@ struct PlanView: View {
                 }
             }
             .frame(width: 48, height: 52)
-            .foregroundStyle(selected ? Color.white : (done ? Theme.success : Color.primary))
+            .foregroundStyle(selected ? Color.ink : (done ? Theme.success : Color.primary))
             .background {
                 ZStack {
                     Capsule().fill(Color.primary.opacity(0.06))
@@ -888,7 +888,7 @@ struct DaySummaryCard: View {
                         .frame(width: 42, height: 42)
                     Image(systemName: isDone ? "checkmark" : "\(day.number).circle")
                         .font(.system(size: isDone ? 16 : 20, weight: .bold))
-                        .foregroundStyle(isDone ? Color.white : Color.primary.opacity(0.6))
+                        .foregroundStyle(isDone ? Color.ink : Color.primary.opacity(0.6))
                         .symbolEffect(.bounce, value: isDone)
                 }
                 VStack(alignment: .leading, spacing: 5) {
@@ -964,11 +964,11 @@ struct DayDetailView: View {
                             .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                             .tracking(1.0)
                     }
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.white, in: Capsule())
-                    .shadow(color: Color.white.opacity(0.18), radius: 12, y: 4)
+                    .background(Color.ink, in: Capsule())
+                    .shadow(color: Color.ink.opacity(0.18), radius: 12, y: 4)
                 }
                 .buttonStyle(.pressable)
                 .padding(.bottom, 4)

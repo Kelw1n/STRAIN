@@ -30,16 +30,16 @@ struct CoachEntryCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("ИИ-тренер")
                             .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                         Text("Спроси про застой, прогресс, восстановление и питание — он видит твои тренировки.")
                             .font(.system(size: 13))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.ink.opacity(0.5))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.3))
+                        .foregroundStyle(Color.ink.opacity(0.3))
                 }
             }
             .buttonStyle(.pressable)
@@ -51,7 +51,7 @@ struct CoachEntryCard: View {
                 } label: {
                     Label("Разбор прошлой недели", systemImage: "calendar.badge.checkmark")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
@@ -99,10 +99,10 @@ struct CoachView: View {
                         }
                         if thinking {
                             HStack(spacing: 8) {
-                                ProgressView().tint(.white)
+                                ProgressView().tint(.ink)
                                 Text("Тренер думает…")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.6))
+                                    .foregroundStyle(Color.ink.opacity(0.6))
                             }
                             .id("thinking")
                         }
@@ -133,7 +133,7 @@ struct CoachView: View {
                 }
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .safeAreaInset(edge: .bottom) {
                 CoachComposer(draft: $draft, thinking: thinking) { question in
                     Task { await ask(question) }
@@ -147,7 +147,7 @@ struct CoachView: View {
                         Button { showingKey = true } label: { Label("Ключ Google AI", systemImage: "key") }
                         Button(role: .destructive) { confirmClear = true } label: { Label("Очистить переписку", systemImage: "trash") }
                     } label: {
-                        Image(systemName: "ellipsis.circle").foregroundStyle(.white)
+                        Image(systemName: "ellipsis.circle").foregroundStyle(.ink)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -182,22 +182,21 @@ struct CoachView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var keyCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Нужен ключ Google AI")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             Text("Тренер работает на ИИ Google Gemini по твоему бесплатному ключу. Если ключ уже есть для фото еды — он подойдёт.")
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.6))
+                .foregroundStyle(Color.ink.opacity(0.6))
                 .fixedSize(horizontal: false, vertical: true)
             Button { showingKey = true } label: {
                 Text("Вставить ключ")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
@@ -214,11 +213,11 @@ struct CoachView: View {
                 .foregroundStyle(Theme.accent)
             Text("Привет! Я вижу твою программу, подходы за полтора месяца, вес тела и питание.")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Text("Программу сам не меняю: если предложу сбросить вес или поменять шаг прибавки — появится кнопка «Применить».")
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 12)
@@ -294,10 +293,10 @@ private struct CoachComposer: View {
                         Button { onAsk(question) } label: {
                             Text(question)
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .padding(.horizontal, 12)
                                 .frame(height: 32)
-                                .background(Color(white: 0.16), in: Capsule())
+                                .background(Color.tone(0.16), in: Capsule())
                         }
                         .buttonStyle(.pressable)
                         .disabled(thinking)
@@ -311,10 +310,10 @@ private struct CoachComposer: View {
                     .lineLimit(1...5)
                     .focused($focused)
                     .font(.system(size: 16))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 Button {
                     let question = draft
                     draft = ""
@@ -322,7 +321,7 @@ private struct CoachComposer: View {
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 16, weight: .heavy))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                         .frame(width: 40, height: 40)
                         .background(Theme.accent, in: Circle())
                 }
@@ -358,7 +357,7 @@ private struct CoachBubble: View {
                 Spacer(minLength: 48)
                 Text(message.text)
                     .font(.system(size: 15))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -374,7 +373,7 @@ private struct CoachBubble: View {
                 // путала бы проценты («6,3% веса») с подстановками.
                 Text(Self.rendered(message.text))
                     .font(.system(size: 15))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(Array(message.actions.enumerated()), id: \.offset) { index, action in
@@ -398,11 +397,11 @@ private struct CoachBubble: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(resolved?.title ?? "Применено")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     if let detail = resolved?.detail, !applied {
                         Text(detail)
                             .font(.system(size: 12))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.ink.opacity(0.5))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -414,7 +413,7 @@ private struct CoachBubble: View {
                 } else {
                     Button("Применить") { onApply(index) }
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                         .padding(.horizontal, 12)
                         .frame(height: 34)
                         .background(Theme.accent, in: Capsule())
@@ -422,7 +421,7 @@ private struct CoachBubble: View {
                 }
             }
             .padding(12)
-            .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 }

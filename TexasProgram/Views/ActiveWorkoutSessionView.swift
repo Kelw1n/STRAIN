@@ -34,7 +34,7 @@ struct ActiveWorkoutSessionView: View {
                         withAnimation(Motion.sheet) { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
-                .background(Color.black.ignoresSafeArea())
+                .background(Color.canvas.ignoresSafeArea())
 
                 // Карточка отдыха в стиле REBRN
                 if restTimer.isRunning {
@@ -77,7 +77,6 @@ struct ActiveWorkoutSessionView: View {
                 Button("4 мин (04:00)") { sessionManager.setRestDuration(240) }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Лента упражнений
@@ -121,9 +120,9 @@ struct ActiveWorkoutSessionView: View {
                 } label: {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .frame(width: 36, height: 36)
-                        .background(Color.white.opacity(0.12), in: Circle())
+                        .background(Color.ink.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.pressable)
                 .accessibilityLabel("Свернуть тренировку")
@@ -157,9 +156,9 @@ struct ActiveWorkoutSessionView: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .frame(width: 36, height: 36)
-                        .background(Color.white.opacity(0.12), in: Circle())
+                        .background(Color.ink.opacity(0.12), in: Circle())
                 }
 
                 Button {
@@ -167,10 +166,10 @@ struct ActiveWorkoutSessionView: View {
                 } label: {
                     Text("Завершить")
                         .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.canvas)
                         .padding(.horizontal, 18)
                         .frame(height: 36)
-                        .background(Color.white, in: Capsule())
+                        .background(Color.ink, in: Capsule())
                 }
                 .buttonStyle(.pressable)
             }
@@ -185,23 +184,23 @@ struct ActiveWorkoutSessionView: View {
             HStack(spacing: 10) {
                 Image(systemName: "trophy.fill")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.canvas)
                     .frame(width: 30, height: 30)
                     .background(Theme.accent, in: Circle())
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Новый рекорд")
                         .font(.system(size: 14, weight: .heavy, design: Theme.fontDesign))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Text("\(record.exercise) · \(WeightFormat.kilogramsPrecise(record.weight))")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(.ink.opacity(0.65))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Color(white: 0.12), in: Capsule())
+            .background(Color.tone(0.12), in: Capsule())
             .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.6), lineWidth: 1))
             .shadow(color: Theme.accent.opacity(0.35), radius: 16, y: 6)
             .padding(.horizontal, 24)
@@ -239,12 +238,12 @@ struct ActiveWorkoutSessionView: View {
 
                 Text(sessionManager.totalCompletedSets == 0 ? "Ни одного подхода не отмечено" : "Отменить тренировку?")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .multilineTextAlignment(.center)
 
                 Text("Тренировка удалится вместе с введёнными значениями и счётчиком времени.")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.white.opacity(0.65))
+                    .foregroundStyle(Color.ink.opacity(0.65))
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
                     .padding(.horizontal, 10)
@@ -261,15 +260,15 @@ struct ActiveWorkoutSessionView: View {
                 } label: {
                     Text("Вернуться к тренировке")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(Color.ink.opacity(0.85))
                         .padding(.vertical, 8)
                 }
             }
             .padding(24)
-            .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                    .strokeBorder(Color.ink.opacity(0.1), lineWidth: 1)
             )
             .padding(.horizontal, 28)
         }
@@ -283,14 +282,14 @@ struct ActiveWorkoutSessionView: View {
             VStack(alignment: .leading, spacing: 16) {
                 TextEditor(text: $sessionManager.noteText)
                     .padding(12)
-                    .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .scrollContentBackground(.hidden)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
 
                 Spacer()
             }
             .padding()
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Заметка к тренировке")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -469,7 +468,7 @@ private struct ExerciseSessionCard: View {
             HStack(spacing: 12) {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(lifted ? 0.9 : 0.3))
+                    .foregroundStyle(Color.ink.opacity(lifted ? 0.9 : 0.3))
                     .frame(width: 18)
 
                 ExerciseThumb(name: exercise.prescription.name, size: compact ? 48 : 52)
@@ -477,7 +476,7 @@ private struct ExerciseSessionCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(exercise.prescription.name)
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .lineLimit(compact ? 1 : 2)
                         .minimumScaleFactor(0.85)
                     if !compact {
@@ -490,7 +489,7 @@ private struct ExerciseSessionCard: View {
                         // После «из» — родительный падеж: «из 3 подходов», а не «из 3 подхода».
                         Text("\(doneCount) из \(exercise.sets.count) \(RuPlural.word(exercise.sets.count, "подхода", "подходов", "подходов"))")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.45))
+                            .foregroundStyle(Color.ink.opacity(0.45))
                             .transition(.opacity)
                     }
                 }
@@ -549,10 +548,10 @@ private struct ExerciseSessionCard: View {
                     .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                     .monospacedDigit()
             }
-            .foregroundStyle(Color.white.opacity(0.85))
+            .foregroundStyle(Color.ink.opacity(0.85))
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
-            .background(Color.white.opacity(0.10), in: Capsule())
+            .background(Color.ink.opacity(0.10), in: Capsule())
         }
         .buttonStyle(.pressable)
         .accessibilityLabel(Self.restLabel(exercise.restSeconds))
@@ -619,7 +618,7 @@ private struct ExerciseSessionCard: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.ink.opacity(0.5))
                 .frame(width: 30, height: 30)
                 .contentShape(Rectangle())
         }
@@ -671,10 +670,10 @@ private struct ExerciseSessionCard: View {
                     Text("Добавить подход")
                         .font(.system(size: 14, weight: .semibold))
                 }
-                .foregroundStyle(Color.white.opacity(0.85))
+                .foregroundStyle(Color.ink.opacity(0.85))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
-                .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(Color.tone(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.pressable)
             .padding(.top, 4)
@@ -682,7 +681,7 @@ private struct ExerciseSessionCard: View {
             if showsDeleteHint {
                 Text("Лишний подход? Смахни его влево или нажми на номер")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(Color.ink.opacity(0.55))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -703,7 +702,7 @@ private struct ExerciseSessionCard: View {
     private func columnTitle(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(Color.white.opacity(0.4))
+            .foregroundStyle(Color.ink.opacity(0.4))
     }
 }
 
@@ -758,7 +757,7 @@ private struct SetRowView: View {
             } label: {
                 Text(set.previousText)
                     .font(.system(size: 12, weight: .medium, design: Theme.fontDesign))
-                    .foregroundStyle(Color.white.opacity(set.previous == nil ? 0.25 : 0.45))
+                    .foregroundStyle(Color.ink.opacity(set.previous == nil ? 0.25 : 0.45))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .frame(width: 62, height: 44)
@@ -808,7 +807,7 @@ private struct SetRowView: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(.ink)
             .scaleEffect(armed ? 1.1 : 0.9)
             .opacity(labelOpacity)
             .padding(.trailing, 16)
@@ -881,7 +880,7 @@ private struct SetRowView: View {
             Text("\(position + 1)")
                 .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                 .monospacedDigit()
-                .foregroundStyle(set.isRecord ? .black : .white)
+                .foregroundStyle(set.isRecord ? .canvas : .ink)
                 .frame(width: 34, height: 34)
                 .background(numberFill, in: Circle())
                 .overlay {
@@ -903,9 +902,9 @@ private struct SetRowView: View {
                     if set.isRecord {
                         Image(systemName: "trophy.fill")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .padding(3)
-                            .background(Color.black, in: Circle())
+                            .background(Color.canvas, in: Circle())
                             .offset(x: 5, y: -5)
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -929,7 +928,7 @@ private struct SetRowView: View {
     private var numberFill: AnyShapeStyle {
         if set.isRecord { return AnyShapeStyle(Theme.accent) }
         if highlighted { return AnyShapeStyle(Theme.accent.opacity(0.35)) }
-        return AnyShapeStyle(Color(white: 0.15))
+        return AnyShapeStyle(Color.tone(0.15))
     }
 
     private var checkButton: some View {
@@ -940,7 +939,7 @@ private struct SetRowView: View {
         } label: {
             ZStack {
                 Circle()
-                    .strokeBorder(Color.white.opacity(0.35), lineWidth: 2)
+                    .strokeBorder(Color.ink.opacity(0.35), lineWidth: 2)
                     .opacity(set.isDone ? 0 : 1)
                 Circle()
                     .fill(Theme.accent)
@@ -948,7 +947,7 @@ private struct SetRowView: View {
                     .opacity(set.isDone ? 1 : 0)
                 Image(systemName: "checkmark")
                     .font(.system(size: 14, weight: .heavy))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .scaleEffect(set.isDone ? 1 : 0.4)
                     .opacity(set.isDone ? 1 : 0)
             }
@@ -968,7 +967,7 @@ private struct SetRowView: View {
 /// экран раз в секунду не перерисовывается.
 struct SessionClock: View {
     var size: CGFloat = 26
-    var color: Color = .white
+    var color: Color = .ink
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -1021,12 +1020,12 @@ struct MinimizedWorkoutBar: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workout.fullTitle)
                             .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .lineLimit(1)
 
                         Text("\(sessionManager.totalCompletedSets) из \(sessionManager.totalSetsCount) \(RuPlural.word(sessionManager.totalSetsCount, "подхода", "подходов", "подходов"))")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.55))
+                            .foregroundStyle(Color.ink.opacity(0.55))
                             .contentTransition(.numericText())
                     }
 
@@ -1044,7 +1043,7 @@ struct MinimizedWorkoutBar: View {
 
                     Image(systemName: "chevron.up")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.7))
+                        .foregroundStyle(Color.ink.opacity(0.7))
                         .padding(6)
                 }
                 .padding(.horizontal, 16)
@@ -1067,13 +1066,13 @@ struct MinimizedWorkoutBar: View {
             .fill(.ultraThinMaterial)
             .overlay {
                 Capsule(style: .continuous)
-                    .fill(Color(red: 0.10, green: 0.10, blue: 0.12).opacity(0.88))
+                    .fill(Color.tone(0.10).opacity(0.88))
             }
             .overlay {
                 Capsule(style: .continuous)
                     .strokeBorder(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.28), Color.white.opacity(0.06)],
+                            colors: [Color.ink.opacity(0.28), Color.ink.opacity(0.06)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -1097,7 +1096,7 @@ private struct WarmUpRow: View {
             Text("РАЗМИНКА")
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Color.ink.opacity(0.45))
             ScrollView(.horizontal) {
                 HStack(spacing: 6) {
                     ForEach(steps, id: \.self) { step in
@@ -1127,10 +1126,10 @@ private struct WarmUpRow: View {
                     .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                     .monospacedDigit()
             }
-            .foregroundStyle(isDone ? Color.black : Color.white.opacity(0.85))
+            .foregroundStyle(isDone ? Color.canvas : Color.ink.opacity(0.85))
             .padding(.horizontal, 10)
             .frame(height: 30)
-            .background(isDone ? Theme.accent : Color.white.opacity(0.08), in: Capsule())
+            .background(isDone ? Theme.accent : Color.ink.opacity(0.08), in: Capsule())
         }
         .buttonStyle(.pressable)
         .accessibilityLabel("Разминка \(WeightFormat.plain(step.weight)) килограммов на \(step.reps)")
@@ -1164,7 +1163,7 @@ private struct SetNumberField: View {
             .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
             .monospacedDigit()
             // План — приглушённым, факт — белым, как у REBRN.
-            .foregroundStyle(isDone || focused ? Color.white : Color.white.opacity(0.6))
+            .foregroundStyle(isDone || focused ? Color.ink : Color.ink.opacity(0.6))
             .focused($focused)
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(Color(white: focused ? 0.19 : 0.14), in: shape)

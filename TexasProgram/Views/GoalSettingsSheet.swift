@@ -39,12 +39,12 @@ struct GoalSettingsSheet: View {
                                 } label: {
                                     Text(item.label)
                                         .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
-                                        .foregroundStyle(isSelected ? .white : Color.white.opacity(0.65))
+                                        .foregroundStyle(isSelected ? .ink : Color.ink.opacity(0.65))
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 48)
                                         .background(
                                             Circle()
-                                                .fill(isSelected ? Theme.accent : Color(white: 0.16))
+                                                .fill(isSelected ? Theme.accent : Color.tone(0.16))
                                         )
                                 }
                                 .buttonStyle(.pressable)
@@ -55,7 +55,7 @@ struct GoalSettingsSheet: View {
                              ? "\(need) \(RuPlural.word(need, "тренировка", "тренировки", "тренировок")) в неделю — столько же дней в программе."
                              : "Выбери \(need) \(RuPlural.word(need, "день", "дня", "дней")) — столько тренировок в неделе программы. Сейчас \(selectedDays.count).")
                             .font(.system(size: 12))
-                            .foregroundStyle(isReady ? Color.white.opacity(0.45) : Theme.warning)
+                            .foregroundStyle(isReady ? Color.ink.opacity(0.45) : Theme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                             .animation(.easeOut(duration: 0.15), value: isReady)
                     }
@@ -67,28 +67,27 @@ struct GoalSettingsSheet: View {
                         VStack(spacing: 0) {
                             Toggle("Напоминать в дни тренировок", isOn: $reminderEnabled.animation(Motion.snappy))
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                                 .tint(Theme.accent)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
 
                             if reminderEnabled {
-                                Divider().overlay(Color.white.opacity(0.06)).padding(.horizontal, 16)
+                                Divider().overlay(Color.ink.opacity(0.06)).padding(.horizontal, 16)
 
                                 HStack {
                                     Text("Время")
                                         .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(.ink)
                                     Spacer()
                                     DatePicker("", selection: $reminderTime, displayedComponents: .hourAndMinute)
                                         .labelsHidden()
-                                        .colorScheme(.dark)
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
                             }
                         }
-                        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     }
 
                     Spacer(minLength: 20)
@@ -100,10 +99,10 @@ struct GoalSettingsSheet: View {
                         Text("СОХРАНИТЬ ЦЕЛЬ")
                             .font(.system(size: 16, weight: .bold, design: Theme.fontDesign))
                             .tracking(1.0)
-                            .foregroundStyle(isReady ? .black : Color.white.opacity(0.4))
+                            .foregroundStyle(isReady ? .canvas : Color.ink.opacity(0.4))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
-                            .background(isReady ? Color.white : Color(white: 0.16), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .background(isReady ? Color.ink : Color.tone(0.16), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                     .buttonStyle(.pressable)
                     .disabled(!isReady)
@@ -112,7 +111,7 @@ struct GoalSettingsSheet: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 14)
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Цель")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -122,15 +121,14 @@ struct GoalSettingsSheet: View {
                     } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.ink)
                             .padding(8)
-                            .background(Color.white.opacity(0.12), in: Circle())
+                            .background(Color.ink.opacity(0.12), in: Circle())
                     }
                     .accessibilityLabel("Назад")
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .onAppear {
             // Те же дни, что видит расписание: свои, если их ровно столько, сколько
             // тренировок, иначе — по умолчанию для программы.
@@ -150,7 +148,7 @@ struct GoalSettingsSheet: View {
         Text(text)
             .font(.system(size: 12, weight: .bold))
             .tracking(1.2)
-            .foregroundStyle(Color.white.opacity(0.45))
+            .foregroundStyle(Color.ink.opacity(0.45))
     }
 
     private func saveGoal() {

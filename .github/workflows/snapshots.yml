@@ -43,10 +43,11 @@ jobs:
             -project TexasProgram.xcodeproj -scheme TexasProgram \
             -destination "platform=iOS Simulator,id=$PRO" \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO
-          for pair in "pro:$PRO" "se:$SE"; do
-            slug="${pair%%:*}"; udid="${pair#*:}"
+          # Светлая тема — на большом iPhone, тёмная — на обоих.
+          for pair in "pro:$PRO:dark" "pro-light:$PRO:light" "se:$SE:dark"; do
+            slug="${pair%%:*}"; rest="${pair#*:}"; udid="${rest%%:*}"; theme="${rest#*:}"
             [ -n "$udid" ] || continue
-            TEST_RUNNER_SNAPSHOTS=1 TEST_RUNNER_SNAPSHOT_DIR="$PWD/snapshots/ios-$slug" \
+            TEST_RUNNER_SNAPSHOTS=1 TEST_RUNNER_THEME="$theme" TEST_RUNNER_SNAPSHOT_DIR="$PWD/snapshots/ios-$slug" \
               xcodebuild test-without-building \
                 -project TexasProgram.xcodeproj -scheme TexasProgram \
                 -destination "platform=iOS Simulator,id=$udid" \
@@ -96,6 +97,15 @@ jobs:
               -project TexasProgram.xcodeproj -scheme TexasProgram \
               -destination "platform=iOS Simulator,id=$UDID" \
               -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+              -only-testing:TexasProgramTests/SnapshotTests/testGlassTabBar \
+              -only-testing:TexasProgramTests/SnapshotTests/testChat \
+              -only-testing:TexasProgramTests/SnapshotTests/testFeedTab || true
+          # Стекло в светлой теме: уже собранное, только тесты.
+          TEST_RUNNER_SNAPSHOTS=1 TEST_RUNNER_THEME=light TEST_RUNNER_SNAPSHOT_DIR="$PWD/snapshots/ios26-light" \
+            xcodebuild test-without-building \
+              -project TexasProgram.xcodeproj -scheme TexasProgram \
+              -destination "platform=iOS Simulator,id=$UDID" \
+              -derivedDataPath build \
               -only-testing:TexasProgramTests/SnapshotTests/testGlassTabBar \
               -only-testing:TexasProgramTests/SnapshotTests/testChat \
               -only-testing:TexasProgramTests/SnapshotTests/testFeedTab || true

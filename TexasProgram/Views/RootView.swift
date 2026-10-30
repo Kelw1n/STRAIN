@@ -6,6 +6,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\ProgramProfile.createdAt)]) private var profiles: [ProgramProfile]
     @AppStorage("activeProfileID") private var activeProfileID = ""
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.dark
     @State private var isAddingProfile = false
 
     private var activeProfile: ProgramProfile? {
@@ -39,7 +40,9 @@ struct RootView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: activeProfile?.profileID)
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: isAddingProfile)
         .tint(Theme.accent)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(appearance.colorScheme)
+        .onAppear { AppAppearance.apply(appearance) }
+        .onChange(of: appearance) { _, value in AppAppearance.apply(value) }
     }
 
     /// Восстановление с первого экрана: после переустановки профилей нет,
@@ -278,7 +281,7 @@ struct ProgramOptionCard: View {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: symbol)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .frame(width: 46, height: 46)
                     .background(gradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 VStack(alignment: .leading, spacing: 6) {

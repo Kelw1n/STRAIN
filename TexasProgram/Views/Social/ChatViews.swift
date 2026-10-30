@@ -22,13 +22,13 @@ struct ChatListView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "bubble.left.and.bubble.right")
                         .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.35))
+                        .foregroundStyle(Color.ink.opacity(0.35))
                     Text("Сообщений пока нет")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Text("Открой профиль друга и нажми «Написать».")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.ink.opacity(0.55))
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
@@ -41,7 +41,7 @@ struct ChatListView: View {
                         Button { onOpen(chat.user.username) } label: { ChatRow(chat: chat) }
                             .buttonStyle(PressableStyle(scale: 0.985))
                         if chat.id != chats.last?.id {
-                            Divider().overlay(Color.white.opacity(0.06)).padding(.leading, 74)
+                            Divider().overlay(Color.ink.opacity(0.06)).padding(.leading, 74)
                         }
                     }
                 }
@@ -49,7 +49,7 @@ struct ChatListView: View {
             }
 
             if loading && chats.isEmpty {
-                ProgressView().tint(.white).frame(maxWidth: .infinity).padding(20)
+                ProgressView().tint(.ink).frame(maxWidth: .infinity).padding(20)
             }
         }
         .task {
@@ -94,11 +94,11 @@ struct ChatRow: View {
                 HStack {
                     Text("@\(chat.user.username)")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                     Spacer()
                     Text(SocialFormat.ago(chat.last.date))
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(Color.ink.opacity(0.4))
                 }
                 HStack {
                     if let live = chat.live, chat.unread == 0 {
@@ -109,7 +109,7 @@ struct ChatRow: View {
                     } else {
                         Text((chat.last.fromMe ? "Вы: " : "") + chat.last.preview)
                             .font(.system(size: 14, weight: chat.unread > 0 ? .semibold : .regular))
-                            .foregroundStyle(Color.white.opacity(chat.unread > 0 ? 0.9 : 0.5))
+                            .foregroundStyle(Color.ink.opacity(chat.unread > 0 ? 0.9 : 0.5))
                             .lineLimit(1)
                     }
                     Spacer()
@@ -191,7 +191,7 @@ struct ChatView: View {
                             Task { await loadOlder() }
                         } label: {
                             if loadingOlder {
-                                ProgressView().tint(.white)
+                                ProgressView().tint(.ink)
                             } else {
                                 Text("Ранние сообщения")
                                     .font(.system(size: 13, weight: .semibold))
@@ -201,11 +201,11 @@ struct ChatView: View {
                         .padding(.vertical, 8)
                     }
                     if loading && messages.isEmpty {
-                        ProgressView().tint(.white).padding(30)
+                        ProgressView().tint(.ink).padding(30)
                     } else if messages.isEmpty {
                         Text("Напиши первым — например, позови на тренировку.")
                             .font(.system(size: 14))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.ink.opacity(0.5))
                             .multilineTextAlignment(.center)
                             .padding(30)
                     }
@@ -215,7 +215,7 @@ struct ChatView: View {
                         if index == 0 || !Calendar.current.isDate(messages[index - 1].date, inSameDayAs: message.date) {
                             Text(dayTitle(message.date))
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.4))
+                                .foregroundStyle(Color.ink.opacity(0.4))
                                 .padding(.top, 12)
                                 .padding(.bottom, 4)
                         }
@@ -281,7 +281,7 @@ struct ChatView: View {
         // Панель ввода плавает поверх переписки: сообщения видны сквозь стекло.
         // Все её стеклянные кнопки и плашки — в одном контейнере стекла.
         .safeAreaInset(edge: .bottom) { GlassGroup { inputBar } }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.canvas.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -293,13 +293,13 @@ struct ChatView: View {
                                     Circle()
                                         .fill(Theme.success)
                                         .frame(width: 9, height: 9)
-                                        .overlay(Circle().strokeBorder(Color.black, lineWidth: 1.5))
+                                        .overlay(Circle().strokeBorder(Color.canvas, lineWidth: 1.5))
                                 }
                             }
                         VStack(alignment: .leading, spacing: 0) {
                             Text("@\(username)")
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                             if let status {
                                 Text(status.text)
                                     .font(.system(size: 11, weight: .semibold))
@@ -314,7 +314,6 @@ struct ChatView: View {
                 .buttonStyle(.pressable)
             }
         }
-        .preferredColorScheme(.dark)
         .photosPicker(isPresented: $showingGallery, selection: $galleryItem, matching: .images)
         .onChange(of: galleryItem) { _, item in
             guard let item else { return }
@@ -331,6 +330,7 @@ struct ChatView: View {
         .cameraSheet(isPresented: $showingCamera) { attachment = $0.downscaled() }
         .fullScreenCover(item: $viewing) { item in
             ImageViewer(id: item.id) { viewing = nil }
+                .preferredColorScheme(.dark)
         }
         .sheet(item: $forwarding) { message in
             ChatTargetSheet(title: "Переслать") { target in forward(message, to: target) }
@@ -391,7 +391,7 @@ struct ChatView: View {
         if otherTyping { return ("печатает…", Theme.accent) }
         if let live { return ("тренируется · \(live.line)", Theme.success) }
         if let lastSeen {
-            return (SocialFormat.lastSeen(Date(timeIntervalSince1970: lastSeen / 1000)), Color.white.opacity(isOnline ? 0.75 : 0.45))
+            return (SocialFormat.lastSeen(Date(timeIntervalSince1970: lastSeen / 1000)), Color.ink.opacity(isOnline ? 0.75 : 0.45))
         }
         return nil
     }
@@ -415,7 +415,7 @@ struct ChatView: View {
             } else if waitingForNetwork {
                 Label("Нет связи — сообщения уйдут сами, когда она появится", systemImage: "wifi.slash")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.8))
+                    .foregroundStyle(Color.ink.opacity(0.8))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .chatGlass(Capsule())
@@ -424,7 +424,7 @@ struct ChatView: View {
             if let hint {
                 Text(hint)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .chatGlass(Capsule())
@@ -477,7 +477,7 @@ struct ChatView: View {
                 } label: {
                     Image(systemName: "paperclip")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.ink)
                         .frame(width: 44, height: 44)
                         .chatGlass(Circle())
                 }
@@ -503,9 +503,9 @@ struct ChatView: View {
                     Image(systemName: editing == nil ? "arrow.up" : "checkmark")
                         .font(.system(size: 17, weight: .heavy))
                         .contentTransition(.symbolEffect(.replace))
-                        .foregroundStyle(canSend ? Color.black : Color.white.opacity(0.5))
+                        .foregroundStyle(canSend ? Color.canvas : Color.ink.opacity(0.5))
                         .frame(width: 44, height: 44)
-                        .background(canSend ? Color.white : Color.clear, in: Circle())
+                        .background(canSend ? Color.ink : Color.clear, in: Circle())
                         .chatGlass(Circle(), enabled: !canSend)
                 }
                 .buttonStyle(PressableStyle(scale: 0.88))
@@ -540,14 +540,14 @@ struct ChatView: View {
                     .foregroundStyle(Theme.accent)
                 Text(text)
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.7))
+                    .foregroundStyle(Color.ink.opacity(0.7))
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
             Button { withAnimation(Motion.snappy) { onClose() } } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.6))
+                    .foregroundStyle(Color.ink.opacity(0.6))
                     .frame(width: 28, height: 28)
             }
             .accessibilityLabel(close)
@@ -578,7 +578,7 @@ struct ChatView: View {
     private var micButton: some View {
         Image(systemName: "mic.fill")
             .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(.ink)
             .frame(width: 44, height: 44)
             .background(recorder.isRecording ? Theme.record : Color.clear, in: Circle())
             .chatGlass(Circle(), enabled: !recorder.isRecording)
@@ -956,7 +956,7 @@ struct TypingBubble: View {
             HStack(spacing: 4) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
-                        .fill(Color.white.opacity(0.7))
+                        .fill(Color.ink.opacity(0.7))
                         .frame(width: 7, height: 7)
                         .scaleEffect(bouncing ? 1 : 0.7)
                         .opacity(bouncing ? 1 : 0.6)
@@ -968,7 +968,7 @@ struct TypingBubble: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Color.tone(0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .accessibilityLabel("Печатает")
             Spacer(minLength: 60)
         }
@@ -1030,7 +1030,7 @@ struct MessageBubble: View {
                 // Стрелка «ответить» выезжает справа, пока тянем пузырь.
                 Image(systemName: "arrowshape.turn.up.left.circle.fill")
                     .font(.system(size: 26))
-                    .foregroundStyle(armed ? Theme.accent : Color.white.opacity(0.8))
+                    .foregroundStyle(armed ? Theme.accent : Color.ink.opacity(0.8))
                     .opacity(Double(min(1, -swipe / Self.replyDistance)))
                     .scaleEffect(armed ? 1.15 : 0.6 + 0.4 * min(1, -swipe / Self.replyDistance))
                     .animation(Motion.bouncy, value: armed)
@@ -1095,7 +1095,7 @@ struct MessageBubble: View {
             } else if !message.text.isEmpty {
                 Text(message.text)
                     .font(.system(size: 16))
-                    .foregroundStyle(message.fromMe ? Color.white : Color.white.opacity(0.92))
+                    .foregroundStyle(message.fromMe ? Color.white : Color.ink.opacity(0.92))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1108,12 +1108,12 @@ struct MessageBubble: View {
                 Text(message.date, format: .dateTime.hour().minute())
                 if message.fromMe {
                     Image(systemName: statusIcon)
-                        .foregroundStyle(failure != nil ? Theme.record : Color.white.opacity(0.55))
+                        .foregroundStyle(failure != nil ? Theme.record : Color.ink.opacity(0.55))
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
             .font(.system(size: 11))
-            .foregroundStyle(Color.white.opacity(0.55))
+            .foregroundStyle(Color.ink.opacity(0.55))
             .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.horizontal, message.image == nil ? 0 : 9)
             .padding(.bottom, message.image == nil ? 0 : 4)
@@ -1121,12 +1121,12 @@ struct MessageBubble: View {
         .padding(.horizontal, message.image == nil ? 13 : 4)
         .padding(.vertical, message.image == nil ? 8 : 4)
         .background(
-            message.fromMe ? Theme.accent.opacity(failure == nil ? 0.9 : 0.5) : Color(white: 0.16),
+            message.fromMe ? Theme.accent.opacity(failure == nil ? 0.9 : 0.5) : Color.tone(0.16),
             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(highlighted ? 0.18 : 0))
+                .fill(Color.ink.opacity(highlighted ? 0.18 : 0))
                 .allowsHitTesting(false)
         )
         // Двойное нажатие — 🔥, как сердечко в Telegram.
@@ -1188,7 +1188,7 @@ struct MessageBubble: View {
                 // Длинная цитата не раздувает пузырь — обрезается.
                 Text(quote.preview)
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.75))
+                    .foregroundStyle(Color.ink.opacity(0.75))
                     .lineLimit(1)
                     .frame(maxWidth: 190, alignment: .leading)
             }
@@ -1197,7 +1197,7 @@ struct MessageBubble: View {
         .padding(.leading, 6)
         .padding(.trailing, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(message.fromMe ? 0.16 : 0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background((message.fromMe ? Color.white : Color.ink).opacity(message.fromMe ? 0.16 : 0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var reactions: some View {
@@ -1209,13 +1209,13 @@ struct MessageBubble: View {
                         if reaction.count > 1 {
                             Text("\(reaction.count)")
                                 .font(.system(size: 12, weight: .bold).monospacedDigit())
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.ink)
                         }
                     }
                     .padding(.horizontal, 8)
                     .frame(height: 26)
-                    .background(reaction.mine ? Theme.accent.opacity(0.45) : Color(white: 0.16), in: Capsule())
-                    .overlay(Capsule().strokeBorder(reaction.mine ? Theme.accent : Color.white.opacity(0.08), lineWidth: 1))
+                    .background(reaction.mine ? Theme.accent.opacity(0.45) : Color.tone(0.16), in: Capsule())
+                    .overlay(Capsule().strokeBorder(reaction.mine ? Theme.accent : Color.ink.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.pressable)
                 .transition(.scale.combined(with: .opacity))
@@ -1230,7 +1230,7 @@ struct MessageBubble: View {
             if let localImage {
                 Image(uiImage: localImage).resizable().scaledToFill()
                     .overlay {
-                        if message.isLocal && failure == nil { ProgressView().tint(.white) }
+                        if message.isLocal && failure == nil { ProgressView().tint(.ink) }
                     }
             } else {
                 RemoteImage(id: message.image)
@@ -1362,11 +1362,11 @@ struct VoiceMessageContent: View {
                 ZStack {
                     Circle().fill(fromMe ? Color.white : Theme.accent)
                     if loading || isLocal {
-                        ProgressView().tint(fromMe ? Theme.accent : .white)
+                        ProgressView().tint(fromMe ? Theme.accent : .ink)
                     } else {
                         Image(systemName: failed ? "arrow.clockwise" : (playing ? "pause.fill" : "play.fill"))
                             .font(.system(size: 15, weight: .heavy))
-                            .foregroundStyle(fromMe ? Theme.accent : .white)
+                            .foregroundStyle(fromMe ? Theme.accent : .ink)
                             .offset(x: playing || failed ? 0 : 1.5)
                             .contentTransition(.symbolEffect(.replace))
                     }
@@ -1401,7 +1401,7 @@ struct VoiceMessageContent: View {
                     HStack(spacing: 6) {
                         Text(SocialVoice.format(timeShown(playing: playing)))
                             .font(.system(size: 12, weight: .medium).monospacedDigit())
-                            .foregroundStyle(Color.white.opacity(0.7))
+                            .foregroundStyle(Color.ink.opacity(0.7))
                         if !heard && !isLocal {
                             Circle()
                                 .fill(fromMe ? Color.white : Theme.accent)
@@ -1414,7 +1414,7 @@ struct VoiceMessageContent: View {
                             Button { player.cycleRate() } label: {
                                 Text(rateText)
                                     .font(.system(size: 11, weight: .heavy).monospacedDigit())
-                                    .foregroundStyle(fromMe ? Theme.accent : .white)
+                                    .foregroundStyle(fromMe ? Theme.accent : .ink)
                                     .padding(.horizontal, 6)
                                     .frame(height: 18)
                                     .background(fromMe ? Color.white : Theme.accent.opacity(0.85), in: Capsule())
@@ -1464,7 +1464,7 @@ struct VoiceWaveform: View {
                 let x = CGFloat(index) * (width + gap)
                 let rect = CGRect(x: x, y: (size.height - height) / 2, width: width, height: height)
                 let played = Double(index) / Double(levels.count) < progress
-                let color: Color = played ? (fromMe ? .white : Theme.accent) : Color.white.opacity(fromMe ? 0.45 : 0.35)
+                let color: Color = played ? (fromMe ? .white : Theme.accent) : (fromMe ? Color.white : Color.ink).opacity(fromMe ? 0.45 : 0.35)
                 context.fill(Path(roundedRect: rect, cornerRadius: width / 2), with: .color(color))
             }
         }
@@ -1490,7 +1490,7 @@ struct VoiceRecordingStrip: View {
                 } animation: { _ in Animation.easeInOut(duration: 0.6) }
             Text(SocialVoice.format(recorder.elapsed))
                 .font(.system(size: 16, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.white)
+                .foregroundStyle(.ink)
             VoiceWaveform(levels: recorder.recentLevels, progress: 1, fromMe: true)
                 .frame(height: 22)
                 .frame(maxWidth: 90)
@@ -1502,7 +1502,7 @@ struct VoiceRecordingStrip: View {
                 Text("отмена")
                     .font(.system(size: 14, weight: .semibold))
             }
-            .foregroundStyle(Color.white.opacity(0.6))
+            .foregroundStyle(Color.ink.opacity(0.6))
             .opacity(1 - pulled)
             .offset(x: drag * 0.4)
         }
@@ -1546,6 +1546,11 @@ struct ImageViewer: View {
     @State private var offset: CGFloat = 0
 
     var body: some View {
+        darkContent.alwaysDark()
+    }
+
+    @ViewBuilder
+    private var darkContent: some View {
         ZStack(alignment: .topTrailing) {
             Color.black.opacity(1 - min(Double(abs(offset)) / 400.0, 0.6)).ignoresSafeArea()
             RemoteImage(id: id, contentMode: .fit, maxPoints: 1000)
@@ -1561,7 +1566,7 @@ struct ImageViewer: View {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.ink)
                     .frame(width: 40, height: 40)
                     .chatGlass(Circle(), interactive: true)
             }
@@ -1575,8 +1580,8 @@ extension View {
     /// Плашка поверх экрана: плотная, с тенью и тонкой кромкой. Под ней бывает
     /// крупный заголовок — сквозь стекло он проступал, и текст было не прочитать.
     func bannerSurface<S: Shape>(_ shape: S) -> some View {
-        background(Color(white: 0.11), in: shape)
-            .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
+        background(Color.tone(0.11), in: shape)
+            .overlay(shape.stroke(Color.ink.opacity(0.12), lineWidth: 1))
             .shadow(color: .black.opacity(0.5), radius: 16, y: 8)
     }
 }
