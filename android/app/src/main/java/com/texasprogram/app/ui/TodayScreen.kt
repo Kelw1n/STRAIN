@@ -124,7 +124,7 @@ fun TodayScreen(
                         }
                     }
                     .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(androidx.compose.ui.graphics.Color.White)
+                    .background(androidx.compose.ui.graphics.Theme.ink)
                     .padding(vertical = 15.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -141,7 +141,7 @@ fun TodayScreen(
                         )
                         Text(
                             text = "ПРОДОЛЖИТЬ ТРЕНИРОВКУ",
-                            color = androidx.compose.ui.graphics.Color.Black,
+                            color = androidx.compose.ui.graphics.Theme.canvas,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp
@@ -149,7 +149,7 @@ fun TodayScreen(
                     } else {
                         Text(
                             text = "НАЧАТЬ ТРЕНИРОВКУ",
-                            color = androidx.compose.ui.graphics.Color.Black,
+                            color = androidx.compose.ui.graphics.Theme.canvas,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp
@@ -341,7 +341,7 @@ private fun BenchTeaser(
                     .background(plan?.highlight?.gradient ?: Theme.accentGradient),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.MonitorHeart, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.MonitorHeart, contentDescription = null, tint = androidx.compose.ui.graphics.Theme.ink, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

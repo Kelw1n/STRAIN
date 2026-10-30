@@ -109,13 +109,13 @@ object NutritionFormat {
 
 /// Оттенки серого из iOS-версии: `Color(white: 0.12)` и соседние.
 internal object NutritionColors {
-    val tile = Color(0xFF1F1F1F)
-    val field = Color(0xFF212121)
-    val fieldFocused = Color(0xFF2B2B2B)
-    val chip = Color(0xFF242424)
-    val button = Color(0xFF292929)
-    val dot = Color(0xFF242424)
-    val bar = Color(0xFF292929)
+    val tile: Color get() = Theme.tone(0xFF1F1F1F)
+    val field: Color get() = Theme.tone(0xFF212121)
+    val fieldFocused: Color get() = Theme.tone(0xFF2B2B2B)
+    val chip: Color get() = Theme.tone(0xFF242424)
+    val button: Color get() = Theme.tone(0xFF292929)
+    val dot: Color get() = Theme.tone(0xFF242424)
+    val bar: Color get() = Theme.tone(0xFF292929)
 }
 
 // MARK: - Карточка и подписи
@@ -133,7 +133,7 @@ fun NutritionCard(
 
 /// Мелкая заглавная подпись над блоком.
 @Composable
-fun NutritionCaption(text: String, modifier: Modifier = Modifier, color: Color = Color.White.copy(alpha = 0.45f)) {
+fun NutritionCaption(text: String, modifier: Modifier = Modifier, color: Color = Theme.ink.copy(alpha = 0.45f)) {
     Text(text.uppercase(), color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = modifier)
 }
 
@@ -147,7 +147,7 @@ fun NutritionButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    val tint = if (primary) Color.Black else Color.White
+    val tint = if (primary) Theme.canvas else Theme.ink
     Row(
         modifier
             .fillMaxWidth()
@@ -173,7 +173,7 @@ fun KcalHeadline(kcal: Double, size: Int = 44) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             NutritionFormat.kcal(kcal),
-            color = Color.White,
+            color = Theme.ink,
             fontSize = size.sp,
             fontWeight = FontWeight.ExtraBold,
             maxLines = 1,
@@ -181,7 +181,7 @@ fun KcalHeadline(kcal: Double, size: Int = 44) {
         )
         Text(
             "ккал",
-            color = Color.White.copy(alpha = 0.5f),
+            color = Theme.ink.copy(alpha = 0.5f),
             fontSize = (size * 0.41f).sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.alignByBaseline()
@@ -210,7 +210,7 @@ fun AmountField(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(
             title.uppercase(),
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.8.sp,
@@ -229,7 +229,7 @@ fun AmountField(
         ) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                 if (text.isEmpty()) {
-                    Text(placeholder, color = Color.White.copy(alpha = 0.3f), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(placeholder, color = Theme.ink.copy(alpha = 0.3f), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
                 BasicTextField(
                     value = text,
@@ -240,13 +240,13 @@ fun AmountField(
                         if (parsed != value) onValueChange(parsed)
                     },
                     singleLine = true,
-                    textStyle = TextStyle(color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold),
+                    textStyle = TextStyle(color = Theme.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold),
                     cursorBrush = SolidColor(Theme.accent),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
                 )
             }
-            Text(unit, color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(unit, color = Theme.ink.copy(alpha = 0.4f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }
@@ -284,14 +284,14 @@ fun NutritionTextField(
         contentAlignment = Alignment.CenterStart
     ) {
         if (value.isEmpty()) {
-            Text(placeholder, color = Color.White.copy(alpha = 0.3f), fontSize = fontSize.sp, fontWeight = weight, fontFamily = fontFamily)
+            Text(placeholder, color = Theme.ink.copy(alpha = 0.3f), fontSize = fontSize.sp, fontWeight = weight, fontFamily = fontFamily)
         }
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = singleLine,
             maxLines = if (singleLine) 1 else 4,
-            textStyle = TextStyle(color = Color.White, fontSize = fontSize.sp, fontWeight = weight, fontFamily = fontFamily),
+            textStyle = TextStyle(color = Theme.ink, fontSize = fontSize.sp, fontWeight = weight, fontFamily = fontFamily),
             cursorBrush = SolidColor(Theme.accent),
             keyboardOptions = keyboard,
             visualTransformation = visualTransformation,
@@ -356,7 +356,7 @@ private fun NutritionSheetFrame(
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Theme.canvas)
             .statusBarsPadding()
             .imePadding()
     ) {
@@ -364,14 +364,14 @@ private fun NutritionSheetFrame(
             if (leading != null) {
                 Text(
                     leading,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = Theme.ink.copy(alpha = 0.7f),
                     fontSize = 17.sp,
                     modifier = Modifier.align(Alignment.CenterStart).pressable(onClick = close).padding(vertical = 8.dp)
                 )
             }
             Text(
                 title,
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -381,7 +381,7 @@ private fun NutritionSheetFrame(
             if (action != null) {
                 Text(
                     action,
-                    color = if (actionEnabled) Theme.accent else Color.White.copy(alpha = 0.3f),
+                    color = if (actionEnabled) Theme.accent else Theme.ink.copy(alpha = 0.3f),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier

@@ -103,11 +103,11 @@ private val PlaceholderPainter = androidx.compose.ui.graphics.painter.ColorPaint
 
 @Composable
 private fun ImagePlaceholder(modifier: Modifier, loading: Boolean) {
-    Box(modifier.background(Color(0xFF1F1F22)), contentAlignment = Alignment.Center) {
+    Box(modifier.background(Theme.tone(0xFF1F1F22)), contentAlignment = Alignment.Center) {
         if (loading) {
-            CircularProgressIndicator(color = Color.White.copy(alpha = 0.4f), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+            CircularProgressIndicator(color = Theme.ink.copy(alpha = 0.4f), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
         } else {
-            Icon(Icons.Filled.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.25f), modifier = Modifier.size(24.dp))
+            Icon(Icons.Filled.Image, contentDescription = null, tint = Theme.ink.copy(alpha = 0.25f), modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -118,7 +118,7 @@ fun Avatar(imageId: String?, username: String, size: Dp = 44.dp, modifier: Modif
         modifier
             .size(size)
             .clip(CircleShape)
-            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape),
+            .border(1.dp, Theme.ink.copy(alpha = 0.08f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         if (imageId != null) {
@@ -161,7 +161,7 @@ fun medalColors(level: Int): List<Color> = when (level) {
     3 -> listOf(Color(0xFFFFD159), Color(0xFFCC8C1A))
     4 -> listOf(Color(0xFF8CEBF2), Color(0xFF338CBF))
     5 -> listOf(Theme.accent, Color(0xFF8C1A73))
-    else -> listOf(Color(0xFF383838), Color(0xFF242424))
+    else -> listOf(Theme.tone(0xFF383838), Theme.tone(0xFF242424))
 }
 
 /// Шестиугольная медаль: цвет — уровень, значок — что за достижение.
@@ -182,12 +182,12 @@ fun MedalView(kind: AchievementKind?, level: Int, size: Dp = 64.dp) {
                 close()
             }
             drawPath(path, Brush.linearGradient(colors, Offset.Zero, Offset(w, h)))
-            drawPath(path, Color.White.copy(alpha = if (level > 0) 0.35f else 0.08f), style = Stroke(width = maxOf(1f, w * 0.03f)))
+            drawPath(path, Theme.ink.copy(alpha = if (level > 0) 0.35f else 0.08f), style = Stroke(width = maxOf(1f, w * 0.03f)))
         }
         Icon(
             kind?.icon ?: Icons.Filled.QuestionMark,
             contentDescription = kind?.let { "${it.title}, уровень $level" },
-            tint = if (level > 0) Color.White else Color.White.copy(alpha = 0.3f),
+            tint = if (level > 0) Theme.ink else Theme.ink.copy(alpha = 0.3f),
             modifier = Modifier.size(size * 0.4f)
         )
     }
@@ -217,8 +217,8 @@ fun PhotoPager(ids: List<String>, modifier: Modifier = Modifier) {
 @Composable
 fun SocialStat(value: String, title: String, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(value, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
-        Text(title, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(value, color = Theme.ink, fontSize = 22.sp, fontWeight = FontWeight.Black)
+        Text(title, color = Theme.ink.copy(alpha = 0.55f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -226,7 +226,7 @@ fun SocialStat(value: String, title: String, modifier: Modifier = Modifier) {
 fun FollowButton(isFollowing: Boolean, compact: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val haptics = rememberHapticEngine()
     val shape = RoundedCornerShape(if (compact) 16.dp else 18.dp)
-    val label by animateColorAsState(if (isFollowing) Color.White else Color.Black, Motion.fade(200), label = "followLabel")
+    val label by animateColorAsState(if (isFollowing) Theme.ink else Theme.canvas, Motion.fade(200), label = "followLabel")
     Box(
         modifier
             .then(if (compact) Modifier else Modifier.fillMaxWidth())
@@ -236,7 +236,7 @@ fun FollowButton(isFollowing: Boolean, compact: Boolean = false, modifier: Modif
                 onClick()
             }
             .clip(shape)
-            .selectionFill(isFollowing, Color(0xFF292929), Color.White, shape)
+            .selectionFill(isFollowing, Theme.tone(0xFF292929), Theme.ink, shape)
             .padding(horizontal = if (compact) 14.dp else 0.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -255,13 +255,13 @@ fun SocialErrorCard(message: String, retry: (() -> Unit)? = null) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
             .padding(22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(Icons.Filled.WifiOff, contentDescription = null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(26.dp))
-        Text(message, color = Color.White.copy(alpha = 0.65f), fontSize = 14.sp, textAlign = TextAlign.Center)
+        Icon(Icons.Filled.WifiOff, contentDescription = null, tint = Theme.ink.copy(alpha = 0.5f), modifier = Modifier.size(26.dp))
+        Text(message, color = Theme.ink.copy(alpha = 0.65f), fontSize = 14.sp, textAlign = TextAlign.Center)
         if (retry != null) {
             Text(
                 "Повторить",
@@ -278,7 +278,7 @@ fun SocialErrorCard(message: String, retry: (() -> Unit)? = null) {
 fun SectionCaption(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
-        color = Color.White.copy(alpha = 0.45f),
+        color = Theme.ink.copy(alpha = 0.45f),
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.2.sp,
@@ -374,7 +374,7 @@ fun SocialHost(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(Color.Black)
+                        .background(Theme.canvas)
                         .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
                 ) {
                     screen(top)

@@ -167,7 +167,7 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
                 Avatar(post.author.avatar, post.author.username, 46.dp)
                 // Тренировались вместе — аватар напарника рядом.
                 post.partner?.let { partner ->
-                    Box(Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 4.dp).size(26.dp).clip(CircleShape).background(Color.Black).padding(2.dp)) {
+                    Box(Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 4.dp).size(26.dp).clip(CircleShape).background(Theme.canvas).padding(2.dp)) {
                         Avatar(partner.avatar, partner.username, 22.dp)
                     }
                 }
@@ -177,7 +177,7 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         post.partner?.let { "@${post.author.username} и @${it.username}" } ?: "@${post.author.username}",
-                        color = Color.White,
+                        color = Theme.ink,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -186,7 +186,7 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
                     )
                     LevelChip(post.author.level)
                 }
-                Text(SocialFormat.ago(post.instant), color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
+                Text(SocialFormat.ago(post.instant), color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp)
             }
         }
         Box {
@@ -194,7 +194,7 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
                 Modifier.size(38.dp).pressable { menu = true }.clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.MoreHoriz, contentDescription = "Действия с постом", tint = Color.White.copy(alpha = 0.55f))
+                Icon(Icons.Filled.MoreHoriz, contentDescription = "Действия с постом", tint = Theme.ink.copy(alpha = 0.55f))
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 if (SocialService.isSignedIn) {
@@ -251,9 +251,9 @@ private fun shareText(post: SocialPost): String = buildString {
 @Composable
 fun PostTitleBlock(post: SocialPost) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(post.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
+        Text(post.title, color = Theme.ink, fontSize = 22.sp, fontWeight = FontWeight.Black)
         if (post.description.isNotBlank()) {
-            Text(post.description, color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
+            Text(post.description, color = Theme.ink.copy(alpha = 0.6f), fontSize = 15.sp)
         }
     }
 }
@@ -287,10 +287,10 @@ fun PostStatsRow(post: SocialPost) {
 private fun PostStat(value: String, unit: String?, title: String) {
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false)
-            if (unit != null) Text(unit, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 2.dp))
+            Text(value, color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false)
+            if (unit != null) Text(unit, color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 2.dp))
         }
-        Text(title, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
+        Text(title, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp)
     }
 }
 
@@ -301,10 +301,10 @@ fun WorkoutSummary(workout: SocialWorkout, limit: Int = Int.MAX_VALUE) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF171717))
+            .background(Theme.tone(0xFF171717))
     ) {
         if (workout.exercises.isEmpty()) {
-            Text("Без записанных подходов", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, modifier = Modifier.padding(16.dp))
+            Text("Без записанных подходов", color = Theme.ink.copy(alpha = 0.5f), fontSize = 14.sp, modifier = Modifier.padding(16.dp))
         }
         val shown = workout.exercises.take(limit)
         shown.forEachIndexed { index, exercise ->
@@ -326,23 +326,23 @@ fun WorkoutSummary(workout: SocialWorkout, limit: Int = Int.MAX_VALUE) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(exercise.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(exercise.name, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         "${exercise.sets.size} ${RuPlural.word(exercise.sets.size, "подход", "подхода", "подходов")}",
-                        color = Color.White.copy(alpha = 0.45f),
+                        color = Theme.ink.copy(alpha = 0.45f),
                         fontSize = 12.sp
                     )
                 }
-                exercise.best?.let { Text(it.text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                exercise.best?.let { Text(it.text, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
             }
             if (index < shown.size - 1) {
-                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 54.dp))
+                HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 54.dp))
             }
         }
         if (workout.exercises.size > limit) {
             Text(
                 "и ещё ${workout.exercises.size - limit}",
-                color = Color.White.copy(alpha = 0.45f),
+                color = Theme.ink.copy(alpha = 0.45f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)
@@ -390,18 +390,18 @@ fun PostActions(post: SocialPost, onComments: () -> Unit, onChange: (SocialPost)
             Icon(
                 if (post.liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                 contentDescription = if (post.liked) "Убрать лайк" else "Лайк",
-                tint = if (post.liked) Theme.record else Color.White,
+                tint = if (post.liked) Theme.record else Theme.ink,
                 modifier = Modifier.size(26.dp).graphicsLayer { scaleX = heart.value; scaleY = heart.value }
             )
-            if (post.likes > 0) RollingNumber(post.likes, color = Color.White, fontSize = 16.sp)
+            if (post.likes > 0) RollingNumber(post.likes, color = Theme.ink, fontSize = 16.sp)
         }
         Row(
             Modifier.pressable(onClick = onComments),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Комментарии", tint = Color.White, modifier = Modifier.size(24.dp))
-            if (post.comments > 0) RollingNumber(post.comments, color = Color.White, fontSize = 16.sp)
+            Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Комментарии", tint = Theme.ink, modifier = Modifier.size(24.dp))
+            if (post.comments > 0) RollingNumber(post.comments, color = Theme.ink, fontSize = 16.sp)
         }
     }
 }
@@ -415,14 +415,14 @@ fun SocialTopBar(title: String, onBack: () -> Unit, trailing: @Composable (() ->
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(40.dp).pressable(onClick = onBack).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)),
+            Modifier.size(40.dp).pressable(onClick = onBack).clip(CircleShape).background(Theme.ink.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Theme.ink, modifier = Modifier.size(20.dp))
         }
         Text(
             title,
-            color = Color.White,
+            color = Theme.ink,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
@@ -496,7 +496,7 @@ fun PostDetailScreen(
             if (mediaReady || post.photos.isEmpty()) {
                 PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showingSets = true })
             } else {
-                Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF1F1F22)))
+                Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f).clip(RoundedCornerShape(22.dp)).background(Theme.tone(0xFF1F1F22)))
             }
         }
         item {
@@ -523,9 +523,9 @@ fun PostDetailScreen(
             SectionCaption(if (comments.isEmpty()) "КОММЕНТАРИИ" else "КОММЕНТАРИИ · ${comments.size}", Modifier.padding(top = 6.dp))
         }
         if (loading && comments.isEmpty()) {
-            item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp)) } }
+            item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp)) } }
         } else if (comments.isEmpty()) {
-            item { Text("Пока тихо. Напиши первым — поддержи или спроси про технику.", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp) }
+            item { Text("Пока тихо. Напиши первым — поддержи или спроси про технику.", color = Theme.ink.copy(alpha = 0.5f), fontSize = 14.sp) }
         }
         val ordered = SocialComment.threads(comments).flatMap { listOf(it.root) + it.replies }
         items(ordered, key = { it.id }) { comment ->
@@ -566,16 +566,16 @@ fun PostDetailScreen(
                             composing = true
                         }
                         .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFF1C1C1C))
+                        .background(Theme.tone(0xFF1C1C1C))
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Avatar(me?.avatar, me?.username ?: "s", 32.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text("Написать комментарий…", color = Color.White.copy(alpha = 0.45f), fontSize = 15.sp)
+                    Text("Написать комментарий…", color = Theme.ink.copy(alpha = 0.45f), fontSize = 15.sp)
                 }
             } else {
-                Text("Создай профиль во вкладке «Профиль», чтобы комментировать", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
+                Text("Создай профиль во вкладке «Профиль», чтобы комментировать", color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp)
             }
         }
     }
@@ -608,14 +608,14 @@ fun PostDetailScreen(
         ModalBottomSheet(
             onDismissRequest = { showingSets = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF121212)
+            containerColor = Theme.tone(0xFF121212)
         ) {
             LazyColumn(
                 Modifier.fillMaxWidth().navigationBarsPadding(),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                item { Text(post.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black) }
+                item { Text(post.title, color = Theme.ink, fontSize = 20.sp, fontWeight = FontWeight.Black) }
                 item { SectionCaption(post.workout.program?.let { "ТРЕНИРОВКА · ${it.uppercase()}" } ?: "ТРЕНИРОВКА") }
                 items(post.workout.exercises.size) { index -> WorkoutSetsCard(post.workout.exercises[index]) }
             }
@@ -656,21 +656,21 @@ private fun CommentRow(
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("@${comment.author.username}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Text(SocialFormat.ago(comment.instant), color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
+                Text("@${comment.author.username}", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(SocialFormat.ago(comment.instant), color = Theme.ink.copy(alpha = 0.4f), fontSize = 12.sp)
             }
             Text(
                 buildAnnotatedString {
                     comment.replyToUsername?.let { withStyle(SpanStyle(color = Theme.accent)) { append("@$it ") } }
                     append(comment.text)
                 },
-                color = Color.White.copy(alpha = 0.88f),
+                color = Theme.ink.copy(alpha = 0.88f),
                 fontSize = 15.sp
             )
             if (canReply) {
                 Text(
                     "Ответить",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = Theme.ink.copy(alpha = 0.5f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp).pressable(onClick = onReply)
@@ -680,7 +680,7 @@ private fun CommentRow(
         if (canDelete) {
             Box {
                 Box(Modifier.size(30.dp).pressable { menu = true }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.MoreHoriz, contentDescription = "Действия с комментарием", tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.MoreHoriz, contentDescription = "Действия с комментарием", tint = Theme.ink.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
@@ -721,7 +721,7 @@ fun PostMedia(post: SocialPost, modifier: Modifier = Modifier) {
             if (page < post.photos.size) {
                 RemoteImage(post.photos[page], Modifier.fillMaxSize())
             } else {
-                Box(Modifier.fillMaxSize().background(Color.Black).padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 34.dp)) {
+                Box(Modifier.fillMaxSize().background(Theme.canvas).padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 34.dp)) {
                     PostWorkoutSlide(post.workout)
                 }
             }
@@ -751,7 +751,7 @@ internal fun PageDots(pager: androidx.compose.foundation.pager.PagerState, count
                     val near = (1f - kotlin.math.abs(position - index)).coerceIn(0f, 1f)
                     val width = d + extra * near
                     drawRoundRect(
-                        Color.White.copy(alpha = 0.45f + 0.55f * near),
+                        Theme.ink.copy(alpha = 0.45f + 0.55f * near),
                         topLeft = Offset(x, 0f),
                         size = Size(width, d),
                         cornerRadius = CornerRadius(d / 2)
@@ -767,7 +767,7 @@ internal fun PageDots(pager: androidx.compose.foundation.pager.PagerState, count
 fun PostWorkoutSlide(workout: SocialWorkout, limit: Int = 4) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (workout.exercises.isEmpty()) {
-            Text("Без записанных подходов", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
+            Text("Без записанных подходов", color = Theme.ink.copy(alpha = 0.5f), fontSize = 14.sp)
         }
         workout.exercises.take(limit).forEach { exercise ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -777,7 +777,7 @@ fun PostWorkoutSlide(workout: SocialWorkout, limit: Int = 4) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             exercise.name,
-                            color = Color.White,
+                            color = Theme.ink,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
@@ -793,7 +793,7 @@ fun PostWorkoutSlide(workout: SocialWorkout, limit: Int = 4) {
                     val sets = "${exercise.sets.size} ${RuPlural.word(exercise.sets.size, "подход", "подхода", "подходов")}"
                     Text(
                         exercise.best?.let { "$sets · ${it.text}" } ?: sets,
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Theme.ink.copy(alpha = 0.5f),
                         fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -805,7 +805,7 @@ fun PostWorkoutSlide(workout: SocialWorkout, limit: Int = 4) {
             val rest = workout.exercises.size - limit
             Text(
                 "ещё $rest ${RuPlural.word(rest, "упражнение", "упражнения", "упражнений")}",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -822,19 +822,19 @@ internal fun WorkoutSetsCard(exercise: SocialWorkout.Exercise) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFF171717))
+            .background(Theme.tone(0xFF171717))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ExerciseThumb(exercise.name, 40.dp)
             Spacer(Modifier.width(12.dp))
-            Text(exercise.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(exercise.name, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         exercise.sets.forEachIndexed { setIndex, set ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${setIndex + 1}", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
-                Text(set.text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("${setIndex + 1}", color = Theme.ink.copy(alpha = 0.4f), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
+                Text(set.text, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 if (set.record) {
                     Spacer(Modifier.width(8.dp))
                     Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.warning, modifier = Modifier.size(13.dp))
@@ -861,7 +861,7 @@ private fun CommentSheet(
     var error by remember { mutableStateOf<String?>(null) }
     val canSend = !sending && text.isNotBlank()
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state, containerColor = Color(0xFF121212)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state, containerColor = Theme.tone(0xFF121212)) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -874,7 +874,7 @@ private fun CommentSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     replyingTo?.let { "Ответ @${it.author.username}" } ?: "Комментарий",
-                    color = Color.White,
+                    color = Theme.ink,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Black,
                     maxLines = 1,
@@ -885,27 +885,27 @@ private fun CommentSheet(
                     Icon(
                         Icons.Filled.Close,
                         contentDescription = "Не отвечать, а написать к посту",
-                        tint = Color.White.copy(alpha = 0.4f),
+                        tint = Theme.ink.copy(alpha = 0.4f),
                         modifier = Modifier.size(22.dp).pressable(onClick = onCancelReply)
                     )
                 }
             }
             replyingTo?.let {
-                Text(it.text, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(it.text, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
                     Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF222222))
+                        .background(Theme.tone(0xFF222222))
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    if (text.isEmpty()) Text(if (replyingTo == null) "Поддержи или спроси про технику" else "Твой ответ", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
+                    if (text.isEmpty()) Text(if (replyingTo == null) "Поддержи или спроси про технику" else "Твой ответ", color = Theme.ink.copy(alpha = 0.4f), fontSize = 16.sp)
                     BasicTextField(
                         value = text,
                         onValueChange = { text = it.take(500) },
-                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                        textStyle = TextStyle(color = Theme.ink, fontSize = 16.sp),
                         cursorBrush = SolidColor(Theme.accent),
                         maxLines = 5,
                         modifier = Modifier.fillMaxWidth().focusRequester(focus)
@@ -929,11 +929,11 @@ private fun CommentSheet(
                             }
                         }
                         .clip(CircleShape)
-                        .background(if (canSend) Color.White else Color(0xFF4D4D4D)),
+                        .background(if (canSend) Theme.ink else Color(0xFF4D4D4D)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (sending) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                    else Icon(Icons.Filled.ArrowUpward, contentDescription = "Отправить", tint = Color.Black)
+                    if (sending) CircularProgressIndicator(color = Theme.canvas, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    else Icon(Icons.Filled.ArrowUpward, contentDescription = "Отправить", tint = Theme.canvas)
                 }
             }
             error?.let { Text(it, color = Theme.warning, fontSize = 12.sp) }

@@ -55,7 +55,7 @@ internal fun heatmapColor(level: Int): Color = when (level) {
     2 -> Theme.accent.copy(alpha = 0.52f)
     3 -> Theme.accent.copy(alpha = 0.76f)
     4 -> Theme.accent
-    else -> Color(0xFF292929)
+    else -> Theme.tone(0xFF292929)
 }
 
 private fun heatmapWord(level: Int): String = when (level) {
@@ -96,14 +96,14 @@ fun ProfileHeatmapCard(levels: List<Int>, today: LocalDate = LocalDate.now()) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
             .padding(18.dp)
             .semantics { contentDescription = "Год тренировок: $label" },
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("ГОД ТРЕНИРОВОК", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
-            Text(label, color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("ГОД ТРЕНИРОВОК", color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
+            Text(label, color = Theme.ink.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
         // Свежие недели справа — прокрутка начинается с конца.
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState(), reverseScrolling = true)) {
@@ -112,7 +112,7 @@ fun ProfileHeatmapCard(levels: List<Int>, today: LocalDate = LocalDate.now()) {
                 months.forEach { (column, text) ->
                     Text(
                         text,
-                        color = Color.White.copy(alpha = 0.45f),
+                        color = Theme.ink.copy(alpha = 0.45f),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.offset(x = (Cell + Gap) * column)
@@ -145,7 +145,7 @@ fun ProfileHeatmapCard(levels: List<Int>, today: LocalDate = LocalDate.now()) {
                         if (index == selected) {
                             val inset = 1.5.dp.toPx()
                             drawRoundRect(
-                                Color.White,
+                                Theme.ink,
                                 Offset(topLeft.x - inset, topLeft.y - inset),
                                 Size(cell + inset * 2, cell + inset * 2),
                                 CornerRadius(4.dp.toPx()),
@@ -161,13 +161,13 @@ fun ProfileHeatmapCard(levels: List<Int>, today: LocalDate = LocalDate.now()) {
             val day = today.minusDays((cells.size - 1 - chosen).toLong())
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(heatmapColor(cells[chosen])))
-                Text("${day.format(heatmapDay)} — ${heatmapWord(cells[chosen])}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("${day.format(heatmapDay)} — ${heatmapWord(cells[chosen])}", color = Theme.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Меньше", color = Color.White.copy(alpha = 0.45f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text("Меньше", color = Theme.ink.copy(alpha = 0.45f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 (0..4).forEach { level -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(heatmapColor(level))) }
-                Text("Больше", color = Color.White.copy(alpha = 0.45f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text("Больше", color = Theme.ink.copy(alpha = 0.45f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }

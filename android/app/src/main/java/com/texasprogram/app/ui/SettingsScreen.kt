@@ -130,7 +130,7 @@ fun SettingsScreen(
                                 .background(if (isActive) Theme.accentGradient else SolidColor(Theme.surfaceSoft)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Filled.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                            Icon(Icons.Filled.Person, contentDescription = null, tint = if (isActive) Color.White else Theme.ink, modifier = Modifier.size(15.dp))
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
@@ -329,6 +329,23 @@ fun SettingsScreen(
                         "Придёт в дни расписания: " + profile.weekdays.joinToString(", ") { RuDate.short(it) } +
                             ". Меняешь дни ниже — напоминания переезжают за ними."
                     else "Уведомление в дни, которые стоят в расписании. Веса в нём не пишутся: они меняются каждую неделю, а уведомление система повторяет одно и то же.",
+                    color = Theme.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        item(key = "appearance") {
+            CardView(Modifier.appearIn(5)) {
+                SectionLabel("Оформление")
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val options = AppAppearance.entries
+                SegmentedControl(
+                    options = options.map { it.title },
+                    selectedIndex = options.indexOf(AppAppearance.load(context))
+                ) { AppAppearance.set(context, options[it]) }
+                Text(
+                    "«Как в системе» — тема меняется вместе с телефоном: днём светлая, вечером тёмная, если так настроено.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
@@ -614,7 +631,7 @@ private fun ModeChip(text: String, selected: Boolean, modifier: Modifier = Modif
     ) {
         Text(
             text,
-            color = if (selected) Color.White else Theme.textSecondary,
+            color = if (selected) Theme.ink else Theme.textSecondary,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,

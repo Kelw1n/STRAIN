@@ -107,29 +107,29 @@ fun ChatTargetSheet(title: String, onDismiss: () -> Unit, onPick: (SocialUserSho
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF121212)
+        containerColor = Theme.tone(0xFF121212)
     ) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp)) {
-            Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Text(title, color = Theme.ink, fontSize = 20.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.height(12.dp))
             Row(
                 Modifier
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.08f))
+                    .background(Theme.ink.copy(alpha = 0.08f))
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Search, contentDescription = null, tint = Theme.ink.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
-                    if (query.isEmpty()) Text("Юзернейм", color = Color.White.copy(alpha = 0.4f), fontSize = 15.sp)
+                    if (query.isEmpty()) Text("Юзернейм", color = Theme.ink.copy(alpha = 0.4f), fontSize = 15.sp)
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it.take(24) },
                         singleLine = true,
-                        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+                        textStyle = TextStyle(color = Theme.ink, fontSize = 15.sp),
                         cursorBrush = SolidColor(Theme.accent),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -144,14 +144,14 @@ fun ChatTargetSheet(title: String, onDismiss: () -> Unit, onPick: (SocialUserSho
                 if (loading && shown.isEmpty()) {
                     item {
                         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                            CircularProgressIndicator(color = Theme.ink, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                         }
                     }
                 } else if (shown.isEmpty()) {
                     item {
                         Text(
                             if (searching) "Никого не нашли" else "Пока не с кем — найди друга по юзернейму",
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = Theme.ink.copy(alpha = 0.5f),
                             fontSize = 14.sp,
                             modifier = Modifier.padding(vertical = 20.dp)
                         )
@@ -171,7 +171,7 @@ fun ChatTargetSheet(title: String, onDismiss: () -> Unit, onPick: (SocialUserSho
                     ) {
                         Avatar(user.avatar, user.username, 40.dp)
                         Spacer(Modifier.width(12.dp))
-                        Text("@${user.username}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text("@${user.username}", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(18.dp))
                     }
                 }
@@ -196,7 +196,7 @@ fun WorkoutRecipientsPicker(selected: Set<String>, onToggle: (String) -> Unit) {
     if (loaded && friends.isEmpty()) {
         Text(
             "Подпишись на друзей или напиши кому-нибудь — и здесь можно будет отправить им тренировку.",
-            color = Color.White.copy(alpha = 0.5f),
+            color = Theme.ink.copy(alpha = 0.5f),
             fontSize = 12.sp
         )
         return
@@ -207,7 +207,7 @@ fun WorkoutRecipientsPicker(selected: Set<String>, onToggle: (String) -> Unit) {
     ) {
         if (!loaded) {
             Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                CircularProgressIndicator(color = Theme.ink, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
             }
         }
         friends.forEach { friend ->
@@ -238,14 +238,14 @@ fun WorkoutRecipientsPicker(selected: Set<String>, onToggle: (String) -> Unit) {
                                 .align(Alignment.BottomEnd)
                                 .size(20.dp)
                                 .clip(CircleShape)
-                                .background(Color.Black)
+                                .background(Theme.canvas)
                                 .popIn()
                         )
                     }
                 }
                 Text(
                     "@${friend.username}",
-                    color = if (on) Color.White else Color.White.copy(alpha = 0.6f),
+                    color = if (on) Theme.ink else Theme.ink.copy(alpha = 0.6f),
                     fontSize = 11.sp,
                     fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
@@ -262,21 +262,23 @@ fun WorkoutRecipientsPicker(selected: Set<String>, onToggle: (String) -> Unit) {
 /// и лучшие подходы первых упражнений. По нажатию открывается целиком.
 @Composable
 internal fun ChatWorkoutCard(workout: SocialChatWorkout, fromMe: Boolean, onOpen: () -> Unit) {
+    // На моей карточке (оранжевый пузырь) текст белый в любой теме.
+    val cardInk = if (fromMe) Color.White else Theme.ink
     Column(
         Modifier.width(236.dp).pressable(onClick = onOpen),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(13.dp))
+            Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = cardInk.copy(alpha = 0.7f), modifier = Modifier.size(13.dp))
             Spacer(Modifier.width(6.dp))
-            Text("ТРЕНИРОВКА", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+            Text("ТРЕНИРОВКА", color = cardInk.copy(alpha = 0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
             if (workout.records > 0) {
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.warning, modifier = Modifier.size(13.dp))
                 Text(" ${workout.records}", color = Theme.warning, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
-        Text(workout.title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(workout.title, color = cardInk, fontSize = 18.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             CardStat(SocialFormat.duration(workout.durationSeconds), "время")
             CardStat("${SocialFormat.grouped(workout.volumeKg)} кг", "объём")
@@ -298,10 +300,10 @@ internal fun ChatWorkoutCard(workout: SocialChatWorkout, fromMe: Boolean, onOpen
                             Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.warning, modifier = Modifier.size(11.dp))
                             Spacer(Modifier.width(4.dp))
                         }
-                        Text(exercise.name, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text(exercise.name, color = cardInk.copy(alpha = 0.85f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         exercise.best?.let {
                             Spacer(Modifier.width(6.dp))
-                            Text(it.text, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(it.text, color = cardInk.copy(alpha = 0.85f), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -309,7 +311,7 @@ internal fun ChatWorkoutCard(workout: SocialChatWorkout, fromMe: Boolean, onOpen
                     val rest = exercises.size - 3
                     Text(
                         "и ещё $rest ${RuPlural.word(rest, "упражнение", "упражнения", "упражнений")}",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = cardInk.copy(alpha = 0.5f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -331,8 +333,8 @@ internal fun ChatWorkoutCard(workout: SocialChatWorkout, fromMe: Boolean, onOpen
 @Composable
 private fun CardStat(value: String, title: String) {
     Column {
-        Text(value, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 1)
-        Text(title, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+        Text(value, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(title, color = Theme.ink.copy(alpha = 0.55f), fontSize = 11.sp)
     }
 }
 
@@ -343,14 +345,14 @@ fun ChatWorkoutSheet(workout: SocialChatWorkout, author: String?, navigator: Soc
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF121212)
+        containerColor = Theme.tone(0xFF121212)
     ) {
         LazyColumn(
             Modifier.fillMaxWidth().navigationBarsPadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item { Text(workout.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black) }
+            item { Text(workout.title, color = Theme.ink, fontSize = 20.sp, fontWeight = FontWeight.Black) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                     SheetStat(SocialFormat.duration(workout.durationSeconds), null, "Время")
@@ -374,9 +376,9 @@ fun ChatWorkoutSheet(workout: SocialChatWorkout, author: String?, navigator: Soc
 private fun SheetStat(value: String, unit: String?, title: String) {
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black, maxLines = 1)
-            unit?.let { Text(" $it", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+            Text(value, color = Theme.ink, fontSize = 20.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            unit?.let { Text(" $it", color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
         }
-        Text(title, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
+        Text(title, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp)
     }
 }

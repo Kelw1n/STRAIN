@@ -197,7 +197,7 @@ fun CheckDot(selected: Boolean, size: Dp = 20.dp, iconSize: Dp = 12.dp) {
         Icon(
             Icons.Filled.Check,
             contentDescription = null,
-            tint = Color.White,
+            tint = Theme.ink,
             modifier = Modifier.size(iconSize).graphicsLayer {
                 scaleX = pop
                 scaleY = pop
@@ -365,7 +365,7 @@ fun TagBadge(
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
         }
-        Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = Theme.ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -621,10 +621,10 @@ fun GradientButton(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(20.dp))
             Text("  ", fontSize = 16.sp)
         }
-        Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

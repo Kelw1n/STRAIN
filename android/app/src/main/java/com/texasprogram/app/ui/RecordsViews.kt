@@ -60,21 +60,21 @@ fun ProfileRecordsCard(records: List<SocialRecord>, isMe: Boolean, bodyWeight: D
             .fillMaxWidth()
             .pressable(enabled = records.isNotEmpty(), onClick = onOpen)
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("РЕКОРДЫ", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
+            Text("РЕКОРДЫ", color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
             if (records.isNotEmpty()) {
-                Text("Все ${records.size}", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                Text("Все ${records.size}", color = Theme.ink.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
             }
         }
         if (records.isEmpty()) {
             Text(
                 if (isMe) "Рекорды появятся после первой тренировки с весами" else "Рекордов пока нет",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -95,27 +95,27 @@ private fun RecordTile(lift: PersonalRecords.Lift, record: SocialRecord?, modifi
     Column(
         modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF1F1F1F))
+            .background(Theme.tone(0xFF1F1F1F))
             .padding(vertical = 12.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(lift.title, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(lift.title, color = Theme.ink.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 record?.let { formatWeight(it.estimate) } ?: "—",
-                color = if (record == null) Color.White.copy(alpha = 0.3f) else Color.White,
+                color = if (record == null) Theme.ink.copy(alpha = 0.3f) else Theme.ink,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Black,
                 maxLines = 1
             )
             if (record != null) {
-                Text("кг", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 3.dp))
+                Text("кг", color = Theme.ink.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 3.dp))
             }
         }
         Text(
             record?.setText ?: "нет подходов",
-            color = if (record == null) Color.White.copy(alpha = 0.3f) else Theme.accent,
+            color = if (record == null) Theme.ink.copy(alpha = 0.3f) else Theme.accent,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1
@@ -128,10 +128,10 @@ private fun RecordTile(lift: PersonalRecords.Lift, record: SocialRecord?, modifi
 private fun RecordTotalLine(total: Double, bodyWeight: Double?) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Icon(Icons.Filled.Functions, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(16.dp))
-        Text("Сумма троеборья", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        Text("≈ ${formatWeight(total)} кг", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black)
+        Text("Сумма троеборья", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Text("≈ ${formatWeight(total)} кг", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Black)
         if (bodyWeight != null && bodyWeight > 0) {
-            Text("· ×${ChallengeScoring.decimal(total / bodyWeight)}", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("· ×${ChallengeScoring.decimal(total / bodyWeight)}", color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -157,12 +157,12 @@ fun RecordsSheet(username: String, records: List<SocialRecord>, bodyWeight: Doub
         NutritionCard(spacing = 0.dp, padding = 0.dp) {
             records.forEachIndexed { index, record ->
                 RecordRow(record, opens = profile != null) { historyFor = record.name }
-                if (index < records.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 16.dp))
+                if (index < records.size - 1) HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 16.dp))
             }
         }
         Text(
             "Число справа — расчётный максимум на один раз по лучшему подходу (формула Эпли). Сумма троеборья — по приседу, жиму лёжа и становой.",
-            color = Color.White.copy(alpha = 0.4f),
+            color = Theme.ink.copy(alpha = 0.4f),
             fontSize = 12.sp
         )
     }
@@ -195,7 +195,7 @@ fun RecordsSheet(username: String, records: List<SocialRecord>, bodyWeight: Doub
                         .background(Theme.surfaceSoft),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = Theme.ink, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -215,18 +215,18 @@ private fun RecordRow(record: SocialRecord, opens: Boolean, onOpen: () -> Unit) 
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(record.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+                Text(record.name, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
                 if (record.lift != null) {
                     Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(12.dp))
                 }
             }
             val detail = if (record.date > 0) "${record.setText} · ${PersonalRecords.localDate(record).format(recordDate)}" else record.setText
-            Text(detail, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+            Text(detail, color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp)
         }
         Spacer(Modifier.width(8.dp))
         Text("≈ ${formatWeight(record.estimate)}", color = Theme.accent, fontSize = 16.sp, fontWeight = FontWeight.Black)
         if (opens) {
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
         }
     }
 }

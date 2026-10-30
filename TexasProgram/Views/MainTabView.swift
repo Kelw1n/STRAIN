@@ -471,7 +471,7 @@ struct TodayView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Text(item.shortWeekday.uppercased())
-                            .font(.caption.weight(.canvas))
+                            .font(.caption.weight(.black))
                             .foregroundStyle(Theme.warning)
                             .frame(width: 26, alignment: .leading)
                         Text(item.day.title)

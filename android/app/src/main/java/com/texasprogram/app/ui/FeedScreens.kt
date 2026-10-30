@@ -215,7 +215,7 @@ fun FeedScreen(
     }) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().background(Color.Black),
+            modifier = Modifier.fillMaxSize().background(Theme.canvas),
             contentPadding = contentPadding
         ) {
             item(key = "header") {
@@ -227,12 +227,12 @@ fun FeedScreen(
                         ) {
                             Text(
                                 if (feedScope == SocialService.FeedScope.ALL) "Главное" else "Подписки",
-                                color = Color.White,
+                                color = Theme.ink,
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.Black
                             )
                             if (SocialService.isSignedIn) {
-                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Выбрать ленту", tint = Color.White.copy(alpha = 0.5f))
+                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Выбрать ленту", tint = Theme.ink.copy(alpha = 0.5f))
                             }
                         }
                         DropdownMenu(expanded = scopeMenu, onDismissRequest = { scopeMenu = false }) {
@@ -261,14 +261,14 @@ fun FeedScreen(
                         Modifier.size(42.dp).pressable(onClick = onFindPeople).clip(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Filled.Search, contentDescription = "Найти людей", tint = Color.White)
+                        Icon(Icons.Filled.Search, contentDescription = "Найти людей", tint = Theme.ink)
                     }
                 }
             }
             if (tabRefreshing) {
                 item(key = "refreshing") {
                     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                        CircularProgressIndicator(color = Theme.ink, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -303,13 +303,13 @@ fun FeedScreen(
                         onOpenAuthor = { navigator.push(SocialRoute.User(post.author.username)) },
                         onChange = { replace(post.id, it) }
                     )
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
+                    HorizontalDivider(color = Theme.ink.copy(alpha = 0.07f))
                 }
             }
             if (loadingMore || (loading && posts.isEmpty())) {
                 item(key = "loading") {
                     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(26.dp))
+                        CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(26.dp))
                     }
                 }
             }
@@ -324,21 +324,21 @@ private fun SignUpTeaser(onCreateProfile: () -> Unit) {
             .fillMaxWidth()
             .padding(top = 8.dp, bottom = 8.dp)
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Делись тренировками", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+        Text("Делись тренировками", color = Theme.ink, fontSize = 20.sp, fontWeight = FontWeight.Black)
         Text(
             "Создай профиль: в конце тренировки сделаешь фото — и оно появится здесь вместе с весами и подходами. Друзья поставят лайк или напишут комментарий.",
-            color = Color.White.copy(alpha = 0.6f),
+            color = Theme.ink.copy(alpha = 0.6f),
             fontSize = 14.sp
         )
         Box(
-            Modifier.height(44.dp).pressable(onClick = onCreateProfile).clip(CircleShape).background(Color.White).padding(horizontal = 18.dp),
+            Modifier.height(44.dp).pressable(onClick = onCreateProfile).clip(CircleShape).background(Theme.ink).padding(horizontal = 18.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("Создать профиль", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text("Создать профиль", color = Theme.canvas, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -351,12 +351,12 @@ private fun OutboxCard() {
             .fillMaxWidth()
             .padding(top = 8.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (SocialService.isFlushing) {
-            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            CircularProgressIndicator(color = Theme.ink, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
         } else {
             Icon(Icons.Filled.CloudUpload, contentDescription = null, tint = Theme.accent)
         }
@@ -364,13 +364,13 @@ private fun OutboxCard() {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 if (SocialService.isFlushing) "Публикую тренировку…" else "Тренировка ждёт отправки",
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
             val message = SocialService.outboxError
             if (message != null && !SocialService.isFlushing) {
-                Text(message, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                Text(message, color = Theme.ink.copy(alpha = 0.55f), fontSize = 12.sp)
             }
         }
         if (!SocialService.isFlushing) {
@@ -386,7 +386,7 @@ private fun OutboxCard() {
                 if (SocialService.outboxError != null) {
                     Text(
                         "Удалить",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Theme.ink.copy(alpha = 0.5f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.pressable { confirmDiscard = true }
@@ -421,17 +421,17 @@ private fun FeedEmpty(scope: SocialService.FeedScope, onFindPeople: () -> Unit) 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(Icons.Filled.Groups, contentDescription = null, tint = Color.White.copy(alpha = 0.35f), modifier = Modifier.size(36.dp))
+        Icon(Icons.Filled.Groups, contentDescription = null, tint = Theme.ink.copy(alpha = 0.35f), modifier = Modifier.size(36.dp))
         Text(
             if (scope == SocialService.FeedScope.ALL) "В ленте пока пусто" else "Здесь появятся тренировки тех, на кого ты подписан",
-            color = Color.White,
+            color = Theme.ink,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Text(
             if (scope == SocialService.FeedScope.ALL) "Закончи тренировку и опубликуй её — будешь первым." else "Найди друзей по юзернейму и подпишись.",
-            color = Color.White.copy(alpha = 0.55f),
+            color = Theme.ink.copy(alpha = 0.55f),
             fontSize = 14.sp,
             textAlign = TextAlign.Center
         )
@@ -482,7 +482,7 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
 
     SocialHost(navigator, screen = { route -> SocialRouteScreen(route, navigator, contentPadding, profile) }) {
         LazyColumn(
-            Modifier.fillMaxSize().background(Color.Black),
+            Modifier.fillMaxSize().background(Theme.canvas),
             state = listState,
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -516,19 +516,19 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                         .fillMaxWidth()
                         .height(46.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF1F1F1F))
+                        .background(Theme.tone(0xFF1F1F1F))
                         .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.45f))
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = Theme.ink.copy(alpha = 0.45f))
                     Spacer(Modifier.width(10.dp))
                     Box(Modifier.weight(1f)) {
-                        if (query.isEmpty()) Text("Найти по юзернейму", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
+                        if (query.isEmpty()) Text("Найти по юзернейму", color = Theme.ink.copy(alpha = 0.4f), fontSize = 16.sp)
                         BasicTextField(
                             value = query,
                             onValueChange = { query = it.take(24) },
                             singleLine = true,
-                            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                            textStyle = TextStyle(color = Theme.ink, fontSize = 16.sp),
                             cursorBrush = SolidColor(Theme.accent),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -537,7 +537,7 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                         Icon(
                             Icons.Filled.Close,
                             contentDescription = "Очистить",
-                            tint = Color.White.copy(alpha = 0.4f),
+                            tint = Theme.ink.copy(alpha = 0.4f),
                             modifier = Modifier.pressable { query = "" }
                         )
                     }
@@ -550,14 +550,14 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                             .fillMaxWidth()
                             .pressable(onClick = onCreateProfile)
                             .clip(RoundedCornerShape(18.dp))
-                            .background(Color(0xFF161617))
+                            .background(Theme.tone(0xFF161617))
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Filled.PersonAdd, contentDescription = null, tint = Theme.accent)
                         Spacer(Modifier.width(12.dp))
-                        Text("Создай профиль, чтобы подписываться на друзей", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.35f))
+                        Text("Создай профиль, чтобы подписываться на друзей", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.35f))
                     }
                 }
             }
@@ -569,7 +569,7 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                 item {
                     Text(
                         if (query.isEmpty()) "Пока никого. Позови друзей в STRAIN — их юзернеймы появятся здесь." else "Никого с таким юзернеймом",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Theme.ink.copy(alpha = 0.5f),
                         fontSize = 14.sp
                     )
                 }
@@ -583,7 +583,7 @@ fun CommunityScreen(profile: ProgramProfile, contentPadding: PaddingValues, onCr
                 }
             }
             if (loading && people.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp)) } }
+                item { Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp)) } }
             }
         }
     }
@@ -595,11 +595,11 @@ private fun PeopleCard(people: List<SocialUserShort>, onOpen: (SocialUserShort) 
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
     ) {
         people.forEachIndexed { index, person ->
             PersonRow(person, onOpen = { onOpen(person) }, onChange = onChange)
-            if (index < people.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 64.dp))
+            if (index < people.size - 1) HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 64.dp))
         }
     }
 }
@@ -620,7 +620,7 @@ fun PersonRow(person: SocialUserShort, onOpen: () -> Unit, onChange: (SocialUser
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         "@${person.username}",
-                        color = Color.White,
+                        color = Theme.ink,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -630,7 +630,7 @@ fun PersonRow(person: SocialUserShort, onOpen: () -> Unit, onChange: (SocialUser
                     LevelChip(person.level)
                 }
                 if (person.bio.isNotBlank()) {
-                    Text(person.bio, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(person.bio, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -684,7 +684,7 @@ fun PeopleListScreen(
         item { SocialTopBar(title, onBack = { navigator.pop() }) }
         val currentError = error
         if (currentError != null) item { SocialErrorCard(currentError) { scope.launch { reload() } } }
-        else if (people.isEmpty() && !loading) item { Text("Пока никого", color = Color.White.copy(alpha = 0.5f), fontSize = 15.sp) }
+        else if (people.isEmpty() && !loading) item { Text("Пока никого", color = Theme.ink.copy(alpha = 0.5f), fontSize = 15.sp) }
         if (people.isNotEmpty()) {
             item {
                 PeopleCard(people, onOpen = { navigator.push(SocialRoute.User(it.username)) }) { updated ->
@@ -693,6 +693,6 @@ fun PeopleListScreen(
                 }
             }
         }
-        if (loading) item { Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp)) } }
+        if (loading) item { Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp)) } }
     }
 }

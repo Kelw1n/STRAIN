@@ -229,7 +229,7 @@ private fun EntryCard(onRecord: (Double) -> Unit) {
             ) {
                 Text(
                     "Записать",
-                    color = if (parsed == null) Theme.textTertiary else Color.Black,
+                    color = if (parsed == null) Theme.textTertiary else Theme.canvas,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )

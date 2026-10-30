@@ -109,4 +109,8 @@ dependencies {
 if (providers.gradleProperty("snapshots").isPresent) {
     apply(plugin = "app.cash.paparazzi")
     android.sourceSets.getByName("test").java.srcDir("src/snapshots/java")
+    // -PsnapshotTheme=light — те же снимки в светлой теме.
+    tasks.withType<Test>().configureEach {
+        systemProperty("snapshotTheme", providers.gradleProperty("snapshotTheme").getOrElse("dark"))
+    }
 }

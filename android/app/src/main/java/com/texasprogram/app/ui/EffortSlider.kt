@@ -93,8 +93,8 @@ fun EffortSlider(score: Int?, onChange: (Int?) -> Unit, modifier: Modifier = Mod
     Column(
         modifier
             .fillMaxWidth()
-            .background(Color(0xFF161616), RoundedCornerShape(22.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+            .background(Theme.tone(0xFF161616), RoundedCornerShape(22.dp))
+            .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
             .padding(18.dp)
             .semantics(mergeDescendants = true) {
                 contentDescription = "Усилие"
@@ -112,12 +112,12 @@ fun EffortSlider(score: Int?, onChange: (Int?) -> Unit, modifier: Modifier = Mod
             if (score != null) {
                 RollingText(
                     text = score.toString(),
-                    style = TextStyle(color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black, fontFeatureSettings = "tnum")
+                    style = TextStyle(color = Theme.ink, fontSize = 30.sp, fontWeight = FontWeight.Black, fontFeatureSettings = "tnum")
                 )
                 Spacer(Modifier.width(3.dp))
-                Text("/10", color = Color.White.copy(alpha = 0.35f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("/10", color = Theme.ink.copy(alpha = 0.35f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             } else {
-                Box(Modifier.width(22.dp).height(4.dp).background(Color.White.copy(alpha = 0.15f), CircleShape))
+                Box(Modifier.width(22.dp).height(4.dp).background(Theme.ink.copy(alpha = 0.15f), CircleShape))
             }
             Spacer(Modifier.weight(1f))
             AnimatedContent(
@@ -127,7 +127,7 @@ fun EffortSlider(score: Int?, onChange: (Int?) -> Unit, modifier: Modifier = Mod
             ) { value ->
                 Text(
                     text = value?.let { EffortScale.titles[it] } ?: "Можно пропустить",
-                    color = value?.let { EffortScale.color(it) } ?: Color.White.copy(alpha = 0.4f),
+                    color = value?.let { EffortScale.color(it) } ?: Theme.ink.copy(alpha = 0.4f),
                     fontSize = 14.sp,
                     fontWeight = if (value == null) FontWeight.Medium else FontWeight.SemiBold
                 )
@@ -176,7 +176,7 @@ fun EffortSlider(score: Int?, onChange: (Int?) -> Unit, modifier: Modifier = Mod
             val segments = segmentFrames(size.width, size.height, gapPx)
             val fillWidth = fillWidth(fill, segments)
             segments.forEach { frame ->
-                drawWedge(frame, size.width, Color.White.copy(alpha = 0.07f))
+                drawWedge(frame, size.width, Theme.ink.copy(alpha = 0.07f))
                 if (fillWidth > frame.left) {
                     clipRect(left = frame.left, top = 0f, right = minOf(frame.right, fillWidth), bottom = size.height) {
                         drawWedge(frame, size.width, color)

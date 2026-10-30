@@ -72,11 +72,11 @@ fun RebrnRestTimerCard(
                     this.shape = shape
                     clip = true
                 }
-                .background(Color(0xFF0D0D0F))
+                .background(Theme.tone(0xFF0D0D0F))
                 .border(
                     width = 1.dp,
                     brush = Brush.linearGradient(
-                        listOf(Color.White.copy(alpha = 0.22f), Theme.accent.copy(alpha = 0.30f), Color.White.copy(alpha = 0.06f))
+                        listOf(Theme.ink.copy(alpha = 0.22f), Theme.accent.copy(alpha = 0.30f), Theme.ink.copy(alpha = 0.06f))
                     ),
                     shape = shape
                 )
@@ -144,7 +144,7 @@ private fun RestRing(timer: RestTimer) {
 private fun ElapsedText(timer: RestTimer) {
     Text(
         text = timer.elapsedText,
-        color = Color.White,
+        color = Theme.ink,
         style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
     )
 }
@@ -175,7 +175,7 @@ private fun ExerciseLine(timer: RestTimer) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(
                 text = name ?: "Отдых между подходами",
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -187,13 +187,13 @@ private fun ExerciseLine(timer: RestTimer) {
                     when {
                         index < done -> Box(dot.background(Theme.accent, CircleShape))
                         index == done -> Box(dot.border(1.5.dp, Theme.accent, CircleShape))
-                        else -> Box(dot.background(Color.White.copy(alpha = 0.25f), CircleShape))
+                        else -> Box(dot.background(Theme.ink.copy(alpha = 0.25f), CircleShape))
                     }
                 }
                 timer.setDetails?.takeIf { it.isNotEmpty() }?.let { details ->
                     Text(
                         text = details,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = Theme.ink.copy(alpha = 0.6f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
@@ -211,9 +211,9 @@ private fun RoundButton(icon: ImageVector, description: String, onClick: () -> U
         modifier = Modifier
             .size(44.dp)
             .pressable(onClick = onClick)
-            .background(Color(0xFF2E2E2E), CircleShape),
+            .background(Theme.tone(0xFF2E2E2E), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = description, tint = Theme.ink, modifier = Modifier.size(18.dp))
     }
 }

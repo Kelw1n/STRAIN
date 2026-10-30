@@ -123,7 +123,7 @@ fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.sta
                             is State.Failed -> "Не получилось"
                             else -> "Вышло обновление ${release.versionName}"
                         },
-                        color = Color.White,
+                        color = Theme.ink,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -138,7 +138,7 @@ fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.sta
                             is State.Failed -> current.message
                             else -> summary(changes, release.notes)
                         },
-                        color = Color.White.copy(alpha = 0.65f),
+                        color = Theme.ink.copy(alpha = 0.65f),
                         fontSize = 13.sp,
                         lineHeight = 16.sp,
                         maxLines = 2,
@@ -148,10 +148,10 @@ fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.sta
                 if (current is State.Available) {
                     Spacer(Modifier.width(8.dp))
                     Box(
-                        Modifier.size(32.dp).pressable { AppUpdater.dismiss() }.clip(CircleShape).background(Color.White.copy(alpha = 0.12f)),
+                        Modifier.size(32.dp).pressable { AppUpdater.dismiss() }.clip(CircleShape).background(Theme.ink.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Filled.Close, contentDescription = "Позже", tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.Close, contentDescription = "Позже", tint = Theme.ink, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -170,7 +170,7 @@ fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.sta
                                 else AppUpdater.update(context)
                             }
                             .clip(CircleShape)
-                            .background(Color.White)
+                            .background(Theme.ink)
                             .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -181,7 +181,7 @@ fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.sta
                                 is State.Ready -> "Установить"
                                 else -> "Обновить"
                             },
-                            color = Color.Black,
+                            color = Theme.canvas,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -226,8 +226,8 @@ private fun WhatsNewBanner(visible: Boolean, modifier: Modifier) {
                 BannerIcon(Icons.Filled.AutoAwesome)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("STRAIN обновлён до ${newest.versionName}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(summary(list, newest.notes), color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("STRAIN обновлён до ${newest.versionName}", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(summary(list, newest.notes), color = Theme.ink.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -237,11 +237,11 @@ private fun WhatsNewBanner(visible: Boolean, modifier: Modifier) {
                         .height(36.dp)
                         .pressable { AppUpdater.dismissWhatsNew(context) }
                         .clip(CircleShape)
-                        .background(Color.White)
+                        .background(Theme.ink)
                         .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Понятно", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Понятно", color = Theme.canvas, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
             AnimatedVisibility(visible = expanded, enter = expandVertically(Motion.sheet()) + fadeIn(), exit = shrinkVertically(Motion.sheet()) + fadeOut()) {
@@ -291,7 +291,7 @@ fun ChangesList(changes: List<AppUpdater.Change>, modifier: Modifier = Modifier,
             .fillMaxWidth()
             .heightIn(max = maxHeight.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.06f))
+            .background(Theme.ink.copy(alpha = 0.06f))
             .verticalScroll(rememberScrollState())
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -301,18 +301,18 @@ fun ChangesList(changes: List<AppUpdater.Change>, modifier: Modifier = Modifier,
                 val date = change.date?.let { runCatching { LocalDate.parse(it).format(changeDate) }.getOrNull() }
                 Text(
                     listOfNotNull(change.versionName.ifBlank { null }, date).joinToString(" · "),
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = Theme.ink.copy(alpha = 0.5f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
                 val points = change.points
                 if (points.isEmpty()) {
-                    Text("Исправления и улучшения", color = Color.White, fontSize = 14.sp, lineHeight = 19.sp)
+                    Text("Исправления и улучшения", color = Theme.ink, fontSize = 14.sp, lineHeight = 19.sp)
                 }
                 points.forEach { point ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("•", color = Theme.accent, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold)
-                        Text(point, color = Color.White, fontSize = 14.sp, lineHeight = 19.sp)
+                        Text(point, color = Theme.ink, fontSize = 14.sp, lineHeight = 19.sp)
                     }
                 }
             }

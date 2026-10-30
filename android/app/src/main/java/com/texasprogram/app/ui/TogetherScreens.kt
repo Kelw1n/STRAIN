@@ -76,21 +76,21 @@ fun TogetherInviteBanner(invite: SocialTogether, modifier: Modifier = Modifier) 
         Avatar(invite.partner.avatar, invite.partner.username, 40.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("@${invite.partner.username}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("зовёт на тренировку", color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2)
+            Text("@${invite.partner.username}", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("зовёт на тренировку", color = Theme.ink.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2)
         }
         Box(
-            Modifier.size(36.dp).pressable(enabled = !busy) { respond(false) }.clip(CircleShape).background(Color.White.copy(alpha = 0.12f)),
+            Modifier.size(36.dp).pressable(enabled = !busy) { respond(false) }.clip(CircleShape).background(Theme.ink.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Close, contentDescription = "Отказаться", tint = Color.White, modifier = Modifier.size(16.dp))
+            Icon(Icons.Filled.Close, contentDescription = "Отказаться", tint = Theme.ink, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.height(36.dp).pressable(enabled = !busy) { respond(true) }.clip(CircleShape).background(Color.White).padding(horizontal = 14.dp),
+            Modifier.height(36.dp).pressable(enabled = !busy) { respond(true) }.clip(CircleShape).background(Theme.ink).padding(horizontal = 14.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("Принять", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("Принять", color = Theme.canvas, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -107,14 +107,14 @@ fun PartnerStatus(together: SocialTogether, compact: Boolean = false, modifier: 
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         val size = if (compact) 34.dp else 42.dp
         Box(
-            Modifier.size(size + 6.dp).border(2.dp, if (live != null) Theme.success else Color.White.copy(alpha = 0.2f), CircleShape),
+            Modifier.size(size + 6.dp).border(2.dp, if (live != null) Theme.success else Theme.ink.copy(alpha = 0.2f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Avatar(together.partner.avatar, together.partner.username, size)
         }
         Spacer(Modifier.width(12.dp))
         Column {
-            Text("Вместе с @${together.partner.username}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Вместе с @${together.partner.username}", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (live != null) {
                     LivePulse(6.dp)
@@ -122,7 +122,7 @@ fun PartnerStatus(together: SocialTogether, compact: Boolean = false, modifier: 
                 }
                 Text(
                     line,
-                    color = if (live != null) Theme.success else Color.White.copy(alpha = 0.5f),
+                    color = if (live != null) Theme.success else Theme.ink.copy(alpha = 0.5f),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -142,7 +142,7 @@ fun TogetherCard(together: SocialTogether) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
             .border(1.dp, Theme.success.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -152,7 +152,7 @@ fun TogetherCard(together: SocialTogether) {
             PartnerStatus(together, modifier = Modifier.weight(1f))
             Text(
                 "Выйти",
-                color = Color.White.copy(alpha = 0.6f),
+                color = Theme.ink.copy(alpha = 0.6f),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.pressable { confirmLeave = true }.padding(8.dp)
@@ -160,7 +160,7 @@ fun TogetherCard(together: SocialTogether) {
         }
         Text(
             "Начни тренировку как обычно — друг увидит твои подходы, а пост выйдет на двоих.",
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 12.sp
         )
     }
@@ -198,7 +198,7 @@ fun PartnerStrip(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF161616))
+            .background(Theme.tone(0xFF161616))
             .border(1.dp, Theme.success.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
             .padding(12.dp)
     )
@@ -232,19 +232,19 @@ internal fun InviteBubble(message: SocialMessage, invite: SocialInvite, username
             Modifier
                 .widthIn(max = 290.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF222222))
+                .background(Theme.tone(0xFF222222))
                 .border(1.dp, Theme.success.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(40.dp).clip(CircleShape).background(Theme.success.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(10.dp))
                 Column {
-                    Text(if (message.fromMe) "Ты зовёшь @$username" else "Тренируемся вместе?", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Text(invite.statusText, color = if (invite.status == "accepted") Theme.success else Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                    Text(if (message.fromMe) "Ты зовёшь @$username" else "Тренируемся вместе?", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(invite.statusText, color = if (invite.status == "accepted") Theme.success else Theme.ink.copy(alpha = 0.6f), fontSize = 13.sp)
                 }
             }
             if (invite.isPending) {
@@ -269,10 +269,10 @@ private fun InviteAction(title: String, primary: Boolean, enabled: Boolean, modi
             .height(38.dp)
             .pressable(enabled = enabled, onClick = onClick)
             .clip(CircleShape)
-            .background(if (primary) Color.White else Color.White.copy(alpha = 0.12f)),
+            .background(if (primary) Theme.ink else Theme.ink.copy(alpha = 0.12f)),
         contentAlignment = Alignment.Center
     ) {
-        Text(title, color = if (primary) Color.Black else Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = if (primary) Theme.canvas else Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -307,10 +307,10 @@ fun InviteButton(username: String, onSent: () -> Unit) {
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-            else Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            if (busy) CircularProgressIndicator(color = Theme.ink, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            else Icon(Icons.Filled.FitnessCenter, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Тренироваться вместе", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("Тренироваться вместе", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         error?.let { Text(it, color = Theme.warning, fontSize = 12.sp) }
     }

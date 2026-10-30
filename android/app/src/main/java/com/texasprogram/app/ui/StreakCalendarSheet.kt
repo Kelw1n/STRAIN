@@ -59,7 +59,7 @@ import com.texasprogram.app.service.RuPlural
 import java.time.LocalDate
 import java.util.Locale
 
-private val SheetColor = Color(0xFF121212)
+private val SheetColor: Color get() = Theme.tone(0xFF121212)
 
 private val monthNames = listOf(
     "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -114,7 +114,7 @@ fun StreakCalendarSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
                     label = "month",
                     modifier = Modifier.weight(1f)
                 ) { value ->
-                    Text(monthTitle(value), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                    Text(monthTitle(value), color = Theme.ink, fontSize = 26.sp, fontWeight = FontWeight.Black)
                 }
                 ArrowButton(Icons.Filled.ChevronLeft, "Прошлый месяц", enabled = true) {
                     haptics.selection()
@@ -142,7 +142,7 @@ fun StreakCalendarSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
                         listOf("ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС").forEach { title ->
                             Text(
                                 title,
-                                color = Color.White.copy(alpha = 0.4f),
+                                color = Theme.ink.copy(alpha = 0.4f),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.weight(1f),
@@ -171,7 +171,7 @@ fun StreakCalendarSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
 
             Text(
                 "Неделя засчитана, если в ней была хотя бы одна тренировка. Начатая неделя серию не обрывает: у тебя есть время до воскресенья.",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 13.sp
             )
         }
@@ -181,8 +181,8 @@ fun StreakCalendarSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
 @Composable
 private fun Stat(title: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, color = Color.White.copy(alpha = 0.55f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        Text(value, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+        Text(title, color = Theme.ink.copy(alpha = 0.55f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(value, color = Theme.ink, fontSize = 24.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -192,11 +192,11 @@ private fun ArrowButton(icon: androidx.compose.ui.graphics.vector.ImageVector, d
         Modifier
             .size(40.dp)
             .pressable(enabled = enabled, onClick = onClick)
-            .background(Color.White.copy(alpha = if (enabled) 0.1f else 0.04f), CircleShape)
+            .background(Theme.ink.copy(alpha = if (enabled) 0.1f else 0.04f), CircleShape)
             .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = description, tint = Color.White.copy(alpha = if (enabled) 1f else 0.25f), modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = description, tint = Theme.ink.copy(alpha = if (enabled) 1f else 0.25f), modifier = Modifier.size(22.dp))
     }
 }
 
@@ -214,24 +214,24 @@ private fun DayCell(date: LocalDate, inMonth: Boolean, isToday: Boolean, isPast:
         Canvas(Modifier.size(44.dp)) {
             val r = size.minDimension / 2
             when {
-                !inMonth -> drawCircle(Color.White.copy(alpha = 0.05f), r)
+                !inMonth -> drawCircle(Theme.ink.copy(alpha = 0.05f), r)
                 isDone -> drawCircle(accent, r)
                 isToday -> drawCircle(accent, r - 1.25.dp.toPx(), style = Stroke(2.5.dp.toPx()))
-                isPast -> drawCircle(Color.White.copy(alpha = 0.12f), r)
+                isPast -> drawCircle(Theme.ink.copy(alpha = 0.12f), r)
                 isTrainingDay -> drawCircle(accent, r - 1.dp.toPx(), style = Stroke(2.dp.toPx()))
-                else -> drawCircle(Color.White.copy(alpha = 0.15f), r - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
+                else -> drawCircle(Theme.ink.copy(alpha = 0.15f), r - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
             }
             if (isToday) {
-                drawCircle(if (isDone) Color.Black else Color.White, 2.5.dp.toPx(), Offset(center.x, center.y + 13.dp.toPx()))
+                drawCircle(if (isDone) Theme.canvas else Theme.ink, 2.5.dp.toPx(), Offset(center.x, center.y + 13.dp.toPx()))
             }
         }
         Text(
             "${date.dayOfMonth}",
             color = when {
-                !inMonth -> Color.White.copy(alpha = 0.22f)
-                isDone -> Color.Black
-                isPast && !isToday -> Color.White.copy(alpha = 0.85f)
-                else -> Color.White
+                !inMonth -> Theme.ink.copy(alpha = 0.22f)
+                isDone -> Theme.canvas
+                isPast && !isToday -> Theme.ink.copy(alpha = 0.85f)
+                else -> Theme.ink
             },
             fontSize = 17.sp,
             fontWeight = if (isToday) FontWeight.Black else FontWeight.SemiBold
@@ -258,7 +258,7 @@ fun SegmentedRing(total: Int, filled: Int, modifier: Modifier = Modifier, stroke
         val sweep = 360f / count
         for (index in 0 until count) {
             drawArc(
-                color = if (index < filled) accent else Color.White.copy(alpha = 0.14f),
+                color = if (index < filled) accent else Theme.ink.copy(alpha = 0.14f),
                 startAngle = -90f + index * sweep + gap / 2,
                 sweepAngle = (sweep - gap).coerceAtLeast(1f),
                 useCenter = false,
@@ -299,7 +299,7 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Text("Цель", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Black)
+            Text("Цель", color = Theme.ink, fontSize = 26.sp, fontWeight = FontWeight.Black)
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SheetLabel("ДНИ ТРЕНИРОВОК")
@@ -314,13 +314,13 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                                     haptics.light()
                                     days = if (on) days - weekday else days + weekday
                                 }
-                                .selectionFill(on, Theme.accent, Color(0xFF262626), CircleShape)
+                                .selectionFill(on, Theme.accent, Theme.tone(0xFF262626), CircleShape)
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 RuDate.short(weekday).uppercase(),
-                                color = if (on) Color.White else Color.White.copy(alpha = 0.65f),
+                                color = if (on) Theme.ink else Theme.ink.copy(alpha = 0.65f),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -330,7 +330,7 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                 Text(
                     if (ready) "${RuPlural.word(need, "Тренировка", "Тренировки", "Тренировок").let { "$need $it" }} в неделю — столько же дней в программе."
                     else "Выбери ${need} ${RuPlural.word(need, "день", "дня", "дней")} — столько тренировок в неделе программы. Сейчас ${days.size}.",
-                    color = if (ready) Color.White.copy(alpha = 0.45f) else Theme.warning,
+                    color = if (ready) Theme.ink.copy(alpha = 0.45f) else Theme.warning,
                     fontSize = 12.sp
                 )
             }
@@ -340,12 +340,12 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF1E1E1E), RoundedCornerShape(18.dp))
+                        .background(Theme.tone(0xFF1E1E1E), RoundedCornerShape(18.dp))
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Напоминать в дни тренировок", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text("Напоминать в дни тренировок", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         Switch(
                             checked = reminder,
                             onCheckedChange = { reminder = it },
@@ -354,13 +354,13 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                     }
                     if (reminder) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Время", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Text("Время", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                             StepChip("−") { hour = (hour + 23) % 24 }
-                            Text(String.format(Locale.US, "%02d", hour), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
+                            Text(String.format(Locale.US, "%02d", hour), color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
                             StepChip("+") { hour = (hour + 1) % 24 }
-                            Text(":", color = Color.White.copy(alpha = 0.5f), fontSize = 18.sp, modifier = Modifier.padding(horizontal = 6.dp))
+                            Text(":", color = Theme.ink.copy(alpha = 0.5f), fontSize = 18.sp, modifier = Modifier.padding(horizontal = 6.dp))
                             StepChip("−") { minute = (minute + 45) % 60 }
-                            Text(String.format(Locale.US, "%02d", minute), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
+                            Text(String.format(Locale.US, "%02d", minute), color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
                             StepChip("+") { minute = (minute + 15) % 60 }
                         }
                     }
@@ -385,11 +385,11 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                         )
                         onDismiss()
                     }
-                    .background(if (ready) Color.White else Color(0xFF2A2A2A), RoundedCornerShape(20.dp))
+                    .background(if (ready) Theme.ink else Theme.tone(0xFF2A2A2A), RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("СОХРАНИТЬ ЦЕЛЬ", color = if (ready) Color.Black else Color.White.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.Black)
+                Text("СОХРАНИТЬ ЦЕЛЬ", color = if (ready) Theme.canvas else Theme.ink.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.Black)
             }
         }
     }
@@ -397,7 +397,7 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
 
 @Composable
 private fun SheetLabel(text: String) {
-    Text(text, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+    Text(text, color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
 }
 
 @Composable
@@ -406,10 +406,10 @@ private fun StepChip(label: String, onClick: () -> Unit) {
         Modifier
             .size(32.dp)
             .pressable(onClick = onClick)
-            .background(Color.White.copy(alpha = 0.1f), CircleShape)
+            .background(Theme.ink.copy(alpha = 0.1f), CircleShape)
             .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
     }
 }

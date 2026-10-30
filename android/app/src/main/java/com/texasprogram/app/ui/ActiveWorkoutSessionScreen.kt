@@ -151,11 +151,11 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 // Цвета экрана — как в iOS-версии: чистый чёрный фон и карточки чуть светлее.
-private val ScreenBlack = Color(0xFF000000)
-private val CardColor = Color(0xFF161616)
-private val CardLifted = Color(0xFF1F1F1F)
-private val FieldColor = Color(0xFF242424)
-private val FieldFocused = Color(0xFF303030)
+private val ScreenBlack: Color get() = Theme.tone(0xFF000000)
+private val CardColor: Color get() = Theme.tone(0xFF161616)
+private val CardLifted: Color get() = Theme.tone(0xFF1F1F1F)
+private val FieldColor: Color get() = Theme.tone(0xFF242424)
+private val FieldFocused: Color get() = Theme.tone(0xFF303030)
 
 /// Высота свёрнутой карточки при перестановке и зазор между ними.
 private val ROW_HEIGHT = 76.dp
@@ -169,7 +169,7 @@ private val ROW_SPACING = 10.dp
 fun SessionClock(
     modifier: Modifier = Modifier,
     fontSize: TextUnit = 26.sp,
-    color: Color = Color.White,
+    color: Color = Theme.ink,
     rolling: Boolean = false
 ) {
     val start = WorkoutSessionManager.startMillis
@@ -232,10 +232,10 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
                 this.shape = shape
                 clip = true
             }
-            .background(Color(0xF21A1A1E))
+            .background(Theme.tone(0xF21A1A1E))
             .border(
                 1.dp,
-                Brush.linearGradient(listOf(Color.White.copy(alpha = 0.28f), Color.White.copy(alpha = 0.06f))),
+                Brush.linearGradient(listOf(Theme.ink.copy(alpha = 0.28f), Theme.ink.copy(alpha = 0.06f))),
                 shape
             )
             .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -262,7 +262,7 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
         Column(Modifier.weight(1f)) {
             Text(
                 text = workout.fullTitle,
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -271,7 +271,7 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
             Text(
                 text = "${WorkoutSessionManager.totalCompletedSets} из $total " +
                     RuPlural.word(total, "подхода", "подходов", "подходов"),
-                color = Color.White.copy(alpha = 0.55f),
+                color = Theme.ink.copy(alpha = 0.55f),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -295,7 +295,7 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
         Icon(
             Icons.Filled.KeyboardArrowUp,
             contentDescription = "Развернуть",
-            tint = Color.White.copy(alpha = 0.7f),
+            tint = Theme.ink.copy(alpha = 0.7f),
             modifier = Modifier.size(20.dp)
         )
     }
@@ -762,11 +762,11 @@ private fun SessionHeader(topInset: Dp, onMinimize: () -> Unit, onFinish: () -> 
             DropdownMenu(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
-                modifier = Modifier.background(Color(0xFF1C1C1F))
+                modifier = Modifier.background(Theme.tone(0xFF1C1C1F))
             ) {
                 DropdownMenuItem(
-                    text = { Text("Заметка к тренировке", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Filled.Notes, null, tint = Color.White) },
+                    text = { Text("Заметка к тренировке", color = Theme.ink) },
+                    leadingIcon = { Icon(Icons.Filled.Notes, null, tint = Theme.ink) },
                     onClick = {
                         menuExpanded = false
                         WorkoutSessionManager.showingNoteSheet = true
@@ -789,12 +789,12 @@ private fun SessionHeader(topInset: Dp, onMinimize: () -> Unit, onFinish: () -> 
             Modifier
                 .height(36.dp)
                 .pressable(onClick = onFinish)
-                .background(Color.White, CircleShape)
+                .background(Theme.ink, CircleShape)
                 .clip(CircleShape)
                 .padding(horizontal = 18.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("Завершить", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text("Завершить", color = Theme.canvas, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -805,11 +805,11 @@ private fun CircleIconButton(icon: ImageVector, description: String, onClick: ()
         Modifier
             .size(36.dp)
             .pressable(onClick = onClick)
-            .background(Color.White.copy(alpha = 0.12f), CircleShape)
+            .background(Theme.ink.copy(alpha = 0.12f), CircleShape)
             .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = description, tint = Theme.ink, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -865,7 +865,7 @@ private fun WarmUpRow(steps: List<com.texasprogram.app.model.WarmUp.Step>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "РАЗМИНКА",
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.2.sp
@@ -883,17 +883,17 @@ private fun WarmUpRow(steps: List<com.texasprogram.app.model.WarmUp.Step>) {
                             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                             done = if (isDone) done - step else done + step
                         }
-                        .background(if (isDone) Theme.accent else Color.White.copy(alpha = 0.08f), CircleShape)
+                        .background(if (isDone) Theme.accent else Theme.ink.copy(alpha = 0.08f), CircleShape)
                         .padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (isDone) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.canvas, modifier = Modifier.size(12.dp))
                     }
                     Text(
                         "${formatWeight(step.weight)}×${step.reps}",
-                        color = if (isDone) Color.Black else Color.White.copy(alpha = 0.85f),
+                        color = if (isDone) Theme.canvas else Theme.ink.copy(alpha = 0.85f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -924,14 +924,14 @@ private fun ExerciseHeader(
         Icon(
             Icons.Filled.DragHandle,
             contentDescription = "Удерживайте, чтобы переставить",
-            tint = Color.White.copy(alpha = if (lifted) 0.9f else 0.3f),
+            tint = Theme.ink.copy(alpha = if (lifted) 0.9f else 0.3f),
             modifier = Modifier.size(18.dp)
         )
         ExerciseThumb(name = name, size = if (compact) 48.dp else 52.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 text = name,
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = if (compact) 1 else 2,
@@ -943,16 +943,16 @@ private fun ExerciseHeader(
                 Row(
                     Modifier
                         .pressable { actions.chooseRest(index) }
-                        .background(Color.White.copy(alpha = 0.10f), CircleShape)
+                        .background(Theme.ink.copy(alpha = 0.10f), CircleShape)
                         .clip(CircleShape)
                         .padding(horizontal = 9.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    Icon(Icons.Filled.Timer, "Время отдыха", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(13.dp))
+                    Icon(Icons.Filled.Timer, "Время отдыха", tint = Theme.ink.copy(alpha = 0.85f), modifier = Modifier.size(13.dp))
                     Text(
                         text = String.format(Locale.US, "%02d:%02d", exercise.restSeconds / 60, exercise.restSeconds % 60),
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = Theme.ink.copy(alpha = 0.85f),
                         style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
                     )
                 }
@@ -960,7 +960,7 @@ private fun ExerciseHeader(
             if (compact) {
                 Text(
                     text = "${exercise.doneCount} из ${RuPlural.sets(exercise.sets.size)}",
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = Theme.ink.copy(alpha = 0.45f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -975,12 +975,12 @@ private fun ExerciseHeader(
                         .pressable { menuExpanded = true },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.MoreHoriz, "Действия с упражнением", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.MoreHoriz, "Действия с упражнением", tint = Theme.ink.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(Color(0xFF1C1C1F))
+                    modifier = Modifier.background(Theme.tone(0xFF1C1C1F))
                 ) {
                     MenuItem("Добавить подход", Icons.Filled.Add) {
                         menuExpanded = false
@@ -1030,7 +1030,7 @@ private fun ExerciseHeader(
 }
 
 @Composable
-private fun MenuItem(title: String, icon: ImageVector, color: Color = Color.White, onClick: () -> Unit) {
+private fun MenuItem(title: String, icon: ImageVector, color: Color = Theme.ink, onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(title, color = color) },
         leadingIcon = { Icon(icon, null, tint = color) },
@@ -1099,9 +1099,9 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Filled.Add, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(15.dp))
+            Icon(Icons.Filled.Add, null, tint = Theme.ink.copy(alpha = 0.85f), modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Добавить подход", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("Добавить подход", color = Theme.ink.copy(alpha = 0.85f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
 
         AnimatedVisibility(
@@ -1111,7 +1111,7 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
         ) {
             Text(
                 "Лишний подход? Смахни его влево или нажми на номер",
-                color = Color.White.copy(alpha = 0.55f),
+                color = Theme.ink.copy(alpha = 0.55f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
@@ -1128,7 +1128,7 @@ private const val HINT_DELETE_SET = "delete_set"
 private fun ColumnTitle(text: String, modifier: Modifier) {
     Text(
         text = text,
-        color = Color.White.copy(alpha = 0.4f),
+        color = Theme.ink.copy(alpha = 0.4f),
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
@@ -1186,7 +1186,7 @@ private fun SetRowContent(
         ) {
             Text(
                 text = set.previousText,
-                color = Color.White.copy(alpha = if (set.previous == null) 0.25f else 0.45f),
+                color = Theme.ink.copy(alpha = if (set.previous == null) 0.25f else 0.45f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -1228,7 +1228,7 @@ private fun SetNumber(
         when {
             set.isRecord -> Theme.accent
             highlighted -> Theme.accent.copy(alpha = 0.35f)
-            else -> Color(0xFF262626)
+            else -> Theme.tone(0xFF262626)
         },
         Motion.fade(220),
         label = "setNumber"
@@ -1258,7 +1258,7 @@ private fun SetNumber(
         ) {
             Text(
                 text = "${position + 1}",
-                color = if (set.isRecord) Color.Black else Color.White,
+                color = if (set.isRecord) Theme.canvas else Theme.ink,
                 style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
             )
         }
@@ -1273,17 +1273,17 @@ private fun SetNumber(
                         alpha = recordScale.coerceIn(0f, 1f)
                     }
                     .size(16.dp)
-                    .background(Color.Black, CircleShape),
+                    .background(Theme.canvas, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.EmojiEvents, null, tint = Color.White, modifier = Modifier.size(10.dp))
+                Icon(Icons.Filled.EmojiEvents, null, tint = Theme.ink, modifier = Modifier.size(10.dp))
             }
         }
 
         DropdownMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
-            modifier = Modifier.background(Color(0xFF1C1C1F))
+            modifier = Modifier.background(Theme.tone(0xFF1C1C1F))
         ) {
             if (set.previous != null) {
                 MenuItem("Как в прошлый раз", Icons.Filled.History) {
@@ -1375,9 +1375,9 @@ private fun SwipeToDelete(
                     },
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.Delete, null, tint = Color.White, modifier = Modifier.size(17.dp))
+                Icon(Icons.Filled.Delete, null, tint = Theme.ink, modifier = Modifier.size(17.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Удалить", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("Удалить", color = Theme.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
         Box(
@@ -1441,7 +1441,7 @@ private fun CheckButton(done: Boolean, onClick: () -> Unit) {
             Modifier
                 .size(30.dp)
                 .graphicsLayer { alpha = 1f - progress.coerceIn(0f, 1f) }
-                .border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                .border(2.dp, Theme.ink.copy(alpha = 0.35f), CircleShape)
         )
         Box(
             Modifier
@@ -1501,7 +1501,7 @@ private fun SetNumberField(
         singleLine = true,
         textStyle = TextStyle(
             // План — приглушённым, факт — белым, как у REBRN.
-            color = if (isDone || focused) Color.White else Color.White.copy(alpha = 0.6f),
+            color = if (isDone || focused) Theme.ink else Theme.ink.copy(alpha = 0.6f),
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -1577,20 +1577,20 @@ private fun RecordBanner(record: RecordNotice?, modifier: Modifier = Modifier) {
                     spotShadowColor = Theme.accent
                     ambientShadowColor = Theme.accent
                 }
-                .background(Color(0xFF1F1F1F))
+                .background(Theme.tone(0xFF1F1F1F))
                 .border(1.dp, Theme.accent.copy(alpha = 0.6f), shape)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(Modifier.size(30.dp).background(Theme.accent, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.EmojiEvents, null, tint = Color.Black, modifier = Modifier.size(17.dp))
+                Icon(Icons.Filled.EmojiEvents, null, tint = Theme.canvas, modifier = Modifier.size(17.dp))
             }
             Column {
-                Text("Новый рекорд", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                Text("Новый рекорд", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Black)
                 Text(
                     "${notice.exercise} · ${formatWeight(notice.weight)} кг",
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = Theme.ink.copy(alpha = 0.65f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -1616,8 +1616,8 @@ private fun ZeroSetsAlertOverlay(onConfirm: () -> Unit, onDismiss: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 28.dp)
-                .background(Color(0xFF1F1F1F), RoundedCornerShape(26.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(26.dp))
+                .background(Theme.tone(0xFF1F1F1F), RoundedCornerShape(26.dp))
+                .border(1.dp, Theme.ink.copy(alpha = 0.1f), RoundedCornerShape(26.dp))
                 // Нажатие по самой карточке не закрывает окно.
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                 .padding(24.dp),
@@ -1627,14 +1627,14 @@ private fun ZeroSetsAlertOverlay(onConfirm: () -> Unit, onDismiss: () -> Unit) {
             Icon(Icons.Filled.Delete, null, tint = Color(0xFFFF4757), modifier = Modifier.size(46.dp))
             Text(
                 text = if (WorkoutSessionManager.totalCompletedSets == 0) "Ни одного подхода не отмечено" else "Отменить тренировку?",
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Text(
                 text = "Тренировка удалится вместе с введёнными значениями и счётчиком времени.",
-                color = Color.White.copy(alpha = 0.65f),
+                color = Theme.ink.copy(alpha = 0.65f),
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp
@@ -1642,7 +1642,7 @@ private fun ZeroSetsAlertOverlay(onConfirm: () -> Unit, onDismiss: () -> Unit) {
             SlideToConfirm(title = "УДАЛИТЬ", onConfirmed = onConfirm)
             Text(
                 text = "Вернуться к тренировке",
-                color = Color.White.copy(alpha = 0.85f),
+                color = Theme.ink.copy(alpha = 0.85f),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -1701,7 +1701,7 @@ private fun SlideToConfirm(title: String, onConfirmed: () -> Unit) {
                 },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Delete, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(Icons.Filled.Delete, null, tint = Theme.ink, modifier = Modifier.size(22.dp))
         }
     }
 }
@@ -1713,8 +1713,8 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1C1C1F),
-        title = { Text("Время отдыха", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+        containerColor = Theme.tone(0xFF1C1C1F),
+        title = { Text("Время отдыха", color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(60, 90, 120, 150, 180, 240).forEach { seconds ->
@@ -1723,14 +1723,14 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
                         Modifier
                             .fillMaxWidth()
                             .pressable { onSelect(seconds) }
-                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+                            .background(Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
                             .clip(RoundedCornerShape(14.dp))
                             .padding(vertical = 13.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             "$minutes мин (${String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60)})",
-                            color = Color.White,
+                            color = Theme.ink,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -1739,7 +1739,7 @@ private fun RestDurationDialog(onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена", color = Color.White.copy(alpha = 0.6f)) }
+            TextButton(onClick = onDismiss) { Text("Отмена", color = Theme.ink.copy(alpha = 0.6f)) }
         }
     )
 }
@@ -1752,18 +1752,18 @@ private fun WorkoutNoteDialog(initialNote: String, onSave: (String) -> Unit, onD
     AlertDialog(
         modifier = Modifier.popIn(),
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1C1C1F),
-        title = { Text("Заметка к тренировке", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+        containerColor = Theme.tone(0xFF1C1C1F),
+        title = { Text("Заметка к тренировке", color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 placeholder = { Text("Как прошла тренировка? Самочувствие, сон...", color = Color.Gray) },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
+                    focusedTextColor = Theme.ink,
+                    unfocusedTextColor = Theme.ink,
                     focusedBorderColor = Theme.accent,
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    unfocusedBorderColor = Theme.ink.copy(alpha = 0.2f),
                     cursorColor = Theme.accent
                 ),
                 modifier = Modifier
@@ -1777,7 +1777,7 @@ private fun WorkoutNoteDialog(initialNote: String, onSave: (String) -> Unit, onD
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена", color = Color.White.copy(alpha = 0.6f)) }
+            TextButton(onClick = onDismiss) { Text("Отмена", color = Theme.ink.copy(alpha = 0.6f)) }
         }
     )
 }

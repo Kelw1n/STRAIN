@@ -108,19 +108,19 @@ fun ExerciseArtDialog(name: String, onDismiss: () -> Unit) {
                 .fillMaxWidth()
                 .popIn()
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF121212))
+                .background(Theme.tone(0xFF121212))
                 .padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(name, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+            Text(name, color = Theme.ink, fontSize = 19.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
             Box(contentAlignment = Alignment.Center) {
                 ExerciseThumb(name = name, size = 220.dp)
-                if (loading) CircularProgressIndicator(color = Color.White)
+                if (loading) CircularProgressIndicator(color = Theme.ink)
             }
             Text(
                 "Стандартная иллюстрация подбирается по названию. Можно поставить свою — она будет у этого упражнения во всех тренировках.",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center
             )
@@ -132,10 +132,10 @@ fun ExerciseArtDialog(name: String, onDismiss: () -> Unit) {
                         picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }
                     .clip(CircleShape)
-                    .background(Color.White),
+                    .background(Theme.ink),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Выбрать из галереи", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Выбрать из галереи", color = Theme.canvas, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             if (hasCustom) {
                 Text(

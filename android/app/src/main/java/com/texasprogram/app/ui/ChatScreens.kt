@@ -205,9 +205,9 @@ fun ChatList(onOpen: (String) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Filled.ChatBubbleOutline, contentDescription = null, tint = Color.White.copy(alpha = 0.35f), modifier = Modifier.size(32.dp))
-                Text("Сообщений пока нет", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text("Открой профиль друга и нажми «Написать».", color = Color.White.copy(alpha = 0.55f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                Icon(Icons.Filled.ChatBubbleOutline, contentDescription = null, tint = Theme.ink.copy(alpha = 0.35f), modifier = Modifier.size(32.dp))
+                Text("Сообщений пока нет", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Открой профиль друга и нажми «Написать».", color = Theme.ink.copy(alpha = 0.55f), fontSize = 14.sp, textAlign = TextAlign.Center)
             }
         }
         if (chats.isNotEmpty()) {
@@ -215,17 +215,17 @@ fun ChatList(onOpen: (String) -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF161617))
+                    .background(Theme.tone(0xFF161617))
             ) {
                 chats.forEachIndexed { index, chat ->
                     ChatRow(chat) { onOpen(chat.user.username) }
-                    if (index < chats.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 74.dp))
+                    if (index < chats.size - 1) HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 74.dp))
                 }
             }
         }
         if (loading && chats.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp))
             }
         }
     }
@@ -246,7 +246,7 @@ internal fun ChatRow(chat: SocialChat, onOpen: () -> Unit) {
                         .align(Alignment.BottomEnd)
                         .size(14.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF161617))
+                        .background(Theme.tone(0xFF161617))
                         .padding(2.5.dp)
                         .clip(CircleShape)
                         .background(Theme.success)
@@ -256,8 +256,8 @@ internal fun ChatRow(chat: SocialChat, onOpen: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("@${chat.user.username}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text(SocialFormat.ago(chat.last.instant), color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
+                Text("@${chat.user.username}", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(SocialFormat.ago(chat.last.instant), color = Theme.ink.copy(alpha = 0.4f), fontSize = 12.sp)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val live = chat.live
@@ -274,7 +274,7 @@ internal fun ChatRow(chat: SocialChat, onOpen: () -> Unit) {
                 } else {
                     Text(
                         (if (chat.last.fromMe) "Вы: " else "") + chat.last.preview,
-                        color = Color.White.copy(alpha = if (chat.unread > 0) 0.9f else 0.5f),
+                        color = Theme.ink.copy(alpha = if (chat.unread > 0) 0.9f else 0.5f),
                         fontSize = 14.sp,
                         fontWeight = if (chat.unread > 0) FontWeight.SemiBold else FontWeight.Normal,
                         maxLines = 1,
@@ -675,7 +675,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Theme.canvas)
             .padding(top = contentPadding.calculateTopPadding())
             .navigationBarsPadding()
             .imePadding()
@@ -713,8 +713,8 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 if (messages.isEmpty()) {
                     item(key = "empty") {
                         Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) {
-                            if (loading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                            else Text("Напиши первым — например, позови на тренировку.", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                            if (loading) CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp))
+                            else Text("Напиши первым — например, позови на тренировку.", color = Theme.ink.copy(alpha = 0.5f), fontSize = 14.sp, textAlign = TextAlign.Center)
                         }
                     }
                 }
@@ -731,7 +731,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         if (previous != day) {
                             Text(
                                 dayTitle(day),
-                                color = Color.White.copy(alpha = 0.4f),
+                                color = Theme.ink.copy(alpha = 0.4f),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 textAlign = TextAlign.Center,
@@ -782,7 +782,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .onSizeChanged { barHeight = it.height }
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f))))
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Theme.canvas.copy(alpha = 0.55f))))
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -796,9 +796,9 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 exit = fadeOut(tween(160))
             ) {
                 Row(Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.CloudOff, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
+                    Icon(Icons.Filled.CloudOff, contentDescription = null, tint = Theme.ink.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Нет связи — сообщения уйдут сами, когда она появится", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Нет связи — сообщения уйдут сами, когда она появится", color = Theme.ink.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             AnimatedVisibility(
@@ -806,7 +806,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 enter = fadeIn(tween(180)) + slideInVertically(Motion.snappy()) { it / 2 },
                 exit = fadeOut(tween(160))
             ) {
-                Text(hint.orEmpty(), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
+                Text(hint.orEmpty(), color = Theme.ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.chatGlass(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
             }
             val edited = editing
             val quoted = replyingTo
@@ -849,7 +849,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                             .pressable(enabled = edited == null) { attachMenu = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Filled.AttachFile, contentDescription = "Прикрепить фото", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.AttachFile, contentDescription = "Прикрепить фото", tint = Theme.ink, modifier = Modifier.size(20.dp))
                     }
                     DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
                         DropdownMenuItem(
@@ -878,11 +878,11 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                         .padding(horizontal = 16.dp, vertical = 11.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    if (draft.isEmpty()) Text(if (edited == null) "Сообщение" else "Новый текст", color = Color.White.copy(alpha = 0.45f), fontSize = 16.sp)
+                    if (draft.isEmpty()) Text(if (edited == null) "Сообщение" else "Новый текст", color = Theme.ink.copy(alpha = 0.45f), fontSize = 16.sp)
                     BasicTextField(
                         value = draft,
                         onValueChange = { draft = it.take(2000) },
-                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                        textStyle = TextStyle(color = Theme.ink, fontSize = 16.sp),
                         cursorBrush = SolidColor(Theme.accent),
                         maxLines = 5,
                         modifier = Modifier.fillMaxWidth()
@@ -914,14 +914,14 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 Box(
                     Modifier
                         .size(44.dp)
-                        .then(if (canSend) Modifier.clip(CircleShape).background(Color.White) else Modifier.chatGlass(CircleShape))
+                        .then(if (canSend) Modifier.clip(CircleShape).background(Theme.ink) else Modifier.chatGlass(CircleShape))
                         .pressable(enabled = canSend) { send() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         if (edited != null) Icons.Filled.Done else Icons.Filled.ArrowUpward,
                         contentDescription = if (edited != null) "Сохранить" else "Отправить",
-                        tint = if (canSend) Color.Black else Color.White.copy(alpha = 0.5f)
+                        tint = if (canSend) Theme.canvas else Theme.ink.copy(alpha = 0.5f)
                     )
                 }
                 }
@@ -973,10 +973,10 @@ private fun ComposerBanner(icon: ImageVector, title: String, text: String, close
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text(text, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text, color = Theme.ink.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Box(Modifier.size(32.dp).pressable(onClick = onClose).clip(CircleShape), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Close, contentDescription = close, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+            Icon(Icons.Filled.Close, contentDescription = close, tint = Theme.ink.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -989,7 +989,7 @@ private fun chatStatus(typing: Boolean, live: SocialLive?, lastSeen: Double?): P
     typing -> "печатает…" to Theme.accent
     live != null -> "тренируется · ${live.line}" to Theme.success
     lastSeen != null -> SocialFormat.lastSeen(Instant.ofEpochMilli(lastSeen.toLong())) to
-        Color.White.copy(alpha = if (isOnline(lastSeen)) 0.75f else 0.45f)
+        Theme.ink.copy(alpha = if (isOnline(lastSeen)) 0.75f else 0.45f)
     else -> null
 }
 
@@ -1005,10 +1005,10 @@ internal fun ChatTopBar(
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(40.dp).pressable(onClick = onBack).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)),
+            Modifier.size(40.dp).pressable(onClick = onBack).clip(CircleShape).background(Theme.ink.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Theme.ink, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(12.dp))
         Row(Modifier.weight(1f).pressable(onClick = onOpenProfile), verticalAlignment = Alignment.CenterVertically) {
@@ -1020,7 +1020,7 @@ internal fun ChatTopBar(
                             .align(Alignment.BottomEnd)
                             .size(11.dp)
                             .clip(CircleShape)
-                            .background(Color.Black)
+                            .background(Theme.canvas)
                             .padding(2.dp)
                             .clip(CircleShape)
                             .background(Theme.success)
@@ -1029,7 +1029,7 @@ internal fun ChatTopBar(
             }
             Spacer(Modifier.width(10.dp))
             Column {
-                Text("@$username", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("@$username", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 status?.let { (text, color) ->
                     Text(text, color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -1052,7 +1052,7 @@ internal fun TypingBubble() {
         Row(
             Modifier
                 .clip(RoundedCornerShape(18.dp))
-                .background(Color(0xFF292929))
+                .background(Theme.tone(0xFF292929))
                 .padding(horizontal = 14.dp, vertical = 13.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -1068,7 +1068,7 @@ internal fun TypingBubble() {
                             scaleY = 0.7f + 0.3f * lift
                         }
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.7f))
+                        .background(Theme.ink.copy(alpha = 0.7f))
                 )
             }
         }
@@ -1085,20 +1085,20 @@ fun Modifier.bannerSurface(shape: Shape): Modifier = this
         clip = false
     }
     .clip(shape)
-    .background(Color(0xFF1C1C21), shape)
+    .background(Theme.tone(0xFF1C1C21), shape)
     .border(
         1.dp,
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.05f))),
+        Brush.verticalGradient(listOf(glassEdge(0.16f), glassEdge(0.05f))),
         shape
     )
 
 /// Стеклянная капсула: полупрозрачная тёмная заливка с кромкой-бликом, как у панели вкладок.
 fun Modifier.chatGlass(shape: Shape): Modifier = this
     .clip(shape)
-    .background(Color(0xB31C1C20), shape)
+    .background(Theme.tone(0xB31C1C20), shape)
     .border(
         1.dp,
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f), Color.White.copy(alpha = 0.10f))),
+        Brush.verticalGradient(listOf(glassEdge(0.22f), glassEdge(0.04f), glassEdge(0.10f))),
         shape
     )
 
@@ -1138,6 +1138,8 @@ internal fun MessageBubble(
     onFailedTap: () -> Unit = {},
     onDelete: () -> Unit
 ) {
+    // На моём оранжевом пузыре текст и значки белые в любой теме.
+    val bubbleInk = if (message.fromMe) Color.White else Theme.ink
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val haptics = rememberHapticEngine()
@@ -1184,8 +1186,8 @@ internal fun MessageBubble(
                     Modifier
                         .widthIn(max = 290.dp)
                         .clip(RoundedCornerShape(18.dp))
-                        .background(if (message.fromMe) Theme.accent.copy(alpha = if (failure == null) 0.9f else 0.5f) else Color(0xFF292929))
-                        .background(Color.White.copy(alpha = if (highlighted) 0.18f else 0f))
+                        .background(if (message.fromMe) Theme.accent.copy(alpha = if (failure == null) 0.9f else 0.5f) else Theme.tone(0xFF292929))
+                        .background(bubbleInk.copy(alpha = if (highlighted) 0.18f else 0f))
                         .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -1207,7 +1209,7 @@ internal fun MessageBubble(
                             Modifier.padding(start = if (hasImage) 9.dp else 0.dp, top = if (hasImage) 5.dp else 0.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val tint = if (message.fromMe) Color.White.copy(alpha = 0.8f) else Theme.accent
+                            val tint = if (message.fromMe) bubbleInk.copy(alpha = 0.8f) else Theme.accent
                             Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
                             Spacer(Modifier.width(4.dp))
                             Text(forwarded.title, color = tint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1227,7 +1229,7 @@ internal fun MessageBubble(
                         Box(Modifier.size(width = 230.dp, height = 270.dp).clip(RoundedCornerShape(15.dp)), contentAlignment = Alignment.Center) {
                             if (localImage != null) {
                                 LocalImage(localImage, Modifier.fillMaxSize())
-                                if (message.isLocal && failure == null) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                                if (message.isLocal && failure == null) CircularProgressIndicator(color = bubbleInk, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                             } else {
                                 RemoteImage(message.image, Modifier.fillMaxSize())
                             }
@@ -1240,7 +1242,7 @@ internal fun MessageBubble(
                     } else if (workout != null) {
                         ChatWorkoutCard(workout, message.fromMe) { onOpenWorkout(workout) }
                     } else if (message.text.isNotEmpty()) {
-                        Text(message.text, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(horizontal = if (hasImage) 9.dp else 0.dp))
+                        Text(message.text, color = bubbleInk, fontSize = 16.sp, modifier = Modifier.padding(horizontal = if (hasImage) 9.dp else 0.dp))
                     }
                     // Время всегда справа, как в Telegram.
                     Row(
@@ -1250,8 +1252,8 @@ internal fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        if (message.edited) Text("изменено", color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
-                        Text(time, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
+                        if (message.edited) Text("изменено", color = bubbleInk.copy(alpha = 0.6f), fontSize = 11.sp)
+                        Text(time, color = bubbleInk.copy(alpha = 0.6f), fontSize = 11.sp)
                         if (message.fromMe) {
                             Icon(
                                 when {
@@ -1265,7 +1267,7 @@ internal fun MessageBubble(
                                     message.read -> "Прочитано"
                                     else -> null
                                 },
-                                tint = if (failure != null) Theme.record else Color.White.copy(alpha = 0.6f),
+                                tint = if (failure != null) Theme.record else bubbleInk.copy(alpha = 0.6f),
                                 modifier = Modifier.size(13.dp)
                             )
                         }
@@ -1286,14 +1288,14 @@ internal fun MessageBubble(
                                     .height(26.dp)
                                     .pressable { onReact(reaction.emoji) }
                                     .clip(CircleShape)
-                                    .background(if (reaction.mine) Theme.accent.copy(alpha = 0.45f) else Color(0xFF292929))
-                                    .border(1.dp, if (reaction.mine) Theme.accent else Color.White.copy(alpha = 0.08f), CircleShape)
+                                    .background(if (reaction.mine) Theme.accent.copy(alpha = 0.45f) else Theme.tone(0xFF292929))
+                                    .border(1.dp, if (reaction.mine) Theme.accent else Theme.ink.copy(alpha = 0.08f), CircleShape)
                                     .padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 Text(reaction.emoji, fontSize = 14.sp)
-                                if (reaction.count > 1) Text("${reaction.count}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                if (reaction.count > 1) Text("${reaction.count}", color = Theme.ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1304,7 +1306,7 @@ internal fun MessageBubble(
                 Icon(
                     Icons.AutoMirrored.Filled.Reply,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = Theme.ink,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .offset { IntOffset((swipe.value + with(density) { 34.dp.toPx() }).roundToInt(), 0) }
@@ -1316,7 +1318,7 @@ internal fun MessageBubble(
                         }
                         .size(26.dp)
                         .clip(CircleShape)
-                        .background(if (armed) Theme.accent else Color.White.copy(alpha = 0.2f))
+                        .background(if (armed) Theme.accent else Theme.ink.copy(alpha = 0.2f))
                         .padding(4.dp)
                 )
             }
@@ -1339,7 +1341,7 @@ internal fun MessageBubble(
                             ) { Text(emoji, fontSize = 22.sp) }
                         }
                     }
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                    HorizontalDivider(color = Theme.ink.copy(alpha = 0.08f))
                     DropdownMenuItem(
                         text = { Text("Ответить") },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null) },
@@ -1402,22 +1404,22 @@ private fun QuoteBlock(quote: SocialMessageQuote, name: String, onMine: Boolean,
     Row(
         modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = if (onMine) 0.16f else 0.07f))
+            .background(Theme.ink.copy(alpha = if (onMine) 0.16f else 0.07f))
             .padding(start = 6.dp, end = 10.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.width(3.dp).height(32.dp).clip(RoundedCornerShape(2.dp)).background(if (onMine) Color.White else Theme.accent))
+        Box(Modifier.width(3.dp).height(32.dp).clip(RoundedCornerShape(2.dp)).background(if (onMine) Theme.ink else Theme.accent))
         Spacer(Modifier.width(8.dp))
         quote.image?.let {
             RemoteImage(it, Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)))
             Spacer(Modifier.width(8.dp))
         }
         Column {
-            Text(name, color = if (onMine) Color.White else Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(name, color = if (onMine) Theme.ink else Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             // Длинная цитата не раздувает пузырь — обрезается.
             Text(
                 quote.preview,
-                color = Color.White.copy(alpha = 0.75f),
+                color = Theme.ink.copy(alpha = 0.75f),
                 fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1553,7 +1555,7 @@ internal fun VoiceMessageContent(
                 val shown = scrub?.let { (it * voice.durationMs).toLong() } ?: if (playing) positionMs else voice.durationMs.toLong()
                 Text(
                     SocialVoice.format(shown),
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = Theme.ink.copy(alpha = 0.7f),
                     style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
                 )
                 if (!heard && !isLocal) {
@@ -1593,7 +1595,7 @@ internal fun VoiceMessageContent(
 @Composable
 internal fun VoiceWaveform(levels: List<Float>, progress: () -> Float, fromMe: Boolean, modifier: Modifier = Modifier) {
     val played = if (fromMe) Color.White else Theme.accent
-    val rest = Color.White.copy(alpha = if (fromMe) 0.45f else 0.35f)
+    val rest = (if (fromMe) Color.White else Theme.ink).copy(alpha = if (fromMe) 0.45f else 0.35f)
     Canvas(modifier) {
         if (levels.isEmpty()) return@Canvas
         val gap = 2.dp.toPx()
@@ -1631,11 +1633,11 @@ private fun VoiceRecordingStrip(recorder: VoiceRecorder, drag: () -> Float, canc
         Spacer(Modifier.width(10.dp))
         Text(
             SocialVoice.format(recorder.elapsedMs),
-            color = Color.White,
+            color = Theme.ink,
             style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
         )
         Spacer(Modifier.width(10.dp))
-        VoiceWaveform(recorder.recentLevels.toList(), { 1f }, fromMe = true, modifier = Modifier.width(90.dp).height(22.dp))
+        VoiceWaveform(recorder.recentLevels.toList(), { 1f }, fromMe = !Theme.isLight, modifier = Modifier.width(90.dp).height(22.dp))
         Spacer(Modifier.weight(1f))
         Row(
             Modifier.graphicsLayer {
@@ -1645,8 +1647,8 @@ private fun VoiceRecordingStrip(recorder: VoiceRecorder, drag: () -> Float, canc
             },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-            Text("отмена", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null, tint = Theme.ink.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+            Text("отмена", color = Theme.ink.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -1698,7 +1700,7 @@ private fun MicButton(
             .semantics { contentDescription = "Голосовое: удерживай и говори" },
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Filled.Mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        Icon(Icons.Filled.Mic, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(20.dp))
     }
 }
 

@@ -131,14 +131,14 @@ fun CopyProgramButton(
                 }
             }
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White),
+            .background(Theme.ink),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (loading) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-        else Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+        if (loading) CircularProgressIndicator(color = Theme.canvas, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+        else Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = Theme.canvas, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text("Скопировать к себе", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text("Скопировать к себе", color = Theme.canvas, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 
     if (choosing) {
@@ -180,6 +180,6 @@ private fun CopyOption(title: String, onClick: () -> Unit) {
         Box(Modifier.fillMaxWidth().pressable(onClick = onClick).padding(vertical = 12.dp)) {
             Text(title, color = Theme.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
-        HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+        HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f))
     }
 }

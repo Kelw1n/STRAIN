@@ -130,7 +130,7 @@ fun WorkoutCompletionSummaryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Theme.tone(0xFF000000))
     ) {
         Column(
             modifier = Modifier
@@ -152,12 +152,12 @@ fun WorkoutCompletionSummaryScreen(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f))
+                        .background(Theme.ink.copy(alpha = 0.12f))
                 ) {
                     Icon(
                         imageVector = Icons.Filled.ArrowBack,
                         contentDescription = "Назад",
-                        tint = Color.White,
+                        tint = Theme.ink,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -170,13 +170,13 @@ fun WorkoutCompletionSummaryScreen(
                 ) {
                     Text(
                         text = "Твоя тренировка",
-                        color = Color.White,
+                        color = Theme.ink,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "Время, усилие и заметка — в историю",
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = Theme.ink.copy(alpha = 0.55f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -189,7 +189,7 @@ fun WorkoutCompletionSummaryScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "ФОТО (${selectedImages.size}/5)",
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = Theme.ink.copy(alpha = 0.45f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 4.dp)
@@ -199,8 +199,8 @@ fun WorkoutCompletionSummaryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF161616))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                        .background(Theme.tone(0xFF161616))
+                        .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -212,13 +212,13 @@ fun WorkoutCompletionSummaryScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = "Добавь фото к тренировке",
-                                    color = Color.White,
+                                    color = Theme.ink,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = "до 5 штук · первое ляжет на карточку для сторис",
-                                    color = Color.White.copy(alpha = 0.50f),
+                                    color = Theme.ink.copy(alpha = 0.50f),
                                     fontSize = 13.sp
                                 )
                             }
@@ -243,7 +243,7 @@ fun WorkoutCompletionSummaryScreen(
                                     modifier = Modifier
                                         .size(80.dp)
                                         .clip(RoundedCornerShape(14.dp))
-                                        .background(Color(0xFF242428))
+                                        .background(Theme.tone(0xFF242428))
                                 ) {
                                     if (bitmap != null) {
                                         Image(
@@ -290,8 +290,8 @@ fun WorkoutCompletionSummaryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF161616))
-                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                    .background(Theme.tone(0xFF161616))
+                    .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
             ) {
                 Column {
                     Row(
@@ -303,10 +303,10 @@ fun WorkoutCompletionSummaryScreen(
                         OutlinedTextField(
                             value = workoutTitle,
                             onValueChange = { workoutTitle = it },
-                            placeholder = { Text("Название тренировки", color = Color.White.copy(alpha = 0.35f)) },
+                            placeholder = { Text("Название тренировки", color = Theme.ink.copy(alpha = 0.35f)) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
+                                focusedTextColor = Theme.ink,
+                                unfocusedTextColor = Theme.ink,
                                 focusedBorderColor = Color.Transparent,
                                 unfocusedBorderColor = Color.Transparent
                             ),
@@ -319,12 +319,12 @@ fun WorkoutCompletionSummaryScreen(
                         Icon(
                             imageVector = Icons.Filled.Edit,
                             contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.35f),
+                            tint = Theme.ink.copy(alpha = 0.35f),
                             modifier = Modifier.size(16.dp)
                         )
                     }
 
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+                    HorizontalDivider(color = Theme.ink.copy(alpha = 0.08f), thickness = 1.dp)
 
                     Row(
                         modifier = Modifier
@@ -335,10 +335,10 @@ fun WorkoutCompletionSummaryScreen(
                         OutlinedTextField(
                             value = workoutDescription,
                             onValueChange = { workoutDescription = it },
-                            placeholder = { Text("Описание", color = Color.White.copy(alpha = 0.35f)) },
+                            placeholder = { Text("Описание", color = Theme.ink.copy(alpha = 0.35f)) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
+                                focusedTextColor = Theme.ink,
+                                unfocusedTextColor = Theme.ink,
                                 focusedBorderColor = Color.Transparent,
                                 unfocusedBorderColor = Color.Transparent
                             ),
@@ -349,7 +349,7 @@ fun WorkoutCompletionSummaryScreen(
                         Icon(
                             imageVector = Icons.Filled.Edit,
                             contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.35f),
+                            tint = Theme.ink.copy(alpha = 0.35f),
                             modifier = Modifier
                                 .padding(top = 8.dp)
                                 .size(16.dp)
@@ -362,7 +362,7 @@ fun WorkoutCompletionSummaryScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "ВРЕМЯ",
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = Theme.ink.copy(alpha = 0.45f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 4.dp)
@@ -372,8 +372,8 @@ fun WorkoutCompletionSummaryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF161616))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                        .background(Theme.tone(0xFF161616))
+                        .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                         .padding(18.dp)
                 ) {
                     Row(
@@ -383,14 +383,14 @@ fun WorkoutCompletionSummaryScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
                                 text = formatDurationRu(durationSeconds),
-                                color = Color.White,
+                                color = Theme.ink,
                                 fontSize = 26.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = FontFamily.Monospace
                             )
                             Text(
                                 text = "В приложении: ${formatDurationRu(WorkoutSessionManager.elapsedSeconds)}",
-                                color = Color.White.copy(alpha = 0.50f),
+                                color = Theme.ink.copy(alpha = 0.50f),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -424,7 +424,7 @@ fun WorkoutCompletionSummaryScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "УСИЛИЕ",
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = Theme.ink.copy(alpha = 0.45f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 4.dp)
@@ -457,8 +457,8 @@ fun WorkoutCompletionSummaryScreen(
                     Brush.verticalGradient(
                         listOf(
                             Color.Transparent,
-                            Color(0xFF000000).copy(alpha = 0.95f),
-                            Color(0xFF000000)
+                            Theme.tone(0xFF000000).copy(alpha = 0.95f),
+                            Theme.tone(0xFF000000)
                         )
                     )
                 )
@@ -496,14 +496,14 @@ fun WorkoutCompletionSummaryScreen(
                         )
                         WorkoutSessionManager.showingSummary = false
                     }
-                    .shadow(12.dp, CircleShape, ambientColor = Color.White.copy(alpha = 0.2f))
+                    .shadow(12.dp, CircleShape, ambientColor = Theme.ink.copy(alpha = 0.2f))
                     .clip(CircleShape)
-                    .background(Color.White),
+                    .background(Theme.ink),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "ДАЛЬШЕ",
-                    color = Color.Black,
+                    color = Theme.canvas,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Black
                 )
@@ -521,7 +521,7 @@ fun WorkoutCompletionSummaryScreen(
             title = {
                 Text(
                     text = "Время тренировки",
-                    color = Color.White,
+                    color = Theme.ink,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -529,7 +529,7 @@ fun WorkoutCompletionSummaryScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(
                         text = "Фактическая длительность: ${formatDurationRu(tempMinutes * 60)}",
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = Theme.ink.copy(alpha = 0.85f),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -558,10 +558,10 @@ fun WorkoutCompletionSummaryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showingDurationPicker = false }) {
-                    Text("Отмена", color = Color.White.copy(alpha = 0.6f))
+                    Text("Отмена", color = Theme.ink.copy(alpha = 0.6f))
                 }
             },
-            containerColor = Color(0xFF1C1C20)
+            containerColor = Theme.tone(0xFF1C1C20)
         )
     }
 }
@@ -596,12 +596,12 @@ private fun PhotoSourceTile(
             .then(if (large) Modifier.height(76.dp) else Modifier.size(80.dp))
             .pressable(onClick = onClick)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.07f)),
+            .background(Theme.ink.copy(alpha = 0.07f)),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(if (large) 24.dp else 20.dp))
-        Text(title, color = Color.White.copy(alpha = if (large) 0.9f else 0.6f), fontSize = if (large) 14.sp else 11.sp, fontWeight = FontWeight.Bold)
+        Icon(icon, contentDescription = null, tint = Theme.ink.copy(alpha = 0.9f), modifier = Modifier.size(if (large) 24.dp else 20.dp))
+        Text(title, color = Theme.ink.copy(alpha = if (large) 0.9f else 0.6f), fontSize = if (large) 14.sp else 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -610,7 +610,7 @@ private fun PublishSection(checked: Boolean, onChange: (Boolean) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "ЛЕНТА",
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = 4.dp)
@@ -619,17 +619,17 @@ private fun PublishSection(checked: Boolean, onChange: (Boolean) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF161616))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                .background(Theme.tone(0xFF161616))
+                .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (SocialService.isSignedIn) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Опубликовать в ленте STRAIN", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Опубликовать в ленте STRAIN", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Фото, время, объём и все подходы с весами. Друзья смогут поставить лайк и написать комментарий.",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Theme.ink.copy(alpha = 0.5f),
                         fontSize = 12.sp
                     )
                 }
@@ -643,7 +643,7 @@ private fun PublishSection(checked: Boolean, onChange: (Boolean) -> Unit) {
                 Spacer(Modifier.width(12.dp))
                 Text(
                     "Создай профиль во вкладке «Профиль» — и тренировки можно будет публиковать в ленту.",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = Theme.ink.copy(alpha = 0.6f),
                     fontSize = 13.sp
                 )
             }
@@ -657,7 +657,7 @@ private fun FriendsSection(selected: Set<String>, onToggle: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = if (selected.isEmpty()) "ОТПРАВИТЬ ДРУГУ" else "ОТПРАВИТЬ ДРУГУ · ${selected.size}",
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = 4.dp)
@@ -666,14 +666,14 @@ private fun FriendsSection(selected: Set<String>, onToggle: (String) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF161616))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
+                .background(Theme.tone(0xFF161616))
+                .border(1.dp, Theme.ink.copy(alpha = 0.08f), RoundedCornerShape(22.dp))
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 "Отметь друзей — тренировка уйдёт им в переписку карточкой со всеми подходами.",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 12.sp
             )
             WorkoutRecipientsPicker(selected, onToggle)

@@ -308,7 +308,7 @@ private fun BenchWaveChart(
                         Icon(
                             Icons.Filled.Check,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = Theme.ink,
                             modifier = Modifier.size(11.dp).padding(top = 1.dp)
                         )
                     }
@@ -355,7 +355,7 @@ private fun BenchSessionCard(
                 contentAlignment = Alignment.Center
             ) {
                 if (isDone) {
-                    Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(18.dp))
                 } else {
                     Text("${session.id}", color = accentColor, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }

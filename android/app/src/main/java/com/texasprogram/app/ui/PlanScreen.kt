@@ -122,7 +122,7 @@ private fun WeekChip(number: Int, selected: Boolean, done: Boolean, onClick: () 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 "$number",
-                color = if (selected) Color.White else if (done) Theme.success else Theme.textPrimary,
+                color = if (selected) Theme.ink else if (done) Theme.success else Theme.textPrimary,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -130,7 +130,7 @@ private fun WeekChip(number: Int, selected: Boolean, done: Boolean, onClick: () 
                 Icon(
                     Icons.Filled.Check,
                     contentDescription = null,
-                    tint = if (selected) Color.White else Theme.success,
+                    tint = if (selected) Theme.ink else Theme.success,
                     modifier = Modifier.size(10.dp)
                 )
             } else {

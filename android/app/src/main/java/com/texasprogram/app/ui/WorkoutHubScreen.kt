@@ -85,10 +85,10 @@ fun WorkoutHubScreen(
                             .size(42.dp)
                             .pressable(onClick = onOpenToday)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f)),
+                            .background(Theme.ink.copy(alpha = 0.08f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Filled.ViewAgenda, contentDescription = "План на сегодня", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.ViewAgenda, contentDescription = "План на сегодня", tint = Theme.ink, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -157,9 +157,9 @@ fun WorkoutHubScreen(
                                 onStartWorkout(focus)
                             }
                         }
-                        .shadow(16.dp, CircleShape, ambientColor = Color.White.copy(alpha = 0.2f))
+                        .shadow(16.dp, CircleShape, ambientColor = Theme.ink.copy(alpha = 0.2f))
                         .clip(CircleShape)
-                        .background(Color.White)
+                        .background(Theme.ink)
                         .padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -176,7 +176,7 @@ fun WorkoutHubScreen(
                             )
                             Text(
                                 text = "ПРОДОЛЖИТЬ ТРЕНИРОВКУ",
-                                color = Color.Black,
+                                color = Theme.canvas,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
@@ -184,7 +184,7 @@ fun WorkoutHubScreen(
                         } else {
                             Text(
                                 text = "НАЧАТЬ ТРЕНИРОВКУ",
-                                color = Color.Black,
+                                color = Theme.canvas,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
@@ -220,8 +220,8 @@ private fun ActivityStreakCard(profile: ProgramProfile, onClick: () -> Unit) {
             .fillMaxWidth()
             .pressable(onClick = onClick)
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161616))
-            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
+            .background(Theme.tone(0xFF161616))
+            .border(1.dp, Theme.ink.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -231,14 +231,14 @@ private fun ActivityStreakCard(profile: ProgramProfile, onClick: () -> Unit) {
         ) {
             Text(
                 text = "Серия активностей",
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.weight(1f))
             Text(
                 text = "Этот месяц",
-                color = Color.White.copy(alpha = 0.45f),
+                color = Theme.ink.copy(alpha = 0.45f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -246,7 +246,7 @@ private fun ActivityStreakCard(profile: ProgramProfile, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.3f),
+                tint = Theme.ink.copy(alpha = 0.3f),
                 modifier = Modifier.size(14.dp)
             )
         }
@@ -264,18 +264,18 @@ private fun ActivityStreakCard(profile: ProgramProfile, onClick: () -> Unit) {
                 Icon(
                     imageVector = Icons.Filled.LocalFireDepartment,
                     contentDescription = null,
-                    tint = if (weeks > 0) Theme.accent else Color.White.copy(alpha = 0.2f),
+                    tint = if (weeks > 0) Theme.accent else Theme.ink.copy(alpha = 0.2f),
                     modifier = Modifier.size(38.dp)
                 )
                 Text(
                     text = "$weeks",
-                    color = Color.White,
+                    color = Theme.ink,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Black
                 )
                 Text(
                     text = streakWord(weeks),
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = Theme.ink.copy(alpha = 0.45f),
                     fontSize = 11.sp
                 )
             }
@@ -294,7 +294,7 @@ private fun ActivityStreakCard(profile: ProgramProfile, onClick: () -> Unit) {
 
         Text(
             text = if (weeks > 0) "Серия активна! Продолжай в том же духе." else "Запиши тренировку, чтобы начать серию",
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 12.sp
         )
     }
@@ -334,9 +334,9 @@ private fun MonthCalendar(today: LocalDate, done: Set<LocalDate>, trainingWeekda
                 val weekday = date.dayOfWeek.value % 7 + 1
                 when {
                     date in done -> drawCircle(accent, d / 2, center)
-                    date.isBefore(today) -> drawCircle(Color.White.copy(alpha = 0.16f), d / 2, center)
+                    date.isBefore(today) -> drawCircle(Theme.ink.copy(alpha = 0.16f), d / 2, center)
                     else -> drawCircle(
-                        if (weekday in trainingWeekdays) accent else Color.White.copy(alpha = 0.18f),
+                        if (weekday in trainingWeekdays) accent else Theme.ink.copy(alpha = 0.18f),
                         d / 2 - stroke / 2,
                         center,
                         style = androidx.compose.ui.graphics.drawscope.Stroke(stroke)
@@ -346,7 +346,7 @@ private fun MonthCalendar(today: LocalDate, done: Set<LocalDate>, trainingWeekda
                     val w = 8.dp.toPx()
                     val h = 2.dp.toPx()
                     drawRoundRect(
-                        Color.White,
+                        Theme.ink,
                         topLeft = androidx.compose.ui.geometry.Offset(center.x - w / 2, center.y + d / 2 + 3.dp.toPx() - h),
                         size = androidx.compose.ui.geometry.Size(w, h),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2)
@@ -381,8 +381,8 @@ private fun GoalCard(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF161616))
-            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
+            .background(Theme.tone(0xFF161616))
+            .border(1.dp, Theme.ink.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -392,7 +392,7 @@ private fun GoalCard(
         ) {
             Text(
                 text = "Цель",
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -400,7 +400,7 @@ private fun GoalCard(
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.3f),
+                tint = Theme.ink.copy(alpha = 0.3f),
                 modifier = Modifier.size(14.dp)
             )
         }
@@ -410,7 +410,7 @@ private fun GoalCard(
             Icon(
                 imageVector = if (reached) Icons.Filled.Check else Icons.Filled.CalendarToday,
                 contentDescription = null,
-                tint = if (reached) Theme.accent else Color.White.copy(alpha = 0.85f),
+                tint = if (reached) Theme.accent else Theme.ink.copy(alpha = 0.85f),
                 modifier = Modifier.size(if (reached) 22.dp else 18.dp)
             )
         }
@@ -418,7 +418,7 @@ private fun GoalCard(
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = if (reached) "Цель недели есть" else "На этой неделе",
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -426,7 +426,7 @@ private fun GoalCard(
             )
             Text(
                 text = "${minOf(done, 99)} из $target ${RuPlural.word(target, "тренировки", "тренировок", "тренировок")}",
-                color = Color.White.copy(alpha = 0.45f),
+                color = Theme.ink.copy(alpha = 0.45f),
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -443,8 +443,8 @@ private fun ProgramsCard(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF161616))
-            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
+            .background(Theme.tone(0xFF161616))
+            .border(1.dp, Theme.ink.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -454,7 +454,7 @@ private fun ProgramsCard(
         ) {
             Text(
                 text = "Программы",
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -462,7 +462,7 @@ private fun ProgramsCard(
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.3f),
+                tint = Theme.ink.copy(alpha = 0.3f),
                 modifier = Modifier.size(14.dp)
             )
         }
@@ -471,13 +471,13 @@ private fun ProgramsCard(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.08f)),
+                .background(Theme.ink.copy(alpha = 0.08f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Filled.ViewCarousel,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.85f),
+                tint = Theme.ink.copy(alpha = 0.85f),
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -485,7 +485,7 @@ private fun ProgramsCard(
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = programTitle,
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -493,7 +493,7 @@ private fun ProgramsCard(
             )
             Text(
                 text = "Свои и каталог",
-                color = Color.White.copy(alpha = 0.45f),
+                color = Theme.ink.copy(alpha = 0.45f),
                 fontSize = 12.sp
             )
         }
@@ -513,8 +513,8 @@ private fun TodaysWorkoutPreviewCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161616))
-            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
+            .background(Theme.tone(0xFF161616))
+            .border(1.dp, Theme.ink.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -528,7 +528,7 @@ private fun TodaysWorkoutPreviewCard(
             )
             Text(
                 text = workout.fullTitle,
-                color = Color.White,
+                color = Theme.ink,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -540,7 +540,7 @@ private fun TodaysWorkoutPreviewCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1C1C1F))
+                        .background(Theme.tone(0xFF1C1C1F))
                         .padding(horizontal = 12.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -553,7 +553,7 @@ private fun TodaysWorkoutPreviewCard(
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = ex.name,
-                        color = Color.White,
+                        color = Theme.ink,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
@@ -562,7 +562,7 @@ private fun TodaysWorkoutPreviewCard(
                     )
                     Text(
                         text = "${ex.sets} подх.",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Theme.ink.copy(alpha = 0.5f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -578,8 +578,8 @@ private fun RestDayCard() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF161616))
-            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
+            .background(Theme.tone(0xFF161616))
+            .border(1.dp, Theme.ink.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -587,13 +587,13 @@ private fun RestDayCard() {
         Text("🌙", fontSize = 36.sp)
         Text(
             text = "Сегодня день отдыха",
-            color = Color.White,
+            color = Theme.ink,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
             text = "Восстановление — неотъемлемая часть прогресса.",
-            color = Color.White.copy(alpha = 0.5f),
+            color = Theme.ink.copy(alpha = 0.5f),
             fontSize = 13.sp
         )
     }

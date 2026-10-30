@@ -161,7 +161,7 @@ private fun LiveCard(friend: SocialLiveFriend, onClick: () -> Unit) {
             .width(196.dp)
             .pressable(onClick = onClick)
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFF161617))
+            .background(Theme.tone(0xFF161617))
             .border(1.dp, Theme.success.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)
@@ -172,7 +172,7 @@ private fun LiveCard(friend: SocialLiveFriend, onClick: () -> Unit) {
             }
             Spacer(Modifier.width(9.dp))
             Column {
-                Text("@${friend.user.username}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("@${friend.user.username}", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     SocialFormat.duration(((now - live.startedAt.toLong()) / 1000).toInt().coerceAtLeast(0)),
                     color = Theme.success,
@@ -183,7 +183,7 @@ private fun LiveCard(friend: SocialLiveFriend, onClick: () -> Unit) {
         }
         Text(
             live.exercise.ifEmpty { live.title },
-            color = Color.White,
+            color = Theme.ink,
             fontSize = 15.sp,
             fontWeight = FontWeight.Black,
             maxLines = 1,
@@ -193,11 +193,11 @@ private fun LiveCard(friend: SocialLiveFriend, onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SetDots(live.done, live.total)
                 Spacer(Modifier.width(8.dp))
-                Text("${live.done}/${live.total}", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("${live.done}/${live.total}", color = Theme.ink.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
         if (live.title.isNotEmpty() && live.exercise.isNotEmpty()) {
-            Text(live.title, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(live.title, color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -212,7 +212,7 @@ private fun SetDots(done: Int, total: Int) {
                     .width(if (total > 6) 8.dp else 14.dp)
                     .height(5.dp)
                     .clip(CircleShape)
-                    .background(if (index < done) Theme.success else Color.White.copy(alpha = 0.14f))
+                    .background(if (index < done) Theme.success else Theme.ink.copy(alpha = 0.14f))
             )
         }
     }
@@ -227,7 +227,7 @@ fun ActivityBell(onClick: () -> Unit) {
         Modifier.size(42.dp).pressable(onClick = onClick).clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Outlined.Notifications, contentDescription = "Активность", tint = Color.White)
+        Icon(Icons.Outlined.Notifications, contentDescription = "Активность", tint = Theme.ink)
         if (SocialService.unseenActivity > 0) {
             Box(
                 Modifier
@@ -264,7 +264,7 @@ fun ActivityScreen(contentPadding: PaddingValues, navigator: SocialNavigator) {
     }
     LaunchedEffect(Unit) { reload() }
 
-    LazyColumn(Modifier.fillMaxSize().background(Color.Black), contentPadding = contentPadding) {
+    LazyColumn(Modifier.fillMaxSize().background(Theme.canvas), contentPadding = contentPadding) {
         item { SocialTopBar("Активность", onBack = { navigator.pop() }) }
         val currentError = error
         if (currentError != null && activity.isEmpty()) {
@@ -276,11 +276,11 @@ fun ActivityScreen(contentPadding: PaddingValues, navigator: SocialNavigator) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color.White.copy(alpha = 0.35f), modifier = Modifier.size(36.dp))
-                    Text("Пока тихо", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Theme.ink.copy(alpha = 0.35f), modifier = Modifier.size(36.dp))
+                    Text("Пока тихо", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Здесь появятся лайки, комментарии, ответы и новые подписчики.",
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = Theme.ink.copy(alpha = 0.55f),
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center
                     )
@@ -299,11 +299,11 @@ fun ActivityScreen(contentPadding: PaddingValues, navigator: SocialNavigator) {
                         else if (postId != null) navigator.push(SocialRoute.PostId(postId))
                     }
                 )
-                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 58.dp))
+                HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 58.dp))
             }
         }
         if (loading && activity.isEmpty()) {
-            item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp)) } }
+            item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp)) } }
         }
     }
 }
@@ -331,12 +331,12 @@ internal fun ActivityRow(item: SocialActivityItem, onOpenActor: () -> Unit, onOp
                         append(" ")
                         append(item.action)
                     },
-                    color = Color.White,
+                    color = Theme.ink,
                     fontSize = 15.sp,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(SocialFormat.ago(item.instant), color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
+                Text(SocialFormat.ago(item.instant), color = Theme.ink.copy(alpha = 0.4f), fontSize = 12.sp)
             }
             if (item.unseen) {
                 Spacer(Modifier.width(8.dp))
@@ -355,10 +355,10 @@ private fun KindIcon(kind: String, modifier: Modifier = Modifier) {
         else -> Icons.Filled.Favorite to Color(0xFFFF455C)
     }
     Box(
-        modifier.size(21.dp).clip(CircleShape).background(Color.Black).padding(2.dp).clip(CircleShape).background(color),
+        modifier.size(21.dp).clip(CircleShape).background(Theme.canvas).padding(2.dp).clip(CircleShape).background(color),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
+        Icon(icon, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(10.dp))
     }
 }
 
@@ -388,7 +388,7 @@ fun PostLoaderScreen(id: String, contentPadding: PaddingValues, navigator: Socia
             SocialErrorCard(currentError) { scope.launch { load() } }
         }
         else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(26.dp))
+            CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(26.dp))
         }
     }
 }
@@ -423,13 +423,13 @@ fun LeaderboardSection(onOpen: (String) -> Unit) {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LeaderboardMetric.entries.forEach { item ->
                 val selected = item == metric
-                val label by animateColorAsState(if (selected) Color.Black else Color.White, Motion.fade(200), label = "metricLabel")
+                val label by animateColorAsState(if (selected) Theme.canvas else Theme.ink, Motion.fade(200), label = "metricLabel")
                 Box(
                     Modifier
                         .height(34.dp)
                         .pressable { metric = item }
                         .clip(CircleShape)
-                        .selectionFill(selected, Color.White, Color(0xFF242424), CircleShape)
+                        .selectionFill(selected, Theme.ink, Theme.tone(0xFF242424), CircleShape)
                         .padding(horizontal = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -451,14 +451,14 @@ fun LeaderboardSection(onOpen: (String) -> Unit) {
         when {
             currentError != null && entries.isEmpty() -> SocialErrorCard(currentError) { scope.launch { reload() } }
             loading && entries.isEmpty() -> Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp))
             }
             else -> {
                 LeaderboardCard(LeaderboardMetric.ranked(entries, metric), metric, onOpen)
                 if (entries.size < 2) {
                     Text(
                         "Подпишись на друзей — и меряйтесь тоннажем, тренировками и рекордами каждую неделю.",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Theme.ink.copy(alpha = 0.5f),
                         fontSize = 14.sp
                     )
                 }
@@ -466,7 +466,7 @@ fun LeaderboardSection(onOpen: (String) -> Unit) {
         }
         Text(
             "Считаются все тренировки в приложении, а не только опубликованные. Неделя — с понедельника. Корона — тому, у кого за прошлую неделю больше всех тренировок.",
-            color = Color.White.copy(alpha = 0.35f),
+            color = Theme.ink.copy(alpha = 0.35f),
             fontSize = 12.sp
         )
     }
@@ -480,10 +480,10 @@ private fun weekTitle(today: LocalDate = LocalDate.now()): String {
 
 @Composable
 internal fun LeaderboardCard(ranked: List<SocialLeaderboardEntry>, metric: LeaderboardMetric, onOpen: (String) -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color(0xFF161617))) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Theme.tone(0xFF161617))) {
         ranked.forEachIndexed { index, entry ->
             LeaderboardRow(index + 1, entry, metric) { onOpen(entry.user.username) }
-            if (index < ranked.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 98.dp))
+            if (index < ranked.size - 1) HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 98.dp))
         }
     }
 }
@@ -492,11 +492,11 @@ internal fun LeaderboardCard(ranked: List<SocialLeaderboardEntry>, metric: Leade
 private fun LeaderboardRow(place: Int, entry: SocialLeaderboardEntry, metric: LeaderboardMetric, onClick: () -> Unit) {
     val scored = metric.value(entry.stats) > 0
     val placeColor = when {
-        !scored -> Color.White.copy(alpha = 0.4f)
+        !scored -> Theme.ink.copy(alpha = 0.4f)
         place == 1 -> Color(0xFFFFCC40)
         place == 2 -> Color(0xFFC7C7C7)
         place == 3 -> Color(0xFFD98C4D)
-        else -> Color.White.copy(alpha = 0.5f)
+        else -> Theme.ink.copy(alpha = 0.5f)
     }
     Row(
         Modifier
@@ -519,7 +519,7 @@ private fun LeaderboardRow(place: Int, entry: SocialLeaderboardEntry, metric: Le
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     if (entry.user.isMe) "Ты" else "@${entry.user.username}",
-                    color = Color.White,
+                    color = Theme.ink,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -534,7 +534,7 @@ private fun LeaderboardRow(place: Int, entry: SocialLeaderboardEntry, metric: Le
             Text(
                 ((if (entry.wins > 0) listOf("👑 ${entry.wins}") else emptyList()) +
                     LeaderboardMetric.entries.filter { it != metric }.map { it.format(entry.stats) }).joinToString(" · "),
-                color = Color.White.copy(alpha = 0.45f),
+                color = Theme.ink.copy(alpha = 0.45f),
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -543,7 +543,7 @@ private fun LeaderboardRow(place: Int, entry: SocialLeaderboardEntry, metric: Le
         Spacer(Modifier.width(8.dp))
         Text(
             metric.format(entry.stats),
-            color = if (scored) Color.White else Color.White.copy(alpha = 0.35f),
+            color = if (scored) Theme.ink else Theme.ink.copy(alpha = 0.35f),
             fontSize = 15.sp,
             fontWeight = FontWeight.Black
         )

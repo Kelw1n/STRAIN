@@ -101,7 +101,7 @@ object ChallengePlace {
         1 -> Color(0xFFFFCC40)
         2 -> Color(0xFFCCCCCC)
         3 -> Color(0xFFD98C4D)
-        else -> Color.White.copy(alpha = 0.5f)
+        else -> Theme.ink.copy(alpha = 0.5f)
     }
 
     fun ordinal(place: Int): String = "$place-е место"
@@ -132,7 +132,7 @@ fun ChallengesSection() {
         when {
             error != null && ChallengeStore.challenges.isEmpty() -> SocialErrorCard(error) { scope.launch { ChallengeStore.refresh() } }
             !ChallengeStore.loaded -> Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
+                CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(22.dp))
             }
             ChallengeStore.challenges.isEmpty() -> EmptyChallenges { creating = true }
         }
@@ -170,10 +170,10 @@ private fun EmptyChallenges(onCreate: () -> Unit) {
             Icon(Icons.Filled.Flag, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(22.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("Позови друзей помериться", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text("Позови друзей помериться", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text(
                 "Тренировки, тоннаж, недели без пропусков или рост силы — от недели до месяца.",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 13.sp
             )
         }
@@ -197,7 +197,7 @@ private fun TimeBar(challenge: SocialChallenge) {
     val fraction = if (challenge.endsAt > challenge.startsAt) {
         ((now - challenge.startsAt) / (challenge.endsAt - challenge.startsAt)).coerceIn(0.0, 1.0).toFloat()
     } else 1f
-    Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
+    Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Theme.ink.copy(alpha = 0.08f))) {
         Box(
             Modifier
                 .fillMaxWidth(fraction.coerceAtLeast(0.02f))
@@ -223,13 +223,13 @@ private fun ChallengeCard(challenge: SocialChallenge, onOpen: () -> Unit) {
             KindIcon(challenge.challengeKind)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(challenge.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(challenge.timeLine(), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(challenge.title, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(challenge.timeLine(), color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
             challenge.me?.place?.let { place ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("$place", color = ChallengePlace.color(place), fontSize = 24.sp, fontWeight = FontWeight.Black)
-                    Text("место", color = Color.White.copy(alpha = 0.45f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("место", color = Theme.ink.copy(alpha = 0.45f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -249,14 +249,14 @@ private fun ChallengeCard(challenge: SocialChallenge, onOpen: () -> Unit) {
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (member.user.isMe) "Ты" else "@${member.user.username}",
-                        color = if (member.user.isMe) Theme.accent else Color.White,
+                        color = if (member.user.isMe) Theme.accent else Theme.ink,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    Text(member.detail.ifEmpty { "—" }, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(member.detail.ifEmpty { "—" }, color = Theme.ink.copy(alpha = 0.8f), fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
         }
@@ -302,16 +302,16 @@ private fun ChallengeInviteCard(challenge: SocialChallenge) {
             Column(Modifier.weight(1f)) {
                 Text(
                     "@${challenge.owner?.username ?: "друг"} зовёт в челлендж",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = Theme.ink.copy(alpha = 0.6f),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text("${challenge.title} · ${challenge.weeks} нед.", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("${challenge.title} · ${challenge.weeks} нед.", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
-        Text(challenge.challengeKind?.subtitle.orEmpty(), color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
+        Text(challenge.challengeKind?.subtitle.orEmpty(), color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp)
         error?.let { Text(it, color = Theme.record, fontSize = 12.sp) }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             NutritionButton("Отказаться", Modifier.weight(1f), primary = false, enabled = !busy) { answer("decline") }
@@ -332,7 +332,7 @@ internal fun ChallengeDetailSheet(id: String, onDismiss: () -> Unit) {
 
     NutritionSheet(title = "Челлендж", onDismiss = onDismiss, leading = null, action = "Готово", onAction = { close -> close() }) { close ->
         if (challenge == null) {
-            Text("Челлендж больше не доступен", color = Color.White.copy(alpha = 0.5f), modifier = Modifier.padding(24.dp))
+            Text("Челлендж больше не доступен", color = Theme.ink.copy(alpha = 0.5f), modifier = Modifier.padding(24.dp))
             return@NutritionSheet
         }
         val kind = challenge.challengeKind
@@ -341,16 +341,16 @@ internal fun ChallengeDetailSheet(id: String, onDismiss: () -> Unit) {
                 KindIcon(kind, 52.dp)
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text(challenge.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(challenge.title, color = Theme.ink, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                     Text(
                         "${challenge.weeks} нед. · ${RuDate.shortDayMonth(challenge.startDay())} – ${RuDate.shortDayMonth(challenge.endDay())}",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Theme.ink.copy(alpha = 0.5f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
-            Text(kind?.subtitle.orEmpty(), color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+            Text(kind?.subtitle.orEmpty(), color = Theme.ink.copy(alpha = 0.7f), fontSize = 14.sp)
             if (!challenge.isFinished) TimeBar(challenge)
             Text(challenge.timeLine(), color = kind?.color ?: Theme.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
@@ -367,8 +367,8 @@ internal fun ChallengeDetailSheet(id: String, onDismiss: () -> Unit) {
                         tint = ChallengePlace.color(place),
                         modifier = Modifier.size(38.dp)
                     )
-                    Text(if (place == 1) "Победа!" else ChallengePlace.ordinal(place), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Black)
-                    Text("из ${challenge.joined.size} · ${mine.detail}", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (place == 1) "Победа!" else ChallengePlace.ordinal(place), color = Theme.ink, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                    Text("из ${challenge.joined.size} · ${mine.detail}", color = Theme.ink.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     if (xp > 0) {
                         Text(
                             if (challenge.isFinal()) "+$xp опыта" else "+$xp опыта — когда места станут окончательными",
@@ -408,7 +408,7 @@ internal fun ChallengeDetailSheet(id: String, onDismiss: () -> Unit) {
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             if (member.user.isMe) "Ты" else "@${member.user.username}",
-                            color = Color.White,
+                            color = Theme.ink,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -417,19 +417,19 @@ internal fun ChallengeDetailSheet(id: String, onDismiss: () -> Unit) {
                         )
                         LevelChip(member.user.level)
                     }
-                    Text(member.detail.ifEmpty { "—" }, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                    Text(member.detail.ifEmpty { "—" }, color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Black, maxLines = 1)
                 }
-                if (index < challenge.joined.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 90.dp))
+                if (index < challenge.joined.size - 1) HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 90.dp))
             }
         }
         if (challenge.invited.isNotEmpty()) {
             Text(
                 "Ждём ответа: " + challenge.invited.joinToString(", ") { "@${it.user.username}" },
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 13.sp
             )
         }
-        Text(kind?.rules.orEmpty(), color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
+        Text(kind?.rules.orEmpty(), color = Theme.ink.copy(alpha = 0.4f), fontSize = 12.sp)
         error?.let { Text(it, color = Theme.record, fontSize = 13.sp) }
         if (!challenge.isFinished && challenge.myStatus == "joined") {
             Text(
@@ -522,13 +522,13 @@ internal fun NewChallengeSheet(onDismiss: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(item.icon, contentDescription = null, tint = item.color, modifier = Modifier.size(20.dp))
-                        Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                        Text(item.subtitle, color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 3)
+                        Text(item.title, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text(item.subtitle, color = Theme.ink.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 3)
                     }
                 }
             }
         }
-        Text(kind.rules, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+        Text(kind.rules, color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
 
         NutritionCaption("Сколько")
         SegmentedControl(options = (1..4).map { "$it нед." }, selectedIndex = weeks - 1) { weeks = it + 1 }
@@ -536,11 +536,11 @@ internal fun NewChallengeSheet(onDismiss: () -> Unit) {
         NutritionCaption("Кого позвать")
         when {
             loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
+                CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(22.dp))
             }
             friends.isEmpty() -> Text(
                 "Подпишись на друзей во вкладке «Люди» — звать можно тех, на кого подписан.",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 14.sp
             )
             else -> Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Theme.surface)) {
@@ -561,7 +561,7 @@ internal fun NewChallengeSheet(onDismiss: () -> Unit) {
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 "@${friend.username}",
-                                color = Color.White,
+                                color = Theme.ink,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -573,7 +573,7 @@ internal fun NewChallengeSheet(onDismiss: () -> Unit) {
                         Icon(
                             if (chosen) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
                             contentDescription = null,
-                            tint = if (chosen) Theme.accent else Color.White.copy(alpha = 0.3f),
+                            tint = if (chosen) Theme.accent else Theme.ink.copy(alpha = 0.3f),
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -583,7 +583,7 @@ internal fun NewChallengeSheet(onDismiss: () -> Unit) {
         if (picked.isNotEmpty()) {
             Text(
                 "Позовём ${picked.size} ${RuPlural.word(picked.size, "друга", "друзей", "друзей")} — счёт пойдёт с сегодняшнего дня.",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 13.sp
             )
         }
@@ -619,11 +619,11 @@ fun WeekWinnersSheet(onDismiss: () -> Unit) {
         when {
             currentError != null && winners.isEmpty() -> SocialErrorCard(currentError) { scope.launch { load() } }
             loading -> Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                CircularProgressIndicator(color = Theme.ink, modifier = Modifier.size(24.dp))
             }
             winners.isEmpty() -> Text(
                 "Пока никто не выигрывал неделю. Победитель — у кого больше тренировок, при равенстве — больше тоннаж.",
-                color = Color.White.copy(alpha = 0.5f),
+                color = Theme.ink.copy(alpha = 0.5f),
                 fontSize = 14.sp
             )
             else -> {
@@ -639,7 +639,7 @@ fun WeekWinnersSheet(onDismiss: () -> Unit) {
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Avatar(user.avatar, user.username, 44.dp)
-                            Text(if (user.isMe) "Ты" else "@${user.username}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(if (user.isMe) "Ты" else "@${user.username}", color = Theme.ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("👑 $count", color = ChallengePlace.color(1), fontSize = 13.sp, fontWeight = FontWeight.Black)
                         }
                     }
@@ -652,10 +652,10 @@ fun WeekWinnersSheet(onDismiss: () -> Unit) {
                             Avatar(winner.user.avatar, winner.user.username, 34.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(if (winner.user.isMe) "Ты" else "@${winner.user.username}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                Text(weekRange(winner.week), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                                Text(if (winner.user.isMe) "Ты" else "@${winner.user.username}", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text(weekRange(winner.week), color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
                             }
-                            Text("${winner.workouts} трен.", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                            Text("${winner.workouts} трен.", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Black)
                         }
                     }
                 }

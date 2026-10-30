@@ -96,14 +96,14 @@ fun CoachEntryCard(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, 
                 Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(22.dp))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("ИИ-тренер", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("ИИ-тренер", color = Theme.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Text(
                     "Спроси про застой, прогресс, восстановление и питание — он видит твои тренировки.",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = Theme.ink.copy(alpha = 0.5f),
                     fontSize = 13.sp
                 )
             }
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
         }
         if (review) {
             NutritionButton("Разбор прошлой недели", icon = Icons.Filled.EventAvailable) {
@@ -230,8 +230,8 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
             if (thinking) {
                 item(key = "thinking") {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                        Text("Тренер думает…", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        CircularProgressIndicator(color = Theme.ink, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                        Text("Тренер думает…", color = Theme.ink.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -239,7 +239,7 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
                 item(key = "clear") {
                     Text(
                         if (confirmClear) "Нажми ещё раз — переписка удалится" else "Очистить переписку",
-                        color = Color.White.copy(alpha = 0.35f),
+                        color = Theme.ink.copy(alpha = 0.35f),
                         fontSize = 13.sp,
                         modifier = Modifier
                             .pressable {
@@ -273,7 +273,7 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
             }
         }
         // Быстрые вопросы и поле ввода.
-        Column(Modifier.fillMaxWidth().background(Color(0xFF0E0E0E)).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().background(Theme.tone(0xFF0E0E0E)).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -284,11 +284,11 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
                             .height(32.dp)
                             .pressable(enabled = !thinking) { ask(question) }
                             .clip(CircleShape)
-                            .background(Color(0xFF292929))
+                            .background(Theme.tone(0xFF292929))
                             .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(question, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(question, color = Theme.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
             }
@@ -298,15 +298,15 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
                         .weight(1f)
                         .heightIn(min = 44.dp)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF212121))
+                        .background(Theme.tone(0xFF212121))
                         .padding(horizontal = 14.dp, vertical = 11.dp)
                 ) {
-                    if (draft.isEmpty()) Text("Спроси тренера", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
+                    if (draft.isEmpty()) Text("Спроси тренера", color = Theme.ink.copy(alpha = 0.4f), fontSize = 16.sp)
                     BasicTextField(
                         value = draft,
                         onValueChange = { draft = it.take(1000) },
                         maxLines = 5,
-                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                        textStyle = TextStyle(color = Theme.ink, fontSize = 16.sp),
                         cursorBrush = SolidColor(Theme.accent),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -324,7 +324,7 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
                         .background(Theme.accent.copy(alpha = if (canSend) 1f else 0.4f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Отправить", tint = Color.Black, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Отправить", tint = Theme.canvas, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -346,10 +346,10 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
 @Composable
 private fun CoachKeyCard(onKey: () -> Unit) {
     NutritionCard(spacing = 10.dp) {
-        Text("Нужен ключ Google AI", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text("Нужен ключ Google AI", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Text(
             "Тренер работает на ИИ Google Gemini по твоему бесплатному ключу. Если ключ уже есть для фото еды — он подойдёт.",
-            color = Color.White.copy(alpha = 0.6f),
+            color = Theme.ink.copy(alpha = 0.6f),
             fontSize = 13.sp
         )
         NutritionButton("Вставить ключ", onClick = onKey)
@@ -362,13 +362,13 @@ private fun CoachIntro() {
         Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(28.dp))
         Text(
             "Привет! Я вижу твою программу, подходы за полтора месяца, вес тела и питание.",
-            color = Color.White,
+            color = Theme.ink,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold
         )
         Text(
             "Программу сам не меняю: если предложу сбросить вес или поменять шаг прибавки — появится кнопка «Применить».",
-            color = Color.White.copy(alpha = 0.5f),
+            color = Theme.ink.copy(alpha = 0.5f),
             fontSize = 13.sp
         )
     }
@@ -381,7 +381,7 @@ private fun CoachBubble(message: CoachMessage, profile: ProgramProfile, onApply:
         Row(Modifier.fillMaxWidth().padding(start = 48.dp), horizontalArrangement = Arrangement.End) {
             Text(
                 message.text,
-                color = Color.Black,
+                color = Theme.canvas,
                 fontSize = 15.sp,
                 modifier = Modifier
                     .clip(RoundedCornerShape(18.dp))
@@ -407,7 +407,7 @@ private fun CoachBubble(message: CoachMessage, profile: ProgramProfile, onApply:
                 Text("РАЗБОР НЕДЕЛИ", color = Theme.accent, fontSize = 12.sp, fontWeight = FontWeight.Black)
             }
         }
-        SelectionContainer { Text(plainMarkdown(message.text), color = Color.White, fontSize = 15.sp) }
+        SelectionContainer { Text(plainMarkdown(message.text), color = Theme.ink, fontSize = 15.sp) }
         message.actions.forEachIndexed { index, action -> CoachActionRow(action, profile, index in message.applied) { onApply(index) } }
     }
 }
@@ -417,12 +417,12 @@ private fun CoachActionRow(action: CoachAction, profile: ProgramProfile, applied
     val resolved = Coach.resolve(action, profile)
     if (!applied && resolved == null) return
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF212121)).padding(12.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Theme.tone(0xFF212121)).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(resolved?.title ?: "Применено", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            if (!applied && resolved != null) Text(resolved.detail, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+            Text(resolved?.title ?: "Применено", color = Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            if (!applied && resolved != null) Text(resolved.detail, color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp)
         }
         Spacer(Modifier.width(8.dp))
         if (applied) {
@@ -435,7 +435,7 @@ private fun CoachActionRow(action: CoachAction, profile: ProgramProfile, applied
                 Modifier.height(34.dp).pressable(onClick = onApply).clip(CircleShape).background(Theme.accent).padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Применить", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Применить", color = Theme.canvas, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

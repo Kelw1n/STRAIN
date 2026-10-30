@@ -113,7 +113,9 @@ import com.texasprogram.app.ui.PlanScreen
 import com.texasprogram.app.ui.ProgressScreen
 import com.texasprogram.app.ui.SettingsScreen
 import com.texasprogram.app.model.LoadPrescription
+import com.texasprogram.app.ui.AppAppearance
 import com.texasprogram.app.ui.Theme
+import com.texasprogram.app.ui.materialColors
 import com.texasprogram.app.ui.TodayScreen
 import com.texasprogram.app.ui.RestTimerBar
 import com.texasprogram.app.ui.RebrnRestTimerCard
@@ -166,27 +168,22 @@ class MainActivity : ComponentActivity() {
                     delay(if (phase < 20) 1000L else phase + 5)
                 }
             }
-            // Тема одна и тёмная: светлые значки строки состояния на чёрном.
+            // Тема — из настройки, «Как в системе» — по теме телефона. Ставим до
+            // первого чтения цветов в этой композиции: экран не мигает чужой темой.
+            val light = AppAppearance.load(this@MainActivity).isLight(androidx.compose.foundation.isSystemInDarkTheme())
+            if (Theme.isLight != light) Theme.isLight = light
+            // Значки строки состояния и навигации — тёмные на светлой теме, светлые на тёмной.
             val view = LocalView.current
             if (!view.isInEditMode) {
                 SideEffect {
                     val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
                     WindowCompat.getInsetsController(window, window.decorView).apply {
-                        isAppearanceLightStatusBars = false
-                        isAppearanceLightNavigationBars = false
+                        isAppearanceLightStatusBars = light
+                        isAppearanceLightNavigationBars = light
                     }
                 }
             }
-            val colorScheme = remember {
-                darkColorScheme(
-                    primary = Theme.accent,
-                    // Белое на акценте: иначе у включённых переключателей тёмно-фиолетовый кружок.
-                    onPrimary = Color.White,
-                    background = Theme.base,
-                    surface = Theme.surface,
-                    onSurface = Theme.textPrimary
-                )
-            }
+            val colorScheme = remember(light) { materialColors(light) }
             // Заставка — один раз на запуск, не на каждый поворот экрана.
             var revealed by rememberSaveable { mutableStateOf(false) }
             MaterialTheme(colorScheme = colorScheme) {

@@ -126,7 +126,7 @@ fun LevelRing(level: Int, fraction: Float, size: Dp = 64.dp, stroke: Dp = 6.dp) 
             val width = stroke.toPx()
             val inset = width / 2
             val arc = Size(this.size.width - width, this.size.height - width)
-            drawArc(Color.White.copy(alpha = 0.1f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(width))
+            drawArc(Theme.ink.copy(alpha = 0.1f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(width))
             rotate(-90f) {
                 drawArc(
                     Brush.sweepGradient(listOf(accent, deep, accent)),
@@ -140,8 +140,8 @@ fun LevelRing(level: Int, fraction: Float, size: Dp = 64.dp, stroke: Dp = 6.dp) 
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$level", color = Color.White, fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.Black, lineHeight = (size.value * 0.38f).sp)
-            Text("УР.", color = Color.White.copy(alpha = 0.5f), fontSize = maxOf(9f, size.value * 0.13f).sp, fontWeight = FontWeight.ExtraBold)
+            Text("$level", color = Theme.ink, fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.Black, lineHeight = (size.value * 0.38f).sp)
+            Text("УР.", color = Theme.ink.copy(alpha = 0.5f), fontSize = maxOf(9f, size.value * 0.13f).sp, fontWeight = FontWeight.ExtraBold)
         }
     }
 }
@@ -153,7 +153,7 @@ private fun XPBar(fraction: Float, height: Dp = 6.dp) {
             .fillMaxWidth()
             .height(height)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.1f))
+            .background(Theme.ink.copy(alpha = 0.1f))
     ) {
         Box(
             Modifier
@@ -219,9 +219,9 @@ fun LevelCard(profile: ProgramProfile, modifier: Modifier = Modifier) {
     ) {
         LevelRing(level.level, level.fraction.toFloat())
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(level.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            Text(level.title, color = Theme.ink, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
             XPBar(level.fraction.toFloat())
-            Text(ProgressionText.toNext(level), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(ProgressionText.toNext(level), color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 ProgressionText.month(month.first, month.second),
                 color = if (month.second == null) gold else Theme.accent,
@@ -229,7 +229,7 @@ fun LevelCard(profile: ProgramProfile, modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.SemiBold
             )
         }
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
     }
     if (showing) LevelSheet(profile) { showing = false }
 }
@@ -259,7 +259,7 @@ fun LevelSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
 
         NutritionCard(spacing = 12.dp) {
             NutritionCaption("Награды месяцев")
-            Text(ProgressionText.month(month.first, month.second), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(ProgressionText.month(month.first, month.second), color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Progression.MonthTier.entries.forEach { tier ->
                     val reached = month.first >= tier.workouts
@@ -272,15 +272,15 @@ fun LevelSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = if (reached) tier.color else Color.White.copy(alpha = 0.18f), modifier = Modifier.size(22.dp))
-                        Text(tier.title, color = if (reached) Color.White else Color.White.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text("${tier.workouts} трен.", color = Color.White.copy(alpha = 0.4f), fontSize = 11.sp)
+                        Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = if (reached) tier.color else Theme.ink.copy(alpha = 0.18f), modifier = Modifier.size(22.dp))
+                        Text(tier.title, color = if (reached) Theme.ink else Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("${tier.workouts} трен.", color = Theme.ink.copy(alpha = 0.4f), fontSize = 11.sp)
                     }
                 }
             }
             Text(
                 "Награду месяца можно взять только в этом месяце — потом она остаётся в коллекции.",
-                color = Color.White.copy(alpha = 0.4f),
+                color = Theme.ink.copy(alpha = 0.4f),
                 fontSize = 12.sp
             )
             awards.chunked(2).forEach { pair ->
@@ -297,8 +297,8 @@ fun LevelSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
                         ) {
                             Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = award.tier.color, modifier = Modifier.size(20.dp))
                             Column {
-                                Text(award.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text("${award.tier.title} · ${award.workouts} трен.", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1)
+                                Text(award.title, color = Theme.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text("${award.tier.title} · ${award.workouts} трен.", color = Theme.ink.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1)
                             }
                         }
                     }
@@ -331,14 +331,14 @@ private fun LevelHeroCard(level: Int, progress: Progression.Level?, caption: Str
     NutritionCard(spacing = 12.dp) {
         Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             LevelRing(level, progress?.fraction?.toFloat() ?: 0f, size = 120.dp, stroke = 10.dp)
-            caption?.let { Text(it, color = Color.White.copy(alpha = 0.7f), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-            Text(Progression.title(level), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+            caption?.let { Text(it, color = Theme.ink.copy(alpha = 0.7f), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            Text(Progression.title(level), color = Theme.ink, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
             if (progress != null) {
-                Text(ProgressionText.experience(progress.xp), color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(ProgressionText.experience(progress.xp), color = Theme.ink.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Box(Modifier.padding(horizontal = 24.dp)) { XPBar(progress.fraction.toFloat(), 8.dp) }
-                Text(ProgressionText.toNext(progress), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(ProgressionText.toNext(progress), color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             } else {
-                Text("Уровень $level", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text("Уровень $level", color = Theme.ink.copy(alpha = 0.6f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -358,10 +358,10 @@ private fun LevelComparisonCard(mine: Int, theirs: Int) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             LevelRing(mine, 1f, size = 48.dp, stroke = 4.dp)
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Ты — ${Progression.title(mine)}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Ты — ${Progression.title(mine)}", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
                     verdict,
-                    color = if (theirs > mine) Theme.accent else Color.White.copy(alpha = 0.55f),
+                    color = if (theirs > mine) Theme.accent else Theme.ink.copy(alpha = 0.55f),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -386,7 +386,7 @@ private fun LevelRulesCard(goal: Int?) {
         RuleRow("Место в челлендже", "до +300")
         Text(
             "Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.",
-            color = Color.White.copy(alpha = 0.4f),
+            color = Theme.ink.copy(alpha = 0.4f),
             fontSize = 12.sp
         )
     }
@@ -405,14 +405,14 @@ private fun LevelTitlesCard(level: Int) {
                     item.title,
                     color = when {
                         current -> Theme.accent
-                        reached -> Color.White
-                        else -> Color.White.copy(alpha = 0.4f)
+                        reached -> Theme.ink
+                        else -> Theme.ink.copy(alpha = 0.4f)
                     },
                     fontSize = 15.sp,
                     fontWeight = if (current) FontWeight.ExtraBold else FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
-                Text("ур. ${item.levels}", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("ур. ${item.levels}", color = Theme.ink.copy(alpha = 0.4f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterEnd) {
                     if (reached) {
                         Icon(
@@ -431,7 +431,7 @@ private fun LevelTitlesCard(level: Int) {
 @Composable
 private fun RuleRow(title: String, value: String) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Text(title, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
         Text(value, color = Theme.accent, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
@@ -547,7 +547,7 @@ fun LevelUpOverlay(gain: ProgressionEvents.Gain, onClose: () -> Unit) {
 private fun ConfettiBurst() {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(1200, easing = LinearEasing)) }
-    val colors = listOf(Theme.accent, Theme.success, Theme.warning, Color.White, Color(0xFF5C38F2))
+    val colors = listOf(Theme.accent, Theme.success, Theme.warning, Theme.ink, Color(0xFF5C38F2))
     Canvas(Modifier.fillMaxSize()) {
         val t = progress.value
         val eased = 1f - (1f - t) * (1f - t)

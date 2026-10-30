@@ -181,7 +181,7 @@ fun NutritionContent(
                     Icon(
                         if (keySaved) Icons.Filled.Key else Icons.Outlined.Key,
                         contentDescription = "Ключ Google для фото еды",
-                        tint = Color.White.copy(alpha = 0.9f),
+                        tint = Theme.ink.copy(alpha = 0.9f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -288,7 +288,7 @@ private fun StageCard(profile: ProgramProfile, data: com.texasprogram.app.model.
                 NutritionCaption("Неделя прошла", color = Theme.warning)
                 Text(
                     "Записано мало: еда — ${state.week.foodDays} из 7 дней, вес — ${state.week.weightDays} из 7. Чтобы среднее не врало, нужно хотя бы ${LimarMethod.MINIMUM_DAYS} дней того и другого.",
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = Theme.ink.copy(alpha = 0.75f),
                     fontSize = 14.sp
                 )
                 NutritionButton("Начать неделю заново", icon = Icons.Filled.Refresh) { actions.startObservation() }
@@ -302,10 +302,10 @@ private fun StageCard(profile: ProgramProfile, data: com.texasprogram.app.model.
 private fun IntroCard(onStart: () -> Unit) {
     NutritionCard {
         NutritionCaption("Метод Лимара", color = Theme.accent)
-        Text("Найди свою норму калорий", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+        Text("Найди свою норму калорий", color = Theme.ink, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
         Text(
             "Без формул. Неделю ешь как обычно и записывай всё, что съел, и вес утром натощак. Средние калории при стоящем весе — твоя поддержка.",
-            color = Color.White.copy(alpha = 0.7f),
+            color = Theme.ink.copy(alpha = 0.7f),
             fontSize = 14.sp
         )
         NutritionButton("Начать неделю наблюдения", icon = Icons.Filled.PlayArrow, onClick = onStart)
@@ -333,12 +333,12 @@ private fun CollectingCard(
         WeekDots(state.week.start, entries, weights, today)
         Text(
             "Ничего не меняй в питании — просто записывай еду и вес натощак каждое утро.",
-            color = Color.White.copy(alpha = 0.7f),
+            color = Theme.ink.copy(alpha = 0.7f),
             fontSize = 14.sp
         )
         Text(
             "Записано: еда — ${state.week.foodDays} дн., вес — ${state.week.weightDays} дн.",
-            color = Color.White.copy(alpha = 0.45f),
+            color = Theme.ink.copy(alpha = 0.45f),
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -351,11 +351,11 @@ private fun MaintenanceCard(state: LimarMethod.Observation.Done, actions: Nutrit
     NutritionCard {
         NutritionCaption("Твоя поддержка", color = Theme.accent)
         KcalHeadline(maintenance.kcal)
-        Text(NutritionFormat.macros(maintenance), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(NutritionFormat.macros(maintenance), color = Theme.ink.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         state.week.weight?.let { weight ->
             Text(
                 "Средний вес ${NutritionFormat.decimal(Math.round(weight * 10) / 10.0)} кг · записано ${state.week.foodDays} дн.",
-                color = Color.White.copy(alpha = 0.45f),
+                color = Theme.ink.copy(alpha = 0.45f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -383,10 +383,10 @@ private fun MaintenanceCard(state: LimarMethod.Observation.Done, actions: Nutrit
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(goal.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text(goal.explanation, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                    Text(goal.title, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(goal.explanation, color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp)
                 }
-                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
             }
         }
         NutritionButton("Понаблюдать ещё неделю", primary = false) { actions.startObservation() }
@@ -411,13 +411,13 @@ private fun GoalCard(plan: NutritionPlan, weights: List<BodyWeightEntry>, today:
         }
         plan.target?.let { target ->
             KcalHeadline(target.kcal)
-            Text(NutritionFormat.macros(target), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(NutritionFormat.macros(target), color = Theme.ink.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
         val check = remember(plan, weights, today) { LimarMethod.check(plan, weights, today) }
         if (check != null) {
             CheckBlock(check, goal, plan, actions, haptics)
         } else {
-            Text(nextCheckLine(plan, today), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(nextCheckLine(plan, today), color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -444,8 +444,8 @@ private fun CheckBlock(check: LimarMethod.Check, goal: NutritionGoal, plan: Nutr
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         NutritionCaption("Неделя прошла")
-        Text(changeLine(check.change), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        Text(NutritionFormat.nbsp(adviceLine(check, goal)), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp)
+        Text(changeLine(check.change), color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(NutritionFormat.nbsp(adviceLine(check, goal)), color = Theme.ink.copy(alpha = 0.75f), fontSize = 14.sp)
         if (check.lowFat) {
             Text(
                 NutritionFormat.nbsp("Жиров станет ${NutritionFormat.grams(check.proposed.fat)} г — меньше ${NutritionFormat.decimal(LimarMethod.FAT_FLOOR_PER_KG)} г на кило веса. Ниже лучше не опускаться."),
@@ -510,11 +510,11 @@ private fun StageMenu(items: List<MenuAction>) {
                 .pressable { open = true },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.MoreHoriz, contentDescription = "Ещё", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+            Icon(Icons.Filled.MoreHoriz, contentDescription = "Ещё", tint = Theme.ink.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             items.forEach { item ->
-                val tint = if (item.destructive) Theme.record else Color.White
+                val tint = if (item.destructive) Theme.record else Theme.ink
                 DropdownMenuItem(
                     text = { Text(item.title, color = tint) },
                     leadingIcon = { Icon(item.icon, contentDescription = null, tint = tint) },
@@ -543,7 +543,7 @@ private fun WeekDots(start: LocalDate, entries: List<FoodEntry>, weights: List<B
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     RuDate.short(RuDate.weekdayOf(date)),
-                    color = Color.White.copy(alpha = if (isToday) 0.9f else 0.4f),
+                    color = Theme.ink.copy(alpha = if (isToday) 0.9f else 0.4f),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -552,10 +552,10 @@ private fun WeekDots(start: LocalDate, entries: List<FoodEntry>, weights: List<B
                         .size(30.dp)
                         .clip(CircleShape)
                         .background(if (food) Theme.accent else NutritionColors.dot)
-                        .border(1.5.dp, if (isToday) Color.White.copy(alpha = 0.8f) else Color.Transparent, CircleShape),
+                        .border(1.5.dp, if (isToday) Theme.ink.copy(alpha = 0.8f) else Color.Transparent, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (food) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(15.dp))
+                    if (food) Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.canvas, modifier = Modifier.size(15.dp))
                 }
                 Box(
                     Modifier
@@ -575,7 +575,7 @@ private fun DayPicker(day: LocalDate, today: LocalDate, onShift: (Int) -> Unit) 
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         PickerChevron(Icons.Filled.ChevronLeft, "Предыдущий день", enabled = true) { onShift(-1) }
         Spacer(Modifier.weight(1f))
-        Text(NutritionFormat.dayTitle(day, today), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text(NutritionFormat.dayTitle(day, today), color = Theme.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
         PickerChevron(Icons.Filled.ChevronRight, "Следующий день", enabled = day.isBefore(today)) { onShift(1) }
     }
@@ -592,7 +592,7 @@ private fun PickerChevron(icon: ImageVector, label: String, enabled: Boolean, on
             .background(NutritionColors.chip),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = label, tint = Theme.ink, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -605,11 +605,11 @@ private fun DayCard(eaten: Nutrients, target: Nutrients?) {
             Spacer(Modifier.weight(1f))
             if (target != null) {
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.padding(bottom = 6.dp)) {
-                    Text("из ${NutritionFormat.kcal(target.kcal)}", color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("из ${NutritionFormat.kcal(target.kcal)}", color = Theme.ink.copy(alpha = 0.75f), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     val left = target.kcal - eaten.kcal
                     Text(
                         if (left >= 0) "осталось ${NutritionFormat.kcal(left)}" else "сверху ${NutritionFormat.kcal(-left)}",
-                        color = if (eaten.kcal > target.kcal) Theme.warning else Color.White.copy(alpha = 0.45f),
+                        color = if (eaten.kcal > target.kcal) Theme.warning else Theme.ink.copy(alpha = 0.45f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -636,18 +636,18 @@ private fun MacroTile(title: String, value: Double, goal: Double?, modifier: Mod
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(title, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        Text(title, color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         // Норма — строкой ниже: на узком экране рядом с числом она не влезала.
         Text(
             NutritionFormat.grams(value) + if (goal == null) " г" else "",
-            color = Color.White,
+            color = Theme.ink,
             fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold,
             maxLines = 1,
             softWrap = false
         )
         if (goal != null) {
-            Text("из ${NutritionFormat.grams(goal)} г", color = Color.White.copy(alpha = 0.4f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text("из ${NutritionFormat.grams(goal)} г", color = Theme.ink.copy(alpha = 0.4f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             if (goal > 0) LineMeter((value / goal).toFloat(), height = 4.dp)
         }
     }
@@ -690,7 +690,7 @@ private fun WeightCard(dayWeight: BodyWeightEntry?, onRecord: (Double) -> Unit) 
                 if (input.isEmpty()) {
                     Text(
                         if (dayWeight == null) "Утром, кг" else "Поправить, кг",
-                        color = Color.White.copy(alpha = 0.3f),
+                        color = Theme.ink.copy(alpha = 0.3f),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -699,7 +699,7 @@ private fun WeightCard(dayWeight: BodyWeightEntry?, onRecord: (Double) -> Unit) 
                     value = input,
                     onValueChange = { text -> input = text.filter { it.isDigit() || it == ',' || it == '.' }.take(6) },
                     singleLine = true,
-                    textStyle = TextStyle(color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold),
+                    textStyle = TextStyle(color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold),
                     cursorBrush = SolidColor(Theme.accent),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { record() }),
@@ -717,7 +717,7 @@ private fun WeightCard(dayWeight: BodyWeightEntry?, onRecord: (Double) -> Unit) 
             ) {
                 Text(
                     "Записать",
-                    color = if (parsed == null) Color.White.copy(alpha = 0.4f) else Color.Black,
+                    color = if (parsed == null) Theme.ink.copy(alpha = 0.4f) else Theme.canvas,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -725,7 +725,7 @@ private fun WeightCard(dayWeight: BodyWeightEntry?, onRecord: (Double) -> Unit) 
         }
         Text(
             "Попадает в «Замеры веса». Взвешивайся каждое утро натощак — так средний вес недели честный.",
-            color = Color.White.copy(alpha = 0.4f),
+            color = Theme.ink.copy(alpha = 0.4f),
             fontSize = 12.sp
         )
     }
@@ -741,16 +741,16 @@ private fun AddButtons(onPhoto: (Boolean) -> Unit, onManual: () -> Unit) {
             AddButton("Сфоткать еду", Icons.Filled.CameraAlt, primary = true) { choosing = true }
             DropdownMenu(expanded = choosing, onDismissRequest = { choosing = false }) {
                 DropdownMenuItem(
-                    text = { Text("Снять", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Filled.CameraAlt, contentDescription = null, tint = Color.White) },
+                    text = { Text("Снять", color = Theme.ink) },
+                    leadingIcon = { Icon(Icons.Filled.CameraAlt, contentDescription = null, tint = Theme.ink) },
                     onClick = {
                         choosing = false
                         onPhoto(true)
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Из галереи", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Filled.PhotoLibrary, contentDescription = null, tint = Color.White) },
+                    text = { Text("Из галереи", color = Theme.ink) },
+                    leadingIcon = { Icon(Icons.Filled.PhotoLibrary, contentDescription = null, tint = Theme.ink) },
                     onClick = {
                         choosing = false
                         onPhoto(false)
@@ -764,7 +764,7 @@ private fun AddButtons(onPhoto: (Boolean) -> Unit, onManual: () -> Unit) {
 
 @Composable
 private fun AddButton(title: String, icon: ImageVector, primary: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val tint = if (primary) Color.Black else Color.White
+    val tint = if (primary) Theme.canvas else Theme.ink
     Row(
         modifier
             .fillMaxWidth()
@@ -792,7 +792,7 @@ private fun EntriesCard(entries: List<FoodEntry>, onOpen: (FoodEntry) -> Unit, o
                 EntryRow(entry, onOpen = { onOpen(entry) }, onDelete = { onDelete(entry) })
             }
             if (index < entries.size - 1) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.06f)))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Theme.ink.copy(alpha = 0.06f)))
             }
         }
     }
@@ -812,12 +812,12 @@ private fun EntryRow(entry: FoodEntry, onOpen: () -> Unit, onDelete: () -> Unit)
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(entry.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
-                Text(entryDetail(entry), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                Text(entry.name, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                Text(entryDetail(entry), color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("${NutritionFormat.kcal(entry.nutrients.kcal)} ккал", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text(NutritionFormat.macros(entry.nutrients), color = Color.White.copy(alpha = 0.4f), fontSize = 11.sp)
+                Text("${NutritionFormat.kcal(entry.nutrients.kcal)} ккал", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(NutritionFormat.macros(entry.nutrients), color = Theme.ink.copy(alpha = 0.4f), fontSize = 11.sp)
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -847,10 +847,10 @@ private fun GuideLink(onClick: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(22.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Как работает метод", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("Почему не формулы и как найти свою норму", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                Text("Как работает метод", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("Почему не формулы и как найти свою норму", color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
             }
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
         }
     }
 }

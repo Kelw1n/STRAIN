@@ -92,7 +92,7 @@ fun SetDotsView(total: Int, tracker: SetTracker, modifier: Modifier = Modifier) 
                 contentAlignment = Alignment.Center
             ) {
                 if (filled) {
-                    Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.ink, modifier = Modifier.size(12.dp))
                 }
             }
         }

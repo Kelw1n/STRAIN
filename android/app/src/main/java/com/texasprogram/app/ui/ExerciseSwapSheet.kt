@@ -83,10 +83,10 @@ fun ExerciseSwapSheet(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ExerciseThumb(exercise.prescription.name, 52.dp)
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Вместо «${exercise.prescription.name}»", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                Text("Вместо «${exercise.prescription.name}»", color = Theme.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 2)
                 Text(
                     "${RuPlural.sets(exercise.sets.size)} по ${exercise.prescription.reps} — схема остаётся",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = Theme.ink.copy(alpha = 0.5f),
                     fontSize = 13.sp
                 )
             }
@@ -101,16 +101,16 @@ fun ExerciseSwapSheet(
                 .fillMaxWidth()
                 .height(46.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF212121))
+                .background(Theme.tone(0xFF212121))
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            if (custom.isEmpty()) Text("Название — и «Заменить» сверху", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
+            if (custom.isEmpty()) Text("Название — и «Заменить» сверху", color = Theme.ink.copy(alpha = 0.4f), fontSize = 16.sp)
             BasicTextField(
                 value = custom,
                 onValueChange = { custom = it.take(60) },
                 singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                textStyle = TextStyle(color = Theme.ink, fontSize = 16.sp),
                 cursorBrush = SolidColor(Theme.accent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
@@ -129,12 +129,12 @@ fun ExerciseSwapSheet(
         if (programLift) {
             Text(
                 "Это основное движение программы — его меняем только на сегодня, в следующий раз оно вернётся.",
-                color = Color.White.copy(alpha = 0.45f),
+                color = Theme.ink.copy(alpha = 0.45f),
                 fontSize = 12.sp
             )
         } else {
             SegmentedControl(options = SwapScope.entries.map { it.title }, selectedIndex = scope.ordinal) { scope = SwapScope.entries[it] }
-            Text(scope.explanation, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+            Text(scope.explanation, color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
         }
         val marked = exercise.doneCount
         if (marked > 0) {
@@ -163,18 +163,18 @@ private fun SwapSection(title: String, items: List<ExerciseSwap.Suggestion>, onC
                     ExerciseThumb(item.name, 42.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(item.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                        Text(item.name, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2)
                         Text(
                             item.detail,
-                            color = if (item.source == ExerciseSwap.Source.HISTORY) Theme.accent else Color.White.copy(alpha = 0.5f),
+                            color = if (item.source == ExerciseSwap.Source.HISTORY) Theme.accent else Theme.ink.copy(alpha = 0.5f),
                             fontSize = 12.sp,
                             maxLines = 2
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    Icon(Icons.Filled.SwapHoriz, contentDescription = null, tint = Color.White.copy(alpha = 0.35f), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.SwapHoriz, contentDescription = null, tint = Theme.ink.copy(alpha = 0.35f), modifier = Modifier.size(18.dp))
                 }
-                if (position < items.size - 1) HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(start = 68.dp))
+                if (position < items.size - 1) HorizontalDivider(color = Theme.ink.copy(alpha = 0.06f), modifier = Modifier.padding(start = 68.dp))
             }
         }
     }

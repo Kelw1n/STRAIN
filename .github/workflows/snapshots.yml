@@ -125,7 +125,7 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -135,27 +135,21 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Record snapshots
+      - run: pip install --quiet pillow
+      # Тёмная тема, потом светлая: Paparazzi пишет снимки в одну папку,
+      # поэтому печатаем их после каждого прогона.
+      - name: Record snapshots (dark)
         working-directory: android
         run: gradle -Psnapshots recordPaparazziDebug --continue --stacktrace
-      - name: Print snapshots
+      - name: Print snapshots (dark)
         if: always()
-        run: |
-          pip install --quiet pillow
-          python3 - <<'PY'
-          import base64, glob, io, os
-          from PIL import Image
-          for path in sorted(glob.glob("android/app/src/test/snapshots/images/*.png")):
-              image = Image.open(path).convert("RGB")
-              width = 540
-              image = image.resize((width, round(image.height * width / image.width)))
-              buffer = io.BytesIO()
-              image.save(buffer, "JPEG", quality=60)
-              data = base64.b64encode(buffer.getvalue()).decode()
-              name = "android/" + os.path.basename(path).replace(".png", ".jpg")
-              chunks = [data[i:i + 4000] for i in range(0, len(data), 4000)]
-              for index, chunk in enumerate(chunks):
-                  print(f"SNAP {name} {index + 1}/{len(chunks)} {chunk}")
-          PY
+        run: python3 .github/scripts/print_paparazzi.py android
+      - name: Record snapshots (light)
+        if: always()
+        working-directory: android
+        run: gradle -Psnapshots -PsnapshotTheme=light recordPaparazziDebug --continue --stacktrace
+      - name: Print snapshots (light)
+        if: always()
+        run: python3 .github/scripts/print_paparazzi.py android-light
 
 # Повторный прогон — любая правка этого файла в ветке. Прогон 7.

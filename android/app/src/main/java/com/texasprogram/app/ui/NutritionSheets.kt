@@ -143,7 +143,7 @@ fun FoodEntrySheet(
             }
             Text(
                 NutritionFormat.nbsp("Не вписал калории — они посчитаются по Б/Ж/У: 4 ккал в грамме белка и углеводов, 9 — в грамме жира. Порцию можно не писать."),
-                color = Color.White.copy(alpha = 0.4f),
+                color = Theme.ink.copy(alpha = 0.4f),
                 fontSize = 12.sp
             )
         }
@@ -160,12 +160,12 @@ fun FoodEntrySheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(entry.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                            Text(NutritionFormat.macros(entry.nutrients), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                            Text(entry.name, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(NutritionFormat.macros(entry.nutrients), color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
                         }
                         Text(
                             "${NutritionFormat.kcal(entry.nutrients.kcal)} ккал",
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = Theme.ink.copy(alpha = 0.8f),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -321,7 +321,7 @@ fun FoodPhotoSheet(photo: Uri, onAdd: (List<RecognizedFood>) -> Unit, onDismiss:
 
         failure?.let { message ->
             NutritionCard {
-                Text(message, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(message, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 if (needsKey) {
                     NutritionButton("Вставить ключ Google", icon = Icons.Filled.Key) { showingKey = true }
                 } else {
@@ -337,15 +337,15 @@ fun FoodPhotoSheet(photo: Uri, onAdd: (List<RecognizedFood>) -> Unit, onDismiss:
                     Spacer(Modifier.weight(1f))
                     Text(
                         "точность: $confidence",
-                        color = if (confidence == "низкая") Theme.warning else Color.White.copy(alpha = 0.45f),
+                        color = if (confidence == "низкая") Theme.warning else Theme.ink.copy(alpha = 0.45f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
                 KcalHeadline(total.kcal, size = 40)
-                Text(NutritionFormat.macros(total), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(NutritionFormat.macros(total), color = Theme.ink.copy(alpha = 0.75f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 if (comment.isNotEmpty()) {
-                    Text(comment, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                    Text(comment, color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
                 }
             }
 
@@ -386,14 +386,14 @@ fun FoodPhotoSheet(photo: Uri, onAdd: (List<RecognizedFood>) -> Unit, onDismiss:
                         Icon(
                             Icons.Filled.ArrowUpward,
                             contentDescription = "Пересчитать",
-                            tint = if (sendable) Color.Black else Color.White.copy(alpha = 0.4f),
+                            tint = if (sendable) Theme.canvas else Theme.ink.copy(alpha = 0.4f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
                 }
                 Text(
                     "ИИ оценивает порцию на глаз и может ошибиться на 20–30%. Для метода это не страшно: главное — считать одинаково каждый день.",
-                    color = Color.White.copy(alpha = 0.4f),
+                    color = Theme.ink.copy(alpha = 0.4f),
                     fontSize = 12.sp
                 )
             }
@@ -444,7 +444,7 @@ private fun RecognizedFoodEditor(item: RecognizedFood, onChange: (RecognizedFood
                 Modifier.size(36.dp).pressable(onClick = onRemove),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.Delete, contentDescription = "Убрать продукт", tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Delete, contentDescription = "Убрать продукт", tint = Theme.ink.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -506,7 +506,7 @@ fun NutritionGuideSheet(onDismiss: () -> Unit) {
         )
         Text(
             "Метод — Лимар, @freedom_limar. Приложение просто ведёт записи и считает за тебя.",
-            color = Color.White.copy(alpha = 0.4f),
+            color = Theme.ink.copy(alpha = 0.4f),
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 4.dp)
         )
@@ -517,11 +517,11 @@ fun NutritionGuideSheet(onDismiss: () -> Unit) {
 private fun GuideStep(number: Int, title: String, text: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(28.dp).clip(CircleShape).background(Theme.accent), contentAlignment = Alignment.Center) {
-            Text("$number", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+            Text("$number", color = Theme.canvas, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Text(NutritionFormat.nbsp(text), color = Color.White.copy(alpha = 0.65f), fontSize = 14.sp)
+            Text(title, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(NutritionFormat.nbsp(text), color = Theme.ink.copy(alpha = 0.65f), fontSize = 14.sp)
         }
     }
 }
@@ -533,7 +533,7 @@ private fun GuideSection(title: String, lines: List<String>) {
         lines.forEach { line ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.padding(top = 8.dp).size(5.dp).clip(CircleShape).background(Theme.accent))
-                Text(NutritionFormat.nbsp(line), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(NutritionFormat.nbsp(line), color = Theme.ink.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -598,7 +598,7 @@ fun GeminiKeySheet(
             NutritionCaption(title, color = Theme.accent)
             Text(
                 intro,
-                color = Color.White.copy(alpha = 0.75f),
+                color = Theme.ink.copy(alpha = 0.75f),
                 fontSize = 14.sp
             )
             KeyInstruction(1, "Открой Google AI Studio и войди в Google-аккаунт.")
@@ -655,7 +655,7 @@ fun GeminiKeySheet(
                     Text("Удалить ключ", color = Theme.record, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
-            Text("Если Google пишет, что страна не поддерживается, — включи VPN.", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
+            Text("Если Google пишет, что страна не поддерживается, — включи VPN.", color = Theme.ink.copy(alpha = 0.4f), fontSize = 12.sp)
         }
     }
 }
@@ -664,6 +664,6 @@ fun GeminiKeySheet(
 private fun KeyInstruction(number: Int, text: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("$number.", color = Theme.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Text(text, color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text(text, color = Theme.ink.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
     }
 }

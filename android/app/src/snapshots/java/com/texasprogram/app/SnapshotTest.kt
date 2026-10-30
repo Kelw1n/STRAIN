@@ -74,6 +74,11 @@ import java.time.LocalDate
 /// вылезает за края и не прячется под панелью вкладок. Запускаются только
 /// workflow `snapshots.yml` (`gradle -Psnapshots recordPaparazziDebug`).
 class SnapshotTest {
+    init {
+        // Тема прогона: gradle -PsnapshotTheme=light снимает всё в светлой.
+        Theme.isLight = System.getProperty("snapshotTheme") == "light"
+    }
+
     @get:Rule
     val paparazzi = Paparazzi(
         deviceConfig = DeviceConfig.PIXEL_5,
@@ -106,7 +111,7 @@ class SnapshotTest {
                 items(Fixtures.posts(), key = { it.id }) { post ->
                     Column {
                         PostCard(post, onOpen = {}, onOpenAuthor = {}, onChange = {})
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
+                        HorizontalDivider(color = Theme.ink.copy(alpha = 0.07f))
                     }
                 }
             }
@@ -124,7 +129,7 @@ class SnapshotTest {
                     items(Fixtures.posts(), key = { it.id }) { post ->
                         Column {
                             PostCard(post, onOpen = {}, onOpenAuthor = {}, onChange = {})
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
+                            HorizontalDivider(color = Theme.ink.copy(alpha = 0.07f))
                         }
                     }
                 }
@@ -564,16 +569,8 @@ private fun Screen(content: @Composable androidx.compose.foundation.layout.BoxSc
         LocalOnBackPressedDispatcherOwner provides backOwner,
         LocalActivityResultRegistryOwner provides registryOwner
     ) {
-        MaterialTheme(
-            colorScheme = darkColorScheme(
-                primary = Theme.accent,
-                onPrimary = Color.White,
-                background = Theme.base,
-                surface = Theme.surface,
-                onSurface = Theme.textPrimary
-            )
-        ) {
-            Box(Modifier.fillMaxSize().background(Color.Black), content = content)
+        MaterialTheme(colorScheme = com.texasprogram.app.ui.materialColors(Theme.isLight)) {
+            Box(Modifier.fillMaxSize().background(Theme.canvas), content = content)
         }
     }
 }

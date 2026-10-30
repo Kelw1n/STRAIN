@@ -115,7 +115,7 @@ fun TrainingRecapEntryCard(profile: ProgramProfile, modifier: Modifier = Modifie
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text("ИТОГИ", color = Theme.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text("ИТОГИ", color = Theme.Dark.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             periods.forEachIndexed { index, period ->

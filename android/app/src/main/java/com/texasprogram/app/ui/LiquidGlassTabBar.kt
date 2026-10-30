@@ -209,15 +209,15 @@ fun LiquidGlassTabBar(
         Spacer(
             Modifier
                 .matchParentSize()
-                .shadow(22.dp, CircleShape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
-                .background(Color(0xF0141417), CircleShape)
+                .shadow(if (Theme.isLight) 14.dp else 22.dp, CircleShape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
+                .background(Theme.tone(0xF0141417), CircleShape)
                 .border(
                     1.dp,
                     Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = 0.28f),
-                        0.35f to Color.White.copy(alpha = 0.06f),
+                        0f to glassEdge(0.28f),
+                        0.35f to glassEdge(0.06f),
                         0.65f to Color.Transparent,
-                        1f to Color.White.copy(alpha = 0.14f)
+                        1f to glassEdge(0.14f)
                     ),
                     CircleShape
                 )
@@ -306,7 +306,7 @@ fun LiquidGlassTabBar(
                         drawContent()
                         val r = lensRect(size.height)
                         drawRoundRect(
-                            color = Color.Black,
+                            color = Theme.canvas,
                             topLeft = r.topLeft,
                             size = r.size,
                             cornerRadius = CornerRadius(r.height / 2),
@@ -352,7 +352,7 @@ fun LiquidGlassTabBar(
                             tabs.forEachIndexed { index, tab ->
                                 if (tab !in badges) return@forEachIndexed
                                 val dot = Offset(center(index) + 14 * px, size.height / 2 - 12 * px)
-                                drawCircle(Color.Black, radius = 7 * px, center = dot)
+                                drawCircle(Theme.canvas, radius = 7 * px, center = dot)
                                 drawCircle(Theme.record, radius = 5 * px, center = dot)
                             }
                         }
@@ -392,7 +392,7 @@ private fun IconRow(
                 Icon(
                     imageVector = if (filled) tab.icon else tab.outlinedIcon,
                     contentDescription = null,
-                    tint = if (filled) Color.White else Color.White.copy(alpha = 0.5f),
+                    tint = if (filled) Theme.ink else Theme.ink.copy(alpha = 0.5f),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -405,15 +405,20 @@ private val rimColors = listOf(
     Color(0xFF7AC8FF), Color(0xFFC77AFF), Color(0xFFFF7A7A)
 )
 
+/// Кромка стекла: белый блик на тёмной теме, тонкая тень на светлой —
+/// белое на светлом не видно.
+internal fun glassEdge(alpha: Float): Color =
+    if (Theme.isLight) Color.Black.copy(alpha = alpha * 0.35f) else Color.White.copy(alpha = alpha)
+
 /// В покое линза — тёмная таблетка, как у REBRN; поднятая — прозрачное
 /// стекло с бликом сверху и радужной каймой по краю, как стекло iOS 26.
 private fun DrawScope.drawLens(r: Rect, l: Float) {
     val radius = CornerRadius(r.height / 2)
     if (l < 1f) {
-        drawRoundRect(Color.Black.copy(alpha = 0.55f * (1f - l)), r.topLeft, r.size, radius)
+        drawRoundRect(Color.Black.copy(alpha = (if (Theme.isLight) 0.07f else 0.55f) * (1f - l)), r.topLeft, r.size, radius)
     }
     if (l > 0f) {
-        drawRoundRect(Color.White.copy(alpha = 0.07f * l), r.topLeft, r.size, radius)
+        drawRoundRect(Theme.ink.copy(alpha = 0.07f * l), r.topLeft, r.size, radius)
         val pad = 2.dp.toPx()
         drawRoundRect(
             brush = Brush.verticalGradient(
@@ -437,9 +442,9 @@ private fun DrawScope.drawLens(r: Rect, l: Float) {
     val stroke = lerp(1.dp.toPx(), 1.2.dp.toPx(), l)
     drawRoundRect(
         brush = Brush.verticalGradient(
-            0f to Color.White.copy(alpha = lerp(0.12f, 0.75f, l)),
-            0.45f to Color.White.copy(alpha = lerp(0.04f, 0.12f, l)),
-            1f to Color.White.copy(alpha = lerp(0.06f, 0.35f, l)),
+            0f to glassEdge(lerp(0.12f, 0.75f, l)),
+            0.45f to glassEdge(lerp(0.04f, 0.12f, l)),
+            1f to glassEdge(lerp(0.06f, 0.35f, l)),
             startY = r.top,
             endY = r.bottom
         ),
