@@ -1,0 +1,7 @@
+{
+  "keys": "pilot",
+  "model": "gemini-2.5-flash-image",
+  "force": false,
+  "reference": "",
+  "run": 1
+}

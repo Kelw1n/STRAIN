@@ -2,8 +2,13 @@ name: Exercise art
 
 # Картинки упражнений: серый 3D-манекен, рабочие мышцы красным. Рисует Gemini
 # ключом из секрета GEMINI_API_KEY; готовые картинки коммитятся в
-# tools/exercise-art/ai/out/ этой же ветки.
+# tools/exercise-art/ai/out/ этой же ветки. Запуск — вручную или правкой
+# tools/exercise-art/ai/request.json: в нём те же параметры.
 on:
+  push:
+    branches: ["claude/possible-improvements-b00203"]
+    paths:
+      - "tools/exercise-art/ai/request.json"
   workflow_dispatch:
     inputs:
       keys:
@@ -36,15 +41,41 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Generate
+      - name: Parameters
+        id: params
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EVENT: ${{ github.event_name }}
           KEYS: ${{ inputs.keys }}
           MODEL: ${{ inputs.model }}
           FORCE: ${{ inputs.force }}
           REFERENCE: ${{ inputs.reference }}
         run: |
           set -euo pipefail
+          if [ "$EVENT" = "push" ]; then
+            python3 - >> "$GITHUB_OUTPUT" <<'PY'
+          import json
+          r = json.load(open("tools/exercise-art/ai/request.json"))
+          print("keys=" + str(r.get("keys", "pilot")))
+          print("model=" + str(r.get("model", "gemini-2.5-flash-image")))
+          print("force=" + ("true" if r.get("force") else "false"))
+          print("reference=" + str(r.get("reference", "")))
+          PY
+          else
+            { echo "keys=$KEYS"; echo "model=$MODEL"; echo "force=$FORCE"; echo "reference=$REFERENCE"; } >> "$GITHUB_OUTPUT"
+          fi
+      - name: Generate
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          KEYS: ${{ steps.params.outputs.keys }}
+          MODEL: ${{ steps.params.outputs.model }}
+          FORCE: ${{ steps.params.outputs.force }}
+          REFERENCE: ${{ steps.params.outputs.reference }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::warning::Секрета GEMINI_API_KEY пока нет — рисовать нечем. Добавь его в Settings → Secrets and variables → Actions."
+            exit 0
+          fi
           pip install --quiet pillow
           args=(--keys "$KEYS" --model "$MODEL")
           if [ "$FORCE" = "true" ]; then args+=(--force); fi
@@ -53,9 +84,10 @@ jobs:
       - name: Commit
         if: always()
         env:
-          KEYS: ${{ inputs.keys }}
+          KEYS: ${{ steps.params.outputs.keys }}
         run: |
           set -euo pipefail
+          mkdir -p tools/exercise-art/ai/out
           git add tools/exercise-art/ai/out
           if git diff --cached --quiet; then
             echo "Новых картинок нет"
