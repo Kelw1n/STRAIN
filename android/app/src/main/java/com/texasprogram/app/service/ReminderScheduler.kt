@@ -1,5 +1,8 @@
 package com.texasprogram.app.service
 
+import com.texasprogram.app.model.activeReminderOffsets
+import com.texasprogram.app.model.trainingMinutes
+import com.texasprogram.app.model.TrainingGoal
 import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -29,6 +32,7 @@ object ReminderScheduler {
     const val CHANNEL = "workout-reminder"
     private const val ACTION = "com.texasprogram.app.REMINDER"
     private const val EXTRA_DAY = "day"
+    private const val EXTRA_OFFSET = "offset"
     private const val WEEK_MILLIS = AlarmManager.INTERVAL_DAY * 7
 
     /// Пересобирает расписание под текущие настройки профиля.
@@ -37,30 +41,52 @@ object ReminderScheduler {
     /// перезагрузку телефона, а запуск случается всё равно.
     fun reschedule(context: Context, profile: ProgramProfile) {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
-        // Сначала снимаем все: поменялось время или дни — старые висели бы дальше.
-        for (weekday in 1..7) manager.cancel(intent(context, weekday, 0))
+        // Сначала снимаем все: поменялось время, дни или напоминания — старые висели бы дальше.
+        cancelAll(context, manager)
 
         if (!profile.reminderEnabled) return
 
-        profile.weekdays.forEachIndexed { index, weekday ->
-            val at = nextOccurrence(weekday, profile.reminderHour, profile.reminderMinute)
-            // В очереди тип дня заранее неизвестен: номер 0 даёт общий текст.
-            // Раньше и в очереди обещали «по расписанию день 2», как на iOS — нет.
-            val day = if (profile.scheduleMode == ScheduleMode.WEEKDAY) index + 1 else 0
+        for ((weekday, day, offset, minutes) in plan(profile)) {
+            val at = nextOccurrence(weekday, minutes / 60, minutes % 60)
             runCatching {
                 manager.setRepeating(
                     AlarmManager.RTC_WAKEUP,
                     at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
                     WEEK_MILLIS,
-                    intent(context, weekday, day)
+                    intent(context, weekday, day, offset)
                 )
             }
         }
     }
 
+    /// Одно напоминание: день недели, номер дня программы (0 — в очереди),
+    /// за сколько минут до тренировки и во сколько.
+    data class Planned(val weekday: Int, val day: Int, val offset: Int, val minutes: Int)
+
+    /// Что поставим: у каждого дня своё время, у тренировки — до трёх напоминаний.
+    /// Напоминание, которое выпало бы на вчера, не ставим. Как на iOS.
+    fun plan(profile: ProgramProfile): List<Planned> {
+        if (!profile.reminderEnabled) return emptyList()
+        return profile.weekdays.flatMapIndexed { index, weekday ->
+            // В очереди тип дня заранее неизвестен: номер 0 даёт общий текст.
+            val day = if (profile.scheduleMode == ScheduleMode.WEEKDAY) index + 1 else 0
+            val training = profile.trainingMinutes(weekday)
+            profile.activeReminderOffsets.mapNotNull { offset ->
+                val minutes = training - offset
+                if (minutes < 0) null else Planned(weekday, day, offset, minutes)
+            }
+        }
+    }
+
+    private fun cancelAll(context: Context, manager: AlarmManager) {
+        for (weekday in 1..7) {
+            for (offset in TrainingGoal.offsetOptions) manager.cancel(intent(context, weekday, 0, offset))
+        }
+    }
+
     fun cancel(context: Context) {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
-        for (weekday in 1..7) manager.cancel(intent(context, weekday, 0))
+        cancelAll(context, manager)
     }
 
     /// Ближайшее срабатывание: сегодня, если время ещё не прошло, иначе через неделю.
@@ -86,17 +112,23 @@ object ReminderScheduler {
         if (mode == ScheduleMode.WEEKDAY && day > 0) "По расписанию день $day. Открой приложение и посмотри веса."
         else "Загляни в приложение — план ждёт."
 
-    private fun intent(context: Context, weekday: Int, day: Int): PendingIntent =
+    /// Напоминание «в начале» — прежний код запроса, остальные — свои: снять
+    /// и переставить можно каждое отдельно.
+    private fun intent(context: Context, weekday: Int, day: Int, offset: Int = 0): PendingIntent =
         PendingIntent.getBroadcast(
             context,
-            2000 + weekday,
+            if (offset == 0) 2000 + weekday else 2100 + weekday * 10 + TrainingGoal.offsetOptions.indexOf(offset),
             Intent(context, ReminderReceiver::class.java)
                 .setAction(ACTION)
-                .putExtra(EXTRA_DAY, day),
+                .putExtra(EXTRA_DAY, day)
+                .putExtra(EXTRA_OFFSET, offset),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
     fun dayOf(intent: Intent): Int = intent.getIntExtra(EXTRA_DAY, 0)
+    fun offsetOf(intent: Intent): Int = intent.getIntExtra(EXTRA_OFFSET, 0)
+
+    fun title(offset: Int): String = if (offset == 0) "Сегодня тренировка" else "Тренировка ${TrainingGoal.inText(offset)}"
 
     /// Утром уже потренировался — вечернее «Сегодня тренировка» ни к чему.
     fun trainedOn(profile: ProgramProfile, date: LocalDate = LocalDate.now()): Boolean =
@@ -137,7 +169,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val day = ReminderScheduler.dayOf(intent)
         val notification = NotificationCompat.Builder(context, ReminderScheduler.CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_rest)
-            .setContentTitle("Сегодня тренировка")
+            .setContentTitle(ReminderScheduler.title(ReminderScheduler.offsetOf(intent)))
             // Ресивер не знает режима расписания — берём общий текст, если дня нет.
             .setContentText(ReminderScheduler.body(day, ScheduleMode.WEEKDAY))
             .setAutoCancel(true)
@@ -151,6 +183,6 @@ class ReminderReceiver : BroadcastReceiver() {
             )
             .build()
 
-        runCatching { NotificationManagerCompat.from(context).notify(3000 + day, notification) }
+        runCatching { NotificationManagerCompat.from(context).notify(3000 + day * 10 + ReminderScheduler.offsetOf(intent) / 15, notification) }
     }
 }

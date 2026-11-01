@@ -322,6 +322,13 @@ struct WorkoutHubView: View {
                     .foregroundStyle(Color.ink.opacity(0.45))
                     .lineLimit(1)
                     .contentTransition(.numericText())
+                // Срок цели — «неделя 3 из 13».
+                if let term = profile.goalWeek() {
+                    Text("Неделя \(term.week) из \(term.total)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(16)

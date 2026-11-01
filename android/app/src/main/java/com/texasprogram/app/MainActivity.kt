@@ -937,7 +937,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         profile.reminderHour,
         profile.reminderMinute,
         profile.weekdays,
-        profile.scheduleMode
+        profile.scheduleMode,
+        profile.trainingTimes,
+        profile.reminderOffsets
     ) {
         ReminderScheduler.reschedule(context, profile)
         // Напоминания о добавках — по дневнику этого профиля.

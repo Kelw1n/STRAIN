@@ -274,6 +274,8 @@ struct MainTabView: View {
         .onChange(of: profile.reminderHour) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.reminderMinute) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.scheduleWeekdays) { _, _ in ReminderScheduler.reschedule(for: profile) }
+        .onChange(of: profile.trainingTimes) { _, _ in ReminderScheduler.reschedule(for: profile) }
+        .onChange(of: profile.reminderOffsets) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.completedDayKeys) { _, _ in WidgetBridge.publish(profile) }
         .onChange(of: profile.scheduleModeRaw) { _, _ in
             WidgetBridge.publish(profile)

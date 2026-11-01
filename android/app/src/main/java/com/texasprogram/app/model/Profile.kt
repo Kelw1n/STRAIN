@@ -114,8 +114,16 @@ data class ProgramProfile(
     val stallDismissed: Map<String, Double> = emptyMap(),
     /// Напоминание о тренировке в дни расписания.
     val reminderEnabled: Boolean = false,
+    /// Время тренировки (и напоминания «в начале») по умолчанию — для всех дней.
     val reminderHour: Int = 18,
-    val reminderMinute: Int = 0
+    val reminderMinute: Int = 0,
+    /// Своё время у каждого дня: номер дня недели строкой → минуты от полуночи.
+    val trainingTimes: Map<String, Int> = emptyMap(),
+    /// За сколько минут до тренировки напоминать: 0 — в её начале. До трёх.
+    val reminderOffsets: List<Int> = listOf(0),
+    /// Срок цели: с какого дня и на сколько месяцев. 0 месяцев — без срока.
+    val goalStartEpochDay: Long? = null,
+    val goalMonths: Int = 0
 ) {
 
     // MARK: - Входные данные и план

@@ -33,11 +33,19 @@ enum ReminderScheduler {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
-    /// Идентификаторы на все дни недели: снимаем с запасом, чтобы не зависеть
-    /// от того, каким расписание было в прошлый раз.
+    /// Идентификаторы на все дни недели и все варианты напоминаний: снимаем
+    /// с запасом, чтобы не зависеть от того, каким расписание было в прошлый раз.
     private static var identifiers: [String] {
-        (1...7).flatMap { weekday in [prefix + "\(weekday)"] + (1...skipWeeks).map { prefix + "\(weekday)-\($0)" } }
+        (1...7).flatMap { weekday in
+            TrainingGoal.offsetOptions.flatMap { offset -> [String] in
+                let base = prefix + "\(weekday)" + suffix(offset)
+                return [base] + (1...skipWeeks).map { base + "-\($0)" }
+            }
+        }
     }
+
+    /// Напоминание в начале тренировки — без приставки, как было до нескольких напоминаний.
+    private static func suffix(_ offset: Int) -> String { offset == 0 ? "" : "-m\(offset)" }
 
     /// На сколько недель вперёд ставим разовые напоминания вместо повторяющегося,
     /// когда сегодняшняя тренировка уже сделана.
@@ -45,45 +53,54 @@ enum ReminderScheduler {
 
     /// Что именно поставим. Вынесено отдельно, чтобы это можно было проверить
     /// тестом, не трогая систему уведомлений.
+    ///
+    /// У каждого дня своё время тренировки, у каждой тренировки — до трёх
+    /// напоминаний: в начале и за 15 минут — 2 часа до неё. Напоминание,
+    /// которое выпало бы на вчера, не ставим.
     static func plan(for profile: ProgramProfile, now: Date = Date(), calendar: Calendar = .current) -> [UNNotificationRequest] {
         guard profile.reminderEnabled else { return [] }
         let trainedToday = profile.completionLog.contains { calendar.isDate($0.date, inSameDayAs: now) }
         let today = calendar.component(.weekday, from: now)
 
         return profile.weekdays.enumerated().flatMap { index, weekday -> [UNNotificationRequest] in
-            let content = UNMutableNotificationContent()
-            content.title = "Сегодня тренировка"
-            content.body = body(for: index + 1, profile: profile)
-            content.sound = .default
+            let training = profile.trainingMinutes(weekday: weekday)
+            return profile.activeReminderOffsets.flatMap { offset -> [UNNotificationRequest] in
+                let minutes = training - offset
+                guard minutes >= 0 else { return [] }
+                let content = UNMutableNotificationContent()
+                content.title = offset == 0 ? "Сегодня тренировка" : "Тренировка \(TrainingGoal.inText(offset))"
+                content.body = body(for: index + 1, profile: profile)
+                content.sound = .default
+                let identifier = prefix + "\(weekday)" + suffix(offset)
 
-            // Утром уже потренировался — повторяющееся напоминание всё равно
-            // пришло бы вечером. Вместо него разовые на следующие недели;
-            // при следующем запуске приложения вернётся обычное.
-            if trainedToday, weekday == today,
-               let tonight = calendar.date(bySettingHour: profile.reminderHour, minute: profile.reminderMinute, second: 0, of: now) {
-                return (1...skipWeeks).compactMap { week -> UNNotificationRequest? in
-                    guard let date = calendar.date(byAdding: .day, value: 7 * week, to: tonight) else { return nil }
-                    return UNNotificationRequest(
-                        identifier: prefix + "\(weekday)-\(week)",
-                        content: content,
-                        trigger: UNCalendarNotificationTrigger(
-                            dateMatching: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date),
-                            repeats: false
+                // Утром уже потренировался — повторяющееся напоминание всё равно
+                // пришло бы вечером. Вместо него разовые на следующие недели;
+                // при следующем запуске приложения вернётся обычное.
+                if trainedToday, weekday == today,
+                   let tonight = calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: now) {
+                    return (1...skipWeeks).compactMap { week -> UNNotificationRequest? in
+                        guard let date = calendar.date(byAdding: .day, value: 7 * week, to: tonight) else { return nil }
+                        return UNNotificationRequest(
+                            identifier: identifier + "-\(week)",
+                            content: content,
+                            trigger: UNCalendarNotificationTrigger(
+                                dateMatching: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date),
+                                repeats: false
+                            )
                         )
-                    )
+                    }
                 }
+
+                var components = DateComponents()
+                components.weekday = weekday
+                components.hour = minutes / 60
+                components.minute = minutes % 60
+                return [UNNotificationRequest(
+                    identifier: identifier,
+                    content: content,
+                    trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+                )]
             }
-
-            var components = DateComponents()
-            components.weekday = weekday
-            components.hour = profile.reminderHour
-            components.minute = profile.reminderMinute
-
-            return [UNNotificationRequest(
-                identifier: prefix + "\(weekday)",
-                content: content,
-                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-            )]
         }
     }
 

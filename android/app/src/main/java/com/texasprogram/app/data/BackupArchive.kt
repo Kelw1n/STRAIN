@@ -80,7 +80,11 @@ data class ProfileSnapshot(
     /// Свои упражнения, «Мои тренировки» и тренировки вне программы. В старых копиях их нет.
     val customExercises: List<com.texasprogram.app.model.LibraryExercise> = emptyList(),
     val workoutTemplates: List<com.texasprogram.app.model.WorkoutTemplate> = emptyList(),
-    val freeWorkouts: List<com.texasprogram.app.model.FreeWorkoutDay> = emptyList()
+    val freeWorkouts: List<com.texasprogram.app.model.FreeWorkoutDay> = emptyList(),
+    /// Цель: своё время у дней и срок. Значения по умолчанию — для старых копий.
+    val trainingTimes: Map<String, Int> = emptyMap(),
+    val goalStartEpochDay: Long? = null,
+    val goalMonths: Int = 0
 )
 
 /// Отчёт авторегуляции в копии. Android хранит номер дня `epochDay`, iOS —
@@ -227,7 +231,10 @@ object BackupService {
         challengeAwards = profile.challengeAwards,
         customExercises = profile.customExercises,
         workoutTemplates = profile.workoutTemplates,
-        freeWorkouts = profile.freeWorkouts
+        freeWorkouts = profile.freeWorkouts,
+        trainingTimes = profile.trainingTimes,
+        goalStartEpochDay = profile.goalStartEpochDay,
+        goalMonths = profile.goalMonths
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(
@@ -287,6 +294,9 @@ object BackupService {
         customExercises = snapshot.customExercises,
         workoutTemplates = snapshot.workoutTemplates,
         freeWorkouts = snapshot.freeWorkouts,
+        trainingTimes = snapshot.trainingTimes,
+        goalStartEpochDay = snapshot.goalStartEpochDay,
+        goalMonths = snapshot.goalMonths,
         scheduleWeekdays = snapshot.scheduleWeekdays,
         scheduleMode = if (snapshot.scheduleMode == "QUEUE") ScheduleMode.QUEUE else ScheduleMode.WEEKDAY,
         cycleStartedEpochDay = snapshot.cycleStartedEpochDay,

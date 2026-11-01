@@ -342,8 +342,17 @@ final class ProgramProfile {
     var stallDismissed: [String: Double] = [:]
     /// Напоминание о тренировке в дни расписания.
     var reminderEnabled: Bool = false
+    /// Время тренировки (и напоминания «в начале») по умолчанию — для всех дней.
     var reminderHour: Int = 18
     var reminderMinute: Int = 0
+    /// Своё время у каждого дня: номер дня недели строкой → минуты от полуночи.
+    /// Пусто — у всех дней одно время, `reminderHour:reminderMinute`.
+    var trainingTimes: [String: Int] = [:]
+    /// За сколько минут до тренировки напоминать: 0 — в её начале. До трёх.
+    var reminderOffsets: [Int] = [0]
+    /// Срок цели: с какого дня и на сколько месяцев. 0 месяцев — без срока.
+    var goalStart: Date?
+    var goalMonths: Int = 0
     var completedBenchSessions: [Int] = []
     /// Дни недели тренировок в нумерации `Calendar` (1 — воскресенье). Пусто — значения по умолчанию.
     var scheduleWeekdays: [Int] = []

@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.model.goalWeek
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -470,6 +471,16 @@ private fun GoalCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // Срок цели — «неделя 3 из 13».
+            profile.goalWeek()?.let { (week, total) ->
+                Text(
+                    text = "Неделя $week из $total",
+                    color = Theme.accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

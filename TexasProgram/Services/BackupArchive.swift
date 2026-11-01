@@ -62,6 +62,10 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var customExercises: [LibraryExercise]?
     var workoutTemplates: [WorkoutTemplate]?
     var freeWorkouts: [FreeWorkoutDay]?
+    /// Цель: своё время у дней и срок. Необязательные: в старых копиях их нет.
+    var trainingTimes: [String: Int]?
+    var goalStartEpochDay: Int?
+    var goalMonths: Int?
 }
 
 /// Отчёт авторегуляции в копии. iOS хранит дату полем `date`, Android — номером
@@ -274,7 +278,10 @@ enum BackupService {
             challengeAwards: profile.challengeAwards.isEmpty ? nil : profile.challengeAwards,
             customExercises: profile.customExercises.isEmpty ? nil : profile.customExercises,
             workoutTemplates: profile.workoutTemplates.isEmpty ? nil : profile.workoutTemplates,
-            freeWorkouts: profile.freeWorkouts.isEmpty ? nil : profile.freeWorkouts
+            freeWorkouts: profile.freeWorkouts.isEmpty ? nil : profile.freeWorkouts,
+            trainingTimes: profile.trainingTimes.isEmpty ? nil : profile.trainingTimes,
+            goalStartEpochDay: profile.goalStart.map(epochDay),
+            goalMonths: profile.goalMonths == 0 ? nil : profile.goalMonths
         )
     }
 
@@ -375,6 +382,9 @@ enum BackupService {
         result.customExercises = snapshot.customExercises ?? []
         result.workoutTemplates = snapshot.workoutTemplates ?? []
         result.freeWorkouts = snapshot.freeWorkouts ?? []
+        result.trainingTimes = snapshot.trainingTimes ?? [:]
+        result.goalStart = snapshot.goalStartEpochDay.map { BackupService.date($0) }
+        result.goalMonths = snapshot.goalMonths ?? 0
         if let nutrition = snapshot.nutrition {
             NutritionStore.write(nutrition, for: result.profileID)
         }

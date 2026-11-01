@@ -7,6 +7,11 @@ struct GoalSettingsSheet: View {
     @State private var selectedDays: Set<Int> = []
     @State private var reminderTime = Calendar.current.date(bySettingHour: 19, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var reminderEnabled = true
+    @State private var goalStart = Calendar.current.startOfDay(for: Date())
+    @State private var goalMonths = 0
+    @State private var ownTimes = false
+    @State private var dayTimes: [Int: Date] = [:]
+    @State private var offsets: Set<Int> = [0]
 
     // Дни недели с понедельника: ПН(2) … СБ(7), ВС(1).
     private let weekdaysList: [(label: String, index: Int)] = [
@@ -60,34 +65,123 @@ struct GoalSettingsSheet: View {
                             .animation(.easeOut(duration: 0.15), value: isReady)
                     }
 
-                    // Напоминание
+                    // Срок
                     VStack(alignment: .leading, spacing: 10) {
-                        sectionTitle("НАПОМИНАНИЕ")
-
+                        sectionTitle("СРОК")
                         VStack(spacing: 0) {
-                            Toggle("Напоминать в дни тренировок", isOn: $reminderEnabled.animation(Motion.snappy))
+                            row("Начало") {
+                                DatePicker("", selection: $goalStart, displayedComponents: .date)
+                                    .labelsHidden()
+                                    .environment(\.locale, Locale(identifier: "ru_RU"))
+                            }
+                            Divider().overlay(Color.ink.opacity(0.06)).padding(.horizontal, 16)
+                            row("Длительность") {
+                                Menu {
+                                    Picker("", selection: $goalMonths) {
+                                        ForEach(TrainingGoal.monthOptions, id: \.self) { Text(TrainingGoal.monthsTitle($0)).tag($0) }
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(TrainingGoal.monthsTitle(goalMonths))
+                                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
+                                    }
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Color.ink.opacity(0.85))
+                                }
+                            }
+                        }
+                        .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        if let term = termLine {
+                            Text(term)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.ink.opacity(0.45))
+                        }
+                    }
+
+                    // Время тренировок
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionTitle("ВРЕМЯ ТРЕНИРОВОК")
+                        VStack(spacing: 0) {
+                            row("Время") {
+                                Menu {
+                                    Picker("", selection: $ownTimes.animation(Motion.snappy)) {
+                                        Text("Одинаковое").tag(false)
+                                        Text("Своё у каждого дня").tag(true)
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(ownTimes ? "Своё у каждого дня" : "Одинаковое")
+                                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
+                                    }
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Color.ink.opacity(0.85))
+                                }
+                            }
+                            if ownTimes {
+                                ForEach(weekdaysList.filter { selectedDays.contains($0.index) }, id: \.index) { item in
+                                    Divider().overlay(Color.ink.opacity(0.06)).padding(.horizontal, 16)
+                                    row(RuDate.full(weekday: item.index).capitalized) {
+                                        DatePicker("", selection: dayTimeBinding(item.index), displayedComponents: .hourAndMinute)
+                                            .labelsHidden()
+                                    }
+                                }
+                            } else {
+                                Divider().overlay(Color.ink.opacity(0.06)).padding(.horizontal, 16)
+                                row("Все дни") {
+                                    DatePicker("", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                                        .labelsHidden()
+                                }
+                            }
+                        }
+                        .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+
+                    // Напоминания
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionTitle("НАПОМИНАНИЯ")
+                        VStack(spacing: 0) {
+                            Toggle("Напоминать", isOn: $reminderEnabled.animation(Motion.snappy))
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.ink)
                                 .tint(Theme.accent)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-
                             if reminderEnabled {
-                                Divider().overlay(Color.ink.opacity(0.06)).padding(.horizontal, 16)
-
-                                HStack {
-                                    Text("Время")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(.ink)
-                                    Spacer()
-                                    DatePicker("", selection: $reminderTime, displayedComponents: .hourAndMinute)
-                                        .labelsHidden()
+                                ForEach(TrainingGoal.offsetOptions, id: \.self) { offset in
+                                    Divider().overlay(Color.ink.opacity(0.06)).padding(.horizontal, 16)
+                                    let selected = offsets.contains(offset)
+                                    Button {
+                                        UISelectionFeedbackGenerator().selectionChanged()
+                                        if selected {
+                                            if offsets.count > 1 { offsets.remove(offset) }
+                                        } else if offsets.count < TrainingGoal.maxOffsets {
+                                            offsets.insert(offset)
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Text(TrainingGoal.offsetTitle(offset))
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundStyle(.ink)
+                                            Spacer()
+                                            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                                .font(.system(size: 20))
+                                                .foregroundStyle(selected ? Theme.accent : Color.ink.opacity(0.25))
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 12)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(!selected && offsets.count >= TrainingGoal.maxOffsets)
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
                             }
                         }
                         .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        if reminderEnabled {
+                            Text("\(offsets.count) " + RuPlural.word(offsets.count, "напоминание", "напоминания", "напоминаний") + " на тренировку, до трёх.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.ink.opacity(0.45))
+                        }
                     }
 
                     Spacer(minLength: 20)
@@ -141,7 +235,50 @@ struct GoalSettingsSheet: View {
             if let date = Calendar.current.date(from: comps) {
                 reminderTime = date
             }
+            goalStart = Calendar.current.startOfDay(for: profile.goalStart ?? Date())
+            goalMonths = profile.goalMonths
+            ownTimes = !profile.trainingTimes.isEmpty
+            for item in weekdaysList {
+                let minutes = profile.trainingMinutes(weekday: item.index)
+                dayTimes[item.index] = Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date())
+            }
+            offsets = Set(profile.activeReminderOffsets)
         }
+    }
+
+    private func row<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.ink)
+            Spacer()
+            trailing()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(minHeight: 50)
+    }
+
+    private func dayTimeBinding(_ weekday: Int) -> Binding<Date> {
+        Binding(
+            get: { dayTimes[weekday] ?? reminderTime },
+            set: { dayTimes[weekday] = $0 }
+        )
+    }
+
+    /// «Идёт неделя 3 из 13 · до 11 января».
+    private var termLine: String? {
+        guard goalMonths > 0, let end = Calendar.current.date(byAdding: .month, value: goalMonths, to: goalStart) else {
+            return "Без срока — цель держится, пока не поменяешь."
+        }
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: goalStart, to: end).day ?? 0
+        let total = max(1, Int(ceil(Double(days) / 7)))
+        let endText = "до \(calendar.component(.day, from: end)) \(RuDate.monthGenitive[calendar.component(.month, from: end)])"
+        let today = calendar.startOfDay(for: Date())
+        guard today >= goalStart else { return "\(total) " + RuPlural.word(total, "неделя", "недели", "недель") + " · " + endText }
+        let week = min(total, (calendar.dateComponents([.day], from: goalStart, to: today).day ?? 0) / 7 + 1)
+        return "Идёт неделя \(week) из \(total) · " + endText
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -161,6 +298,18 @@ struct GoalSettingsSheet: View {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         profile.reminderHour = comps.hour ?? 19
         profile.reminderMinute = comps.minute ?? 0
+        // Своё время — только у выбранных дней; одинаковое — словарь пустой.
+        var times: [String: Int] = [:]
+        if ownTimes {
+            for day in selectedDays {
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: dayTimes[day] ?? reminderTime)
+                times[String(day)] = (parts.hour ?? 19) * 60 + (parts.minute ?? 0)
+            }
+        }
+        profile.trainingTimes = times
+        profile.reminderOffsets = offsets.sorted()
+        profile.goalStart = goalStart
+        profile.goalMonths = goalMonths
 
         ReminderScheduler.reschedule(for: profile)
         WidgetBridge.publish(profile)

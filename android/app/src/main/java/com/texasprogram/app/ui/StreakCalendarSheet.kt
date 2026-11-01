@@ -1,5 +1,11 @@
 package com.texasprogram.app.ui
 
+import androidx.compose.material.icons.filled.Check
+import com.texasprogram.app.model.goalEnd
+import com.texasprogram.app.model.goalWeek
+import com.texasprogram.app.model.activeReminderOffsets
+import com.texasprogram.app.model.trainingMinutes
+import com.texasprogram.app.model.TrainingGoal
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -282,6 +288,14 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
     var reminder by remember { mutableStateOf(profile.reminderEnabled) }
     var hour by remember { mutableIntStateOf(profile.reminderHour) }
     var minute by remember { mutableIntStateOf(profile.reminderMinute) }
+    var goalStart by remember { mutableStateOf(profile.goalStartEpochDay ?: java.time.LocalDate.now().toEpochDay()) }
+    var goalMonths by remember { mutableIntStateOf(profile.goalMonths) }
+    var ownTimes by remember { mutableStateOf(profile.trainingTimes.isNotEmpty()) }
+    var dayTimes by remember {
+        mutableStateOf(RuDate.weekOrder.associateWith { profile.trainingMinutes(it) })
+    }
+    var offsets by remember { mutableStateOf(profile.activeReminderOffsets.toSet()) }
+    var pickingDate by remember { mutableStateOf(false) }
     val ready = days.size == need
 
     ModalBottomSheet(
@@ -336,16 +350,45 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SheetLabel("НАПОМИНАНИЕ")
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(Theme.tone(0xFF1E1E1E), RoundedCornerShape(18.dp))
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                SheetLabel("СРОК")
+                GoalGroup {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().pressable { pickingDate = true }) {
+                        Text("Начало", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(RuDate.dayMonth(java.time.LocalDate.ofEpochDay(goalStart)), color = Theme.ink.copy(alpha = 0.85f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text("Длительность", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    ChipRow(TrainingGoal.monthOptions.map { it to TrainingGoal.monthsTitle(it) }, setOf(goalMonths)) { goalMonths = it }
+                }
+                val preview = profile.copy(goalStartEpochDay = goalStart, goalMonths = goalMonths)
+                Text(
+                    preview.goalWeek()?.let { (week, total) -> "Идёт неделя $week из $total · до ${RuDate.dayMonth(preview.goalEnd()!!)}" }
+                        ?: preview.goalEnd()?.let { "До ${RuDate.dayMonth(it)}" }
+                        ?: "Без срока — цель держится, пока не поменяешь.",
+                    color = Theme.ink.copy(alpha = 0.45f),
+                    fontSize = 12.sp
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SheetLabel("ВРЕМЯ ТРЕНИРОВОК")
+                GoalGroup {
+                    ChipRow(listOf(false to "Одинаковое", true to "Своё у каждого дня"), setOf(ownTimes)) { ownTimes = it }
+                    if (ownTimes) {
+                        RuDate.weekOrder.filter { it in days }.forEach { weekday ->
+                            val value = dayTimes[weekday] ?: (hour * 60 + minute)
+                            TimeRow(RuDate.full(weekday).replaceFirstChar { it.uppercase() }, value) { dayTimes = dayTimes + (weekday to it) }
+                        }
+                    } else {
+                        TimeRow("Все дни", hour * 60 + minute) { hour = it / 60; minute = it % 60 }
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SheetLabel("НАПОМИНАНИЯ")
+                GoalGroup {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Напоминать в дни тренировок", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text("Напоминать", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         Switch(
                             checked = reminder,
                             onCheckedChange = { reminder = it },
@@ -353,16 +396,32 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                         )
                     }
                     if (reminder) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Время", color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            StepChip("−") { hour = (hour + 23) % 24 }
-                            Text(String.format(Locale.US, "%02d", hour), color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
-                            StepChip("+") { hour = (hour + 1) % 24 }
-                            Text(":", color = Theme.ink.copy(alpha = 0.5f), fontSize = 18.sp, modifier = Modifier.padding(horizontal = 6.dp))
-                            StepChip("−") { minute = (minute + 45) % 60 }
-                            Text(String.format(Locale.US, "%02d", minute), color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
-                            StepChip("+") { minute = (minute + 15) % 60 }
+                        TrainingGoal.offsetOptions.forEach { offset ->
+                            val selected = offset in offsets
+                            Row(
+                                Modifier.fillMaxWidth().pressable {
+                                    haptics.selection()
+                                    offsets = when {
+                                        selected && offsets.size > 1 -> offsets - offset
+                                        !selected && offsets.size < TrainingGoal.MAX_OFFSETS -> offsets + offset
+                                        else -> offsets
+                                    }
+                                }.padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(TrainingGoal.offsetTitle(offset), color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                Box(
+                                    Modifier.size(22.dp).clip(CircleShape)
+                                        .background(if (selected) Theme.accent else androidx.compose.ui.graphics.Color.Transparent)
+                                        .border(2.dp, Theme.ink.copy(alpha = if (selected) 0f else 0.25f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = Theme.canvas, modifier = Modifier.size(14.dp))
+                                }
+                            }
                         }
+                        Text("${offsets.size} " + RuPlural.word(offsets.size, "напоминание", "напоминания", "напоминаний") + " на тренировку, до трёх.",
+                            color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp)
                     }
                 }
             }
@@ -380,7 +439,12 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                                 scheduleWeekdays = ordered,
                                 reminderEnabled = reminder,
                                 reminderHour = hour,
-                                reminderMinute = minute
+                                reminderMinute = minute,
+                                // Своё время — только у выбранных дней; одинаковое — пусто.
+                                trainingTimes = if (ownTimes) ordered.associate { it.toString() to (dayTimes[it] ?: (hour * 60 + minute)) } else emptyMap(),
+                                reminderOffsets = offsets.sorted(),
+                                goalStartEpochDay = goalStart,
+                                goalMonths = goalMonths
                             )
                         )
                         onDismiss()
@@ -392,6 +456,75 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                 Text("СОХРАНИТЬ ЦЕЛЬ", color = if (ready) Theme.canvas else Theme.ink.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.Black)
             }
         }
+    }
+    if (pickingDate) {
+        val pickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = goalStart * 86_400_000L
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = { pickingDate = false },
+            confirmButton = {
+                Text("Готово", color = Theme.accent, fontWeight = FontWeight.Bold, modifier = Modifier.padding(12.dp).pressable {
+                    pickerState.selectedDateMillis?.let { goalStart = it / 86_400_000L }
+                    pickingDate = false
+                })
+            },
+            dismissButton = { Text("Отмена", color = Theme.ink.copy(alpha = 0.6f), modifier = Modifier.padding(12.dp).pressable { pickingDate = false }) }
+        ) {
+            androidx.compose.material3.DatePicker(state = pickerState)
+        }
+    }
+}
+
+@Composable
+private fun GoalGroup(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Theme.tone(0xFF1E1E1E), RoundedCornerShape(18.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        content = content
+    )
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun <T> ChipRow(options: List<Pair<T, String>>, selected: Set<T>, onSelect: (T) -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { (value, title) ->
+            val on = value in selected
+            Box(
+                Modifier
+                    .height(34.dp)
+                    .pressable { onSelect(value) }
+                    .clip(CircleShape)
+                    .background(if (on) Theme.accent else Theme.tone(0xFF2A2A2A))
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(title, color = if (on) Theme.canvas else Theme.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimeRow(title: String, minutes: Int, onChange: (Int) -> Unit) {
+    val hour = minutes / 60
+    val minute = minutes % 60
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = Theme.ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        StepChip("−") { onChange(((hour + 23) % 24) * 60 + minute) }
+        Text(String.format(Locale.US, "%02d", hour), color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp))
+        StepChip("+") { onChange(((hour + 1) % 24) * 60 + minute) }
+        Text(":", color = Theme.ink.copy(alpha = 0.5f), fontSize = 18.sp, modifier = Modifier.padding(horizontal = 4.dp))
+        StepChip("−") { onChange(hour * 60 + (minute + 45) % 60) }
+        Text(String.format(Locale.US, "%02d", minute), color = Theme.ink, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp))
+        StepChip("+") { onChange(hour * 60 + (minute + 15) % 60) }
     }
 }
 
