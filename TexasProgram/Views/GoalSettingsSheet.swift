@@ -238,9 +238,10 @@ struct GoalSettingsSheet: View {
             goalStart = Calendar.current.startOfDay(for: profile.goalStart ?? Date())
             goalMonths = profile.goalMonths
             ownTimes = !profile.trainingTimes.isEmpty
-            for item in weekdaysList {
-                let minutes = profile.trainingMinutes(weekday: item.index)
-                dayTimes[item.index] = Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date())
+            // Только заданное своё время: у остальных дней — общее, даже если его поменяют.
+            for (key, minutes) in profile.trainingTimes {
+                guard let day = Int(key) else { continue }
+                dayTimes[day] = Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date())
             }
             offsets = Set(profile.activeReminderOffsets)
         }

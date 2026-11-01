@@ -113,6 +113,27 @@ struct MainTabView: View {
         }
     }
 
+    /// Всё, от чего зависят напоминания о тренировке.
+    private struct ReminderSettings: Equatable {
+        let enabled: Bool
+        let hour: Int
+        let minute: Int
+        let weekdays: [Int]
+        let times: [String: Int]
+        let offsets: [Int]
+    }
+
+    private var reminderSettings: ReminderSettings {
+        ReminderSettings(
+            enabled: profile.reminderEnabled,
+            hour: profile.reminderHour,
+            minute: profile.reminderMinute,
+            weekdays: profile.scheduleWeekdays,
+            times: profile.trainingTimes,
+            offsets: profile.reminderOffsets
+        )
+    }
+
     private var showsMinimizedWorkout: Bool {
         sessionManager.isRunning && !sessionManager.isPresented && !AppChrome.shared.hidesTabBar
     }
@@ -269,13 +290,9 @@ struct MainTabView: View {
         .onChange(of: profile.workoutTemplates) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         // Опыт за место в челлендже — новый уровень у ника тоже.
         .onChange(of: profile.challengeAwards) { _, _ in SocialService.shared.scheduleSync(from: profile) }
-        // Расписание напоминаний собирается заново на каждое изменение
-        .onChange(of: profile.reminderEnabled) { _, _ in ReminderScheduler.reschedule(for: profile) }
-        .onChange(of: profile.reminderHour) { _, _ in ReminderScheduler.reschedule(for: profile) }
-        .onChange(of: profile.reminderMinute) { _, _ in ReminderScheduler.reschedule(for: profile) }
-        .onChange(of: profile.scheduleWeekdays) { _, _ in ReminderScheduler.reschedule(for: profile) }
-        .onChange(of: profile.trainingTimes) { _, _ in ReminderScheduler.reschedule(for: profile) }
-        .onChange(of: profile.reminderOffsets) { _, _ in ReminderScheduler.reschedule(for: profile) }
+        // Расписание напоминаний собирается заново на каждое изменение. Одной
+        // проверкой: шесть отдельных не укладываются в проверку типов тела.
+        .onChange(of: reminderSettings) { _, _ in ReminderScheduler.reschedule(for: profile) }
         .onChange(of: profile.completedDayKeys) { _, _ in WidgetBridge.publish(profile) }
         .onChange(of: profile.scheduleModeRaw) { _, _ in
             WidgetBridge.publish(profile)

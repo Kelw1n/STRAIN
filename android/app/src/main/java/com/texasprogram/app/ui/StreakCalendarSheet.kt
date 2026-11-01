@@ -4,7 +4,6 @@ import androidx.compose.material.icons.filled.Check
 import com.texasprogram.app.model.goalEnd
 import com.texasprogram.app.model.goalWeek
 import com.texasprogram.app.model.activeReminderOffsets
-import com.texasprogram.app.model.trainingMinutes
 import com.texasprogram.app.model.TrainingGoal
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -291,8 +290,9 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
     var goalStart by remember { mutableStateOf(profile.goalStartEpochDay ?: java.time.LocalDate.now().toEpochDay()) }
     var goalMonths by remember { mutableIntStateOf(profile.goalMonths) }
     var ownTimes by remember { mutableStateOf(profile.trainingTimes.isNotEmpty()) }
+    // Только заданное своё время: у остальных дней — общее, даже если его поменяют.
     var dayTimes by remember {
-        mutableStateOf(RuDate.weekOrder.associateWith { profile.trainingMinutes(it) })
+        mutableStateOf(profile.trainingTimes.mapNotNull { (key, minutes) -> key.toIntOrNull()?.let { it to minutes } }.toMap())
     }
     var offsets by remember { mutableStateOf(profile.activeReminderOffsets.toSet()) }
     var pickingDate by remember { mutableStateOf(false) }
