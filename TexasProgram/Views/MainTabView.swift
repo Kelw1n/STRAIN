@@ -222,7 +222,7 @@ struct MainTabView: View {
             Button("Отменить текущую и начать новую", role: .destructive) {
                 sessionManager.confirmReplace(profile: profile)
             }
-            Button("Закрыть", role: .cancel) { sessionManager.pendingWorkout = nil }
+            Button("Закрыть", role: .cancel) { sessionManager.dismissReplace() }
         } message: {
             Text("Подходы текущей тренировки, отмеченные в этой сессии, будут сброшены.")
         }

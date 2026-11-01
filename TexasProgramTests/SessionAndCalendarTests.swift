@@ -138,6 +138,23 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertNil(manager.pendingWorkout)
     }
 
+    /// Шаблон, начатый поверх идущей тренировки, и «Закрыть» в вопросе: заготовка
+    /// свободной тренировки не должна остаться висеть в профиле.
+    func testDismissingTemplateReplaceDropsFreeWorkout() throws {
+        let profile = texas()
+        let manager = WorkoutSessionManager.shared
+        let current = try XCTUnwrap(profile.schedule.allPending.first)
+        manager.requestStart(workout: current, profile: profile)
+        manager.startTemplate(TemplateCatalog.all[0], profile: profile)
+        XCTAssertEqual(manager.pendingWorkout?.week, ProgramProfile.freeWeek)
+        XCTAssertEqual(profile.freeWorkouts.count, 1)
+
+        manager.dismissReplace()
+        XCTAssertNil(manager.pendingWorkout)
+        XCTAssertTrue(profile.freeWorkouts.isEmpty)
+        XCTAssertEqual(manager.activeWorkout?.id, current.id, "текущая тренировка не должна пропасть")
+    }
+
     func testEditingDoneSetRewritesEntry() throws {
         let profile = texas()
         let workout = try XCTUnwrap(profile.schedule.focus)

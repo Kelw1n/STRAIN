@@ -164,6 +164,12 @@ final class WorkoutSessionManager {
     }
 
     func cancelReplace() {
+        dismissReplace()
+        expand()
+    }
+
+    /// Новую тренировку не начали — «Закрыть» или «Вернуться к текущей».
+    func dismissReplace() {
         // Свободная тренировка уже заведена в профиле — раз её не начали, убираем.
         if let pending = pendingWorkout, pending.week == ProgramProfile.freeWeek, let profile = pendingProfile {
             profile.discardFreeWorkout(pending.day.number)
@@ -171,7 +177,6 @@ final class WorkoutSessionManager {
         pendingWorkout = nil
         pendingProfile = nil
         templateRows = [:]
-        expand()
     }
 
     @ObservationIgnored private weak var pendingProfile: ProgramProfile?

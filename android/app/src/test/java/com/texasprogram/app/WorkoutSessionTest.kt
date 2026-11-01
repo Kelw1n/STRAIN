@@ -180,6 +180,22 @@ class WorkoutSessionTest {
         assertEquals(pending[1].id, manager.activeWorkout?.id)
     }
 
+    /// Шаблон, начатый поверх идущей тренировки, и отказ в вопросе: заготовка
+    /// свободной тренировки не должна остаться висеть в профиле.
+    @Test
+    fun cancellingTemplateReplaceDropsFreeWorkout() {
+        val current = profile.schedule().allPending.first()
+        manager.startWorkout(current, profile)
+        manager.startTemplate(com.texasprogram.app.model.TemplateCatalog.all[0], profile, update)
+        assertEquals(ProgramProfile.FREE_WEEK, manager.pendingWorkout?.week)
+        assertEquals(1, profile.freeWorkouts.size)
+
+        manager.cancelReplace(profile, update)
+        assertNull(manager.pendingWorkout)
+        assertTrue(profile.freeWorkouts.isEmpty())
+        assertEquals(current.id, manager.activeWorkout?.id)
+    }
+
     @Test
     fun sessionSurvivesProcessDeath() {
         val w = start()

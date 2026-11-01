@@ -479,6 +479,8 @@ struct ChatView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(.ink)
                         .frame(width: 44, height: 44)
+                        // Весь кружок, а не только значок: под стеклом нет залитого фона.
+                        .contentShape(Circle())
                         .chatGlass(Circle())
                 }
                 .disabled(editing != nil)

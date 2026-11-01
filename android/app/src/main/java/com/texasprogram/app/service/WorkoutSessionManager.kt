@@ -210,7 +210,12 @@ object WorkoutSessionManager {
         startWorkout(workout, profile)
     }
 
-    fun cancelReplace() {
+    /// Новую тренировку не начали. Свободная уже заведена в профиле — убираем её.
+    fun cancelReplace(profile: ProgramProfile? = null, onUpdateProfile: ((ProgramProfile) -> Unit)? = null) {
+        val pending = pendingWorkout
+        if (pending != null && pending.week == ProgramProfile.FREE_WEEK && profile != null && onUpdateProfile != null) {
+            onUpdateProfile(profile.discardFreeWorkout(pending.day.number))
+        }
         pendingWorkout = null
         templateRows = emptyMap()
         expand()

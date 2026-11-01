@@ -10,8 +10,14 @@ struct NotesListView: View {
     /// От свежих к старым: перечитывают обычно последнее.
     private var notes: [(week: Int, day: Int, text: String)] {
         profile.workoutNotes
-            .filter { profile.isOwnKey($0.key) }
-            .compactMap { key, text in
+            .compactMap { entry -> (week: Int, day: Int, text: String)? in
+                let key = entry.key, text = entry.value
+                // Заметки свободных тренировок — вне циклов, у них свой ключ.
+                if key.hasPrefix("free-") {
+                    guard let number = Int(key.dropFirst("free-".count)) else { return nil }
+                    return (ProgramProfile.freeWeek, number, text)
+                }
+                guard profile.isOwnKey(key) else { return nil }
                 let parts = key.dropFirst(profile.keyPrefix.count).split(separator: "-")
                 guard parts.count == 2, let week = Int(parts[0]), let day = Int(parts[1]) else { return nil }
                 return (week, day, text)
@@ -34,7 +40,7 @@ struct NotesListView: View {
                 ForEach(Array(notes.enumerated()), id: \.offset) { index, note in
                     CardView(padding: 15, spacing: 7) {
                         HStack {
-                            Text("Неделя \(note.week), день \(note.day)")
+                            Text(title(week: note.week, day: note.day))
                                 .font(.caption.weight(.bold))
                                 .foregroundStyle(Theme.accentGradient)
                             Spacer(minLength: 8)
@@ -65,5 +71,10 @@ struct NotesListView: View {
         .screenBackground()
         .navigationTitle("Заметки")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func title(week: Int, day: Int) -> String {
+        guard week == ProgramProfile.freeWeek else { return "Неделя \(week), день \(day)" }
+        return profile.freeDay(day)?.title ?? "Свободная тренировка"
     }
 }

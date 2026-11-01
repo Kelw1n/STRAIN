@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.freeDay
 
 /// Все заметки цикла одним списком.
 ///
@@ -34,9 +35,15 @@ fun NotesListScreen(
     // От свежих к старым: перечитывают обычно последнее.
     val notes = remember(profile.workoutNotes, profile.id) {
         val prefix = profile.keyPrefix
+        val freePrefix = ProgramProfile.freeKey(0).dropLast(1)
         profile.workoutNotes
-            .filterKeys { profile.isOwnKey(it) }
             .mapNotNull { (key, text) ->
+                // Заметки свободных тренировок — вне циклов, у них свой ключ.
+                if (key.startsWith(freePrefix)) {
+                    val number = key.removePrefix(freePrefix).toIntOrNull() ?: return@mapNotNull null
+                    return@mapNotNull Triple(ProgramProfile.FREE_WEEK, number, text)
+                }
+                if (!profile.isOwnKey(key)) return@mapNotNull null
                 val parts = key.removePrefix(prefix).split("-")
                 val week = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
                 val day = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
@@ -69,7 +76,8 @@ fun NotesListScreen(
             CardView(padding = 15.dp, spacing = 7.dp) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Неделя $week, день $day",
+                        if (week == ProgramProfile.FREE_WEEK) profile.freeDay(day)?.title ?: "Свободная тренировка"
+                        else "Неделя $week, день $day",
                         color = Theme.accent,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold

@@ -817,7 +817,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
             val current = WorkoutSessionManager.activeWorkout
             androidx.compose.material3.AlertDialog(
                 modifier = Modifier.popIn(),
-                onDismissRequest = { WorkoutSessionManager.cancelReplace() },
+                onDismissRequest = { WorkoutSessionManager.cancelReplace(store.active ?: profile, updateProfile) },
                 containerColor = Theme.dialog,
                 title = { Text("Идёт другая тренировка", color = Theme.textPrimary, fontWeight = FontWeight.Bold) },
                 text = {
@@ -832,7 +832,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     }) { Text("Начать новую", color = Theme.record, fontWeight = FontWeight.Bold) }
                 },
                 dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { WorkoutSessionManager.cancelReplace() }) {
+                    androidx.compose.material3.TextButton(onClick = { WorkoutSessionManager.cancelReplace(store.active ?: profile, updateProfile) }) {
                         Text("Продолжить текущую", color = Theme.accent)
                     }
                 }

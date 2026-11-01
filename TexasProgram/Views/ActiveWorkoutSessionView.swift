@@ -1073,6 +1073,9 @@ struct MinimizedWorkoutBar: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
+                // Нажимается вся плашка: под стеклом iOS 26 нет залитого фона, и без
+                // формы касания срабатывали только буквы — стрелка справа «не жалась».
+                .contentShape(Capsule(style: .continuous))
                 .background {
                     if !GlassPreference.isSupported { materialBackground }
                 }
