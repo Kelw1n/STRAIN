@@ -217,8 +217,8 @@ struct TemplateEditorView: View {
                 .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                 .foregroundStyle(Color.ink.opacity(0.7))
                 .frame(width: 64, alignment: .leading)
-            NumberField(value: weightBinding(exercise, set), placeholder: "—", decimal: true)
-            NumberField(value: repsBinding(exercise, set), placeholder: "0", decimal: false)
+            TemplateNumberField(value: weightBinding(exercise, set), placeholder: "—", decimal: true)
+            TemplateNumberField(value: repsBinding(exercise, set), placeholder: "0", decimal: false)
             Button {
                 guard draft.exercises[exercise].sets.count > 1 else { return }
                 UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
@@ -263,7 +263,7 @@ struct TemplateEditorView: View {
 }
 
 /// Число в ячейке подхода: пустое поле — ноль, запятая и точка — одно и то же.
-private struct NumberField: View {
+private struct TemplateNumberField: View {
     @Binding var value: Double
     let placeholder: String
     let decimal: Bool

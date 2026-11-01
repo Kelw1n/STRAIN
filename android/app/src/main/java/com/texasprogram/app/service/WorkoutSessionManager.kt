@@ -1,5 +1,13 @@
 package com.texasprogram.app.service
 
+import com.texasprogram.app.model.discardFreeWorkout
+import com.texasprogram.app.model.replaceFreeExercise
+import com.texasprogram.app.model.appendFreeExercises
+import com.texasprogram.app.model.startWorkout
+import com.texasprogram.app.model.LibraryExercise
+import com.texasprogram.app.model.WorkoutTemplate
+import com.texasprogram.app.model.TemplateExercise
+import com.texasprogram.app.model.dayPlan
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -141,6 +149,8 @@ object WorkoutSessionManager {
     var swapTarget by mutableStateOf<Int?>(null)
     /// Правки дня, которые сделали замены: отмена тренировки их откатывает.
     private var swapUndo = SwapUndo()
+    /// Подходы шаблона, по которому сейчас начинается тренировка: вес, повторы и отдых.
+    private var templateRows: Map<String, TemplateExercise> = emptyMap()
 
     /// Отметки дня на момент старта: отмена возвращает к ним, а не стирает день.
     private var snapshotProgress: Map<String, Int> = emptyMap()
@@ -202,7 +212,46 @@ object WorkoutSessionManager {
 
     fun cancelReplace() {
         pendingWorkout = null
+        templateRows = emptyMap()
         expand()
+    }
+
+    /// Тренировка по шаблону — своему, из каталога или сообщества. Программа не двигается.
+    fun startTemplate(template: WorkoutTemplate, profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
+        val (next, workout) = profile.startWorkout(template)
+        onUpdateProfile(next)
+        templateRows = template.exercises.associateBy { it.id }
+        requestStart(workout, next)
+    }
+
+    /// Упражнения из библиотеки — в идущую свободную тренировку.
+    fun addExercises(items: List<LibraryExercise>, profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
+        val workout = activeWorkout ?: return
+        if (workout.week != ProgramProfile.FREE_WEEK || items.isEmpty()) return
+        val added = items.map { TemplateExercise(name = it.name, restSeconds = profile.defaultRestSeconds) }
+        val next = profile.appendFreeExercises(workout.day.number, added.map { it.prescription })
+        onUpdateProfile(next)
+        added.forEach { row -> exercises.add(apply(row, buildExercise(row.prescription, next, workout))) }
+        save()
+    }
+
+    /// Строки шаблона поверх расчёта: свой вес и повторы в каждом подходе, свой отдых.
+    /// Пустой вес — из прошлого раза, а если упражнение делается впервые — ноль.
+    private fun apply(row: TemplateExercise, state: ActiveExerciseState): ActiveExerciseState {
+        val fresh = state.sets.all { it.previous == null } && state.bestBefore == 0.0
+        val sets = state.sets.mapIndexed { index, set ->
+            val planned = row.sets.getOrNull(index)
+            if (set.isDone || planned == null) set
+            else set.copy(
+                weight = when {
+                    planned.weight > 0 -> planned.weight
+                    fresh -> 0.0
+                    else -> set.weight
+                },
+                reps = planned.reps
+            )
+        }
+        return state.copy(restSeconds = row.restSeconds, sets = sets)
     }
 
     fun confirmReplace(profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
@@ -234,7 +283,11 @@ object WorkoutSessionManager {
         snapshotLog = profile.setLog.filterKeys { it.startsWith(prefix) }
 
         exercises.clear()
-        exercises.addAll(profile.exercises(workout).map { presc -> buildExercise(presc, profile, workout) })
+        exercises.addAll(profile.exercises(workout).map { presc ->
+            val state = buildExercise(presc, profile, workout)
+            templateRows[presc.key]?.let { apply(it, state) } ?: state
+        })
+        templateRows = emptyMap()
         save()
         isPresented = true
     }
@@ -300,6 +353,23 @@ object WorkoutSessionManager {
             if (set.isDone) next = next.clearSetEntry(workout.week, workout.day.number, old.prescription, set.index)
         }
         next = next.updateCompletedSets(workout.week, workout.day.number, old.prescription, 0)
+        // В свободной тренировке меняем прямо в её дне: правок программы нет.
+        if (workout.week == ProgramProfile.FREE_WEEK) {
+            val (updated, fresh) = next.replaceFreeExercise(workout.day.number, old.prescription, name)
+            onUpdateProfile(updated)
+            exercises[exIdx] = buildExercise(
+                fresh,
+                updated,
+                workout,
+                weight = suggestion.weight ?: old.sets.firstOrNull { !it.isDone }?.weight ?: old.sets.firstOrNull()?.weight,
+                repsOverride = suggestion.reps ?: old.sets.firstOrNull()?.reps,
+                countOverride = old.sets.size,
+                rest = old.restSeconds
+            )
+            swapTarget = null
+            save()
+            return
+        }
         val result = next.swapExercise(
             old.prescription,
             name,
@@ -426,7 +496,9 @@ object WorkoutSessionManager {
         // Замены упражнений — тоже назад: тренировки не было.
         val base = profile.undoSwaps(swapUndo)
         val snapshot = base.copy(setProgress = snapshotProgress, setLog = snapshotLog)
-        val restored = base.restoreDay(snapshot, workout.week, workout.day.number)
+        var restored = base.restoreDay(snapshot, workout.week, workout.day.number)
+        // Незаконченная свободная тренировка исчезает целиком.
+        if (workout.week == ProgramProfile.FREE_WEEK) restored = restored.discardFreeWorkout(workout.day.number)
         onUpdateProfile(restored)
         reset()
         return restored
@@ -670,8 +742,7 @@ object WorkoutSessionManager {
         val workout = profile.schedule().allPending
             .firstOrNull { it.week == session.week && it.day.number == session.day }
             ?: run {
-                val day = profile.workoutPlan.weeks.firstOrNull { it.number == session.week }
-                    ?.days?.firstOrNull { it.number == session.day } ?: return
+                val day = profile.dayPlan(session.week, session.day) ?: return
                 ScheduledWorkout(
                     week = session.week,
                     day = day,

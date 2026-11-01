@@ -382,6 +382,10 @@ object SocialService {
 
     // MARK: Люди
 
+    /// Свои тренировки и программы других людей — вкладка «Сообщество».
+    suspend fun communityPrograms(query: String = ""): List<com.texasprogram.app.model.CommunityProgram> =
+        decode(call("GET", if (query.isBlank()) "/programs" else "/programs?q=${q(query.trim())}"))
+
     suspend fun user(username: String): SocialUser = decode(call("GET", "/users/${q(username)}"))
 
     suspend fun searchUsers(query: String): List<SocialUserShort> = decode(call("GET", "/users?q=${q(query)}"))

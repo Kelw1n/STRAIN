@@ -571,6 +571,9 @@ fun ActiveWorkoutSessionScreen(
         ExerciseReorder(scope, listState, haptics) { focusManager.clearFocus() }
     }
     reorder.stepPx = with(density) { (ROW_HEIGHT + ROW_SPACING).toPx() }
+    // Своя тренировка вне программы — в неё можно добавлять упражнения по ходу.
+    val isFree = workout.week == ProgramProfile.FREE_WEEK
+    var addingExercises by remember { mutableStateOf(false) }
     val headerZonePx = with(density) { 84.dp.toPx() }
     val trailingZonePx = with(density) { 124.dp.toPx() }
 
@@ -653,6 +656,15 @@ fun ActiveWorkoutSessionScreen(
                             }
                     )
                 }
+                if (isFree && !compact) {
+                    item(key = "add-exercise") {
+                        NutritionButton(
+                            "Добавить упражнение",
+                            icon = Icons.Filled.Add,
+                            primary = exercises.isEmpty()
+                        ) { addingExercises = true }
+                    }
+                }
             }
         }
 
@@ -684,6 +696,15 @@ fun ActiveWorkoutSessionScreen(
                 },
                 onDismiss = { WorkoutSessionManager.showingZeroSetsAlert = false }
             )
+        }
+
+        if (addingExercises) {
+            val current = currentProfile()
+            if (current != null) {
+                ExerciseLibrarySheet(current, currentUpdate, onDismiss = { addingExercises = false }, pickTitle = "Добавить") { items ->
+                    currentProfile()?.let { WorkoutSessionManager.addExercises(items, it, currentUpdate) }
+                }
+            }
         }
 
         if (WorkoutSessionManager.showingSummary) {

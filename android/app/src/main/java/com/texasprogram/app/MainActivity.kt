@@ -152,6 +152,8 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // Библиотека упражнений — небольшой файл; нужна и вкладке, и сводке профиля для ленты.
+        com.texasprogram.app.model.ExerciseLibrary.load(this)
         requestHighestRefreshRate()
         WorkoutSessionManager.attach(filesDir)
         SocialService.init(applicationContext)
@@ -385,7 +387,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     LaunchedEffect(Unit) {
         snapshotFlow { WorkoutSessionManager.liveStatus }.collect { SocialService.reportLive(it) }
     }
-    LaunchedEffect(profile.completionLog, profile.bodyWeightLog, profile.challengeAwards, SocialService.isSignedIn) {
+    LaunchedEffect(profile.completionLog, profile.bodyWeightLog, profile.challengeAwards, profile.workoutTemplates, SocialService.isSignedIn) {
         SocialService.scheduleSync(profile)
     }
     // Счёт в челленджах — после каждой тренировки и при запуске; опыт за места

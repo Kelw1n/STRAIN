@@ -137,7 +137,7 @@ fun ProgressChartView(records: List<CompletionRecord>, modifier: Modifier = Modi
 
 /// Список последних тренировок с датами.
 @Composable
-fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier) {
+fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier, freeTitles: Map<Int, String> = emptyMap()) {
     val recent = remember(records) { records.sortedByDescending { it.epochDay }.take(8) }
     if (recent.isEmpty()) return
 
@@ -160,7 +160,12 @@ fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier) 
                     fontWeight = FontWeight.Black,
                     modifier = Modifier.width(24.dp)
                 )
-                Text("Неделя ${record.week} · день ${record.day}", color = Theme.textPrimary, fontSize = 12.sp)
+                Text(
+                    if (record.week == com.texasprogram.app.model.ProgramProfile.FREE_WEEK) freeTitles[record.day] ?: "Своя тренировка"
+                    else "Неделя ${record.week} · день ${record.day}",
+                    color = Theme.textPrimary,
+                    fontSize = 12.sp
+                )
                 Spacer(Modifier.weight(1f))
                 Text(RuDate.shortDayMonth(date), color = Theme.textSecondary, fontSize = 10.sp)
             }

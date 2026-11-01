@@ -1,5 +1,7 @@
 package com.texasprogram.app
 
+import com.texasprogram.app.model.TemplateCatalog
+import com.texasprogram.app.model.saveTemplate
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -424,6 +426,49 @@ class SnapshotTest {
             Screen {
                 CompositionLocalProvider(LocalNutritionSheetInline provides true) {
                     SupplementSheet(original = magnesium, onSave = {}, onDelete = {}, onDismiss = {})
+                }
+            }
+        }
+        com.texasprogram.app.model.ExerciseLibrary.load(java.io.File("src/main/assets/exercise-library.json").readText())
+        paparazzi.snapshot("25d-library") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    com.texasprogram.app.ui.ExerciseLibrarySheet(profile, {}, onDismiss = {})
+                }
+            }
+        }
+        paparazzi.snapshot("25e-library-pick") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    com.texasprogram.app.ui.ExerciseLibrarySheet(profile, {}, onDismiss = {}) { }
+                }
+            }
+        }
+        paparazzi.snapshot("25f-exercise-detail") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    com.texasprogram.app.ui.ExerciseDetailSheet(profile, com.texasprogram.app.model.ExerciseLibrary.find("Жим гантелей на наклонной")!!) {}
+                }
+            }
+        }
+        val withTemplates = profile
+            .saveTemplate(TemplateCatalog.all[0].duplicate())
+            .saveTemplate(TemplateCatalog.all[3].duplicate("Верх по средам").copy(isShared = true))
+        paparazzi.snapshot("25g-templates") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    com.texasprogram.app.ui.TemplatesSheet(withTemplates, {}, {}, {})
+                }
+            }
+        }
+        paparazzi.snapshot("25h-template-editor") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    val first = withTemplates.workoutTemplates.first()
+                    val edited = first.copy(exercises = first.exercises.mapIndexed { i, e ->
+                        if (i == 0) e.copy(sets = listOf(com.texasprogram.app.model.TemplateSet(60.0, 8), com.texasprogram.app.model.TemplateSet(70.0, 6), com.texasprogram.app.model.TemplateSet(80.0, 5))) else e
+                    })
+                    com.texasprogram.app.ui.TemplateEditorSheet(withTemplates, edited, false, {}, {}) {}
                 }
             }
         }

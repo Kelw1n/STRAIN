@@ -191,7 +191,7 @@ fun ProgressScreen(
         }
 
         item(key = "history") {
-            HistoryCard(profile.completionLog, Modifier.appearIn(3))
+            HistoryCard(profile.completionLog, Modifier.appearIn(3), freeTitles = remember(profile.freeWorkouts) { profile.freeWorkouts.associate { it.number to it.title } })
         }
 
         item(key = "weeks") {

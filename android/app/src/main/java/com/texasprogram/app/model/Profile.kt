@@ -95,6 +95,12 @@ data class ProgramProfile(
     val bodyWeightLog: List<BodyWeightEntry> = emptyList(),
     /// Опыт за места в законченных челленджах: один раз за каждый челлендж.
     val challengeAwards: List<ChallengeAward> = emptyList(),
+    /// Свои упражнения библиотеки.
+    val customExercises: List<LibraryExercise> = emptyList(),
+    /// «Мои тренировки» — шаблоны, которые запускаются в любой день.
+    val workoutTemplates: List<WorkoutTemplate> = emptyList(),
+    /// Тренировки вне программы: по шаблону, из каталога или пустые.
+    val freeWorkouts: List<FreeWorkoutDay> = emptyList(),
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
     val accessoryProgressionEnabled: Boolean = true,
     /// Шаг прибавки по упражнениям: ключ — нормализованное название.
@@ -275,7 +281,7 @@ data class ProgramProfile(
     /// Одной проверки префикса мало: у пустого префикса «peak-1-1» тоже
     /// начинается с него, а у «c2-» внутри может лежать пиковый ключ.
     fun isOwnKey(key: String): Boolean {
-        if (!key.startsWith(keyPrefix)) return false
+        if (key.startsWith("free-") || !key.startsWith(keyPrefix)) return false
         val rest = key.removePrefix(keyPrefix)
         return !rest.contains("peak-") && !rest.startsWith("c")
     }
@@ -502,40 +508,49 @@ data class ProgramProfile(
     /// нужно человеческое имя, и порядок должен совпадать с порядком в программе.
     /// Профиль неизменяемый — список считаем один раз на экземпляр.
     val loggedExerciseNames: List<String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val names = LinkedHashSet<String>()
-        for (week in workoutPlan.weeks) {
-            for (day in week.days) {
-                for (exercise in day.exercises) {
-                    if (exercise.name in names) continue
-                    if (entries(week.number, day.number, exercise).isNotEmpty()) names += exercise.name
-                }
-            }
-        }
-        names.toList()
+        collectHistory(null).map { it.first }.distinct()
     }
 
-    /// Весь путь одного движения по текущему циклу.
+    /// Весь путь одного движения по текущему циклу и свободным тренировкам.
     fun history(exerciseName: String): List<ExerciseHistoryPoint> =
-        historyMemo.getOrPut(exerciseName) { buildHistory(exerciseName) }
+        historyMemo.getOrPut(exerciseName) { collectHistory(exerciseName).map { it.second } }
 
-    private fun buildHistory(exerciseName: String): List<ExerciseHistoryPoint> {
-        val points = mutableListOf<ExerciseHistoryPoint>()
+    /// Точки истории по времени. Дни программы идут по порядку плана, свободные
+    /// тренировки встают между ними по дате: у дня программы дата — когда его
+    /// закрыли, а незакрытый день стоит сразу за предыдущим. Как на iOS.
+    private fun collectHistory(exerciseName: String?): List<Pair<String, ExerciseHistoryPoint>> {
+        data class Item(val name: String, val point: ExerciseHistoryPoint, val day: Long, val order: Int)
+        val dates = completionLog.associate { it.key to it.epochDay }
+        val items = mutableListOf<Item>()
+        var carried = Long.MIN_VALUE
         for (week in workoutPlan.weeks) {
             for (day in week.days) {
+                dates[dayKey(week.number, day.number)]?.let { carried = maxOf(carried, it) }
                 for (exercise in day.exercises) {
-                    if (exercise.name != exerciseName) continue
+                    if (exerciseName != null && exercise.name != exerciseName) continue
                     val logged = entries(week.number, day.number, exercise)
                     if (logged.isEmpty()) continue
-                    points += ExerciseHistoryPoint(
-                        week = week.number,
-                        day = day.number,
-                        planned = (exercise.load as? LoadPrescription.Kilograms)?.value,
-                        entries = logged
+                    items += Item(
+                        exercise.name,
+                        ExerciseHistoryPoint(week.number, day.number, (exercise.load as? LoadPrescription.Kilograms)?.value, logged),
+                        carried,
+                        items.size
                     )
                 }
             }
         }
-        return points
+        if (freeWorkouts.isEmpty()) return items.map { it.name to it.point }
+        for (free in freeWorkouts.sortedBy { it.date }) {
+            val date = dates[freeKey(free.number)] ?: free.epochDay()
+            for (exercise in free.exercises.map { it.prescription }) {
+                if (exerciseName != null && exercise.name != exerciseName) continue
+                val logged = entries(FREE_WEEK, free.number, exercise)
+                if (logged.isEmpty()) continue
+                items += Item(exercise.name, ExerciseHistoryPoint(FREE_WEEK, free.number, null, logged), date, items.size)
+            }
+        }
+        // Сортировка устойчивая: при равной дате порядок плана сохраняется.
+        return items.sortedWith(compareBy<Item>({ it.day }, { it.order })).map { it.name to it.point }
     }
 
     // MARK: - Вес тела
@@ -586,9 +601,7 @@ data class ProgramProfile(
         val top = exercise.topReps ?: return null
 
         // Прошлые разы этого движения — строго раньше текущего дня.
-        val last = history(exercise.name)
-            .filter { it.week < week || (it.week == week && it.day < day) }
-            .lastOrNull()
+        val last = previousPoints(exercise.name, week, day).lastOrNull()
         val working = last?.entries?.maxOfOrNull { it.weight }
 
         if (last == null || working == null || working <= 0) {
@@ -632,8 +645,7 @@ data class ProgramProfile(
     /// Минус 10% под шаг — достаточно, чтобы снова пойти вверх.
     private fun stallDeload(exercise: ExercisePrescription, top: Int, working: Double, week: Int, day: Int): Double? {
         if (stallDismissed[weightStepKey(exercise.name)] == working) return null
-        val recent = history(exercise.name)
-            .filter { it.week < week || (it.week == week && it.day < day) }
+        val recent = previousPoints(exercise.name, week, day)
             .filter { it.entries.isNotEmpty() }
             .takeLast(STALL_SESSIONS)
         if (recent.size < STALL_SESSIONS) return null
@@ -648,6 +660,14 @@ data class ProgramProfile(
         if (deload >= working) deload = working - step
         return deload.takeIf { it > 0 }
     }
+
+    /// Прошлые разы движения до этого дня. Прогрессию программы ведут только её
+    /// дни; свободной тренировке подходит любой прошлый раз — история уже по времени.
+    private fun previousPoints(name: String, week: Int, day: Int): List<ExerciseHistoryPoint> =
+        history(name).filter { point ->
+            if (week == FREE_WEEK) !(point.week == week && point.day == day)
+            else point.week != FREE_WEEK && (point.week < week || (point.week == week && point.day < day))
+        }
 
     /// «Не сбрасывать»: застой на этом весе больше не предлагаем.
     fun dismissStall(name: String, weight: Double): ProgramProfile =
@@ -995,9 +1015,13 @@ data class ProgramProfile(
 
     /// Ключ отметки. У пикового цикла своё пространство имён: недели там тоже
     /// нумеруются с единицы и иначе накладывались бы на основную программу.
-    fun dayKey(week: Int, day: Int): String = keyPrefix + "$week-$day"
+    fun dayKey(week: Int, day: Int): String =
+        // Свободные тренировки — вне циклов и пикового режима: их история одна.
+        if (week == FREE_WEEK) freeKey(day) else keyPrefix + "$week-$day"
 
-    fun isCompleted(week: Int, day: Int): Boolean = completedDayKeys.contains(dayKey(week, day))
+    fun isCompleted(week: Int, day: Int): Boolean =
+        if (week == FREE_WEEK) freeDay(day)?.completed ?: false
+        else completedDayKeys.contains(dayKey(week, day))
 
     /// Считаем только текущий цикл.
     val completedDayCount: Int
@@ -1012,6 +1036,12 @@ data class ProgramProfile(
         durationSeconds: Int? = null,
         effort: String? = null
     ): ProgramProfile {
+        // Свободная тренировка программу не двигает: только история.
+        if (week == FREE_WEEK) {
+            val now = if (today == LocalDate.now()) java.time.Instant.now()
+            else today.atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant()
+            return setFreeCompleted(day, !isCompleted(week, day), now, durationSeconds, effort)
+        }
         val done = !isCompleted(week, day)
         var next = setDayCompleted(week, day, done)
         // Возместил пропущенное — задержка снимается сама.
@@ -1045,6 +1075,15 @@ data class ProgramProfile(
         effort: String? = null
     ): ProgramProfile {
         val key = dayKey(week, day)
+        if (week == FREE_WEEK) {
+            // У свободной тренировки нет весов программы — только дата, время и усилие.
+            val previous = completionLog.firstOrNull { it.key == key }
+            val record = previous?.copy(
+                durationSeconds = durationSeconds ?: previous.durationSeconds,
+                effort = effort ?: previous.effort
+            ) ?: CompletionRecord(key, today.toEpochDay(), week, day, durationSeconds = durationSeconds, effort = effort)
+            return copy(completionLog = completionLog.filterNot { it.key == key } + record)
+        }
         val exercises = workoutPlan.weeks.firstOrNull { it.number == week }
             ?.days?.firstOrNull { it.number == day }?.exercises.orEmpty()
 
@@ -1342,6 +1381,11 @@ data class ProgramProfile(
     }
 
     companion object {
+        /// Неделя свободных тренировок. В программах недели начинаются с первой.
+        const val FREE_WEEK = 0
+
+        fun freeKey(number: Int): String = "free-$number"
+
         /// Сколько подходов сверх плана ищем в записях.
         const val EXTRA_SET_ALLOWANCE = 12
 

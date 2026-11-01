@@ -63,6 +63,10 @@ fun WorkoutHubScreen(
     val haptic = LocalHapticFeedback.current
     var showingStreak by remember { mutableStateOf(false) }
     var showingGoal by remember { mutableStateOf(false) }
+    var showingTemplates by remember { mutableStateOf(false) }
+    var showingLibrary by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    remember { com.texasprogram.app.model.ExerciseLibrary.load(context) }
     val today = remember { LocalDate.now() }
     val schedule = remember(profile, today) { profile.schedule(today) }
     val focus = schedule.focus
@@ -116,6 +120,30 @@ fun WorkoutHubScreen(
                         modifier = Modifier
                             .weight(1f)
                             .pressable { onOpenPlan() }
+                    )
+                }
+            }
+
+            // «Мои тренировки» и библиотека упражнений — как в REBRN.
+            item(key = "templates") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val count = profile.workoutTemplates.size
+                    HubSmallCard(
+                        title = "Мои тренировки",
+                        icon = androidx.compose.material.icons.Icons.Filled.FitnessCenter,
+                        value = if (count == 0) "Свои и каталог" else "$count " + com.texasprogram.app.service.RuPlural.word(count, "тренировка", "тренировки", "тренировок"),
+                        caption = "В любой день",
+                        modifier = Modifier.weight(1f).pressable { showingTemplates = true }
+                    )
+                    HubSmallCard(
+                        title = "Упражнения",
+                        icon = androidx.compose.material.icons.Icons.Filled.ViewAgenda,
+                        value = "${com.texasprogram.app.model.ExerciseLibrary.builtIn.size + profile.customExercises.size}",
+                        caption = "Техника и мышцы",
+                        modifier = Modifier.weight(1f).pressable { showingLibrary = true }
                     )
                 }
             }
@@ -198,6 +226,17 @@ fun WorkoutHubScreen(
 
     if (showingStreak) {
         StreakCalendarSheet(profile) { showingStreak = false }
+    }
+    if (showingTemplates) {
+        TemplatesSheet(
+            profile = profile,
+            onUpdateProfile = onUpdateProfile,
+            onStart = { template -> WorkoutSessionManager.startTemplate(template, profile, onUpdateProfile) },
+            onDismiss = { showingTemplates = false }
+        )
+    }
+    if (showingLibrary) {
+        ExerciseLibrarySheet(profile, onUpdateProfile, onDismiss = { showingLibrary = false })
     }
     if (showingGoal) {
         GoalSheet(profile, onSave = onUpdateProfile) { showingGoal = false }
@@ -496,6 +535,39 @@ private fun ProgramsCard(
                 color = Theme.ink.copy(alpha = 0.45f),
                 fontSize = 12.sp
             )
+        }
+    }
+}
+
+@Composable
+private fun HubSmallCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    caption: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(Theme.tone(0xFF161616))
+            .border(1.dp, Theme.ink.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Theme.ink.copy(alpha = 0.3f), modifier = Modifier.size(14.dp))
+        }
+        Box(
+            modifier = Modifier.size(44.dp).clip(CircleShape).background(Theme.ink.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = Theme.ink.copy(alpha = 0.85f), modifier = Modifier.size(22.dp))
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(value, color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(caption, color = Theme.ink.copy(alpha = 0.45f), fontSize = 12.sp, maxLines = 1)
         }
     }
 }

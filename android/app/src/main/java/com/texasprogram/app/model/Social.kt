@@ -44,6 +44,8 @@ data class SocialBadge(val id: String, val level: Int)
 @Serializable
 data class SocialProgramDay(
     val title: String = "Тренировка",
+    /// «template» — своя тренировка из «Мои тренировки»; у дней программы — нет.
+    val kind: String? = null,
     val groups: List<String> = emptyList(),
     val exercises: List<Exercise> = emptyList()
 ) {
@@ -51,6 +53,24 @@ data class SocialProgramDay(
     data class Exercise(val name: String, val sets: Int, val reps: String, val load: String)
 
     val setCount: Int get() = exercises.sumOf { it.sets }
+    val isTemplate: Boolean get() = kind == "template"
+
+    /// В «Мои тренировки» — шаблоном со своими подходами.
+    val template: WorkoutTemplate
+        get() = WorkoutTemplate.from(title, exercises.map { SocialProgramExercise(it.name, it.sets, it.reps, it.load) })
+}
+
+/// Программа из «Сообщества»: чья и что внутри.
+@Serializable
+data class CommunityProgram(
+    val author: SocialAuthor,
+    val title: String = "Тренировка",
+    val kind: String? = null,
+    val groups: List<String> = emptyList(),
+    val exercises: List<SocialProgramDay.Exercise> = emptyList()
+) {
+    val program: SocialProgramDay get() = SocialProgramDay(title, kind, groups, exercises)
+    val id: String get() = author.id + "|" + title + exercises.size
 }
 
 @Serializable
@@ -733,7 +753,28 @@ object AchievementCalculator {
 
 object SocialProgramBuilder {
     /// Дни текущей недели программы: название, две главные группы мышц и упражнения.
-    fun days(profile: ProgramProfile): List<SocialProgramDay> {
+    fun days(profile: ProgramProfile): List<SocialProgramDay> = programDays(profile) + sharedTemplates(profile)
+
+    /// Свои тренировки, которые решили показать в профиле, — их видят в «Сообществе».
+    fun sharedTemplates(profile: ProgramProfile): List<SocialProgramDay> =
+        profile.workoutTemplates.filter { it.isShared && it.exercises.isNotEmpty() }.map { template ->
+            SocialProgramDay(
+                title = template.name,
+                kind = "template",
+                groups = template.groups(profile.customExercises).take(2),
+                exercises = template.exercises.map { exercise ->
+                    val weight = exercise.sets.firstOrNull { it.weight > 0 }?.weight
+                    SocialProgramDay.Exercise(
+                        exercise.name,
+                        exercise.sets.size,
+                        "${exercise.sets.firstOrNull()?.reps ?: 10}",
+                        weight?.let { "${formatWeight(it)} кг" } ?: "—"
+                    )
+                }
+            )
+        }
+
+    private fun programDays(profile: ProgramProfile): List<SocialProgramDay> {
         val plan = profile.workoutPlan
         val week = plan.weeks.firstOrNull { it.number == profile.currentWeek } ?: plan.weeks.firstOrNull() ?: return emptyList()
         return week.days.map { day ->

@@ -1,5 +1,6 @@
 package com.texasprogram.app.service
 
+import com.texasprogram.app.model.historyWeeks
 import com.texasprogram.app.model.ProgramProfile
 
 /// Выгрузка записанных подходов таблицей.
@@ -22,7 +23,7 @@ object CSVExport {
         val rows = mutableListOf("Профиль;Программа;Цикл;Неделя;День;Упражнение;Подход;Повторы;Вес;Тоннаж")
 
         for (profile in profiles) {
-            for (week in profile.workoutPlan.weeks) {
+            for (week in profile.historyWeeks) {
                 for (day in week.days) {
                     for (exercise in day.exercises) {
                         for (index in 0 until maxOf(exercise.sets, 0)) {

@@ -1,5 +1,6 @@
 package com.texasprogram.app.service
 
+import com.texasprogram.app.model.historyWeeks
 import com.texasprogram.app.model.ProgramProfile
 import kotlin.math.roundToInt
 
@@ -85,7 +86,7 @@ object MuscleGroupAnalytics {
 
         // 1. Проверяем фактически выполненные подходы из setLog
         val idToName = mutableMapOf<String, String>()
-        for (week in profile.workoutPlan.weeks) {
+        for (week in profile.historyWeeks) {
             for (day in week.days) {
                 for (ex in day.exercises) {
                     ex.id?.let { idToName[it] = ex.name }

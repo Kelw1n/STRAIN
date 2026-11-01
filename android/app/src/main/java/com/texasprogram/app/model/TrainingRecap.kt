@@ -131,7 +131,7 @@ data class TrainingRecap(
         /// упражнение, поэтому прошлые циклы программы тоже попадают в итоги.
         fun build(profile: ProgramProfile, period: Period): TrainingRecap {
             val names = mutableMapOf<String, String>()
-            profile.workoutPlan.weeks.forEach { week ->
+            profile.historyWeeks.forEach { week ->
                 week.days.forEach { day -> day.exercises.forEach { names[it.key] = it.name } }
             }
             return build(profile.completionLog, profile.setLog, names, period)

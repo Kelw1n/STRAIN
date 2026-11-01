@@ -117,7 +117,7 @@ object PersonalRecords {
             if (edit.kind == PlanEditKind.ADD || edit.kind == PlanEditKind.REPLACE) map[edit.id] = edit.name
         }
         profile.customProgram?.days?.forEach { day -> day.exercises.forEach { map[it.id] = it.name } }
-        profile.workoutPlan.weeks.forEach { week -> week.days.forEach { day -> day.exercises.forEach { map[it.key] = it.name } } }
+        profile.historyWeeks.forEach { week -> week.days.forEach { day -> day.exercises.forEach { map[it.key] = it.name } } }
         return map
     }
 

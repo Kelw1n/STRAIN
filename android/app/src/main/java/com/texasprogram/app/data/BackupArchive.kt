@@ -76,7 +76,11 @@ data class ProfileSnapshot(
     /// снятых до вкладки «Питание», его нет, и тогда прежний дневник не трогаем.
     val nutrition: NutritionData? = null,
     /// Опыт за места в челленджах. В старых копиях его нет.
-    val challengeAwards: List<com.texasprogram.app.model.ChallengeAward> = emptyList()
+    val challengeAwards: List<com.texasprogram.app.model.ChallengeAward> = emptyList(),
+    /// Свои упражнения, «Мои тренировки» и тренировки вне программы. В старых копиях их нет.
+    val customExercises: List<com.texasprogram.app.model.LibraryExercise> = emptyList(),
+    val workoutTemplates: List<com.texasprogram.app.model.WorkoutTemplate> = emptyList(),
+    val freeWorkouts: List<com.texasprogram.app.model.FreeWorkoutDay> = emptyList()
 )
 
 /// Отчёт авторегуляции в копии. Android хранит номер дня `epochDay`, iOS —
@@ -220,7 +224,10 @@ object BackupService {
         defaultWeightStep = profile.defaultWeightStep,
         stallDismissed = profile.stallDismissed,
         nutrition = nutrition,
-        challengeAwards = profile.challengeAwards
+        challengeAwards = profile.challengeAwards,
+        customExercises = profile.customExercises,
+        workoutTemplates = profile.workoutTemplates,
+        freeWorkouts = profile.freeWorkouts
     )
 
     fun profile(snapshot: ProfileSnapshot) = ProgramProfile(
@@ -277,6 +284,9 @@ object BackupService {
         defaultWeightStep = snapshot.defaultWeightStep,
         stallDismissed = snapshot.stallDismissed,
         challengeAwards = snapshot.challengeAwards,
+        customExercises = snapshot.customExercises,
+        workoutTemplates = snapshot.workoutTemplates,
+        freeWorkouts = snapshot.freeWorkouts,
         scheduleWeekdays = snapshot.scheduleWeekdays,
         scheduleMode = if (snapshot.scheduleMode == "QUEUE") ScheduleMode.QUEUE else ScheduleMode.WEEKDAY,
         cycleStartedEpochDay = snapshot.cycleStartedEpochDay,

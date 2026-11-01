@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.model.historyTitle
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -82,7 +83,7 @@ fun ExerciseHistoryScreen(
 
         // Одно движение дважды в дне даёт две точки с одной датой — ключ с номером.
         itemsIndexed(points, key = { index, it -> "${it.week}-${it.day}-$index" }) { _, point ->
-            PointRow(point)
+            PointRow(point, profile.historyTitle(point.week, point.day))
         }
     }
 }
@@ -211,11 +212,11 @@ private fun Legend(color: Color, text: String) {
 }
 
 @Composable
-private fun PointRow(point: ExerciseHistoryPoint) {
+private fun PointRow(point: ExerciseHistoryPoint, title: String) {
     CardView(padding = 14.dp, spacing = 7.dp) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Неделя ${point.week}, день ${point.day}",
+                title,
                 color = Theme.textPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
