@@ -337,7 +337,7 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                     }
                 }
                 Text(
-                    if (ready) "${RuPlural.word(need, "Тренировка", "Тренировки", "Тренировок").let { "$need $it" }} в неделю — столько же дней в программе."
+                    if (ready) "${RuPlural.word(need, "тренировка", "тренировки", "тренировок").let { "$need $it" }} в неделю — столько же дней в программе."
                     else "Выбери ${need} ${RuPlural.word(need, "день", "дня", "дней")} — столько тренировок в неделе программы. Сейчас ${days.size}.",
                     color = if (ready) Theme.ink.copy(alpha = 0.45f) else Theme.warning,
                     fontSize = 12.sp

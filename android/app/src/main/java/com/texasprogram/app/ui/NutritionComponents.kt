@@ -315,6 +315,8 @@ fun NutritionSheet(
     action: String? = null,
     actionEnabled: Boolean = true,
     onAction: (close: () -> Unit) -> Unit = {},
+    /// Своё нажатие на левую кнопку: например, спросить, выйти ли без сохранения.
+    onLeading: ((close: () -> Unit) -> Unit)? = null,
     /// Без своей прокрутки: экран сам раскладывает список и поле ввода, как чат.
     scrollable: Boolean = true,
     content: @Composable ColumnScope.(close: () -> Unit) -> Unit
@@ -326,7 +328,7 @@ fun NutritionSheet(
         if (visible.isIdle && !visible.currentState && !visible.targetState) onDismiss()
     }
     val frame: @Composable () -> Unit = {
-        NutritionSheetFrame(title, leading, action, actionEnabled, close, { onAction(close) }, scrollable) { content(close) }
+        NutritionSheetFrame(title, leading, action, actionEnabled, { onLeading?.invoke(close) ?: close() }, { onAction(close) }, scrollable) { content(close) }
     }
     if (LocalNutritionSheetInline.current) {
         frame()

@@ -791,7 +791,7 @@ fun TemplateEditorSheet(
     NutritionSheet(
         title = if (isNew) "Новая тренировка" else "Тренировка",
         onDismiss = onDismiss,
-        leading = null,
+        leading = "Отмена",
         action = "Сохранить",
         actionEnabled = canSave,
         onAction = { close ->
@@ -800,15 +800,11 @@ fun TemplateEditorSheet(
                 onSave(draft.copy(name = draft.name.trim()))
                 close()
             }
-        }
+        },
+        // Есть несохранённые правки — сначала спросим.
+        onLeading = { close -> if (draft != original) confirmExit = true else close() }
     ) { close ->
         closeSheet[0] = close
-        Text(
-            "Отмена",
-            color = Theme.ink.copy(alpha = 0.7f),
-            fontSize = 15.sp,
-            modifier = Modifier.pressable { if (draft != original) confirmExit = true else close() }
-        )
         NutritionTextField(draft.name, { draft = draft.copy(name = it.take(60)) }, "Название тренировки", fontSize = 20, weight = FontWeight.Bold,
             keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
         draft.exercises.forEachIndexed { index, exercise ->
