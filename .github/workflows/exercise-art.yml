@@ -1,0 +1,71 @@
+name: Exercise art
+
+# Картинки упражнений: серый 3D-манекен, рабочие мышцы красным. Рисует Gemini
+# ключом из секрета GEMINI_API_KEY; готовые картинки коммитятся в
+# tools/exercise-art/ai/out/ этой же ветки.
+on:
+  workflow_dispatch:
+    inputs:
+      keys:
+        description: "pilot, all или ключи через запятую"
+        default: "pilot"
+      model:
+        description: "Модель Gemini для картинок"
+        default: "gemini-2.5-flash-image"
+      force:
+        description: "Перерисовать уже готовые"
+        type: boolean
+        default: false
+      reference:
+        description: "Ключ готовой картинки — образец стиля (необязательно)"
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: exercise-art
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generate
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          KEYS: ${{ inputs.keys }}
+          MODEL: ${{ inputs.model }}
+          FORCE: ${{ inputs.force }}
+          REFERENCE: ${{ inputs.reference }}
+        run: |
+          set -euo pipefail
+          pip install --quiet pillow
+          args=(--keys "$KEYS" --model "$MODEL")
+          if [ "$FORCE" = "true" ]; then args+=(--force); fi
+          if [ -n "$REFERENCE" ]; then args+=(--reference "$REFERENCE"); fi
+          python3 tools/exercise-art/ai/generate.py "${args[@]}"
+      - name: Commit
+        if: always()
+        env:
+          KEYS: ${{ inputs.keys }}
+        run: |
+          set -euo pipefail
+          git add tools/exercise-art/ai/out
+          if git diff --cached --quiet; then
+            echo "Новых картинок нет"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Картинки упражнений: $KEYS"
+          for attempt in 1 2 3; do
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push -q origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep 5
+          done
+          exit 1

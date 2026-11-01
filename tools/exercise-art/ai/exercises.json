@@ -1,0 +1,50 @@
+[
+  {
+    "key": "incline_db_press",
+    "name": "Жим гантелей на наклонной",
+    "pilot": true,
+    "pose": "lying back on an adjustable incline bench set to about 35 degrees, pressing two dumbbells straight up above the upper chest with arms almost fully extended, feet flat on the floor",
+    "view": "three-quarter front view from the side of the bench",
+    "highlight": "upper chest muscles (clavicular head of the pectoralis major)"
+  },
+  {
+    "key": "bench",
+    "name": "Жим штанги лёжа",
+    "pilot": true,
+    "pose": "lying on a flat bench, holding a barbell loaded with weight plates above the chest with arms extended, feet flat on the floor",
+    "view": "three-quarter front view from the side of the bench, slightly from above",
+    "highlight": "chest muscles (pectoralis major)"
+  },
+  {
+    "key": "squat",
+    "name": "Приседания со штангой",
+    "pilot": true,
+    "pose": "back squat with a barbell loaded with weight plates resting on the upper back, at the bottom position with thighs parallel to the floor, chest up, feet shoulder-width apart",
+    "view": "three-quarter front view",
+    "highlight": "front thigh muscles (quadriceps)"
+  },
+  {
+    "key": "deadlift",
+    "name": "Становая тяга",
+    "pilot": true,
+    "pose": "conventional barbell deadlift, mid-lift with the loaded barbell just below the knees, back flat, hips hinged, arms straight",
+    "view": "side view slightly from behind",
+    "highlight": "lower back muscles (erector spinae), glutes and hamstrings"
+  },
+  {
+    "key": "lat_pulldown",
+    "name": "Тяга верхнего блока",
+    "pilot": true,
+    "pose": "seated at a lat pulldown cable machine with knees under the pads, pulling a long wide bar down to the upper chest with elbows pointing down",
+    "view": "three-quarter rear view so the back is visible",
+    "highlight": "large back muscles (latissimus dorsi)"
+  },
+  {
+    "key": "lateral_raise",
+    "name": "Махи гантелями в стороны",
+    "pilot": true,
+    "pose": "standing upright, raising two dumbbells out to the sides up to shoulder height with slightly bent elbows",
+    "view": "front view, slightly from the side",
+    "highlight": "side shoulder muscles (lateral deltoids)"
+  }
+]
