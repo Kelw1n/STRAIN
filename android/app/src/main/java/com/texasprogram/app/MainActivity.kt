@@ -938,6 +938,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         profile.scheduleMode
     ) {
         ReminderScheduler.reschedule(context, profile)
+        // Напоминания о добавках — по дневнику этого профиля.
+        NutritionStore.get(context).open(profile.id)
+        NutritionStore.get(context).rescheduleReminders()
         // Будильник без разрешения на уведомления срабатывает молча: на Android 13+
         // просим его, как только напоминания включены, а не только при старте тренировки.
         if (profile.reminderEnabled && android.os.Build.VERSION.SDK_INT >= 33 &&

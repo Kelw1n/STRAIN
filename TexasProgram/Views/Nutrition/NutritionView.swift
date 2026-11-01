@@ -31,6 +31,8 @@ struct NutritionView: View {
     private var dayEntries: [FoodEntry] { store.entries(on: day) }
     private var eaten: Nutrients { LimarMethod.total(dayEntries) }
     private var target: Nutrients? { store.data.plan?.target }
+    /// Дни с тренировкой — для добавок «с тренировкой».
+    private var trainedDays: Set<Date> { Set(profile.completionLog.map { calendar.startOfDay(for: $0.date) }) }
     private var dayWeight: BodyWeightEntry? { profile.bodyWeightLog.first { calendar.isDate($0.date, inSameDayAs: day) } }
 
     var body: some View {
@@ -43,6 +45,7 @@ struct NutritionView: View {
                     weightCard
                     addButtons
                     if !dayEntries.isEmpty { entriesCard }
+                    SupplementsCard(day: day, trainedDays: trainedDays)
                     guideLink
                     Spacer(minLength: 90)
                 }

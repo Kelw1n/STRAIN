@@ -73,6 +73,11 @@
             android:name=".service.ReminderReceiver"
             android:exported="false" />
 
+        <!-- Напоминание о добавках: молчит, если всё уже выпито. -->
+        <receiver
+            android:name=".service.SupplementReminderReceiver"
+            android:exported="false" />
+
         <!-- Будильники не переживают перезагрузку и обновление — ставим их заново. -->
         <receiver
             android:name=".service.ReminderBootReceiver"

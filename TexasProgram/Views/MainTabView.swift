@@ -220,6 +220,10 @@ struct MainTabView: View {
         .onAppear {
             WidgetBridge.publish(profile)
             ReminderScheduler.reschedule(for: profile)
+            // Напоминания о добавках — по дневнику этого профиля: выпил всё
+            // вчера — сегодня повторяющееся напоминание снова на месте.
+            NutritionStore.shared.open(profile.profileID)
+            NutritionStore.shared.rescheduleReminders()
             // Тренировка другого профиля в этот не пишет.
             sessionManager.detachIfOtherProfile(profile)
             // Приложение выгружали посреди тренировки — поднимаем её свёрнутой.

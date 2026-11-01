@@ -105,7 +105,10 @@ class AppStore private constructor(val context: Context) {
         NutritionStore.delete(NutritionStore.directory(context), id)
         com.texasprogram.app.model.CoachHistory.delete(com.texasprogram.app.model.CoachHistory.directory(context.filesDir), id)
         // Профилей не осталось: раньше будильник удалённого профиля звенел и дальше.
-        if (profiles.isEmpty()) com.texasprogram.app.service.ReminderScheduler.cancel(context)
+        if (profiles.isEmpty()) {
+            com.texasprogram.app.service.ReminderScheduler.cancel(context)
+            com.texasprogram.app.service.SupplementReminders.cancel(context)
+        }
     }
 
     /// Профили неизменяемые: правка — это замена элемента списка новой копией.

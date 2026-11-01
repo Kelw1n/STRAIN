@@ -120,7 +120,9 @@ data class NutritionPlan(
 @Serializable
 data class NutritionData(
     val entries: List<FoodEntry> = emptyList(),
-    val plan: NutritionPlan? = null
+    val plan: NutritionPlan? = null,
+    /// Добавки и отметки «выпил». Необязательное: старые файлы и копии без него открываются.
+    val supplements: SupplementData? = null
 )
 
 /// Дата в JSON — ISO 8601 без долей секунды, как пишет и читает iOS-версия:

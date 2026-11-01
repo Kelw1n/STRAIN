@@ -22,8 +22,12 @@ final class NutritionStore {
     @ObservationIgnored private var indexStale = true
     @ObservationIgnored private var indexTimeZone: TimeZone?
 
+    /// Напоминания о добавках ставит только настоящий дневник, а не тестовый.
+    @ObservationIgnored private let schedulesReminders: Bool
+
     init(directory: URL = NutritionStore.defaultDirectory) {
         self.directory = directory
+        schedulesReminders = directory == NutritionStore.defaultDirectory
     }
 
     nonisolated static var defaultDirectory: URL {
@@ -37,6 +41,7 @@ final class NutritionStore {
         self.profileID = profileID
         data = Self.read(profileID, in: directory) ?? NutritionData()
         indexStale = true
+        rescheduleReminders()
     }
 
     /// После восстановления из копии файл мог смениться под открытым профилем.
@@ -44,6 +49,7 @@ final class NutritionStore {
         guard let profileID else { return }
         data = Self.read(profileID, in: directory) ?? NutritionData()
         indexStale = true
+        rescheduleReminders()
     }
 
     // MARK: Записи
@@ -127,6 +133,49 @@ final class NutritionStore {
     func resetPlan() {
         data.plan = nil
         save()
+    }
+
+    // MARK: Добавки
+
+    var supplements: SupplementData { data.supplements ?? SupplementData() }
+
+    /// Новая добавка или правка старой.
+    func saveSupplement(_ item: Supplement) {
+        var next = supplements
+        if let index = next.items.firstIndex(where: { $0.id == item.id }) {
+            next.items[index] = item
+        } else {
+            next.items.append(item)
+        }
+        setSupplements(next)
+    }
+
+    /// Добавка уходит вместе со своими отметками.
+    func deleteSupplement(_ item: Supplement) {
+        var next = supplements
+        next.items.removeAll { $0.id == item.id }
+        next.taken.removeAll { $0.supplementID == item.id }
+        setSupplements(next)
+    }
+
+    /// «Выпил» — или снять отметку, если нажал по ошибке.
+    func toggleSupplement(_ item: Supplement, on day: Date, now: Date = Date(), calendar: Calendar = .current) {
+        var next = supplements
+        SupplementTracker.toggle(item, on: day, in: &next, now: now, calendar: calendar)
+        setSupplements(SupplementTracker.pruned(next, now: now, calendar: calendar))
+    }
+
+    private func setSupplements(_ next: SupplementData) {
+        data.supplements = next.items.isEmpty && next.taken.isEmpty ? nil : next
+        save()
+        rescheduleReminders()
+    }
+
+    /// Напоминания — по добавкам открытого профиля. Выпил всё до времени
+    /// напоминания — сегодня оно уже не придёт.
+    func rescheduleReminders() {
+        guard schedulesReminders else { return }
+        SupplementReminders.reschedule(supplements)
     }
 
     // MARK: Файлы

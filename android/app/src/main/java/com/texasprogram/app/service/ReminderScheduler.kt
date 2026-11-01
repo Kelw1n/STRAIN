@@ -111,6 +111,10 @@ class ReminderBootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val profile = com.texasprogram.app.data.AppStore.get(context).active ?: return
         ReminderScheduler.reschedule(context, profile)
+        val nutrition = com.texasprogram.app.data.NutritionStore
+        nutrition.read(nutrition.directory(context), profile.id)?.supplements?.let {
+            SupplementReminders.reschedule(context, it)
+        }
     }
 }
 

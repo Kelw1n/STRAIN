@@ -115,6 +115,9 @@ class NutritionActions(private val store: NutritionStore?) {
     fun choose(goal: NutritionGoal, maintenance: Nutrients) = store?.choose(goal, maintenance)
     fun apply(norm: Nutrients, note: String) = store?.apply(norm, note)
     fun resetPlan() = store?.resetPlan()
+    fun saveSupplement(item: com.texasprogram.app.model.Supplement) = store?.saveSupplement(item)
+    fun deleteSupplement(item: com.texasprogram.app.model.Supplement) = store?.deleteSupplement(item)
+    fun toggleSupplement(item: com.texasprogram.app.model.Supplement, day: LocalDate) = store?.toggleSupplement(item, day)
 }
 
 @Composable
@@ -152,6 +155,8 @@ fun NutritionContent(
     val eaten = remember(dayEntries) { LimarMethod.total(dayEntries) }
     val target = data.plan?.target
     val dayWeight = profile.bodyWeightLog.firstOrNull { it.epochDay == dayNumber }
+    // Дни с тренировкой — для добавок «с тренировкой».
+    val trainedDays = remember(profile.completionLog) { profile.completionLog.map { LocalDate.ofEpochDay(it.epochDay) }.toSet() }
 
     /// Без ключа фото разобрать нечем — сначала просим ключ.
     fun startPhoto(fromCamera: Boolean) {
@@ -221,6 +226,15 @@ fun NutritionContent(
                     actions.remove(it)
                 })
             }
+        }
+        item(key = "supplements") {
+            SupplementsCard(
+                day = day,
+                today = today,
+                data = data.supplements ?: com.texasprogram.app.model.SupplementData(),
+                trainedDays = trainedDays,
+                actions = actions
+            )
         }
         item(key = "guide") { GuideLink { showingGuide = true } }
     }

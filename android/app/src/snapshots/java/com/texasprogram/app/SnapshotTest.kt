@@ -39,6 +39,11 @@ import com.texasprogram.app.model.Nutrients
 import com.texasprogram.app.model.NutritionData
 import com.texasprogram.app.model.NutritionGoal
 import com.texasprogram.app.model.NutritionPlan
+import com.texasprogram.app.model.Supplement
+import com.texasprogram.app.model.SupplementData
+import com.texasprogram.app.model.SupplementIntake
+import com.texasprogram.app.model.SupplementReminder
+import com.texasprogram.app.model.SupplementSlot
 import com.texasprogram.app.model.ProgramInput
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.SocialBadge
@@ -56,6 +61,7 @@ import com.texasprogram.app.ui.LocalNutritionSheetInline
 import com.texasprogram.app.ui.NutritionActions
 import com.texasprogram.app.ui.NutritionContent
 import com.texasprogram.app.ui.NutritionGuideSheet
+import com.texasprogram.app.ui.SupplementSheet
 import com.texasprogram.app.ui.LiquidGlassTabBar
 import com.texasprogram.app.ui.MainTabItem
 import com.texasprogram.app.ui.PostCard
@@ -368,6 +374,21 @@ class SnapshotTest {
         // Вес за две недели чуть снижается — на наборе это совет добавить углеводов.
         val weighed = profile.copy(bodyWeightLog = (0L..13L).map { BodyWeightEntry(today.minusDays(it).toEpochDay(), 82.0 + it * 0.02) })
         val observe = NutritionData(food, NutritionPlan(observationStart = midnight(3)))
+        // Креатин и омега-3 пьются девять дней подряд, сегодня выпит только креатин;
+        // протеин — «с тренировкой», магний — с напоминанием.
+        val creatine = Supplement(name = "Креатин", dose = "5 г", reminder = SupplementReminder(9, 0), created = midnight(10))
+        val omega = Supplement(name = "Омега-3", dose = "2 капсулы", created = midnight(10))
+        val magnesium = Supplement(name = "Магний", dose = "400 мг", slot = SupplementSlot.EVENING, reminder = SupplementReminder(22, 30), created = midnight(0))
+        val protein = Supplement(name = "Протеин", dose = "30 г", slot = SupplementSlot.WORKOUT, created = midnight(10))
+        val supplements = SupplementData(
+            items = listOf(creatine, omega, magnesium, protein),
+            taken = (1L..9L).flatMap { daysAgo ->
+                listOfNotNull(
+                    SupplementIntake(creatine.id, at(daysAgo, 8)),
+                    if (daysAgo != 4L) SupplementIntake(omega.id, at(daysAgo, 8)) else null
+                )
+            } + SupplementIntake(creatine.id, at(0, 8))
+        )
         val goal = NutritionData(
             food,
             NutritionPlan(
@@ -376,19 +397,35 @@ class SnapshotTest {
                 goal = NutritionGoal.BULK,
                 target = Nutrients(2920.0, 150.0, 90.0, 370.0),
                 stepStart = midnight(7)
-            )
+            ),
+            supplements
         )
         val tab: @Composable (NutritionData) -> Unit = { data ->
             NutritionContent(weighed, data, padding, NutritionActions(null), hasKey = { true }, onUpdate = {})
         }
         tall(2600)
         paparazzi.snapshot("22-nutrition-observe") { Screen { tab(observe) } }
+        tall(3400)
         paparazzi.snapshot("23-nutrition-goal") { Screen { tab(goal) } }
-        paparazzi.unsafeUpdateConfig(deviceConfig = DeviceConfig.NEXUS_5.copy(screenHeight = 2600))
+        paparazzi.unsafeUpdateConfig(deviceConfig = DeviceConfig.NEXUS_5.copy(screenHeight = 3400))
         paparazzi.snapshot("23b-nutrition-goal-narrow") { Screen { tab(goal) } }
         tall(2600)
         paparazzi.snapshot("24-nutrition-guide") {
             Screen { CompositionLocalProvider(LocalNutritionSheetInline provides true) { NutritionGuideSheet {} } }
+        }
+        paparazzi.snapshot("25b-supplement-new") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    SupplementSheet(original = null, onSave = {}, onDismiss = {})
+                }
+            }
+        }
+        paparazzi.snapshot("25c-supplement-edit") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    SupplementSheet(original = magnesium, onSave = {}, onDelete = {}, onDismiss = {})
+                }
+            }
         }
         paparazzi.snapshot("25-nutrition-entry") {
             Screen {

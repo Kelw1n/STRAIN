@@ -375,9 +375,36 @@ final class SnapshotTests: XCTestCase {
         for daysAgo in 1...14 {
             profile.recordBodyWeight(82 + (daysAgo % 2 == 0 ? 0.1 : 0), on: calendar.date(byAdding: .day, value: -daysAgo, to: today)!)
         }
-        NutritionStore.write(NutritionData(entries: dayOfMeals(0), plan: plan), for: profile.profileID)
+        NutritionStore.write(NutritionData(entries: dayOfMeals(0), plan: plan, supplements: sampleSupplements()), for: profile.profileID)
         defer { NutritionStore.delete(profile.profileID) }
-        try snap("21-nutrition-goal", height: 2000) { NutritionView(profile: profile) }
+        try snap("21-nutrition-goal", height: 2600) { NutritionView(profile: profile) }
+    }
+
+    /// Креатин и омега-3 пьются девять дней подряд, сегодня выпит только креатин;
+    /// протеин — «с тренировкой», магний — с напоминанием.
+    private func sampleSupplements() -> SupplementData {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let created = calendar.date(byAdding: .day, value: -10, to: today)!
+        let creatine = Supplement(name: "Креатин", dose: "5 г", slot: .morning, reminder: SupplementReminder(hour: 9, minute: 0), created: created)
+        let omega = Supplement(name: "Омега-3", dose: "2 капсулы", slot: .morning, created: created)
+        let magnesium = Supplement(name: "Магний", dose: "400 мг", slot: .evening, reminder: SupplementReminder(hour: 22, minute: 30), created: today)
+        let protein = Supplement(name: "Протеин", dose: "30 г", slot: .workout, created: created)
+        var taken: [SupplementIntake] = []
+        for daysAgo in 1...9 {
+            let day = calendar.date(byAdding: .day, value: -daysAgo, to: today)!
+            let morning = calendar.date(bySettingHour: 8, minute: 40, second: 0, of: day)!
+            taken.append(SupplementIntake(supplementID: creatine.id, date: morning))
+            if daysAgo != 4 { taken.append(SupplementIntake(supplementID: omega.id, date: morning)) }
+        }
+        taken.append(SupplementIntake(supplementID: creatine.id, date: calendar.date(bySettingHour: 8, minute: 12, second: 0, of: today)!))
+        return SupplementData(items: [creatine, omega, magnesium, protein], taken: taken)
+    }
+
+    @MainActor func testSupplementSheet() throws {
+        try snap("23c-supplement-new") { SupplementSheet(original: nil, onSave: { _ in }) }
+        let item = Supplement(name: "Магний", dose: "400 мг", slot: .evening, reminder: SupplementReminder(hour: 22, minute: 30))
+        try snap("23d-supplement-edit", height: 1500) { SupplementSheet(original: item, onSave: { _ in }, onDelete: {}) }
     }
 
     @MainActor func testNutritionGuide() throws {

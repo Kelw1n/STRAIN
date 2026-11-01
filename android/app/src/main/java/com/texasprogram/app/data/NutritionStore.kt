@@ -11,6 +11,9 @@ import com.texasprogram.app.model.Nutrients
 import com.texasprogram.app.model.NutritionData
 import com.texasprogram.app.model.NutritionGoal
 import com.texasprogram.app.model.NutritionPlan
+import com.texasprogram.app.model.Supplement
+import com.texasprogram.app.model.SupplementData
+import com.texasprogram.app.model.SupplementTracker
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.time.LocalDate
@@ -23,6 +26,10 @@ import java.time.ZoneId
 /// Формат файла тот же, что у питания в копии iOS.
 class NutritionStore(private val directory: File) {
 
+    /// Добавки поменялись или открыт другой профиль — пересобрать напоминания.
+    /// У тестового дневника его нет.
+    var onSupplementsChanged: ((SupplementData) -> Unit)? = null
+
     var profileId by mutableStateOf<String?>(null)
         private set
     var data by mutableStateOf(NutritionData())
@@ -33,12 +40,14 @@ class NutritionStore(private val directory: File) {
         if (this.profileId == profileId) return
         this.profileId = profileId
         data = read(directory, profileId) ?: NutritionData()
+        rescheduleReminders()
     }
 
     /// После восстановления из копии файл мог смениться под открытым профилем.
     fun reload() {
         val id = profileId ?: return
         data = read(directory, id) ?: NutritionData()
+        rescheduleReminders()
     }
 
     // MARK: Записи
@@ -105,6 +114,40 @@ class NutritionStore(private val directory: File) {
         save(data.copy(plan = null))
     }
 
+    // MARK: Добавки
+
+    val supplements: SupplementData get() = data.supplements ?: SupplementData()
+
+    /// Новая добавка или правка старой.
+    fun saveSupplement(item: Supplement) {
+        val current = supplements
+        val items = if (current.items.any { it.id == item.id }) current.items.map { if (it.id == item.id) item else it }
+        else current.items + item
+        setSupplements(current.copy(items = items))
+    }
+
+    /// Добавка уходит вместе со своими отметками.
+    fun deleteSupplement(item: Supplement) {
+        val current = supplements
+        setSupplements(SupplementData(current.items.filterNot { it.id == item.id }, current.taken.filterNot { it.supplementId == item.id }))
+    }
+
+    /// «Выпил» — или снять отметку, если нажал по ошибке.
+    fun toggleSupplement(item: Supplement, day: LocalDate, now: java.time.Instant = java.time.Instant.now(), zone: ZoneId = ZoneId.systemDefault()) {
+        setSupplements(SupplementTracker.pruned(SupplementTracker.toggle(item, day, supplements, now, zone), now, zone))
+    }
+
+    private fun setSupplements(next: SupplementData) {
+        save(data.copy(supplements = if (next.items.isEmpty() && next.taken.isEmpty()) null else next))
+        rescheduleReminders()
+    }
+
+    /// Напоминания — по добавкам открытого профиля. Выпил всё до времени
+    /// напоминания — сегодня оно уже не придёт.
+    fun rescheduleReminders() {
+        onSupplementsChanged?.invoke(supplements)
+    }
+
     // MARK: Файлы
 
     private fun save(next: NutritionData) {
@@ -119,7 +162,11 @@ class NutritionStore(private val directory: File) {
 
         fun get(context: Context): NutritionStore =
             instance ?: synchronized(this) {
-                instance ?: NutritionStore(directory(context)).also { instance = it }
+                instance ?: NutritionStore(directory(context)).also { store ->
+                    val app = context.applicationContext
+                    store.onSupplementsChanged = { com.texasprogram.app.service.SupplementReminders.reschedule(app, it) }
+                    instance = store
+                }
             }
 
         fun directory(context: Context): File = File(context.applicationContext.filesDir, "nutrition")

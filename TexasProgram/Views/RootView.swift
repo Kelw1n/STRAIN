@@ -72,6 +72,7 @@ struct RootView: View {
             // Профилей не осталось: раньше напоминания приходили и дальше,
             // а виджет показывал тренировку удалённого профиля.
             ReminderScheduler.cancel()
+            SupplementReminders.cancel()
             WidgetBridge.clear()
         }
     }

@@ -111,6 +111,8 @@ struct NutritionPlan: Codable, Equatable, Sendable {
 struct NutritionData: Codable, Equatable, Sendable {
     var entries: [FoodEntry] = []
     var plan: NutritionPlan?
+    /// Добавки и отметки «выпил». Необязательное: старые файлы и копии без него открываются.
+    var supplements: SupplementData?
 }
 
 // MARK: - Метод Лимара
