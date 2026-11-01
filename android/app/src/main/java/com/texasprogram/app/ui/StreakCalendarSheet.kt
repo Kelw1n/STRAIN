@@ -298,12 +298,7 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
     var pickingDate by remember { mutableStateOf(false) }
     val ready = days.size == need
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = state,
-        containerColor = SheetColor,
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
-    ) {
+    val body: @Composable () -> Unit = {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -456,6 +451,17 @@ fun GoalSheet(profile: ProgramProfile, onSave: (ProgramProfile) -> Unit, onDismi
                 Text("СОХРАНИТЬ ЦЕЛЬ", color = if (ready) Theme.canvas else Theme.ink.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.Black)
             }
         }
+    }
+    // На снимках экрана лист рисуется прямо на экране: всплывающее окно туда не попадает.
+    if (LocalNutritionSheetInline.current) {
+        Box(Modifier.background(SheetColor).padding(top = 24.dp)) { body() }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = state,
+            containerColor = SheetColor,
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+        ) { body() }
     }
     if (pickingDate) {
         val pickerState = androidx.compose.material3.rememberDatePickerState(

@@ -472,6 +472,22 @@ class SnapshotTest {
                 }
             }
         }
+        paparazzi.snapshot("25i-goal") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    val goal = profile.copy(
+                        reminderEnabled = true,
+                        reminderHour = 19,
+                        reminderMinute = 0,
+                        trainingTimes = profile.weekdays.mapIndexed { i, d -> d.toString() to (if (i == 0) 7 * 60 + 30 else 19 * 60) }.toMap(),
+                        reminderOffsets = listOf(0, 30),
+                        goalStartEpochDay = today.minusDays(16).toEpochDay(),
+                        goalMonths = 3
+                    )
+                    com.texasprogram.app.ui.GoalSheet(goal, {}, {})
+                }
+            }
+        }
         paparazzi.snapshot("25-nutrition-entry") {
             Screen {
                 CompositionLocalProvider(LocalNutritionSheetInline provides true) {

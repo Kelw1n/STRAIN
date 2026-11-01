@@ -436,6 +436,20 @@ final class SnapshotTests: XCTestCase {
         try snap("45-templates-empty", height: 1300) { TemplatesView(profile: ProgramProfile(input: .demo), onStart: { _ in }) }
     }
 
+    @MainActor func testGoalSettings() throws {
+        let profile = ProgramProfile(input: .demo)
+        profile.reminderEnabled = true
+        profile.reminderHour = 19
+        profile.reminderMinute = 0
+        profile.trainingTimes = Dictionary(uniqueKeysWithValues: profile.weekdays.enumerated().map { index, day in
+            (String(day), index == 0 ? 7 * 60 + 30 : 19 * 60)
+        })
+        profile.reminderOffsets = [0, 30]
+        profile.goalStart = Calendar.current.date(byAdding: .day, value: -16, to: Calendar.current.startOfDay(for: Date()))
+        profile.goalMonths = 3
+        try snap("46-goal", height: 2300) { GoalSettingsSheet(profile: profile) }
+    }
+
     @MainActor func testNutritionEntry() throws {
         let entry = dayOfMeals(0)[1]
         try snap("23-nutrition-entry") {
