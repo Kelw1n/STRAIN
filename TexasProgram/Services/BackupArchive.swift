@@ -57,6 +57,11 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var nutrition: NutritionData?
     /// Опыт за места в челленджах. Необязательное: в старых копиях его нет.
     var challengeAwards: [ChallengeAward]?
+    /// Свои упражнения, «Мои тренировки» и тренировки вне программы.
+    /// Необязательные: в старых копиях их нет.
+    var customExercises: [LibraryExercise]?
+    var workoutTemplates: [WorkoutTemplate]?
+    var freeWorkouts: [FreeWorkoutDay]?
 }
 
 /// Отчёт авторегуляции в копии. iOS хранит дату полем `date`, Android — номером
@@ -266,7 +271,10 @@ enum BackupService {
             defaultWeightStep: profile.defaultWeightStep,
             stallDismissed: profile.stallDismissed,
             nutrition: NutritionStore.read(profile.profileID),
-            challengeAwards: profile.challengeAwards.isEmpty ? nil : profile.challengeAwards
+            challengeAwards: profile.challengeAwards.isEmpty ? nil : profile.challengeAwards,
+            customExercises: profile.customExercises.isEmpty ? nil : profile.customExercises,
+            workoutTemplates: profile.workoutTemplates.isEmpty ? nil : profile.workoutTemplates,
+            freeWorkouts: profile.freeWorkouts.isEmpty ? nil : profile.freeWorkouts
         )
     }
 
@@ -364,6 +372,9 @@ enum BackupService {
         result.defaultWeightStep = snapshot.defaultWeightStep ?? AccessoryHint.step
         result.stallDismissed = snapshot.stallDismissed ?? [:]
         result.challengeAwards = snapshot.challengeAwards ?? []
+        result.customExercises = snapshot.customExercises ?? []
+        result.workoutTemplates = snapshot.workoutTemplates ?? []
+        result.freeWorkouts = snapshot.freeWorkouts ?? []
         if let nutrition = snapshot.nutrition {
             NutritionStore.write(nutrition, for: result.profileID)
         }

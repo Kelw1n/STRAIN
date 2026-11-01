@@ -141,7 +141,7 @@ struct TrainingRecap: Equatable {
     /// упражнение, поэтому прошлые циклы программы тоже попадают в итоги.
     static func build(_ profile: ProgramProfile, period: Period, calendar: Calendar = WorkoutScheduler.trainingCalendar()) -> TrainingRecap {
         var names: [String: String] = [:]
-        for week in profile.workoutPlan.weeks {
+        for week in profile.historyWeeks {
             for day in week.days {
                 for exercise in day.exercises { names[exercise.id] = exercise.name }
             }

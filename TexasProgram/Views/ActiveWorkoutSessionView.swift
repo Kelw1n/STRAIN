@@ -10,6 +10,10 @@ struct ActiveWorkoutSessionView: View {
 
     @Bindable var sessionManager = WorkoutSessionManager.shared
     @State private var reorder = ExerciseReorder()
+    @State private var addingExercises = false
+
+    /// Своя тренировка вне программы — в неё можно добавлять упражнения по ходу.
+    private var isFree: Bool { workout.week == ProgramProfile.freeWeek }
 
     var body: some View {
         NavigationStack {
@@ -20,6 +24,7 @@ struct ActiveWorkoutSessionView: View {
                             // Совместная тренировка: что сейчас делает напарник.
                             PartnerStrip()
                             exerciseList
+                            if isFree && !reorder.isActive { addExerciseButton }
                         }
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
@@ -65,6 +70,11 @@ struct ActiveWorkoutSessionView: View {
             .sheet(item: $sessionManager.swapTarget) { target in
                 ExerciseSwapSheet(profile: profile, workout: workout, index: target.index)
             }
+            .sheet(isPresented: $addingExercises) {
+                ExerciseLibraryView(profile: profile, onPick: { items in
+                    sessionManager.addExercises(items, profile: profile)
+                }, pickTitle: "Добавить")
+            }
             .confirmationDialog("Время отдыха", isPresented: Binding(
                 get: { sessionManager.customRestTargetExerciseIndex != nil },
                 set: { if !$0 { sessionManager.customRestTargetExerciseIndex = nil } }
@@ -105,6 +115,21 @@ struct ActiveWorkoutSessionView: View {
                 .zIndex(dragged ? 1 : 0)
             }
         }
+    }
+
+    private var addExerciseButton: some View {
+        Button { addingExercises = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus").font(.system(size: 15, weight: .bold))
+                Text("Добавить упражнение").font(.system(size: 15, weight: .bold))
+            }
+            .foregroundStyle(sessionManager.exercises.isEmpty ? Color.canvas : Color.ink)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(sessionManager.exercises.isEmpty ? Theme.accent : Color.tone(0.14),
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.pressable)
     }
 
     // MARK: - Шапка

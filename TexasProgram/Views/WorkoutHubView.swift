@@ -10,6 +10,8 @@ struct WorkoutHubView: View {
     @State private var showingProgramCatalog = false
     @State private var showingCustomizing = false
     @State private var showingToday = false
+    @State private var showingTemplates = false
+    @State private var showingLibrary = false
 
     var body: some View {
         // Расписание — один раз за проход: каждое обращение к profile.schedule
@@ -44,6 +46,22 @@ struct WorkoutHubView: View {
                                 showingProgramCatalog = true
                             } label: {
                                 programsCard
+                            }
+                            .buttonStyle(.pressable)
+                        }
+
+                        // «Мои тренировки» и библиотека упражнений — как в REBRN.
+                        HStack(spacing: 12) {
+                            Button { showingTemplates = true } label: {
+                                smallCard(title: "Мои тренировки", icon: "list.bullet.rectangle.fill",
+                                          value: profile.workoutTemplates.isEmpty ? "Свои и каталог" : "\(profile.workoutTemplates.count) " + RuPlural.word(profile.workoutTemplates.count, "тренировка", "тренировки", "тренировок"),
+                                          caption: "В любой день")
+                            }
+                            .buttonStyle(.pressable)
+                            Button { showingLibrary = true } label: {
+                                smallCard(title: "Упражнения", icon: "figure.strengthtraining.traditional",
+                                          value: "\(profile.exerciseLibrary.count)",
+                                          caption: "Техника и мышцы")
                             }
                             .buttonStyle(.pressable)
                         }
@@ -128,6 +146,16 @@ struct WorkoutHubView: View {
             }) {
                 TodayView(profile: profile, onSettings: {}, onOpenBench: onOpenBench, onStartWorkout: onStartWorkout)
             }
+            .sheet(isPresented: $showingTemplates, onDismiss: {
+                WorkoutSessionManager.shared.representAfterSheet()
+            }) {
+                TemplatesView(profile: profile) { template in
+                    WorkoutSessionManager.shared.startTemplate(template, profile: profile)
+                }
+            }
+            .sheet(isPresented: $showingLibrary) {
+                ExerciseLibraryView(profile: profile)
+            }
             .sheet(isPresented: $showingProgramCatalog, onDismiss: {
                 WorkoutSessionManager.shared.representAfterSheet()
             }) {
@@ -139,12 +167,14 @@ struct WorkoutHubView: View {
                 if presented {
                     showingProgramCatalog = false
                     showingToday = false
+                    showingTemplates = false
                 }
             }
             .onChange(of: WorkoutSessionManager.shared.showingReplaceConfirm) { _, showing in
                 if showing {
                     showingProgramCatalog = false
                     showingToday = false
+                    showingTemplates = false
                 }
             }
         }
@@ -330,6 +360,43 @@ struct WorkoutHubView: View {
                 Text("Свои и каталог")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.ink.opacity(0.45))
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func smallCard(title: String, icon: String, value: String, caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.ink)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.ink.opacity(0.3))
+            }
+            ZStack {
+                Circle()
+                    .fill(Color.ink.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.ink.opacity(0.85))
+            }
+            .padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.ink)
+                    .lineLimit(1)
+                Text(caption)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.ink.opacity(0.45))
+                    .lineLimit(1)
             }
         }
         .padding(16)

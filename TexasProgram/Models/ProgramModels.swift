@@ -320,6 +320,12 @@ final class ProgramProfile {
     var workoutNotes: [String: String] = [:]
     /// Замеры веса тела, по одному на дату.
     var bodyWeightLog: [BodyWeightEntry] = []
+    /// Свои упражнения библиотеки.
+    var customExercises: [LibraryExercise] = []
+    /// «Мои тренировки» — шаблоны, которые запускаются в любой день.
+    var workoutTemplates: [WorkoutTemplate] = []
+    /// Тренировки вне программы: по шаблону, из каталога или пустые.
+    var freeWorkouts: [FreeWorkoutDay] = []
     /// Опыт за места в законченных челленджах: один раз за каждый челлендж.
     var challengeAwards: [ChallengeAward] = []
     /// Вести ли рабочий вес подсобки по записям прошлых тренировок.
@@ -917,60 +923,58 @@ final class ProgramProfile {
     ///
     /// Берём из плана, а не из ключей: в ключе лежит идентификатор, а показать
     /// нужно человеческое имя, и порядок должен совпадать с порядком в программе.
-    var loggedExerciseNames: [String] {
-        var names: [String] = []
-        for week in workoutPlan.weeks {
-            for day in week.days {
-                for exercise in day.exercises where !names.contains(exercise.name) {
-                    if !entries(week: week.number, day: day.number, exercise: exercise).isEmpty {
-                        names.append(exercise.name)
-                    }
-                }
-            }
-        }
-        return names
-    }
+    var loggedExerciseNames: [String] { historyByName().names }
 
-    /// Весь путь одного движения по текущему циклу.
+    /// Весь путь одного движения по текущему циклу и свободным тренировкам.
     ///
     /// Ключ отметки завязан на идентификатор упражнения, а он совпадает с именем,
     /// поэтому замена упражнения в одном дне не смешивает историю разных движений.
     func history(forExerciseNamed name: String) -> [ExerciseHistoryPoint] {
-        var points: [ExerciseHistoryPoint] = []
+        historyByName(only: name).points[name] ?? []
+    }
+
+    /// История всех движений за один проход по плану: имена — в порядке первого
+    /// появления, точки — по времени. Медали и сводка недели читают историю
+    /// каждого движения, а по отдельности это десятки проходов по всем неделям.
+    ///
+    /// Дни программы идут по порядку плана, свободные тренировки встают между
+    /// ними по дате: у дня программы дата — когда его закрыли, а не закрытый
+    /// день стоит сразу за предыдущим.
+    func historyByName(only name: String? = nil) -> (names: [String], points: [String: [ExerciseHistoryPoint]]) {
+        var collected: [(name: String, point: ExerciseHistoryPoint, date: Date)] = []
+        let dates = Dictionary(completionLog.map { ($0.key, $0.date) }, uniquingKeysWith: { first, _ in first })
+        var carried = Date.distantPast
         for week in workoutPlan.weeks {
             for day in week.days {
-                for exercise in day.exercises where exercise.name == name {
+                if let date = dates[dayKey(week: week.number, day: day.number)] { carried = max(carried, date) }
+                for exercise in day.exercises where name == nil || exercise.name == name {
                     let logged = entries(week: week.number, day: day.number, exercise: exercise).map(\.entry)
                     guard !logged.isEmpty else { continue }
                     var planned: Double?
                     if case .kilograms(let value) = exercise.load { planned = value }
-                    points.append(ExerciseHistoryPoint(week: week.number, day: day.number, planned: planned, entries: logged))
+                    collected.append((exercise.name, ExerciseHistoryPoint(week: week.number, day: day.number, planned: planned, entries: logged), carried))
                 }
             }
         }
-        return points
-    }
-
-    /// История всех движений за один проход по плану: имена — в том же порядке,
-    /// что и у `loggedExerciseNames`, точки — те же, что у `history(forExerciseNamed:)`.
-    /// Медали и сводка недели читают историю каждого движения, а по отдельности
-    /// это десятки проходов по всем неделям на каждую перерисовку профиля.
-    func historyByName() -> (names: [String], points: [String: [ExerciseHistoryPoint]]) {
-        var names: [String] = []
-        var points: [String: [ExerciseHistoryPoint]] = [:]
-        for week in workoutPlan.weeks {
-            for day in week.days {
-                for exercise in day.exercises {
-                    let logged = entries(week: week.number, day: day.number, exercise: exercise).map(\.entry)
+        if !freeWorkouts.isEmpty {
+            for free in freeWorkouts.sorted(by: { $0.date < $1.date }) {
+                let date = dates[Self.freeKey(free.number)] ?? free.date
+                for exercise in free.exercises.map(\.prescription) where name == nil || exercise.name == name {
+                    let logged = entries(week: Self.freeWeek, day: free.number, exercise: exercise).map(\.entry)
                     guard !logged.isEmpty else { continue }
-                    var planned: Double?
-                    if case .kilograms(let value) = exercise.load { planned = value }
-                    if points[exercise.name] == nil { names.append(exercise.name) }
-                    points[exercise.name, default: []].append(
-                        ExerciseHistoryPoint(week: week.number, day: day.number, planned: planned, entries: logged)
-                    )
+                    collected.append((exercise.name, ExerciseHistoryPoint(week: Self.freeWeek, day: free.number, planned: nil, entries: logged), date))
                 }
             }
+            // Сортировка устойчивая: при равной дате порядок плана сохраняется.
+            collected = collected.enumerated()
+                .sorted { ($0.element.date, $0.offset) < ($1.element.date, $1.offset) }
+                .map(\.element)
+        }
+        var names: [String] = []
+        var points: [String: [ExerciseHistoryPoint]] = [:]
+        for item in collected {
+            if points[item.name] == nil { names.append(item.name) }
+            points[item.name, default: []].append(item.point)
         }
         return (names, points)
     }
@@ -1137,9 +1141,13 @@ final class ProgramProfile {
     func accessoryHint(for exercise: ExercisePrescription, week: Int, day: Int) -> AccessoryHint? {
         guard accessoryProgressionEnabled, exercise.needsOwnWeight, let top = exercise.topReps else { return nil }
 
-        // Прошлые разы этого движения — строго раньше текущего дня.
-        let previous = history(forExerciseNamed: exercise.name)
-            .filter { ($0.week, $0.day) < (week, day) }
+        // Прошлые разы этого движения — строго раньше текущего дня. Прогрессию
+        // программы ведут только её дни; свободной тренировке подходит любой
+        // прошлый раз — история уже стоит по времени.
+        let previous = history(forExerciseNamed: exercise.name).filter { point in
+            if week == Self.freeWeek { return !(point.week == week && point.day == day) }
+            return point.week != Self.freeWeek && (point.week, point.day) < (week, day)
+        }
 
         guard let last = previous.last, let working = last.entries.map(\.weight).max(), working > 0 else {
             return AccessoryHint(
@@ -1413,7 +1421,11 @@ final class ProgramProfile {
 
     /// Ключ отметки. У пикового цикла своё пространство имён, иначе его дни
     /// накладывались бы на дни основной программы — недели там нумеруются с единицы.
-    func dayKey(week: Int, day: Int) -> String { keyPrefix + "\(week)-\(day)" }
+    func dayKey(week: Int, day: Int) -> String {
+        // Свободные тренировки — вне циклов и пикового режима: их история одна.
+        if week == Self.freeWeek { return Self.freeKey(day) }
+        return keyPrefix + "\(week)-\(day)"
+    }
 
     /// Пространство имён отметок: номер цикла и пиковый режим.
     ///
@@ -1429,16 +1441,24 @@ final class ProgramProfile {
     /// Одной проверки префикса мало: у пустого префикса «peak-1-1» тоже
     /// начинается с него, а у «c2-» внутри может лежать пиковый ключ.
     func isOwnKey(_ key: String) -> Bool {
-        guard key.hasPrefix(keyPrefix) else { return false }
+        guard !key.hasPrefix("free-"), key.hasPrefix(keyPrefix) else { return false }
         let rest = key.dropFirst(keyPrefix.count)
         return !rest.contains("peak-") && !rest.hasPrefix("c")
     }
 
-    func isCompleted(week: Int, day: Int) -> Bool { completedDayKeys.contains(dayKey(week: week, day: day)) }
+    func isCompleted(week: Int, day: Int) -> Bool {
+        if week == Self.freeWeek { return freeDay(day)?.completed ?? false }
+        return completedDayKeys.contains(dayKey(week: week, day: day))
+    }
 
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
     func toggleCompleted(week: Int, day: Int, now: Date = Date(), durationSeconds: Int? = nil, effort: String? = nil) {
+        // Свободная тренировка программу не двигает: только история.
+        if week == Self.freeWeek {
+            setFreeCompleted(day, !isCompleted(week: week, day: day), now: now, durationSeconds: durationSeconds, effort: effort)
+            return
+        }
         let done = !isCompleted(week: week, day: day)
         setDayCompleted(week: week, day: day, done)
         if carriesBenchWave(day: day) {
@@ -1471,7 +1491,19 @@ final class ProgramProfile {
     /// Кладёт в историю дату и рабочие веса основных движений этого дня.
     private func recordCompletion(week: Int, day: Int, now: Date, durationSeconds: Int? = nil, effort: String? = nil) {
         let key = dayKey(week: week, day: day)
+        let previous = completionLog.first { $0.key == key }
         completionLog.removeAll { $0.key == key }
+        if week == Self.freeWeek {
+            // У свободной тренировки нет весов программы — только дата, время и усилие.
+            completionLog.append(previous.map {
+                var record = $0
+                record.durationSeconds = durationSeconds ?? record.durationSeconds
+                record.effort = effort ?? record.effort
+                return record
+            } ?? CompletionRecord(key: key, date: now, week: week, day: day, squat: nil, bench: nil, deadlift: nil,
+                                  durationSeconds: durationSeconds, effort: effort))
+            return
+        }
 
         let exercises = workoutPlan.weeks.first { $0.number == week }?
             .days.first { $0.number == day }?.exercises ?? []

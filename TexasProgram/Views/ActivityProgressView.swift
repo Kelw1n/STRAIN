@@ -43,7 +43,7 @@ struct ActivityProgressView: View {
                     // История упражнений, заметки и «Жим 14»
                     linksCard
 
-                    HistoryCard(records: profile.completionLog)
+                    HistoryCard(records: profile.completionLog, freeTitles: Dictionary(profile.freeWorkouts.map { ($0.number, $0.title) }, uniquingKeysWith: { first, _ in first }))
 
                     Spacer(minLength: 90)
                 }
@@ -660,7 +660,7 @@ struct MuscleGroupAnalytics {
 
         // 1. Проверяем фактически выполненные подходы из setLog
         var idToName: [String: String] = [:]
-        for week in profile.workoutPlan.weeks {
+        for week in profile.historyWeeks {
             for day in week.days {
                 for ex in day.exercises {
                     idToName[ex.id] = ex.name

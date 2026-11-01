@@ -461,6 +461,24 @@ test('лента, профили, подписки, фото и коммента
         const profile = (await call('GET', '/users/tim', { token: friend.token })).data;
         assert.deepEqual(profile.programs, [{ title: 'День', groups: ['Ноги', '3'], exercises: [{ name: 'Присед', sets: 5, reps: '5', load: '100 кг' }] }]);
         assert.deepEqual(profile.achievements, [{ id: 'path', level: 2 }]);
+
+        // «Сообщество»: свои тренировки — первыми, свой профиль не показывается, поиск по названию.
+        await call('PATCH', '/me', {
+            token: me.token,
+            body: {
+                programs: [
+                    { title: 'День', groups: ['Ноги'], exercises: [{ name: 'Присед', sets: 5, reps: '5', load: '100 кг' }] },
+                    { title: 'Руки по субботам', kind: 'template', groups: ['Руки'], exercises: [{ name: 'Молотки', sets: 3, reps: '12', load: '16 кг' }] },
+                    { title: 'Пустая', kind: 'template', exercises: [] }
+                ]
+            }
+        });
+        const community = (await call('GET', '/programs', { token: friend.token })).data;
+        const mine = community.filter((item) => item.author.username === 'tim');
+        assert.deepEqual(mine.map((item) => [item.title, item.kind]), [['Руки по субботам', 'template'], ['День', 'program']]);
+        assert.equal(mine[0].exercises[0].name, 'Молотки');
+        assert.equal((await call('GET', '/programs', { token: me.token })).data.some((item) => item.author.username === 'tim'), false);
+        assert.deepEqual((await call('GET', '/programs?q=руки', { token: friend.token })).data.map((item) => item.title), ['Руки по субботам']);
         assert.deepEqual(profile.records, [{ name: 'Присед', weight: 150, reps: 3 }]);
 
         // Сводка недели: мусор в одном профиле не ломает рейтинг всем, кто на него подписан.

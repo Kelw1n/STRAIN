@@ -354,6 +354,8 @@ const CHAT_WORKOUT = shape({
 });
 const PROGRAMS = listOf(shape({
     title: asText,
+    // «template» — своя тренировка из «Мои тренировки», остальное — дни программы.
+    kind: asText,
     groups: listOf(asText),
     exercises: listOf(shape({ name: asText, sets: asInt(), reps: asText, load: asText }, ['name', 'sets', 'reps', 'load']))
 }));
@@ -691,6 +693,38 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
             [me ? me.id : '', user.id, before, limit]
         );
         res.json(pageResult(rows, limit));
+    }));
+
+    // MARK: Программы сообщества
+
+    // Вкладка «Сообщество» в «Моих тренировках»: свои тренировки, которые люди
+    // показали в профиле, и дни их программ. Сначала свои тренировки, внутри —
+    // кто заходил недавно. Себя не показываем: свои и так во вкладке «Мои».
+    router.get('/programs', wrap(async (req, res) => {
+        const me = await viewer(req);
+        const query = text(req.query.q, 40).toLowerCase();
+        const rows = await q(
+            `SELECT ${SHORT}, programs FROM users
+             WHERE id <> $1 AND CASE WHEN jsonb_typeof(programs) = 'array' THEN jsonb_array_length(programs) ELSE 0 END > 0
+             ORDER BY last_seen DESC LIMIT 200`,
+            [me ? me.id : '']
+        );
+        const items = [];
+        for (const row of rows) {
+            for (const program of programsOf(row.programs)) {
+                if (!program.title || !Array.isArray(program.exercises) || program.exercises.length === 0) continue;
+                if (query && !program.title.toLowerCase().includes(query)) continue;
+                items.push({
+                    author: shortUser(row),
+                    title: program.title,
+                    kind: program.kind === 'template' ? 'template' : 'program',
+                    groups: program.groups || [],
+                    exercises: program.exercises
+                });
+            }
+        }
+        items.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'template' ? -1 : 1));
+        res.json(items.slice(0, 100));
     }));
 
     async function people(req, res, sql) {

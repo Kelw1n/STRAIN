@@ -411,6 +411,31 @@ final class SnapshotTests: XCTestCase {
         try snap("22-nutrition-guide", height: 2000) { NutritionGuideView() }
     }
 
+    // MARK: Библиотека и «Мои тренировки»
+
+    @MainActor func testExerciseLibrary() throws {
+        let profile = ProgramProfile(input: .demo)
+        try snap("40-library", height: 2000) { ExerciseLibraryView(profile: profile) }
+        try snap("41-library-pick", height: 2000) { ExerciseLibraryView(profile: profile, onPick: { _ in }) }
+        let bench = try XCTUnwrap(ExerciseLibrary.find(named: "Жим гантелей на наклонной"))
+        try snap("42-exercise-detail", height: 1900) { ExerciseDetailView(profile: profile, exercise: bench) }
+    }
+
+    @MainActor func testTemplates() throws {
+        let profile = ProgramProfile(input: .demo)
+        profile.saveTemplate(TemplateCatalog.all[0].copy())
+        var shared = TemplateCatalog.all[3].copy(named: "Верх по средам")
+        shared.isShared = true
+        profile.saveTemplate(shared)
+        try snap("43-templates", height: 1500) { TemplatesView(profile: profile, onStart: { _ in }) }
+        var edited = profile.workoutTemplates[0]
+        edited.exercises[0].sets = [TemplateSet(weight: 60, reps: 8), TemplateSet(weight: 70, reps: 6), TemplateSet(weight: 80, reps: 5)]
+        try snap("44-template-editor", height: 2200) {
+            TemplateEditorView(profile: profile, original: edited, isNew: false, onSave: { _ in })
+        }
+        try snap("45-templates-empty", height: 1300) { TemplatesView(profile: ProgramProfile(input: .demo), onStart: { _ in }) }
+    }
+
     @MainActor func testNutritionEntry() throws {
         let entry = dayOfMeals(0)[1]
         try snap("23-nutrition-entry") {

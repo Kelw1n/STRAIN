@@ -20,7 +20,7 @@ enum CSVExport {
         var rows = ["Профиль;Программа;Цикл;Неделя;День;Упражнение;Подход;Повторы;Вес;Тоннаж"]
 
         for profile in profiles {
-            for week in profile.workoutPlan.weeks {
+            for week in profile.historyWeeks {
                 for day in week.days {
                     for exercise in day.exercises {
                         for item in profile.entries(week: week.number, day: day.number, exercise: exercise) {

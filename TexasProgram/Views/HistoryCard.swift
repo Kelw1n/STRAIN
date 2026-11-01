@@ -3,6 +3,8 @@ import SwiftUI
 /// Список последних тренировок с датами.
 struct HistoryCard: View {
     let records: [CompletionRecord]
+    /// Названия своих тренировок по номеру — у них нет недели и дня программы.
+    var freeTitles: [Int: String] = [:]
 
     private var recent: [CompletionRecord] {
         Array(records.sorted { $0.date > $1.date }.prefix(8))
@@ -18,7 +20,9 @@ struct HistoryCard: View {
                             .font(.caption2.weight(.black))
                             .foregroundStyle(Theme.accent)
                             .frame(width: 24, alignment: .leading)
-                        Text("Неделя \(record.week) · день \(record.day)")
+                        Text(record.week == ProgramProfile.freeWeek
+                             ? (freeTitles[record.day] ?? "Своя тренировка")
+                             : "Неделя \(record.week) · день \(record.day)")
                             .font(.caption)
                         Spacer(minLength: 4)
                         Text(RuDate.dayMonth(record.date))

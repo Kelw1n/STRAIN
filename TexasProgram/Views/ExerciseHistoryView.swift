@@ -143,7 +143,7 @@ struct ExerciseHistoryView: View {
     private func row(_ point: ExerciseHistoryPoint) -> some View {
         CardView(padding: 14, spacing: 8) {
             HStack {
-                Text("Неделя \(point.week), день \(point.day)")
+                Text(profile.historyTitle(week: point.week, day: point.day))
                     .font(.subheadline.weight(.semibold))
                 Spacer(minLength: 8)
                 Text(WeightFormat.kilogramsPrecise(point.best))

@@ -99,6 +99,8 @@ final class WorkoutSessionManager {
     @ObservationIgnored private var saveScheduled = false
     /// Правки дня, которые сделали замены: отмена тренировки их откатывает.
     @ObservationIgnored private var swapUndo = ProgramProfile.SwapUndo()
+    /// Подходы шаблона, по которому сейчас начинается тренировка: вес, повторы и отдых.
+    @ObservationIgnored private var templateRows: [String: TemplateExercise] = [:]
 
     // MARK: - Время
 
@@ -162,8 +164,62 @@ final class WorkoutSessionManager {
     }
 
     func cancelReplace() {
+        // Свободная тренировка уже заведена в профиле — раз её не начали, убираем.
+        if let pending = pendingWorkout, pending.week == ProgramProfile.freeWeek, let profile = pendingProfile {
+            profile.discardFreeWorkout(pending.day.number)
+        }
         pendingWorkout = nil
+        pendingProfile = nil
+        templateRows = [:]
         expand()
+    }
+
+    @ObservationIgnored private weak var pendingProfile: ProgramProfile?
+
+    /// Тренировка по шаблону — своему, из каталога или сообщества. Программа не двигается.
+    func startTemplate(_ template: WorkoutTemplate, profile: ProgramProfile) {
+        let workout = profile.startWorkout(from: template)
+        templateRows = Dictionary(template.exercises.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        pendingProfile = profile
+        requestStart(workout: workout, profile: profile)
+    }
+
+    /// Пустая тренировка: упражнения добавляются по ходу из библиотеки.
+    func startEmpty(profile: ProgramProfile) {
+        startTemplate(WorkoutTemplate(name: "Тренировка"), profile: profile)
+    }
+
+    /// Упражнения из библиотеки — в идущую свободную тренировку.
+    func addExercises(_ items: [LibraryExercise], profile: ProgramProfile) {
+        guard let workout = activeWorkout, workout.week == ProgramProfile.freeWeek, !items.isEmpty else { return }
+        let added = items.map { item in
+            TemplateExercise(name: item.name, restSeconds: profile.defaultRestSeconds)
+        }
+        profile.appendFreeExercises(day: workout.day.number, added.map(\.prescription))
+        for item in added {
+            var state = activeState(for: item.prescription, profile: profile, workout: workout)
+            apply(item, to: &state)
+            exercises.append(state)
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        save()
+    }
+
+    /// Строки шаблона поверх расчёта: свой вес и повторы в каждом подходе, свой отдых.
+    /// Пустой вес — из прошлого раза, а если упражнение делается впервые — ноль, впишешь сам.
+    private func apply(_ row: TemplateExercise, to state: inout ActiveExerciseState) {
+        state.restSeconds = row.restSeconds
+        let fresh = state.sets.allSatisfy { $0.previous == nil } && state.bestBefore == 0
+        for index in state.sets.indices where !state.sets[index].isDone {
+            guard index < row.sets.count else { continue }
+            let planned = row.sets[index]
+            if planned.weight > 0 {
+                state.sets[index].weight = planned.weight
+            } else if fresh {
+                state.sets[index].weight = 0
+            }
+            state.sets[index].reps = planned.reps
+        }
     }
 
     func confirmReplace(profile: ProgramProfile) {
@@ -206,8 +262,12 @@ final class WorkoutSessionManager {
         swapUndo = ProgramProfile.SwapUndo()
 
         exercises = profile.exercises(for: workout).map { presc in
-            activeState(for: presc, profile: profile, workout: workout)
+            var state = activeState(for: presc, profile: profile, workout: workout)
+            if let row = templateRows[presc.id] { apply(row, to: &state) }
+            return state
         }
+        templateRows = [:]
+        pendingProfile = nil
 
         save()
         withAnimation(Motion.sheet) { isPresented = true }
@@ -262,14 +322,17 @@ final class WorkoutSessionManager {
             profile.clearSetEntry(week: workout.week, day: workout.day.number, exercise: old.prescription, index: set.index)
         }
         profile.updateCompletedSets(week: workout.week, day: workout.day.number, exercise: old.prescription, count: 0)
-        let presc = profile.swapExercise(
-            old.prescription,
-            to: name,
-            week: workout.week,
-            day: workout.day.number,
-            scope: profile.isProgramLift(old.prescription) ? .today : scope,
-            undo: &swapUndo
-        )
+        // В свободной тренировке меняем прямо в её дне: правок программы нет.
+        let presc = workout.week == ProgramProfile.freeWeek
+            ? profile.replaceFreeExercise(day: workout.day.number, old: old.prescription, with: name)
+            : profile.swapExercise(
+                old.prescription,
+                to: name,
+                week: workout.week,
+                day: workout.day.number,
+                scope: profile.isProgramLift(old.prescription) ? .today : scope,
+                undo: &swapUndo
+            )
         exercises[exIdx] = activeState(
             for: presc,
             profile: profile,
@@ -353,6 +416,10 @@ final class WorkoutSessionManager {
         profile.undoSwaps(swapUndo)
         if let snapshot = startSnapshot {
             profile.restoreDay(snapshot, week: workout.week, day: workout.day.number)
+        }
+        // Незаконченная свободная тренировка исчезает целиком.
+        if workout.week == ProgramProfile.freeWeek {
+            profile.discardFreeWorkout(workout.day.number)
         }
         reset()
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()

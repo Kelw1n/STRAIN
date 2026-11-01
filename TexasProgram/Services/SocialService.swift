@@ -357,6 +357,14 @@ final class SocialService {
         }
     }
 
+    // MARK: Программы сообщества
+
+    /// Свои тренировки и программы других людей — вкладка «Сообщество».
+    func communityPrograms(query: String = "") async throws -> [CommunityProgram] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return try await request("GET", "/programs", query: trimmed.isEmpty ? [] : [URLQueryItem(name: "q", value: trimmed)])
+    }
+
     // MARK: Люди
 
     func user(_ username: String) async throws -> SocialUser {

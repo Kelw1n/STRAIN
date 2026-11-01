@@ -53,13 +53,17 @@ struct SocialProgramDay: Codable, Hashable, Identifiable, Sendable {
 
     var id: String { title + "\(exercises.count)" }
     let title: String
+    /// «template» — своя тренировка из «Мои тренировки»; у дней программы — нет.
+    var kind: String? = nil
     let groups: [String]
     let exercises: [Exercise]
 
     var setCount: Int { exercises.reduce(0) { $0 + $1.sets } }
+    var isTemplate: Bool { kind == "template" }
 
-    init(title: String, groups: [String], exercises: [Exercise]) {
+    init(title: String, kind: String? = nil, groups: [String], exercises: [Exercise]) {
         self.title = title
+        self.kind = kind
         self.groups = groups
         self.exercises = exercises
     }
@@ -67,8 +71,34 @@ struct SocialProgramDay: Codable, Hashable, Identifiable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Тренировка"
+        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
         groups = try c.decodeIfPresent([String].self, forKey: .groups) ?? []
         exercises = try c.decodeIfPresent([Exercise].self, forKey: .exercises) ?? []
+    }
+
+    /// В «Мои тренировки» — шаблоном со своими подходами.
+    var template: WorkoutTemplate {
+        WorkoutTemplate.from(title: title, exercises: exercises.map { ($0.name, $0.sets, $0.reps, $0.load) })
+    }
+}
+
+/// Программа из «Сообщества»: чья и что внутри.
+struct CommunityProgram: Decodable, Hashable, Identifiable, Sendable {
+    let author: SocialAuthor
+    let program: SocialProgramDay
+
+    var id: String { author.id + "|" + program.id }
+
+    private enum CodingKeys: String, CodingKey { case author }
+
+    init(author: SocialAuthor, program: SocialProgramDay) {
+        self.author = author
+        self.program = program
+    }
+
+    init(from decoder: Decoder) throws {
+        author = try decoder.container(keyedBy: CodingKeys.self).decode(SocialAuthor.self, forKey: .author)
+        program = try SocialProgramDay(from: decoder)
     }
 }
 

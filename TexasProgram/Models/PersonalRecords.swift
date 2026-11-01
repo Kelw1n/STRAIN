@@ -132,7 +132,7 @@ enum PersonalRecords {
         for day in profile.customProgram?.days ?? [] {
             for exercise in day.exercises { map[exercise.id] = exercise.name }
         }
-        for week in profile.workoutPlan.weeks {
+        for week in profile.historyWeeks {
             for day in week.days {
                 for exercise in day.exercises { map[exercise.id] = exercise.name }
             }

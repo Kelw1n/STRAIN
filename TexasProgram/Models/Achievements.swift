@@ -242,6 +242,30 @@ enum AchievementCalculator {
 enum SocialProgramBuilder {
     /// Дни текущей недели программы: название, две главные группы мышц и упражнения.
     static func days(for profile: ProgramProfile) -> [SocialProgramDay] {
+        programDays(for: profile) + sharedTemplates(for: profile)
+    }
+
+    /// Свои тренировки, которые решили показать в профиле, — их видят в «Сообществе».
+    static func sharedTemplates(for profile: ProgramProfile) -> [SocialProgramDay] {
+        profile.workoutTemplates.filter { $0.isShared && !$0.exercises.isEmpty }.map { template in
+            SocialProgramDay(
+                title: template.name,
+                kind: "template",
+                groups: Array(template.groups(custom: profile.customExercises).prefix(2)),
+                exercises: template.exercises.map { exercise in
+                    let weight = exercise.sets.first(where: { $0.weight > 0 })?.weight
+                    return SocialProgramDay.Exercise(
+                        name: exercise.name,
+                        sets: exercise.sets.count,
+                        reps: "\(exercise.sets.first?.reps ?? 10)",
+                        load: weight.map { WeightFormat.kilogramsPrecise($0) } ?? "—"
+                    )
+                }
+            )
+        }
+    }
+
+    private static func programDays(for profile: ProgramProfile) -> [SocialProgramDay] {
         let plan = profile.workoutPlan
         let week = plan.weeks.first { $0.number == profile.currentWeek } ?? plan.weeks.first
         guard let week else { return [] }
