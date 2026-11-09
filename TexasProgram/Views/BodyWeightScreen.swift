@@ -237,7 +237,7 @@ struct BodyWeightScreen: View {
 
     private func ratio(_ title: String, _ maximum: Double) -> some View {
         VStack(spacing: 4) {
-            Text(profile.relativeStrength(maximum).map { String(format: "%.2f", $0).replacingOccurrences(of: ".", with: ",") } ?? "—")
+            Text(profile.relativeStrength(maximum).map { L10n.decimal(String(format: "%.2f", $0)) } ?? "—")
                 .font(.system(size: 22, weight: .heavy, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(.ink)

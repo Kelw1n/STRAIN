@@ -20,7 +20,7 @@ object CSVExport {
     private const val SEPARATOR = ";"
 
     fun text(profiles: List<ProgramProfile>): String {
-        val rows = mutableListOf("Профиль;Программа;Цикл;Неделя;День;Упражнение;Подход;Повторы;Вес;Тоннаж")
+        val rows = mutableListOf(L("Профиль;Программа;Цикл;Неделя;День;Упражнение;Подход;Повторы;Вес;Тоннаж"))
 
         for (profile in profiles) {
             for (week in profile.historyWeeks) {

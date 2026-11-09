@@ -67,16 +67,18 @@ struct CycleFeelHint: Equatable, Sendable {
     let suggestion: CycleFeel
 
     var text: String {
+        // Куски переводятся по отдельности: целиком такая фраза в словаре не найдётся.
         var parts: [String] = []
         if let averageEffort {
-            parts.append("среднее усилие \(String(format: "%.1f", averageEffort).replacingOccurrences(of: ".", with: ",")) из 10")
+            let value = String(format: "%.1f", averageEffort)
+            parts.append(L("среднее усилие \(L10n.isEnglish ? value : value.replacingOccurrences(of: ".", with: ",")) из 10"))
         }
         if loggedSets > 0 {
-            parts.append(missedSets == 0
-                         ? "все записанные подходы выполнены"
-                         : "недобрано подходов: \(missedSets) из \(loggedSets)")
+            parts.append(L(missedSets == 0
+                           ? "все записанные подходы выполнены"
+                           : "недобрано подходов: \(missedSets) из \(loggedSets)"))
         }
-        return "По записям: " + parts.joined(separator: ", ") + ". Похоже на «\(suggestion.title)»."
+        return L("По записям: \(parts.joined(separator: ", ")). Похоже на «\(L(suggestion.title))».")
     }
 }
 

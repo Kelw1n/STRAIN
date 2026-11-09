@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L10n
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -267,7 +268,7 @@ fun SettingsScreen(
             CardView(Modifier.appearIn(5)) {
                 SectionLabel("Блины в зале · шаг прибавки, кг")
                 SegmentedControl(
-                    options = options.map { com.texasprogram.app.model.formatWeight(it).replace('.', ',') },
+                    options = options.map { L10n.decimal(com.texasprogram.app.model.formatWeight(it)) },
                     selectedIndex = options.indexOf(profile.defaultWeightStep).coerceAtLeast(0)
                 ) { onUpdate(profile.copy(defaultWeightStep = options[it])) }
                 Text(

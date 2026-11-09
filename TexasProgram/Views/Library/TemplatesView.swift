@@ -199,7 +199,7 @@ struct TemplatesView: View {
                     Button { start(template) } label: { Label(L("Начать"), systemImage: "play.fill") }
                     Button { editing = EditorTarget(template: template, isNew: false) } label: { Label(L("Изменить"), systemImage: "pencil") }
                     Button {
-                        profile.saveTemplate(template.copy(named: template.name + " (копия)"))
+                        profile.saveTemplate(template.copy(named: template.name + L(" (копия)")))
                     } label: { Label(L("Дублировать"), systemImage: "plus.square.on.square") }
                     Button {
                         var shared = template

@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L10n
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
@@ -65,7 +66,7 @@ import kotlin.math.abs
 object NutritionFormat {
     fun kcal(value: Double): String = roundHalfUp(value).toLong().toString()
 
-    fun decimal(value: Double): String = formatWeight(value).replace('.', ',')
+    fun decimal(value: Double): String = L10n.decimal(formatWeight(value))
 
     /// Граммы: от десяти — целыми, меньше — с десятыми.
     fun grams(value: Double): String =

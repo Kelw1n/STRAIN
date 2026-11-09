@@ -17,6 +17,10 @@ final class SnapshotTests: XCTestCase {
         try XCTSkipUnless(environment["SNAPSHOTS"] == "1", "Снимки экранов делаются только по запросу")
         directory = URL(fileURLWithPath: environment["SNAPSHOT_DIR"] ?? NSTemporaryDirectory(), isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Язык прогона: по умолчанию русский, TEST_RUNNER_LANGUAGE=en — английский.
+        // Симулятор сам на английском, поэтому русский тоже ставим явно.
+        UserDefaults.standard.set(environment["LANGUAGE"] == "en" ? "en" : "ru", forKey: AppLanguage.storageKey)
+        L10n.reload()
     }
 
     // MARK: Экраны
@@ -660,7 +664,9 @@ final class SnapshotTests: XCTestCase {
         // Тема — из прогона: снимки делаются и в тёмной, и в светлой.
         window.overrideUserInterfaceStyle = ProcessInfo.processInfo.environment["THEME"] == "light" ? .light : .dark
         // Цвет кнопок — как в приложении: его задаёт RootView.
-        window.rootViewController = UIHostingController(rootView: content().tint(Theme.accent).environment(RestTimer()))
+        window.rootViewController = UIHostingController(
+            rootView: content().tint(Theme.accent).environment(RestTimer()).environment(\.locale, L10n.locale)
+        )
         window.makeKeyAndVisible()
         // Даём SwiftUI отрисоваться, запустить .task и дождаться ответа сервера.
         RunLoop.main.run(until: Date().addingTimeInterval(wait))

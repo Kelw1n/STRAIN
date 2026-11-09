@@ -53,7 +53,13 @@ object L10n {
     private class Template(val regex: Regex, val target: String)
 
     @Volatile private var exact: Map<String, String> = emptyMap()
+    /// Те же фразы капсом: «ЖИМ ЛЁЖА» в заголовках, собранных через `uppercase()`.
+    @Volatile private var upper: Map<String, String> = emptyMap()
     @Volatile private var templates: List<Template> = emptyList()
+    /// Куски фраз, к которым в коде приклеено число или имя: «был(а) » + «5 минут назад»,
+    /// «Жим лёжа» + « · тест 1ПМ». Длинные проверяются первыми.
+    @Volatile private var prefixes: List<Pair<String, String>> = emptyList()
+    @Volatile private var suffixes: List<Pair<String, String>> = emptyList()
     @Volatile private var loaded = false
     private var appContext: Context? = null
     @Volatile var isEnglish: Boolean = false
@@ -107,18 +113,45 @@ object L10n {
             val literal = key.replace("{}", "")
             // Шаблон без русских букв вне подстановок поймал бы что угодно.
             if (!literal.any(::isCyrillic)) continue
-            val pattern = "^" + key.split("{}").joinToString("(.+?)") { Regex.escape(it) } + "$"
-            patterns += Template(Regex(pattern, RegexOption.DOT_MATCHES_ALL), value) to literal.length
+            patterns += Template(Regex(pattern(key), RegexOption.DOT_MATCHES_ALL), value) to literal.length
+        }
+        val pieces = plain.entries.filter { it.key.trim().length >= 2 && it.key.any(::isCyrillic) }.sortedBy { it.key }
+        prefixes = pieces.filter { it.key.endsWith(' ') }
+            .sortedByDescending { it.key.length }.map { it.key to it.value }
+        suffixes = pieces.filter { val first = it.key.first(); !(first.isLetterOrDigit() || first in "«\"(") }
+            .sortedByDescending { it.key.length }.map { it.key to it.value }
+        // Кусок «Отдых » годится и как отдельное слово «Отдых».
+        for ((key, value) in plain.entries.sortedBy { it.key }.toList()) {
+            val trimmed = key.trim()
+            if (trimmed != key && trimmed.isNotEmpty() && trimmed !in plain) plain[trimmed] = value.trim()
         }
         exact = plain
+        upper = plain.entries.associate { it.key.uppercase() to it.value.uppercase() }
         // Чем длиннее неизменная часть, тем точнее шаблон: такие проверяем первыми.
         templates = patterns.sortedByDescending { it.second }.map { it.first }
         loaded = true
         synchronized(cache) { cache.clear() }
     }
 
+    /// Дробная часть числа: «2,5» по-русски, «2.5» по-английски. На входе — с точкой.
+    fun decimal(text: String): String = if (isEnglish) text else text.replace('.', ',')
+
     /// Язык для дат и чисел: «12 марта» или «March 12».
     val locale: Locale get() = if (isEnglish) Locale.US else Locale.forLanguageTag("ru")
+
+    /// Регулярка шаблона. Подстановка вплотную к русской букве («Ж{}», «{}м») — число, а не слово:
+    /// иначе «Ж{}» съел бы любую фразу на «Ж».
+    private fun pattern(key: String): String {
+        val parts = key.split("{}")
+        val out = StringBuilder("^").append(Regex.escape(parts[0]))
+        for (i in 1 until parts.size) {
+            val before = parts[i - 1].lastOrNull()
+            val after = parts[i].firstOrNull()
+            val tight = (before != null && isCyrillic(before)) || (after != null && isCyrillic(after))
+            out.append(if (tight) "([^\\u0400-\\u04FF]+?)" else "(.+?)").append(Regex.escape(parts[i]))
+        }
+        return out.append("$").toString()
+    }
 
     fun isCyrillic(c: Char): Boolean = c in 'Ѐ'..'ӿ'
 
@@ -134,19 +167,36 @@ object L10n {
         return result
     }
 
+    /// Разделители, по которым дробится собранная из кусков строка: «Жим лёжа · тест 1ПМ».
+    private val separators = listOf(" · ", "\n", "; ", ", ")
+
     private fun translate(text: String, depth: Int): String {
         exact[text]?.let { return it }
         // Хвостовые пробелы и переводы строк — частая разница между фразой в коде и на экране.
         val trimmed = text.trim()
         if (trimmed != text) exact[trimmed]?.let { return text.replace(trimmed, it) }
-        if (depth >= 2) return text
+        if (trimmed == trimmed.uppercase()) upper[trimmed]?.let { return text.replace(trimmed, it) }
+        if (depth >= 3) return text
         for (template in templates) {
             val match = template.regex.matchEntire(text) ?: continue
-            val values = match.groupValues.drop(1).map { if (it.any(::isCyrillic)) translate(it, depth + 1) else it }
+            val values = match.groupValues.drop(1).map { part(it, depth + 1) }
             return fill(template.target, values)
+        }
+        for ((key, value) in prefixes) {
+            if (text.length > key.length && text.startsWith(key)) return value + part(text.substring(key.length), depth + 1)
+        }
+        for ((key, value) in suffixes) {
+            if (text.length > key.length && text.endsWith(key)) return part(text.dropLast(key.length), depth + 1) + value
+        }
+        // Целиком не нашлась — переводим куски по отдельности.
+        for (separator in separators) {
+            if (!text.contains(separator)) continue
+            return text.split(separator).joinToString(separator) { part(it, depth + 1) }
         }
         return text
     }
+
+    private fun part(text: String, depth: Int): String = if (text.any(::isCyrillic)) translate(text, depth) else text
 
     /// `{}` — по порядку, `{2}` — по номеру: в английском слова иногда меняются местами.
     private fun fill(target: String, values: List<String>): String {

@@ -322,7 +322,7 @@ internal fun RecapSlideContent(slide: RecapSlide, recap: TrainingRecap, restart:
             RecapSlide.VOLUME -> {
                 Text("Поднято ${recap.period.inPhrase}", color = white70, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.Bottom) {
-                    CountUp(recap.volumeKg / 1000, 92) { String.format(java.util.Locale.US, "%.1f", it).replace('.', ',') }
+                    CountUp(recap.volumeKg / 1000, 92) { L10n.decimal(String.format(java.util.Locale.US, "%.1f", it)) }
                     Text(" т", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(bottom = 16.dp))
                 }
                 recap.volumeComparison?.let { Text("Это $it 🐘", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }

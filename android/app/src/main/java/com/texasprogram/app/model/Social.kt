@@ -642,7 +642,7 @@ enum class AchievementKind(
             L10n.isEnglish -> formatWeight(Math.round(value / 100.0) / 10.0) + " t"
             else -> formatWeight(Math.round(value / 100.0) / 10.0).replace('.', ',') + " т"
         }
-        BENCH, SQUAT, DEADLIFT, TOTAL -> "×" + formatWeight(Math.round(value * 100.0) / 100.0).replace('.', ',')
+        BENCH, SQUAT, DEADLIFT, TOTAL -> "×" + formatWeight(Math.round(value * 100.0) / 100.0).let { if (L10n.isEnglish) it else it.replace('.', ',') }
         else -> "${value.roundToLong()}"
     }
 

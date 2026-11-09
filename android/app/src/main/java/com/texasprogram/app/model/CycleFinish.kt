@@ -1,5 +1,7 @@
 package com.texasprogram.app.model
 
+import com.texasprogram.app.service.L
+import com.texasprogram.app.service.L10n
 import com.texasprogram.app.service.ProgramCalculator
 import java.time.LocalDate
 import java.util.Locale
@@ -40,13 +42,16 @@ data class CycleRecap(val weeks: Int, val workouts: Int, val tonnage: Double, va
 data class CycleFeelHint(val averageEffort: Double?, val missedSets: Int, val loggedSets: Int, val suggestion: CycleFeel) {
     val text: String
         get() {
+            // Куски переводятся по отдельности: целиком такая фраза в словаре не найдётся.
             val parts = mutableListOf<String>()
-            averageEffort?.let { parts += "среднее усилие ${String.format(Locale.US, "%.1f", it).replace('.', ',')} из 10" }
-            if (loggedSets > 0) {
-                parts += if (missedSets == 0) "все записанные подходы выполнены"
-                else "недобрано подходов: $missedSets из $loggedSets"
+            averageEffort?.let {
+                val value = String.format(Locale.US, "%.1f", it).let { text -> if (L10n.isEnglish) text else text.replace('.', ',') }
+                parts += L("среднее усилие $value из 10")
             }
-            return "По записям: " + parts.joinToString(", ") + ". Похоже на «${suggestion.title}»."
+            if (loggedSets > 0) {
+                parts += L(if (missedSets == 0) "все записанные подходы выполнены" else "недобрано подходов: $missedSets из $loggedSets")
+            }
+            return L("По записям: ${parts.joinToString(", ")}. Похоже на «${L(suggestion.title)}».")
         }
 }
 

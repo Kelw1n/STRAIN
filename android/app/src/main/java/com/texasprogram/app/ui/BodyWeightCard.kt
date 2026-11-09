@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L10n
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -362,7 +363,7 @@ private fun Ratio(title: String, value: Double?, modifier: Modifier = Modifier) 
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            value?.let { String.format(java.util.Locale.ROOT, "%.2f", it).replace('.', ',') } ?: "—",
+            value?.let { L10n.decimal(String.format(java.util.Locale.ROOT, "%.2f", it)) } ?: "—",
             color = Theme.textPrimary,
             fontSize = 22.sp,
             fontWeight = FontWeight.Black

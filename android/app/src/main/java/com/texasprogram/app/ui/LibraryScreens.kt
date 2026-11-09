@@ -596,7 +596,7 @@ fun TemplatesSheet(
                             actions = listOf(
                                 TemplateMenuAction("Начать", Icons.Filled.PlayArrow) { start(template) },
                                 TemplateMenuAction("Изменить", Icons.Filled.Edit) { editing = template to false },
-                                TemplateMenuAction("Дублировать", Icons.Filled.ContentCopy) { update(current.saveTemplate(template.duplicate(template.name + " (копия)"))) },
+                                TemplateMenuAction("Дублировать", Icons.Filled.ContentCopy) { update(current.saveTemplate(template.duplicate(template.name + L(" (копия)")))) },
                                 TemplateMenuAction(
                                     if (template.isShared) "Убрать из профиля" else "Показывать в профиле",
                                     if (template.isShared) Icons.Filled.VisibilityOff else Icons.Filled.Visibility

@@ -302,7 +302,7 @@ struct TrainingRecapView: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Color.ink.opacity(0.85))
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    CountUpText(value: recap.volumeKg / 1000) { String(format: "%.1f", $0).replacingOccurrences(of: ".", with: ",") }
+                    CountUpText(value: recap.volumeKg / 1000) { L10n.decimal(String(format: "%.1f", $0)) }
                         .font(.system(size: 96, weight: .black, design: Theme.fontDesign))
                     Text(L("т"))
                         .font(.system(size: 36, weight: .heavy))
@@ -607,7 +607,7 @@ struct TrainingRecapCard: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 tile("\(recap.workouts)", RuPlural.word(recap.workouts, "тренировка", "тренировки", "тренировок"))
                 tile("\(recap.hours) ч \(recap.minutes) м", "в зале")
-                tile(String(format: "%.1f т", recap.volumeKg / 1000).replacingOccurrences(of: ".", with: ","), "поднято")
+                tile(L10n.decimal(String(format: "%.1f", recap.volumeKg / 1000)) + (L10n.isEnglish ? " t" : " т"), "поднято")
                 // Без рекордов ноль не показываем — показываем, сколько подходов сделано.
                 if recap.records > 0 {
                     tile("\(recap.records)", RuPlural.word(recap.records, "рекорд", "рекорда", "рекордов"))

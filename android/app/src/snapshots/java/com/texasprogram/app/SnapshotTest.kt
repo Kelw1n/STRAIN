@@ -85,6 +85,10 @@ class SnapshotTest {
     init {
         // Тема прогона: gradle -PsnapshotTheme=light снимает всё в светлой.
         Theme.isLight = System.getProperty("snapshotTheme") == "light"
+        // Язык прогона: gradle -PsnapshotLanguage=en снимает всё на английском.
+        val english = System.getProperty("snapshotLanguage") == "en"
+        if (english) com.texasprogram.app.service.L10n.install(java.io.File("src/main/assets/i18n-en.json").readText())
+        com.texasprogram.app.service.L10n.setEnglish(english)
     }
 
     @get:Rule

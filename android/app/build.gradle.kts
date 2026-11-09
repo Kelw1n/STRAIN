@@ -112,5 +112,7 @@ if (providers.gradleProperty("snapshots").isPresent) {
     // -PsnapshotTheme=light — те же снимки в светлой теме.
     tasks.withType<Test>().configureEach {
         systemProperty("snapshotTheme", providers.gradleProperty("snapshotTheme").getOrElse("dark"))
+        // -PsnapshotLanguage=en — те же снимки на английском.
+        systemProperty("snapshotLanguage", providers.gradleProperty("snapshotLanguage").getOrElse("ru"))
     }
 }
