@@ -21,6 +21,10 @@ struct TexasProgramApp: App {
         URLCache.shared = URLCache(memoryCapacity: 40 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
         AppLanguage.keepRussianForExistingUsers()
         AppLanguage.shareWithWidgets()
+        // Словарь читается в фоне: первый экран на английском не ждёт разбора 2,5 тыс. фраз.
+        if L10n.isEnglish {
+            DispatchQueue.global(qos: .userInitiated).async { _ = L10n.tr("Сегодня") }
+        }
     }
 
     var body: some Scene {

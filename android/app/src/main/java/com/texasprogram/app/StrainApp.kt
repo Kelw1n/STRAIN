@@ -15,6 +15,8 @@ class StrainApp : Application(), ImageLoaderFactory {
         super.onCreate()
         // Язык нужен до первого экрана и до напоминаний, которые приходят без него.
         L10n.init(this)
+        // Словарь читается в фоне: первый экран на английском не ждёт разбора 2,5 тыс. фраз.
+        if (L10n.isEnglish) Thread { L10n.tr("Сегодня") }.start()
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
