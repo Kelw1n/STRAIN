@@ -172,8 +172,10 @@ fun WorkoutHubScreen(
             }
         }
 
-        // Большая плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ» / «ПРОДОЛЖИТЬ ТРЕНИРОВКУ»
-        if (focus != null) {
+        // Большая плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ». Пока тренировка идёт, её место
+        // занимает плашка свёрнутой тренировки над панелью вкладок: вдвоём они
+        // накладывались, и надпись кнопки просвечивала сквозь стекло плашки.
+        if (focus != null && !isRunning) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -185,11 +187,7 @@ fun WorkoutHubScreen(
                         .fillMaxWidth()
                         .pressable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (isRunning) {
-                                WorkoutSessionManager.expand()
-                            } else {
-                                onStartWorkout(focus)
-                            }
+                            onStartWorkout(focus)
                         }
                         .shadow(16.dp, CircleShape, ambientColor = Theme.ink.copy(alpha = 0.2f))
                         .clip(CircleShape)
@@ -197,34 +195,13 @@ fun WorkoutHubScreen(
                         .padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (isRunning) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF2ED573))
-                            )
-                            Text(
-                                text = "ПРОДОЛЖИТЬ ТРЕНИРОВКУ",
-                                color = Theme.canvas,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                        } else {
-                            Text(
-                                text = "НАЧАТЬ ТРЕНИРОВКУ",
-                                color = Theme.canvas,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                        }
-                    }
+                    Text(
+                        text = "НАЧАТЬ ТРЕНИРОВКУ",
+                        color = Theme.canvas,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
                 }
             }
         }

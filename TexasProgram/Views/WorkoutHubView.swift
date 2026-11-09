@@ -85,42 +85,29 @@ struct WorkoutHubView: View {
                 .scrollIndicators(.hidden)
                 .screenBackground()
 
-                // Плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ» / «ПРОДОЛЖИТЬ»
-                if let focus {
-                    let isRunning = WorkoutSessionManager.shared.isRunning
+                // Плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ». Пока тренировка идёт, её место
+                // занимает плашка свёрнутой тренировки над панелью вкладок: вдвоём они
+                // накладывались друг на друга.
+                if let focus, !WorkoutSessionManager.shared.isRunning {
                     VStack(spacing: 0) {
                         Button {
                             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                            if isRunning {
-                                WorkoutSessionManager.shared.expand()
-                            } else {
-                                onStartWorkout(focus)
-                            }
+                            onStartWorkout(focus)
                         } label: {
-                            HStack(spacing: 8) {
-                                if isRunning {
-                                    Circle()
-                                        .fill(Color.green)
-                                        .frame(width: 8, height: 8)
-                                    Text(L("ПРОДОЛЖИТЬ ТРЕНИРОВКУ"))
-                                } else {
-                                    Text(L("НАЧАТЬ ТРЕНИРОВКУ"))
-                                }
-                            }
-                            .font(.system(size: 16, weight: .black, design: Theme.fontDesign))
-                            .tracking(1.2)
-                            .foregroundStyle(.canvas)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 18)
-                            .background(Color.ink, in: Capsule())
-                            .shadow(color: Color.ink.opacity(0.18), radius: 14, y: 4)
-                            .contentTransition(.opacity)
+                            Text(L("НАЧАТЬ ТРЕНИРОВКУ"))
+                                .font(.system(size: 16, weight: .black, design: Theme.fontDesign))
+                                .tracking(1.2)
+                                .foregroundStyle(.canvas)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 18)
+                                .background(Color.ink, in: Capsule())
+                                .shadow(color: Color.ink.opacity(0.18), radius: 14, y: 4)
                         }
                         .buttonStyle(.pressable)
-                        .animation(Motion.snappy, value: isRunning)
                         .padding(.horizontal, 18)
                         .padding(.bottom, 74) // Зазор для Liquid Glass Dock
                     }
+                    .transition(.opacity)
                 }
             }
             .navigationTitle(L("Тренировка"))
