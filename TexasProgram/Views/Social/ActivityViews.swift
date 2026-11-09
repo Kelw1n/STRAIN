@@ -32,7 +32,7 @@ struct LiveBadge: View {
     var body: some View {
         HStack(spacing: 7) {
             LivePulse()
-            Text(live.line.isEmpty ? "Тренируется" : "Тренируется · \(live.line)")
+            Text(live.line.isEmpty ? L("Тренируется") : L("Тренируется · \(live.line)"))
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Theme.success)
                 .lineLimit(1)
@@ -52,7 +52,7 @@ struct LiveFriendsStrip: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 7) {
                 LivePulse(size: 7)
-                Text("СЕЙЧАС ТРЕНИРУЮТСЯ")
+                Text(L("СЕЙЧАС ТРЕНИРУЮТСЯ"))
                     .font(.system(size: 12, weight: .bold))
                     .tracking(1.2)
                     .foregroundStyle(Color.ink.opacity(0.5))
@@ -165,7 +165,7 @@ struct ActivityView: View {
         }
         .refreshable { await reload() }
         .background(Color.canvas.ignoresSafeArea())
-        .navigationTitle("Активность")
+        .navigationTitle(L("Активность"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await reload() }
     }
@@ -175,10 +175,10 @@ struct ActivityView: View {
             Image(systemName: "bell")
                 .font(.system(size: 34, weight: .semibold))
                 .foregroundStyle(Color.ink.opacity(0.35))
-            Text("Пока тихо")
+            Text(L("Пока тихо"))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.ink)
-            Text("Здесь появятся лайки, комментарии, ответы и новые подписчики.")
+            Text(L("Здесь появятся лайки, комментарии, ответы и новые подписчики."))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.55))
                 .multilineTextAlignment(.center)
@@ -249,7 +249,7 @@ struct ActivityRow: View {
     }
 
     private var line: Text {
-        Text("\(Text("@\(item.actor.username)").bold()) \(item.action)")
+        Text("\(Text(verbatim: "@\(item.actor.username)").bold()) \(L(item.action))")
             .font(.system(size: 15))
     }
 
@@ -392,7 +392,7 @@ struct LeaderboardView: View {
                     .foregroundStyle(Color.ink.opacity(0.45))
                 Spacer()
                 Button { showingWinners = true } label: {
-                    Label("Победители", systemImage: "crown.fill")
+                    Label(L("Победители"), systemImage: "crown.fill")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(ChallengePlace.color(1))
                 }
@@ -415,12 +415,12 @@ struct LeaderboardView: View {
                 }
                 .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 if entries.count < 2 {
-                    Text("Подпишись на друзей — и меряйтесь тоннажем, тренировками и рекордами каждую неделю.")
+                    Text(L("Подпишись на друзей — и меряйтесь тоннажем, тренировками и рекордами каждую неделю."))
                         .font(.system(size: 14))
                         .foregroundStyle(Color.ink.opacity(0.5))
                 }
             }
-            Text("Считаются все тренировки в приложении, а не только опубликованные. Неделя — с понедельника. Корона — тому, у кого за прошлую неделю больше всех тренировок.")
+            Text(L("Считаются все тренировки в приложении, а не только опубликованные. Неделя — с понедельника. Корона — тому, у кого за прошлую неделю больше всех тренировок."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.35))
         }
@@ -468,7 +468,7 @@ struct LeaderboardRow: View {
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(entry.user.isMe ? "Ты" : "@\(entry.user.username)")
+                        Text(entry.user.isMe ? L("Ты") : "@\(entry.user.username)")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.ink)
                             .lineLimit(1)
@@ -477,7 +477,7 @@ struct LeaderboardRow: View {
                             Image(systemName: "crown.fill")
                                 .font(.system(size: 12))
                                 .foregroundStyle(ChallengePlace.color(1))
-                                .accessibilityLabel("Победитель прошлой недели")
+                                .accessibilityLabel(L("Победитель прошлой недели"))
                         }
                         LevelChip(level: entry.user.level ?? entry.stats.level)
                     }

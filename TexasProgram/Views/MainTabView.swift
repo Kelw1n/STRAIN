@@ -218,13 +218,13 @@ struct MainTabView: View {
             isPresented: $sessionManager.showingReplaceConfirm,
             titleVisibility: .visible
         ) {
-            Button("Вернуться к текущей") { sessionManager.cancelReplace() }
-            Button("Отменить текущую и начать новую", role: .destructive) {
+            Button(L("Вернуться к текущей")) { sessionManager.cancelReplace() }
+            Button(L("Отменить текущую и начать новую"), role: .destructive) {
                 sessionManager.confirmReplace(profile: profile)
             }
-            Button("Закрыть", role: .cancel) { sessionManager.dismissReplace() }
+            Button(L("Закрыть"), role: .cancel) { sessionManager.dismissReplace() }
         } message: {
-            Text("Подходы текущей тренировки, отмеченные в этой сессии, будут сброшены.")
+            Text(L("Подходы текущей тренировки, отмеченные в этой сессии, будут сброшены."))
         }
         .fullScreenCover(isPresented: $sessionManager.isPresented) {
             if let workout = sessionManager.activeWorkout {
@@ -358,7 +358,7 @@ struct TodayView: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: "play.fill")
                                         .font(.system(size: 14, weight: .bold))
-                                    Text("НАЧАТЬ ТРЕНИРОВКУ")
+                                    Text(L("НАЧАТЬ ТРЕНИРОВКУ"))
                                         .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                                         .tracking(1.0)
                                 }
@@ -401,7 +401,7 @@ struct TodayView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
-            .navigationTitle("Сегодня")
+            .navigationTitle(L("Сегодня"))
             .sheet(isPresented: $showingCycleFinish) { CycleFinishView(profile: profile) }
             .sheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)
@@ -489,7 +489,7 @@ struct TodayView: View {
 
     private func overdueCard(_ items: [ScheduledWorkout]) -> some View {
         CardView(padding: 16, spacing: 10) {
-            Label("Пропущено на этой неделе", systemImage: "exclamationmark.arrow.circlepath")
+            Label(L("Пропущено на этой неделе"), systemImage: "exclamationmark.arrow.circlepath")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(Theme.warning)
             ForEach(items) { item in
@@ -529,7 +529,7 @@ struct TodayView: View {
                         .tracking(1.3)
                         .foregroundStyle(Theme.accentGradient)
                     HStack(spacing: 8) {
-                        Text("Неделя \(workout.week)")
+                        Text(L("Неделя \(workout.week)"))
                             .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
                         if profile.isPeaking {
@@ -547,7 +547,7 @@ struct TodayView: View {
                         Text("\(profile.completedDayCount)")
                             .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
-                        Text("из \(profile.totalDays)").font(.system(size: 10)).foregroundStyle(.secondary)
+                        Text(L("из \(profile.totalDays)")).font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                 }
                 .frame(width: 76, height: 76)
@@ -566,8 +566,8 @@ struct TodayView: View {
                     Image(systemName: "calendar.badge.clock")
                         .font(.system(size: 44))
                         .foregroundStyle(Theme.accent)
-                    Text("В плане пока пусто").font(.title3.weight(.bold))
-                    Text("Добавь тренировки в программу, и они появятся здесь.")
+                    Text(L("В плане пока пусто")).font(.title3.weight(.bold))
+                    Text(L("Добавь тренировки в программу, и они появятся здесь."))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -597,7 +597,7 @@ struct TodayWorkoutPreviewCard: View {
                     Image(systemName: "list.bullet.clipboard.fill")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(Theme.accent)
-                    Text("План на сегодня")
+                    Text(L("План на сегодня"))
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
@@ -615,14 +615,14 @@ struct TodayWorkoutPreviewCard: View {
                     Button {
                         onCustomize()
                     } label: {
-                        Label("Настроить упражнения", systemImage: "pencil.line")
+                        Label(L("Настроить упражнения"), systemImage: "pencil.line")
                     }
                     Button {
                         withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
                             profile.toggleCompleted(week: workout.week, day: workout.day.number)
                         }
                     } label: {
-                        Label(workout.isCompleted ? "Снять отметку" : "Отметить выполненной вручную",
+                        Label(workout.isCompleted ? L("Снять отметку") : L("Отметить выполненной вручную"),
                               systemImage: workout.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
                     }
                     Button(role: .destructive) {
@@ -630,7 +630,7 @@ struct TodayWorkoutPreviewCard: View {
                             profile.markSkipped(week: workout.week, day: workout.day.number, holdsProgression: false)
                         }
                     } label: {
-                        Label("Пропустить тренировку", systemImage: "forward.end")
+                        Label(L("Пропустить тренировку"), systemImage: "forward.end")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -734,15 +734,15 @@ struct BenchTeaser: View {
                         .background(isDone ? Theme.successGradient : (plan?.accent ?? Theme.accentGradient),
                                     in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Жим 14 · тренировка \(session) из \(UpperLowerCalculator.benchSessionCount)")
+                        Text(L("Жим 14 · тренировка \(session) из \(UpperLowerCalculator.benchSessionCount)"))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
                         if isDone {
-                            Text("Уже отмечена в разделе «Жим 14»")
+                            Text(L("Уже отмечена в разделе «Жим 14»"))
                                 .font(.caption)
                                 .foregroundStyle(Theme.success)
                         } else if let plan {
-                            Text("Верх до \(plan.topWeightText) · \(plan.sets.count) подходов")
+                            Text(L("Верх до \(plan.topWeightText) · \(plan.sets.count) подходов"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -807,7 +807,7 @@ struct PlanView: View {
                                             profile.setCurrentWorkout(week: week.number, day: day.number)
                                         }
                                     } label: {
-                                        Label("Начать с этого дня", systemImage: "flag.checkered")
+                                        Label(L("Начать с этого дня"), systemImage: "flag.checkered")
                                     }
                                 }
                                 .appearIn(index)
@@ -826,7 +826,7 @@ struct PlanView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
-            .navigationTitle("План")
+            .navigationTitle(L("План"))
             .onAppear {
                 guard !focusedOnOpen else { return }
                 focusedOnOpen = true
@@ -886,7 +886,7 @@ struct PlanView: View {
             }
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel("Неделя \(week.number)")
+        .accessibilityLabel(L("Неделя \(week.number)"))
     }
 }
 
@@ -928,7 +928,7 @@ struct DaySummaryCard: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 6) {
-                        Text("\(day.exercises.count) упражнений").font(.caption).foregroundStyle(.secondary)
+                        Text(L("\(day.exercises.count) упражнений")).font(.caption).foregroundStyle(.secondary)
                         if let scheduled {
                             Text("· \(RuDate.dayMonth(scheduled.date))").font(.caption).foregroundStyle(.secondary)
                         }
@@ -990,7 +990,7 @@ struct DayDetailView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
                             .font(.system(size: 14, weight: .bold))
-                        Text("НАЧАТЬ ТРЕНИРОВКУ")
+                        Text(L("НАЧАТЬ ТРЕНИРОВКУ"))
                             .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                             .tracking(1.0)
                     }
@@ -1079,8 +1079,8 @@ struct DayDetailView: View {
         .screenBackground()
         // В очереди день недели зависит от места в очереди, поэтому в заголовке его нет.
         .navigationTitle(profile.scheduleMode == .queue
-                         ? "Неделя \(week)"
-                         : "Неделя \(week) · \(profile.shortWeekdayName(forDay: day.number).uppercased())")
+                         ? L("Неделя \(week)")
+                         : L("Неделя \(week) · \(profile.shortWeekdayName(forDay: day.number).uppercased())"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -1095,7 +1095,7 @@ struct DayDetailView: View {
                                          ? AnyShapeStyle(Theme.accent)
                                          : AnyShapeStyle(Theme.warning))
                 }
-                .accessibilityLabel("Свои упражнения")
+                .accessibilityLabel(L("Свои упражнения"))
             }
         }
         .sheet(isPresented: $showCustomize) {
@@ -1141,7 +1141,7 @@ struct AsPlannedButton: View {
             Button { confirming = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "checklist.checked").font(.footnote.weight(.bold))
-                    Text("Всё прошло по плану").font(.subheadline.weight(.semibold))
+                    Text(L("Всё прошло по плану")).font(.subheadline.weight(.semibold))
                 }
                 .foregroundStyle(Theme.accent)
                 .frame(maxWidth: .infinity)
@@ -1151,16 +1151,16 @@ struct AsPlannedButton: View {
                     .strokeBorder(Theme.accent.opacity(0.3), lineWidth: 1))
             }
             .buttonStyle(.pressable)
-            .confirmationDialog("Записать все подходы плановыми весами?",
+            .confirmationDialog(L("Записать все подходы плановыми весами?"),
                                 isPresented: $confirming, titleVisibility: .visible) {
-                Button("Записать") {
+                Button(L("Записать")) {
                     withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
                         profile.completeAsPlanned(week: week, day: day)
                     }
                 }
-                Button("Отмена", role: .cancel) {}
+                Button(L("Отмена"), role: .cancel) {}
             } message: {
-                Text("Повторы и веса возьмутся из плана. Что разошлось — поправишь долгим нажатием на кружок.")
+                Text(L("Повторы и веса возьмутся из плана. Что разошлось — поправишь долгим нажатием на кружок."))
             }
         }
     }
@@ -1245,7 +1245,7 @@ struct ExerciseCard: View {
                             .background(Theme.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
                     .buttonStyle(.pressable)
-                    .accessibilityLabel("История упражнения")
+                    .accessibilityLabel(L("История упражнения"))
                 }
 
                 if isBenchLink {
@@ -1287,7 +1287,7 @@ struct ExerciseCard: View {
                         }
                         if hint.isDeload, let onKeepWeight {
                             Button(action: onKeepWeight) {
-                                Text("Не сбрасывать")
+                                Text(L("Не сбрасывать"))
                                     .font(.caption2.weight(.semibold))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 10)
@@ -1351,7 +1351,7 @@ struct WeightStepMenu: View {
 
     var body: some View {
         Menu {
-            Picker("Шаг прибавки", selection: Binding(get: { step }, set: onSelect)) {
+            Picker(L("Шаг прибавки"), selection: Binding(get: { step }, set: onSelect)) {
                 ForEach(ProgramProfile.weightStepOptions, id: \.self) { option in
                     Text(ProgramProfile.weightStepTitle(option)).tag(option)
                 }
@@ -1360,7 +1360,7 @@ struct WeightStepMenu: View {
             HStack(spacing: 4) {
                 Image(systemName: "scalemass")
                     .font(.system(size: 10, weight: .bold))
-                Text("Шаг \(WeightFormat.kilogramsPrecise(step))")
+                Text(L("Шаг \(WeightFormat.kilogramsPrecise(step))"))
                     .font(.caption2.weight(.semibold))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
@@ -1370,7 +1370,7 @@ struct WeightStepMenu: View {
             .padding(.vertical, 5)
             .background(Theme.accent.opacity(0.12), in: Capsule())
         }
-        .accessibilityLabel("Шаг прибавки \(WeightFormat.kilogramsPrecise(step))")
+        .accessibilityLabel(L("Шаг прибавки \(WeightFormat.kilogramsPrecise(step))"))
     }
 }
 
@@ -1389,7 +1389,7 @@ struct CompleteButton: View {
             HStack(spacing: 10) {
                 Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
                     .symbolEffect(.bounce, value: trigger)
-                Text(isCompleted ? "Выполнено" : "Отметить тренировку")
+                Text(isCompleted ? L("Выполнено") : L("Отметить тренировку"))
             }
         }
         .buttonStyle(GradientButtonStyle(
@@ -1420,7 +1420,7 @@ struct SkipButton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if profile.isSkipped(week: week, day: day) {
-                Label("Тренировка отмечена пропущенной", systemImage: "calendar.badge.exclamationmark")
+                Label(L("Тренировка отмечена пропущенной"), systemImage: "calendar.badge.exclamationmark")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.warning)
             } else {
@@ -1429,7 +1429,7 @@ struct SkipButton: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "calendar.badge.minus")
-                        Text("Не пришёл на тренировку")
+                        Text(L("Не пришёл на тренировку"))
                     }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.warning)
@@ -1438,22 +1438,22 @@ struct SkipButton: View {
             }
 
             if held > 0 {
-                Text("Прогрессия задержана на \(held) нед.: веса не растут, пока не закроешь пропущенное.")
+                Text(L("Прогрессия задержана на \(held) нед.: веса не растут, пока не закроешь пропущенное."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .confirmationDialog("Пропустил эту тренировку?", isPresented: $asking, titleVisibility: .visible) {
-            Button("Пропустить и задержать веса") {
+        .confirmationDialog(L("Пропустил эту тренировку?"), isPresented: $asking, titleVisibility: .visible) {
+            Button(L("Пропустить и задержать веса")) {
                 profile.markSkipped(week: week, day: day, holdsProgression: true)
             }
-            Button("Просто пропустить") {
+            Button(L("Просто пропустить")) {
                 profile.markSkipped(week: week, day: day, holdsProgression: false)
             }
-            Button("Отмена", role: .cancel) {}
+            Button(L("Отмена"), role: .cancel) {}
         } message: {
-            Text("Тренировка останется в расписании, её можно закрыть позже. С задержкой следующие недели повторят текущие веса — вернёшься к той же штанге, а не к более тяжёлой.")
+            Text(L("Тренировка останется в расписании, её можно закрыть позже. С задержкой следующие недели повторят текущие веса — вернёшься к той же штанге, а не к более тяжёлой."))
         }
     }
 }

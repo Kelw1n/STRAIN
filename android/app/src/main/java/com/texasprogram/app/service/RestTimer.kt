@@ -242,12 +242,12 @@ class RestTimer private constructor(context: Context) {
         if (!liveNotification || !isRunning) return
         runCatching {
             ensureChannels()
-            val name = exerciseName?.takeIf { it.isNotBlank() } ?: "Отдых между подходами"
+            val name = L(exerciseName?.takeIf { it.isNotBlank() } ?: "Отдых между подходами")
             val line = buildString {
-                if (totalSets > 0) append("Подход ${(completedSets + 1).coerceAtMost(totalSets)} из $totalSets")
+                if (totalSets > 0) append(L("Подход ${(completedSets + 1).coerceAtMost(totalSets)} из $totalSets"))
                 setDetails?.takeIf { it.isNotBlank() }?.let {
                     if (isNotEmpty()) append(" · ")
-                    append("было $it")
+                    append(L("было ${L(it)}"))
                 }
             }
             val open = PendingIntent.getActivity(
@@ -260,8 +260,8 @@ class RestTimer private constructor(context: Context) {
                 .setSmallIcon(R.drawable.ic_stat_rest)
                 .setColor(0xFFFF6029.toInt())
                 .setContentTitle(name)
-                .setContentText(line.ifEmpty { "Отдых" })
-                .setSubText("Отдых")
+                .setContentText(line.ifEmpty { L("Отдых") })
+                .setSubText(L("Отдых"))
                 .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setOngoing(true)
@@ -274,9 +274,9 @@ class RestTimer private constructor(context: Context) {
                 // Не висит после конца, даже если будильник опоздал.
                 .setTimeoutAfter((endsAtMillis - System.currentTimeMillis()).coerceAtLeast(1000L) + 3000L)
                 .setContentIntent(open)
-                .addAction(0, "−30 с", actionIntent(ACTION_MINUS, 11))
-                .addAction(0, "+30 с", actionIntent(ACTION_PLUS, 12))
-                .addAction(0, "Пропустить", actionIntent(ACTION_SKIP, 13))
+                .addAction(0, L("−30 с"), actionIntent(ACTION_MINUS, 11))
+                .addAction(0, L("+30 с"), actionIntent(ACTION_PLUS, 12))
+                .addAction(0, L("Пропустить"), actionIntent(ACTION_SKIP, 13))
             exerciseName?.let { ExerciseArt.cached(it) }?.let { builder.setLargeIcon(it) }
             val notification: Notification = builder.build()
             // Уведомления запрещены — часть прошивок бросает исключение; отдых
@@ -326,11 +326,11 @@ class RestTimer private constructor(context: Context) {
         runCatching {
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_DONE, "Отдых закончен", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(CHANNEL_DONE, L("Отдых закончен"), NotificationManager.IMPORTANCE_HIGH)
             )
             // Тихий канал: отсчёт не звенит и не всплывает поверх экрана.
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_LIVE, "Отсчёт отдыха", NotificationManager.IMPORTANCE_LOW).apply {
+                NotificationChannel(CHANNEL_LIVE, L("Отсчёт отдыха"), NotificationManager.IMPORTANCE_LOW).apply {
                     setShowBadge(false)
                     enableVibration(false)
                     setSound(null, null)
@@ -398,14 +398,14 @@ class RestFinishedReceiver : BroadcastReceiver() {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         runCatching {
             manager.createNotificationChannel(
-                NotificationChannel(RestTimer.CHANNEL_DONE, "Отдых закончен", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(RestTimer.CHANNEL_DONE, L("Отдых закончен"), NotificationManager.IMPORTANCE_HIGH)
             )
         }
         val notification = NotificationCompat.Builder(context, RestTimer.CHANNEL_DONE)
             .setSmallIcon(R.drawable.ic_stat_rest)
             .setColor(0xFFFF6029.toInt())
-            .setContentTitle("Отдых закончен")
-            .setContentText("Пора к следующему подходу.")
+            .setContentTitle(L("Отдых закончен"))
+            .setContentText(L("Пора к следующему подходу."))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)

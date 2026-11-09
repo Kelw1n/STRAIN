@@ -3,6 +3,8 @@ import Foundation
 /// Согласование числа со словом: 1 подход, 3 подхода, 5 подходов, 11 подходов.
 enum RuPlural {
     static func word(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
+        // В английском две формы: одна штука и всё остальное (0, 2, 21, 105).
+        if L10n.isEnglish { return abs(count) == 1 ? L10n.tr(one) : L10n.tr(many) }
         let value = abs(count)
         if (11...14).contains(value % 100) { return many }
         switch value % 10 {
@@ -26,12 +28,20 @@ enum RuDate {
     /// Номера дней недели в порядке «понедельник → воскресенье» (нумерация `Calendar`: 1 — воскресенье).
     static let weekOrder = [2, 3, 4, 5, 6, 7, 1]
 
+    static let weekdayFullEn = ["", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    static let weekdayShortEn = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    static let monthEn = ["", "January", "February", "March", "April", "May", "June",
+                          "July", "August", "September", "October", "November", "December"]
+    static let monthShortEn = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
     static func full(weekday: Int) -> String {
-        weekdayFull.indices.contains(weekday) ? weekdayFull[weekday] : ""
+        let names = L10n.isEnglish ? weekdayFullEn : weekdayFull
+        return names.indices.contains(weekday) ? names[weekday] : ""
     }
 
     static func short(weekday: Int) -> String {
-        weekdayShort.indices.contains(weekday) ? weekdayShort[weekday] : ""
+        let names = L10n.isEnglish ? weekdayShortEn : weekdayShort
+        return names.indices.contains(weekday) ? names[weekday] : ""
     }
 
     static let monthShort = ["", "янв", "фев", "мар", "апр", "май", "июн",
@@ -39,14 +49,16 @@ enum RuDate {
 
     static func dayMonth(_ date: Date, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents([.day, .month], from: date)
-        let month = monthGenitive.indices.contains(parts.month ?? 0) ? monthGenitive[parts.month ?? 0] : ""
-        return "\(parts.day ?? 1) \(month)"
+        let names = L10n.isEnglish ? monthEn : monthGenitive
+        let month = names.indices.contains(parts.month ?? 0) ? names[parts.month ?? 0] : ""
+        return L10n.isEnglish ? "\(month) \(parts.day ?? 1)" : "\(parts.day ?? 1) \(month)"
     }
 
     static func shortDayMonth(_ date: Date, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents([.day, .month], from: date)
-        let month = monthShort.indices.contains(parts.month ?? 0) ? monthShort[parts.month ?? 0] : ""
-        return "\(parts.day ?? 1) \(month)"
+        let names = L10n.isEnglish ? monthShortEn : monthShort
+        let month = names.indices.contains(parts.month ?? 0) ? names[parts.month ?? 0] : ""
+        return L10n.isEnglish ? "\(month) \(parts.day ?? 1)" : "\(parts.day ?? 1) \(month)"
     }
 }
 

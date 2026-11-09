@@ -69,28 +69,28 @@ struct BenchWaveView: View {
                 }
             }
             .screenBackground()
-            .navigationTitle("Жим 14")
+            .navigationTitle(L("Жим 14"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     if let onClose {
-                        Button("Готово", action: onClose).font(.body.weight(.semibold))
+                        Button(L("Готово"), action: onClose).font(.body.weight(.semibold))
                     }
                 }
             }
             .confirmationDialog(
-                pendingStart.map { "Начать с тренировки \($0.id)?" } ?? "",
+                pendingStart.map { L("Начать с тренировки \($0.id)?") } ?? "",
                 isPresented: Binding(get: { pendingStart != nil }, set: { if !$0 { pendingStart = nil } }),
                 titleVisibility: .visible,
                 presenting: pendingStart
             ) { session in
-                Button("Сделать следующей") {
+                Button(L("Сделать следующей")) {
                     withAnimation(Motion.maybe(Motion.card, reduce: reduceMotion)) {
                         profile.setCurrentBenchSession(session.id)
                         expanded = session.id
                     }
                     pendingStart = nil
                 }
-                Button("Отмена", role: .cancel) { pendingStart = nil }
+                Button(L("Отмена"), role: .cancel) { pendingStart = nil }
             } message: { session in
                 Text(startMessage(for: session))
             }
@@ -144,7 +144,7 @@ struct BenchWaveView: View {
         HighlightCard {
             HStack(alignment: .center, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("ВОЛНОВАЯ ПРОГРЕССИЯ")
+                    Text(L("ВОЛНОВАЯ ПРОГРЕССИЯ"))
                         .font(.caption2.weight(.bold))
                         .tracking(1.3)
                         .foregroundStyle(Theme.accentGradient)
@@ -152,15 +152,15 @@ struct BenchWaveView: View {
                         Text("\(completed.count)")
                             .font(.system(size: 38, weight: .bold, design: Theme.fontDesign))
                             .contentTransition(.numericText())
-                        Text("из \(sessions.count) тренировок")
+                        Text(L("из \(sessions.count) тренировок"))
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     if let nextSession {
-                        Text("Следующая — №\(nextSession)")
+                        Text(L("Следующая — №\(nextSession)"))
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("Волна пройдена полностью")
+                        Text(L("Волна пройдена полностью"))
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(Theme.success)
                     }
@@ -201,7 +201,7 @@ struct BenchWaveView: View {
 
     private var chartCard: some View {
         CardView(padding: 16, spacing: 12) {
-            Text("Верхний вес по тренировкам")
+            Text(L("Верхний вес по тренировкам"))
                 .font(.subheadline.weight(.semibold))
             BenchWaveChart(
                 sessions: sessions,
@@ -281,7 +281,7 @@ struct BenchWaveChart: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.pressable)
-                .accessibilityLabel("Тренировка \(session.id), до \(Int(session.topWeight)) кг")
+                .accessibilityLabel(L("Тренировка \(session.id), до \(Int(session.topWeight)) кг"))
             }
         }
         .frame(height: 122, alignment: .bottom)
@@ -329,7 +329,7 @@ struct BenchSessionCard: View {
                 numberBadge
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text("Тренировка \(session.id)")
+                        Text(L("Тренировка \(session.id)"))
                             .font(.headline)
                             .foregroundStyle(.primary)
                         if let highlight = session.highlight {
@@ -345,7 +345,7 @@ struct BenchSessionCard: View {
                     Text(session.topWeightText)
                         .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                         .foregroundStyle(session.accent)
-                    Text("\(session.sets.count) подх.")
+                    Text(L("\(session.sets.count) подх."))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -380,7 +380,7 @@ struct BenchSessionCard: View {
                     HStack(spacing: 8) {
                         Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
                             .symbolEffect(.bounce, value: doneTrigger)
-                        Text(isDone ? "Жим выполнен" : "Отметить жим")
+                        Text(isDone ? L("Жим выполнен") : L("Отметить жим"))
                     }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
@@ -395,7 +395,7 @@ struct BenchSessionCard: View {
                 .padding(.top, 4)
 
                 Button(action: onSetCurrent) {
-                    Label("Начать отсюда", systemImage: "flag.checkered")
+                    Label(L("Начать отсюда"), systemImage: "flag.checkered")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(session.accentColor)
                         .padding(.vertical, 10)

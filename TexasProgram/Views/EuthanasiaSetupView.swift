@@ -37,29 +37,29 @@ struct EuthanasiaSetupView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Уровень", selection: $level) {
+                    Picker(L("Уровень"), selection: $level) {
                         ForEach(EuthanasiaLevel.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
                 } header: {
-                    Text("Уровень сложности")
+                    Text(L("Уровень сложности"))
                 } footer: {
-                    Text(level.subtitle + ". Отличается только шагом уплотнения: веса и повторы одинаковые.")
+                    Text(level.subtitle + L(". Отличается только шагом уплотнения: веса и повторы одинаковые."))
                 }
 
                 ForEach(EuthanasiaPattern.allCases) { pattern in
                     Section {
-                        Picker("Упражнение", selection: binding(chosen: pattern, fallback: pattern.options[0])) {
+                        Picker(L("Упражнение"), selection: binding(chosen: pattern, fallback: pattern.options[0])) {
                             ForEach(pattern.options, id: \.self) { Text($0).tag($0) }
                         }
-                        TextField("Тест 1ПМ, кг", text: binding(max: pattern))
+                        TextField(L("Тест 1ПМ, кг"), text: binding(max: pattern))
                             .keyboardType(.decimalPad)
-                        TextField("Тест \(pattern.totalReps) КПШ, минут", text: binding(minutes: pattern))
+                        TextField(L("Тест \(pattern.totalReps) КПШ, минут"), text: binding(minutes: pattern))
                             .keyboardType(.decimalPad)
                     } header: {
                         Text(pattern.rawValue)
                     } footer: {
-                        Text("Сначала максимум на один раз, потом — за сколько минут пройдёшь \(pattern.totalReps) повторений с 75 % от него, не подходя к отказу. Ориентир: \(pattern.testHint).")
+                        Text(L("Сначала максимум на один раз, потом — за сколько минут пройдёшь \(pattern.totalReps) повторений с 75 % от него, не подходя к отказу. Ориентир: \(pattern.testHint)."))
                     }
                 }
 
@@ -70,17 +70,17 @@ struct EuthanasiaSetupView: View {
                               let press = movement(.press) else { return }
                         onSave(EuthanasiaInput(pull: pull, squat: squat, press: press, level: level))
                     } label: {
-                        Label("Начать программу", systemImage: "play.circle.fill")
+                        Label(L("Начать программу"), systemImage: "play.circle.fill")
                     }
                     .disabled(!isReady)
                 } footer: {
-                    Text("Первая неделя цикла — тестовая: приложение поставит оба теста в план, чтобы числа можно было уточнить прямо на тренировке.")
+                    Text(L("Первая неделя цикла — тестовая: приложение поставит оба теста в план, чтобы числа можно было уточнить прямо на тренировке."))
                 }
             }
-            .navigationTitle("Эвтаназия худобы")
+            .navigationTitle(L("Эвтаназия худобы"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Назад", action: onBack) }
+                ToolbarItem(placement: .topBarLeading) { Button(L("Назад"), action: onBack) }
             }
         }
     }

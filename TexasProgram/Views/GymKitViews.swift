@@ -54,7 +54,7 @@ struct SetDotsView: View {
                 .foregroundStyle(tracker.done >= total ? Theme.success : Theme.accent)
             }
             .buttonStyle(.pressable)
-            .accessibilityLabel("Записать подход")
+            .accessibilityLabel(L("Записать подход"))
         } else {
             Text("\(tracker.done) / \(total)")
                 .font(.caption2.weight(.semibold).monospacedDigit())
@@ -104,8 +104,8 @@ struct SetDotsView: View {
                     pressing = isPressing ? index : nil
                 }
             }
-            .accessibilityLabel("Подход \(index + 1)")
-            .accessibilityHint(tracker.onHold == nil ? "" : "Удерживай, чтобы записать вес и повторы")
+            .accessibilityLabel(L("Подход \(index + 1)"))
+            .accessibilityHint(tracker.onHold == nil ? "" : L("Удерживай, чтобы записать вес и повторы"))
     }
 }
 
@@ -120,7 +120,7 @@ struct RestTimerLauncher: View {
         CardView(padding: 16, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "hourglass").font(.footnote.weight(.bold)).foregroundStyle(Theme.accent)
-                Text("Отдых между подходами").font(.subheadline.weight(.semibold))
+                Text(L("Отдых между подходами")).font(.subheadline.weight(.semibold))
             }
             HStack(spacing: 8) {
                 ForEach(RestTimer.presets, id: \.self) { preset in
@@ -149,7 +149,7 @@ struct RestTimerLauncher: View {
                 stepButton("minus") { change(-15) }
                 VStack(spacing: 1) {
                     Text(timeText).font(.title3.weight(.bold).monospacedDigit())
-                    Text("своё время").font(.caption2).foregroundStyle(.tertiary)
+                    Text(L("своё время")).font(.caption2).foregroundStyle(.tertiary)
                 }
                 .frame(maxWidth: .infinity)
                 stepButton("plus") { change(15) }
@@ -165,7 +165,7 @@ struct RestTimerLauncher: View {
                 .buttonStyle(.pressable)
             }
 
-            Text("Отмеченный подход запускает отдых сам — выбранной здесь длительности.")
+            Text(L("Отмеченный подход запускает отдых сам — выбранной здесь длительности."))
                 .font(.caption2).foregroundStyle(.tertiary)
         }
     }

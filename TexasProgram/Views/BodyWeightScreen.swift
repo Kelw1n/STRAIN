@@ -32,17 +32,17 @@ struct BodyWeightScreen: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Замеры веса")
+            .navigationTitle(L("Замеры веса"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Готово") { typing = false }
+                    Button(L("Готово")) { typing = false }
                 }
             }
         }
@@ -52,7 +52,7 @@ struct BodyWeightScreen: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("ТЕКУЩИЙ ВЕС")
+            Text(L("ТЕКУЩИЙ ВЕС"))
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Color.ink.opacity(0.45))
@@ -62,7 +62,7 @@ struct BodyWeightScreen: View {
                     .monospacedDigit()
                     .foregroundStyle(.ink)
                     .contentTransition(.numericText())
-                Text("кг")
+                Text(L("кг"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(Color.ink.opacity(0.5))
                 Spacer()
@@ -89,7 +89,7 @@ struct BodyWeightScreen: View {
 
     private func deltaChip(_ value: Double, caption: String) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text((value > 0 ? "+" : value < 0 ? "−" : "") + WeightFormat.decimal(abs(value)) + " кг")
+            Text((value > 0 ? "+" : value < 0 ? "−" : "") + WeightFormat.decimal(abs(value)) + L(" кг"))
                 .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                 .foregroundStyle(value == 0 ? Color.ink.opacity(0.7) : Theme.accent)
             Text(caption)
@@ -111,11 +111,11 @@ struct BodyWeightScreen: View {
 
     private var entryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Новый замер")
+            Text(L("Новый замер"))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.ink)
             HStack(spacing: 10) {
-                TextField("Сегодня, кг", text: $input)
+                TextField(L("Сегодня, кг"), text: $input)
                     .keyboardType(.decimalPad)
                     .focused($typing)
                     .font(.system(size: 18, weight: .bold, design: Theme.fontDesign))
@@ -135,11 +135,11 @@ struct BodyWeightScreen: View {
                             .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.pressable)
-                    .accessibilityLabel("Взять вес из «Здоровья»")
+                    .accessibilityLabel(L("Взять вес из «Здоровья»"))
                 }
 
                 Button(action: record) {
-                    Text("Записать")
+                    Text(L("Записать"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(parsed == nil ? Color.ink.opacity(0.4) : .canvas)
                         .padding(.horizontal, 18)
@@ -149,7 +149,7 @@ struct BodyWeightScreen: View {
                 .buttonStyle(.pressable)
                 .disabled(parsed == nil)
             }
-            Text("Второй замер за день заменяет первый. Лучше взвешиваться утром, натощак.")
+            Text(L("Второй замер за день заменяет первый. Лучше взвешиваться утром, натощак."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
@@ -163,13 +163,13 @@ struct BodyWeightScreen: View {
     private var chartCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Динамика")
+                Text(L("Динамика"))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.ink)
                 Spacer()
                 if let first = series.first, let last = series.last {
                     let total = last.weight - first.weight
-                    Text((total > 0 ? "+" : total < 0 ? "−" : "") + WeightFormat.decimal(abs(total)) + " кг с первого замера")
+                    Text((total > 0 ? "+" : total < 0 ? "−" : "") + WeightFormat.decimal(abs(total)) + L(" кг с первого замера"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.5))
                 }
@@ -218,7 +218,7 @@ struct BodyWeightScreen: View {
 
     private var ratioCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Сила к своему весу")
+            Text(L("Сила к своему весу"))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.ink)
             HStack(spacing: 10) {
@@ -226,7 +226,7 @@ struct BodyWeightScreen: View {
                 ratio("Жим", profile.bench5RM)
                 ratio("Тяга", profile.deadlift5RM)
             }
-            Text("Отношение \(profile.maximumLabel) к весу тела. Держится при похудении — значит, сила осталась, а лишнее ушло.")
+            Text(L("Отношение \(profile.maximumLabel) к весу тела. Держится при похудении — значит, сила осталась, а лишнее ушло."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
@@ -255,7 +255,7 @@ struct BodyWeightScreen: View {
     private var historyCard: some View {
         let items = Array(series.reversed())
         return VStack(alignment: .leading, spacing: 4) {
-            Text("Все замеры")
+            Text(L("Все замеры"))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.ink)
                 .padding(.bottom, 6)
@@ -268,7 +268,7 @@ struct BodyWeightScreen: View {
                             .foregroundStyle(.ink)
                         if let previous {
                             let diff = entry.weight - previous.weight
-                            Text(diff == 0 ? "без изменений" : (diff > 0 ? "+" : "−") + WeightFormat.decimal(abs(diff)) + " кг")
+                            Text(diff == 0 ? L("без изменений") : (diff > 0 ? "+" : "−") + WeightFormat.decimal(abs(diff)) + L(" кг"))
                                 .font(.system(size: 12))
                                 .foregroundStyle(Color.ink.opacity(0.45))
                         }
@@ -282,7 +282,7 @@ struct BodyWeightScreen: View {
                         Button(role: .destructive) {
                             withAnimation(Motion.snappy) { profile.removeBodyWeight(entry) }
                         } label: {
-                            Label("Удалить замер", systemImage: "trash")
+                            Label(L("Удалить замер"), systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis")

@@ -19,7 +19,7 @@ struct StrainHomeWidget: Widget {
             StrainWidgetView(snapshot: entry.snapshot, date: entry.date)
         }
         .configurationDisplayName("STRAIN")
-        .description("Следующая тренировка и номер жима.")
+        .description(WidgetText.t("Следующая тренировка и номер жима."))
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -82,7 +82,7 @@ private struct StrainWidgetView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 if let session = snapshot.benchSession {
-                    Text("Жим №\(session)")
+                    Text(WidgetText.bench(session))
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(HomePalette.record)
                 }
@@ -113,11 +113,11 @@ private struct StrainWidgetView: View {
             if let snapshot {
                 VStack(alignment: .trailing, spacing: 6) {
                     if let session = snapshot.benchSession {
-                        Text("Жим №\(session)")
+                        Text(WidgetText.bench(session))
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(HomePalette.record)
                         if let top = snapshot.benchTopWeight {
-                            Text("до \(top) кг")
+                            Text(WidgetText.upTo(top))
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
@@ -150,7 +150,7 @@ private struct StrainWidgetView: View {
             Text("STRAIN")
                 .font(.system(size: 14, weight: .black))
                 .tracking(1.2)
-            Text("Открой приложение, чтобы виджет наполнился")
+            Text(WidgetText.t("Открой приложение, чтобы виджет наполнился"))
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
         }
@@ -188,7 +188,7 @@ private struct StrainWidgetView: View {
                     .lineLimit(1)
             } else {
                 Text("STRAIN").font(.system(size: 13, weight: .bold))
-                Text("Открой приложение").font(.system(size: 11))
+                Text(WidgetText.t("Открой приложение")).font(.system(size: 11))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

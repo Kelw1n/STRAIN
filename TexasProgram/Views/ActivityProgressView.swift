@@ -53,7 +53,7 @@ struct ActivityProgressView: View {
             }
             .scrollIndicators(.hidden)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Активность")
+            .navigationTitle(L("Активность"))
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -195,11 +195,11 @@ struct ActivityProgressView: View {
         let recent = Array(zip(records, tonnages).suffix(8))
         return VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Время, объём и тренировки")
+                Text(L("Время, объём и тренировки"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.ink)
                 Text(records.isEmpty
-                     ? (profile.completionLog.isEmpty ? "Появятся после первой тренировки" : "За этот период тренировок нет")
+                     ? (profile.completionLog.isEmpty ? L("Появятся после первой тренировки") : L("За этот период тренировок нет"))
                      : "\(selectedPeriod == "Всё время" ? "За всё время" : "За \(selectedPeriod)")")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.ink.opacity(0.45))
@@ -255,7 +255,7 @@ struct ActivityProgressView: View {
                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                 onStartWorkout()
             } label: {
-                Text("НАЧАТЬ ТРЕНИРОВКУ")
+                Text(L("НАЧАТЬ ТРЕНИРОВКУ"))
                     .font(.system(size: 15, weight: .black, design: Theme.fontDesign))
                     .tracking(1.0)
                     .foregroundStyle(.canvas)
@@ -300,7 +300,7 @@ struct ActivityProgressView: View {
         } label: {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Замеры веса")
+                    Text(L("Замеры веса"))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.ink)
                     Spacer()
@@ -343,14 +343,14 @@ struct ActivityProgressView: View {
                         Text(WeightFormat.kilogramsPrecise(weight))
                             .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(.ink)
-                        Text("Текущий вес")
+                        Text(L("Текущий вес"))
                             .font(.system(size: 11))
                             .foregroundStyle(Color.ink.opacity(0.45))
                     } else {
-                        Text("— кг")
+                        Text(L("— кг"))
                             .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(.ink)
-                        Text("Нужен первый замер")
+                        Text(L("Нужен первый замер"))
                             .font(.system(size: 11))
                             .foregroundStyle(Color.ink.opacity(0.45))
                     }
@@ -372,7 +372,7 @@ struct ActivityProgressView: View {
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Группы мышц")
+                    Text(L("Группы мышц"))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.ink)
                     Spacer()
@@ -395,7 +395,7 @@ struct ActivityProgressView: View {
                 .frame(height: 56)
                 .padding(.vertical, 4)
 
-                Text("Баланс нагрузки")
+                Text(L("Баланс нагрузки"))
                     .font(.system(size: 11))
                     .foregroundStyle(Color.ink.opacity(0.45))
             }
@@ -411,7 +411,7 @@ struct ActivityProgressView: View {
     private var strengthRecordsCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Сила")
+                Text(L("Сила"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.ink)
                 Spacer()
@@ -419,7 +419,7 @@ struct ActivityProgressView: View {
                     Image(systemName: "medal.fill")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.yellow)
-                    Text("Рекорды")
+                    Text(L("Рекорды"))
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Color.ink.opacity(0.85))
                 }
@@ -452,7 +452,7 @@ struct ActivityProgressView: View {
                 Text(name)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.ink)
-                Text(best == nil ? "максимум из настроек" : "лучший подход")
+                Text(best == nil ? L("максимум из настроек") : L("лучший подход"))
                     .font(.system(size: 11))
                     .foregroundStyle(Color.ink.opacity(0.4))
             }
@@ -482,7 +482,7 @@ struct MuscleGroupsDetailSheet: View {
                     // Большая радарная диаграмма
                     CardView(padding: 20) {
                         VStack(spacing: 16) {
-                            Text("Баланс распределения нагрузки")
+                            Text(L("Баланс распределения нагрузки"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(.ink)
 
@@ -534,7 +534,7 @@ struct MuscleGroupsDetailSheet: View {
                                         Text("\(group.percentage)%")
                                             .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                                             .foregroundStyle(Theme.accent)
-                                        Text("\(group.sets) подх.")
+                                        Text(L("\(group.sets) подх."))
                                             .font(.system(size: 11))
                                             .foregroundStyle(Color.ink.opacity(0.45))
                                     }
@@ -563,11 +563,11 @@ struct MuscleGroupsDetailSheet: View {
                 .padding(.top, 12)
             }
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Группы мышц")
+            .navigationTitle(L("Группы мышц"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(Theme.accent)
                 }

@@ -56,13 +56,14 @@ enum WeightFormat {
     }
 
     static func kilograms(_ value: Double) -> String {
-        short(value) + " кг"
+        short(value) + (L10n.isEnglish ? " kg" : " кг")
     }
 
     /// Тоннаж: до тонны — в килограммах, дальше — в тоннах с одним знаком.
     static func tonnage(_ value: Double) -> String {
-        if value < 1000 { return String(Int(value.rounded())) + " кг" }
-        return String(format: "%.1f", value / 1000).replacingOccurrences(of: ".", with: ",") + " т"
+        if value < 1000 { return String(Int(value.rounded())) + (L10n.isEnglish ? " kg" : " кг") }
+        let tons = String(format: "%.1f", value / 1000)
+        return L10n.isEnglish ? tons + " t" : tons.replacingOccurrences(of: ".", with: ",") + " т"
     }
 
     /// Число без единиц — для полей ввода, куда «кг» подставлять нельзя.
@@ -76,12 +77,14 @@ enum WeightFormat {
         let hundredths = (value * 100).rounded()
         if hundredths.truncatingRemainder(dividingBy: 100) == 0 { return String(Int(hundredths / 100)) }
         let format = hundredths.truncatingRemainder(dividingBy: 10) == 0 ? "%.1f" : "%.2f"
-        return String(format: format, hundredths / 100).replacingOccurrences(of: ".", with: ",")
+        let text = String(format: format, hundredths / 100)
+        // В английском дробная часть через точку: 52.5, а не 52,5.
+        return L10n.isEnglish ? text : text.replacingOccurrences(of: ".", with: ",")
     }
 
     /// Веса основных программ идут с шагом 2,5 кг, поэтому дробная часть — только «,5».
     static func kilogramsPrecise(_ value: Double) -> String {
-        decimal(value) + " кг"
+        decimal(value) + (L10n.isEnglish ? " kg" : " кг")
     }
 }
 

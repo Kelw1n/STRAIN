@@ -98,7 +98,7 @@ private struct RestBadge: View {
     var body: some View {
         HStack(spacing: 6) {
             RestRing(done: done, size: 15)
-            Text(done ? "ГОТОВО" : "ОТДЫХ")
+            Text(WidgetText.t(done ? "ГОТОВО" : "ОТДЫХ"))
                 .font(.system(size: 13, weight: .heavy))
                 .tracking(0.6)
                 .foregroundStyle(done ? WidgetPalette.done : WidgetPalette.accent)
@@ -115,7 +115,7 @@ private struct ElapsedText: View {
     var body: some View {
         Group {
             if done {
-                Text("к подходу")
+                Text(WidgetText.t("к подходу"))
                     .foregroundStyle(WidgetPalette.done)
             } else {
                 Text(timerInterval: state.range, countsDown: false, showsHours: false)
@@ -155,7 +155,7 @@ private struct ExerciseLine: View {
             .clipShape(RoundedRectangle(cornerRadius: thumb * 0.24, style: .continuous))
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(state.exerciseName.isEmpty ? "Отдых между подходами" : state.exerciseName)
+                Text(state.exerciseName.isEmpty ? WidgetText.t("Отдых между подходами") : state.exerciseName)
                     .font(.system(size: title, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -231,7 +231,7 @@ private struct ControlsLine: View {
             Spacer(minLength: 4)
 
             Link(destination: URL(string: "strain://timer/stop")!) {
-                Text("Пропустить")
+                Text(WidgetText.t("Пропустить"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)

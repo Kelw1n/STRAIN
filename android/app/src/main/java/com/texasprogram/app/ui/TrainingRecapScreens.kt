@@ -51,7 +51,6 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -521,7 +520,7 @@ object TrainingRecapCard {
         val inner = WIDTH - pad * 2
         var y = pad + u(18f)
         canvas.drawText("STRAIN", pad, y, paint(18f, white(1f), black).apply { letterSpacing = 0.12f })
-        val label = if (recap.period.isYear) "ИТОГИ ГОДА" else "ИТОГИ МЕСЯЦА"
+        val label = L(if (recap.period.isYear) "ИТОГИ ГОДА" else "ИТОГИ МЕСЯЦА")
         val labelPaint = paint(11f, white(0.75f), bold).apply { letterSpacing = 0.1f }
         canvas.drawText(label, WIDTH - pad - labelPaint.measureText(label), y, labelPaint)
         y += u(52f)
@@ -535,7 +534,8 @@ object TrainingRecapCard {
         val tiles = listOf(
             "${recap.workouts}" to RuPlural.word(recap.workouts, "тренировка", "тренировки", "тренировок"),
             "${recap.hours} ч ${recap.minutes} м" to "в зале",
-            String.format(java.util.Locale.US, "%.1f т", recap.volumeKg / 1000).replace('.', ',') to "поднято",
+            String.format(java.util.Locale.US, "%.1f", recap.volumeKg / 1000)
+                .let { if (L10n.isEnglish) "$it t" else it.replace('.', ',') + " т" } to "поднято",
             // Без рекордов ноль не показываем — показываем, сколько подходов сделано.
             if (recap.records > 0) "${recap.records}" to RuPlural.word(recap.records, "рекорд", "рекорда", "рекордов")
             else "${recap.sets}" to RuPlural.word(recap.sets, "подход", "подхода", "подходов")
@@ -546,12 +546,12 @@ object TrainingRecapCard {
             val top = y + (index / 2) * (tileHeight + gap)
             canvas.drawRoundRect(RectF(left, top, left + tileWidth, top + tileHeight), u(16f), u(16f), tilePaint)
             canvas.drawText(fit(value, paint(26f, white(1f), black), tileWidth - u(28f)), left + u(14f), top + u(38f), paint(26f, white(1f), black))
-            canvas.drawText(title, left + u(14f), top + u(60f), paint(13f, white(0.75f), medium))
+            canvas.drawText(L(title), left + u(14f), top + u(60f), paint(13f, white(0.75f), medium))
         }
         y += tileHeight * 2 + gap + u(40f)
 
         fun row(title: String, value: String) {
-            canvas.drawText(title.uppercase(), pad, y, paint(11f, white(0.7f), bold).apply { letterSpacing = 0.1f })
+            canvas.drawText(L(title).uppercase(), pad, y, paint(11f, white(0.7f), bold).apply { letterSpacing = 0.1f })
             y += u(24f)
             canvas.drawText(fit(value, paint(18f, white(1f), bold), inner), pad, y, paint(18f, white(1f), bold))
             y += u(34f)
@@ -565,6 +565,7 @@ object TrainingRecapCard {
     }
 
     /// Длинная строка обрезается многоточием по ширине.
+    /// Перевод и многоточие, если не влезает в ширину.
     private fun fit(text: String, paint: TextPaint, width: Float): String =
-        TextUtils.ellipsize(text, paint, width, TextUtils.TruncateAt.END).toString()
+        TextUtils.ellipsize(L(text), paint, width, TextUtils.TruncateAt.END).toString()
 }

@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -92,7 +91,7 @@ fun NotesListScreen(
                             .pressable { onUpdate(profile.setNote("", week, day)) }
                     )
                 }
-                Text(text, color = Theme.textPrimary, fontSize = 13.sp)
+                RawText(text, color = Theme.textPrimary, fontSize = 13.sp)
             }
         }
     }

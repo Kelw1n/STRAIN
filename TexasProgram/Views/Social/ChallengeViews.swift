@@ -62,7 +62,7 @@ struct ChallengesSection: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     creating = true
                 } label: {
-                    Label("Новый", systemImage: "plus")
+                    Label(L("Новый"), systemImage: "plus")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(Theme.accent)
                 }
@@ -88,7 +88,7 @@ struct ChallengesSection: View {
                 ChallengeCard(challenge: challenge) { opened = challenge }
             }
             if finished.count > 2 && !showAllFinished {
-                Button("Все законченные · \(finished.count)") { withAnimation(Motion.snappy) { showAllFinished = true } }
+                Button(L("Все законченные · \(finished.count)")) { withAnimation(Motion.snappy) { showAllFinished = true } }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.accent)
             }
@@ -107,10 +107,10 @@ struct ChallengesSection: View {
                     .frame(width: 46, height: 46)
                     .background(Theme.accent.opacity(0.15), in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Позови друзей помериться")
+                    Text(L("Позови друзей помериться"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.ink)
-                    Text("Тренировки, тоннаж, недели без пропусков или рост силы — от недели до месяца.")
+                    Text(L("Тренировки, тоннаж, недели без пропусков или рост силы — от недели до месяца."))
                         .font(.system(size: 13))
                         .foregroundStyle(Color.ink.opacity(0.5))
                         .fixedSize(horizontal: false, vertical: true)
@@ -182,7 +182,7 @@ struct ChallengeCard: View {
                             Text("\(place)")
                                 .font(.system(size: 24, weight: .black, design: Theme.fontDesign).monospacedDigit())
                                 .foregroundStyle(ChallengePlace.color(place))
-                            Text("место")
+                            Text(L("место"))
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(Color.ink.opacity(0.45))
                         }
@@ -197,7 +197,7 @@ struct ChallengeCard: View {
                                 .foregroundStyle(ChallengePlace.color(member.place))
                                 .frame(width: 18)
                             AvatarView(imageId: member.user.avatar, username: member.user.username, size: 22)
-                            Text(member.user.isMe ? "Ты" : "@\(member.user.username)")
+                            Text(member.user.isMe ? L("Ты") : "@\(member.user.username)")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(member.user.isMe ? Theme.accent : .ink)
                                 .lineLimit(1)
@@ -228,11 +228,11 @@ struct ChallengeInviteCard: View {
             HStack(spacing: 12) {
                 KindIcon(kind: challenge.kind)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("@\(challenge.owner?.username ?? "друг") зовёт в челлендж")
+                    Text(L("@\(challenge.owner?.username ?? "друг") зовёт в челлендж"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.6))
                         .lineLimit(1)
-                    Text("\(challenge.title) · \(challenge.weeks) нед.")
+                    Text(L("\(challenge.title) · \(challenge.weeks) нед."))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.ink)
                 }
@@ -246,7 +246,7 @@ struct ChallengeInviteCard: View {
             }
             HStack(spacing: 10) {
                 Button { Task { await answer("decline") } } label: {
-                    Text("Отказаться")
+                    Text(L("Отказаться"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.ink)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -254,7 +254,7 @@ struct ChallengeInviteCard: View {
                 }
                 .buttonStyle(.pressable)
                 Button { Task { await answer("join") } } label: {
-                    Text("Принять")
+                    Text(L("Принять"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.canvas)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -311,7 +311,7 @@ struct ChallengeDetailSheet: View {
                         }
                         table(challenge)
                         if !challenge.invited.isEmpty {
-                            Text("Ждём ответа: " + challenge.invited.map { "@\($0.user.username)" }.joined(separator: ", "))
+                            Text(L("Ждём ответа: ") + challenge.invited.map { "@\($0.user.username)" }.joined(separator: ", "))
                                 .font(.system(size: 13))
                                 .foregroundStyle(Color.ink.opacity(0.5))
                         }
@@ -323,7 +323,7 @@ struct ChallengeDetailSheet: View {
                             Text(error).font(.system(size: 13)).foregroundStyle(Theme.record)
                         }
                         if !challenge.isFinished && challenge.myStatus == "joined" {
-                            Button("Выйти из челленджа", role: .destructive) { confirmLeave = true }
+                            Button(L("Выйти из челленджа"), role: .destructive) { confirmLeave = true }
                                 .font(.system(size: 15, weight: .semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 8)
@@ -333,27 +333,27 @@ struct ChallengeDetailSheet: View {
                     .padding(.top, 8)
                     .padding(.bottom, 32)
                 } else {
-                    Text("Челлендж больше не доступен")
+                    Text(L("Челлендж больше не доступен"))
                         .foregroundStyle(Color.ink.opacity(0.5))
                         .padding(40)
                 }
             }
             .scrollIndicators(.hidden)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Челлендж")
+            .navigationTitle(L("Челлендж"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }
             }
             .refreshable { await ChallengeStore.shared.syncAgain() }
-            .confirmationDialog("Выйти из челленджа?", isPresented: $confirmLeave, titleVisibility: .visible) {
-                Button("Выйти", role: .destructive) { Task { await leave() } }
+            .confirmationDialog(L("Выйти из челленджа?"), isPresented: $confirmLeave, titleVisibility: .visible) {
+                Button(L("Выйти"), role: .destructive) { Task { await leave() } }
             } message: {
-                Text("Счёт пропадёт из таблицы, вернуться не получится.")
+                Text(L("Счёт пропадёт из таблицы, вернуться не получится."))
             }
             .sheet(item: $shareImage) { ShareSheet(items: [$0.image]) }
         }
@@ -367,7 +367,7 @@ struct ChallengeDetailSheet: View {
                     Text(challenge.title)
                         .font(.system(size: 22, weight: .heavy, design: Theme.fontDesign))
                         .foregroundStyle(.ink)
-                    Text("\(challenge.weeks) нед. · \(RuDate.shortDayMonth(challenge.start)) – \(RuDate.shortDayMonth(challenge.end.addingTimeInterval(-1)))")
+                    Text(L("\(challenge.weeks) нед. · \(RuDate.shortDayMonth(challenge.start)) – \(RuDate.shortDayMonth(challenge.end.addingTimeInterval(-1)))"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.5))
                 }
@@ -391,14 +391,14 @@ struct ChallengeDetailSheet: View {
             Image(systemName: place <= 3 ? "trophy.fill" : "flag.checkered")
                 .font(.system(size: 34, weight: .bold))
                 .foregroundStyle(ChallengePlace.color(place))
-            Text(place == 1 ? "Победа!" : ChallengePlace.ordinal(place))
+            Text(place == 1 ? L("Победа!") : ChallengePlace.ordinal(place))
                 .font(.system(size: 26, weight: .black, design: Theme.fontDesign))
                 .foregroundStyle(.ink)
-            Text("из \(challenge.joined.count) · \(mine.detail)")
+            Text(L("из \(challenge.joined.count) · \(mine.detail)"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.ink.opacity(0.6))
             if xp > 0 {
-                Text(challenge.isFinal() ? "+\(xp) опыта" : "+\(xp) опыта — когда места станут окончательными")
+                Text(challenge.isFinal() ? L("+\(xp) опыта") : L("+\(xp) опыта — когда места станут окончательными"))
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.accent)
                     .multilineTextAlignment(.center)
@@ -406,7 +406,7 @@ struct ChallengeDetailSheet: View {
             Button {
                 if let image = ChallengeShareCard.render(challenge) { shareImage = ShareImage(image: image) }
             } label: {
-                Label("Поделиться", systemImage: "square.and.arrow.up")
+                Label(L("Поделиться"), systemImage: "square.and.arrow.up")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.ink)
                     .frame(maxWidth: .infinity, minHeight: 46)
@@ -429,7 +429,7 @@ struct ChallengeDetailSheet: View {
                         .frame(width: 26)
                     AvatarView(imageId: member.user.avatar, username: member.user.username, size: 38)
                     HStack(spacing: 6) {
-                        Text(member.user.isMe ? "Ты" : "@\(member.user.username)")
+                        Text(member.user.isMe ? L("Ты") : "@\(member.user.username)")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.ink)
                             .lineLimit(1)
@@ -490,8 +490,8 @@ struct NewChallengeSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     caption("Сколько")
-                    Picker("Недели", selection: $weeks) {
-                        ForEach(1...4, id: \.self) { Text("\($0) нед.").tag($0) }
+                    Picker(L("Недели"), selection: $weeks) {
+                        ForEach(1...4, id: \.self) { Text(L("\($0) нед.")).tag($0) }
                     }
                     .pickerStyle(.segmented)
 
@@ -509,11 +509,11 @@ struct NewChallengeSheet: View {
             .scrollIndicators(.hidden)
             .background(Color.canvas.ignoresSafeArea())
             .safeAreaInset(edge: .bottom) { startButton }
-            .navigationTitle("Новый челлендж")
+            .navigationTitle(L("Новый челлендж"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") { dismiss() }.foregroundStyle(.ink)
+                    Button(L("Отмена")) { dismiss() }.foregroundStyle(.ink)
                 }
             }
             .task { await loadFriends() }
@@ -556,7 +556,7 @@ struct NewChallengeSheet: View {
         if loading {
             ProgressView().tint(.ink).frame(maxWidth: .infinity).padding(16)
         } else if friends.isEmpty {
-            Text("Подпишись на друзей во вкладке «Люди» — звать можно тех, на кого подписан.")
+            Text(L("Подпишись на друзей во вкладке «Люди» — звать можно тех, на кого подписан."))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.5))
         } else {
@@ -591,7 +591,7 @@ struct NewChallengeSheet: View {
 
     private var startButton: some View {
         Button { Task { await start() } } label: {
-            Text(picked.isEmpty ? "Выбери друзей" : "Позвать \(picked.count) и начать")
+            Text(picked.isEmpty ? L("Выбери друзей") : L("Позвать \(picked.count) и начать"))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(.canvas)
                 .frame(maxWidth: .infinity, minHeight: 54)
@@ -643,7 +643,7 @@ struct WeekWinnersSheet: View {
                     } else if loading {
                         ProgressView().tint(.ink).frame(maxWidth: .infinity).padding(20)
                     } else if winners.isEmpty {
-                        Text("Пока никто не выигрывал неделю. Победитель — у кого больше тренировок, при равенстве — больше тоннаж.")
+                        Text(L("Пока никто не выигрывал неделю. Победитель — у кого больше тренировок, при равенстве — больше тоннаж."))
                             .font(.system(size: 14))
                             .foregroundStyle(Color.ink.opacity(0.5))
                     } else {
@@ -656,7 +656,7 @@ struct WeekWinnersSheet: View {
                                         .foregroundStyle(ChallengePlace.color(1))
                                     AvatarView(imageId: winner.user.avatar, username: winner.user.username, size: 34)
                                     VStack(alignment: .leading, spacing: 1) {
-                                        Text(winner.user.isMe ? "Ты" : "@\(winner.user.username)")
+                                        Text(winner.user.isMe ? L("Ты") : "@\(winner.user.username)")
                                             .font(.system(size: 15, weight: .bold))
                                             .foregroundStyle(.ink)
                                         Text(Self.weekTitle(winner.week))
@@ -664,7 +664,7 @@ struct WeekWinnersSheet: View {
                                             .foregroundStyle(Color.ink.opacity(0.45))
                                     }
                                     Spacer()
-                                    Text("\(winner.workouts) трен.")
+                                    Text(L("\(winner.workouts) трен."))
                                         .font(.system(size: 14, weight: .heavy).monospacedDigit())
                                         .foregroundStyle(.ink)
                                 }
@@ -680,11 +680,11 @@ struct WeekWinnersSheet: View {
                 .padding(.bottom, 32)
             }
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Победители недель")
+            .navigationTitle(L("Победители недель"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }
@@ -730,7 +730,7 @@ struct WeekWinnersSheet: View {
         var body: some View {
             VStack(spacing: 6) {
                 AvatarView(imageId: user.avatar, username: user.username, size: 44)
-                Text(user.isMe ? "Ты" : "@\(user.username)")
+                Text(user.isMe ? L("Ты") : "@\(user.username)")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
@@ -785,7 +785,7 @@ struct ChallengeShareCard: View {
                     .font(.system(size: 18, weight: .black, design: Theme.fontDesign))
                     .tracking(2)
                 Spacer()
-                Text("ЧЕЛЛЕНДЖ")
+                Text(L("ЧЕЛЛЕНДЖ"))
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.4)
                     .foregroundStyle(Color.ink.opacity(0.8))
@@ -799,11 +799,11 @@ struct ChallengeShareCard: View {
                 Text(challenge.title)
                     .font(.system(size: 20, weight: .heavy))
                     .foregroundStyle(Color.ink.opacity(0.8))
-                Text(place == 1 ? "Победа" : ChallengePlace.ordinal(place))
+                Text(place == 1 ? L("Победа") : ChallengePlace.ordinal(place))
                     .font(.system(size: 48, weight: .black, design: Theme.fontDesign))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                Text("из \(challenge.joined.count) · \(challenge.weeks) нед. · \(challenge.me?.detail ?? "")")
+                Text(L("из \(challenge.joined.count) · \(challenge.weeks) нед. · \(challenge.me?.detail ?? "")"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.75))
                     .lineLimit(1)

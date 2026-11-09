@@ -108,13 +108,13 @@ class SupplementReminderReceiver : BroadcastReceiver() {
         if (due.isEmpty()) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         manager.createNotificationChannel(
-            NotificationChannel(SupplementReminders.CHANNEL, "Напоминание о добавках", NotificationManager.IMPORTANCE_DEFAULT)
+            NotificationChannel(SupplementReminders.CHANNEL, L("Напоминание о добавках"), NotificationManager.IMPORTANCE_DEFAULT)
         )
         val notification = NotificationCompat.Builder(context, SupplementReminders.CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_rest)
-            .setContentTitle("Добавки")
-            .setContentText(SupplementReminders.body(due))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(SupplementReminders.body(due)))
+            .setContentTitle(L("Добавки"))
+            .setContentText(L(SupplementReminders.body(due)))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(L(SupplementReminders.body(due))))
             .setAutoCancel(true)
             .setContentIntent(
                 PendingIntent.getActivity(

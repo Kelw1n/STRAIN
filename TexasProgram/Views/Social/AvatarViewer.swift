@@ -66,7 +66,7 @@ struct AvatarViewer: View {
         .clipped()
         .contentShape(Rectangle())
         .accessibilityElement()
-        .accessibilityLabel("Аватарка @\(username)")
+        .accessibilityLabel(L("Аватарка @\(username)"))
         .accessibilityAddTraits(.isImage)
     }
 
@@ -84,7 +84,7 @@ struct AvatarViewer: View {
                     .frame(width: 40, height: 40)
                     .chatGlass(Circle(), interactive: true)
             }
-            .accessibilityLabel("Закрыть")
+            .accessibilityLabel(L("Закрыть"))
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)

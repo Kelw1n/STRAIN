@@ -80,11 +80,11 @@ struct ExerciseLibraryView: View {
                 }
             }
             .animation(Motion.snappy, value: picked.isEmpty)
-            .navigationTitle("Упражнения")
+            .navigationTitle(L("Упражнения"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(isPicking ? "Отмена" : "Готово") { dismiss() }
+                    Button(isPicking ? L("Отмена") : L("Готово")) { dismiss() }
                         .foregroundStyle(Color.ink.opacity(0.7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -93,7 +93,7 @@ struct ExerciseLibraryView: View {
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.ink)
                     }
-                    .accessibilityLabel("Создать упражнение")
+                    .accessibilityLabel(L("Создать упражнение"))
                 }
             }
         }
@@ -113,7 +113,7 @@ struct ExerciseLibraryView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.ink.opacity(0.45))
-            TextField("Поиск упражнения", text: $query)
+            TextField(L("Поиск упражнения"), text: $query)
                 .focused($searching)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.ink)
@@ -122,7 +122,7 @@ struct ExerciseLibraryView: View {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Color.ink.opacity(0.35))
                 }
-                .accessibilityLabel("Очистить")
+                .accessibilityLabel(L("Очистить"))
             }
         }
         .padding(.horizontal, 14)
@@ -142,7 +142,7 @@ struct ExerciseLibraryView: View {
             Button {
                 set(nil)
             } label: {
-                if value == nil { Label("Все", systemImage: "checkmark") } else { Text("Все") }
+                if value == nil { Label(L("Все"), systemImage: "checkmark") } else { Text(L("Все")) }
             }
             ForEach(options) { option in
                 Button {
@@ -175,10 +175,10 @@ struct ExerciseLibraryView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(Color.ink.opacity(0.3))
-            Text("Ничего не нашлось")
+            Text(L("Ничего не нашлось"))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.ink)
-            Button("Создать «\(query.isEmpty ? "своё" : query)»") { creating = true }
+            Button(L("Создать «\(query.isEmpty ? "своё" : query)»")) { creating = true }
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.accent)
         }
@@ -207,7 +207,7 @@ struct ExerciseLibraryView: View {
                             .foregroundStyle(.ink)
                             .multilineTextAlignment(.leading)
                             .lineLimit(2)
-                        Text(ExerciseLibrary.groupTitle(item.group) + (item.isCustom ? " · своё" : ""))
+                        Text(ExerciseLibrary.groupTitle(item.group) + (item.isCustom ? L(" · своё") : ""))
                             .font(.system(size: 12))
                             .foregroundStyle(Color.ink.opacity(0.45))
                     }
@@ -240,7 +240,7 @@ struct ExerciseLibraryView: View {
                         .foregroundStyle(Color.ink.opacity(0.5))
                         .frame(width: 32, height: 44)
                 }
-                .accessibilityLabel("Техника: \(item.name)")
+                .accessibilityLabel(L("Техника: \(item.name)"))
             }
         }
         .contextMenu {
@@ -249,7 +249,7 @@ struct ExerciseLibraryView: View {
                     profile.deleteCustomExercise(item.id)
                     picked.removeAll { $0.id == item.id }
                 } label: {
-                    Label("Удалить своё упражнение", systemImage: "trash")
+                    Label(L("Удалить своё упражнение"), systemImage: "trash")
                 }
             }
         }
@@ -273,8 +273,8 @@ struct ExerciseDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Picker("", selection: $tab) {
-                        Text("Техника").tag(0)
-                        Text("Прогресс").tag(1)
+                        Text(L("Техника")).tag(0)
+                        Text(L("Прогресс")).tag(1)
                     }
                     .pickerStyle(.segmented)
 
@@ -296,7 +296,7 @@ struct ExerciseDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }.fontWeight(.bold)
+                    Button(L("Готово")) { dismiss() }.fontWeight(.bold)
                 }
             }
         }
@@ -333,7 +333,7 @@ struct ExerciseDetailView: View {
                     }
                 }
             } else if exercise.isCustom {
-                Text("Своё упражнение — техники здесь нет.")
+                Text(L("Своё упражнение — техники здесь нет."))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.5))
             }
@@ -344,7 +344,7 @@ struct ExerciseDetailView: View {
         let points = profile.history(forExerciseNamed: exercise.name)
         return VStack(alignment: .leading, spacing: 14) {
             if points.isEmpty {
-                Text("Ещё не делал. Сделаешь в тренировке — здесь появятся лучший вес и история.")
+                Text(L("Ещё не делал. Сделаешь в тренировке — здесь появятся лучший вес и история."))
                     .font(.system(size: 15))
                     .foregroundStyle(Color.ink.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
@@ -358,7 +358,7 @@ struct ExerciseDetailView: View {
                     ExerciseHistoryView(profile: profile, name: exercise.name)
                 } label: {
                     HStack {
-                        Text("Вся история")
+                        Text(L("Вся история"))
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.ink)
                         Spacer()
@@ -447,28 +447,28 @@ struct CustomExerciseSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Название") {
-                    TextField("Например, жим Ларсена", text: $name)
+                Section(L("Название")) {
+                    TextField(L("Например, жим Ларсена"), text: $name)
                 }
-                Section("Мышцы") {
-                    Picker("Группа", selection: $group) {
+                Section(L("Мышцы")) {
+                    Picker(L("Группа"), selection: $group) {
                         ForEach(ExerciseLibrary.groups) { Text($0.title).tag($0.id) }
                     }
                 }
-                Section("Инвентарь") {
-                    Picker("Инвентарь", selection: $equipment) {
+                Section(L("Инвентарь")) {
+                    Picker(L("Инвентарь"), selection: $equipment) {
                         ForEach(ExerciseLibrary.equipment) { Text($0.title).tag($0.id) }
                     }
                 }
             }
             .scrollContentBackground(.hidden)
             .screenBackground()
-            .navigationTitle("Создать упражнение")
+            .navigationTitle(L("Создать упражнение"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Отмена") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) { Button(L("Отмена")) { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Сохранить") {
+                    Button(L("Сохранить")) {
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                         onSave(.custom(name: trimmed, group: group, equipment: equipment))
                         dismiss()

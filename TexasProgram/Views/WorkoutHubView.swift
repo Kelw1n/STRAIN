@@ -102,9 +102,9 @@ struct WorkoutHubView: View {
                                     Circle()
                                         .fill(Color.green)
                                         .frame(width: 8, height: 8)
-                                    Text("ПРОДОЛЖИТЬ ТРЕНИРОВКУ")
+                                    Text(L("ПРОДОЛЖИТЬ ТРЕНИРОВКУ"))
                                 } else {
-                                    Text("НАЧАТЬ ТРЕНИРОВКУ")
+                                    Text(L("НАЧАТЬ ТРЕНИРОВКУ"))
                                 }
                             }
                             .font(.system(size: 16, weight: .black, design: Theme.fontDesign))
@@ -123,7 +123,7 @@ struct WorkoutHubView: View {
                     }
                 }
             }
-            .navigationTitle("Тренировка")
+            .navigationTitle(L("Тренировка"))
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 // Прежний экран «Сегодня» с точками подходов: «Главное» теперь лента.
@@ -135,7 +135,7 @@ struct WorkoutHubView: View {
                             .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(.ink)
                     }
-                    .accessibilityLabel("План на сегодня")
+                    .accessibilityLabel(L("План на сегодня"))
                 }
             }
             .sheet(isPresented: $showingGoalSheet) {
@@ -193,11 +193,11 @@ struct WorkoutHubView: View {
         let streak = (current: profile.calendarStreak().weeks, best: 0)
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Серия активностей")
+                Text(L("Серия активностей"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.ink)
                 Spacer()
-                Text("Этот месяц")
+                Text(L("Этот месяц"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.ink.opacity(0.45))
                 Image(systemName: "chevron.right")
@@ -226,7 +226,7 @@ struct WorkoutHubView: View {
                 monthDotsMatrix
             }
 
-            Text(streak.current > 0 ? "Серия активна! Продолжай в том же духе." : "Запиши тренировку, чтобы начать серию")
+            Text(streak.current > 0 ? L("Серия активна! Продолжай в том же духе.") : L("Запиши тренировку, чтобы начать серию"))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.45))
         }
@@ -262,7 +262,7 @@ struct WorkoutHubView: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Тренировок в этом месяце: \(rows.joined().compactMap { $0 }.filter { done.contains($0) }.count)")
+        .accessibilityLabel(L("Тренировок в этом месяце: \(rows.joined().compactMap { $0 }.filter { done.contains($0) }.count)"))
     }
 
     /// Дни месяца по неделям; пустые клетки до первого и после последнего числа — `nil`.
@@ -294,7 +294,7 @@ struct WorkoutHubView: View {
     private func goalCard(schedule: WorkoutSchedule, focus: ScheduledWorkout?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Цель")
+                Text(L("Цель"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.ink)
                 Spacer()
@@ -319,18 +319,18 @@ struct WorkoutHubView: View {
             .animation(Motion.snappy, value: goal.done)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(goal.done >= goal.target ? "Цель недели есть" : "На этой неделе")
+                Text(goal.done >= goal.target ? L("Цель недели есть") : L("На этой неделе"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
-                Text("\(min(goal.done, 99)) из \(goal.target) \(RuPlural.word(goal.target, "тренировки", "тренировок", "тренировок"))")
+                Text(L("\(min(goal.done, 99)) из \(goal.target) \(RuPlural.word(goal.target, "тренировки", "тренировок", "тренировок"))"))
                     .font(.system(size: 12))
                     .foregroundStyle(Color.ink.opacity(0.45))
                     .lineLimit(1)
                     .contentTransition(.numericText())
                 // Срок цели — «неделя 3 из 13».
                 if let term = profile.goalWeek() {
-                    Text("Неделя \(term.week) из \(term.total)")
+                    Text(L("Неделя \(term.week) из \(term.total)"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.accent)
                         .lineLimit(1)
@@ -345,7 +345,7 @@ struct WorkoutHubView: View {
     private var programsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Программы")
+                Text(L("Программы"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.ink)
                 Spacer()
@@ -370,7 +370,7 @@ struct WorkoutHubView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
-                Text("Свои и каталог")
+                Text(L("Свои и каталог"))
                     .font(.system(size: 12))
                     .foregroundStyle(Color.ink.opacity(0.45))
             }
@@ -423,7 +423,7 @@ struct WorkoutHubView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("СЕГОДНЯШНИЙ ПЛАН")
+                    Text(L("СЕГОДНЯШНИЙ ПЛАН"))
                         .font(.system(size: 11, weight: .bold))
                         .tracking(1.2)
                         .foregroundStyle(Theme.accent)
@@ -467,10 +467,10 @@ struct WorkoutHubView: View {
             Image(systemName: "moon.zzz.fill")
                 .font(.system(size: 32))
                 .foregroundStyle(Theme.accent)
-            Text("Сегодня отдых")
+            Text(L("Сегодня отдых"))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(.ink)
-            Text("Восстановление — неотъемлемая часть прогресса.")
+            Text(L("Восстановление — неотъемлемая часть прогресса."))
                 .font(.system(size: 13))
                 .foregroundStyle(Color.ink.opacity(0.5))
                 .multilineTextAlignment(.center)
@@ -504,7 +504,7 @@ struct SegmentedRing: View {
         }
         .padding(lineWidth / 2)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Сделано \(min(filled, count)) из \(count)")
+        .accessibilityLabel(L("Сделано \(min(filled, count)) из \(count)"))
     }
 }
 

@@ -25,16 +25,16 @@ struct PostCardView: View {
             PostHeader(post: post, onOpenAuthor: onOpenAuthor) {
                 if isMine {
                     Button(role: .destructive) { confirmDelete = true } label: {
-                        Label("Удалить пост", systemImage: "trash")
+                        Label(L("Удалить пост"), systemImage: "trash")
                     }
                 }
                 if social.isSignedIn {
                     Button { sharing = true } label: {
-                        Label("Отправить другу", systemImage: "paperplane")
+                        Label(L("Отправить другу"), systemImage: "paperplane")
                     }
                 }
                 ShareLink(item: shareText) {
-                    Label("Поделиться текстом", systemImage: "square.and.arrow.up")
+                    Label(L("Поделиться текстом"), systemImage: "square.and.arrow.up")
                 }
             }
 
@@ -72,8 +72,8 @@ struct PostCardView: View {
                 social.send(SocialChatWorkout(post: post), to: friend.username)
             }
         }
-        .confirmationDialog("Удалить тренировку из ленты?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Удалить", role: .destructive) {
+        .confirmationDialog(L("Удалить тренировку из ленты?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button(L("Удалить"), role: .destructive) {
                 Task {
                     do {
                         try await social.deletePost(post.id)
@@ -83,7 +83,7 @@ struct PostCardView: View {
                     }
                 }
             }
-            Button("Отмена", role: .cancel) {}
+            Button(L("Отмена"), role: .cancel) {}
         }
     }
 
@@ -118,7 +118,7 @@ struct PostHeader<MenuContent: View>: View {
                         }
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
-                            Text(post.partner.map { "@\(post.author.username) и @\($0.username)" } ?? "@\(post.author.username)")
+                            Text(post.partner.map { L("@\(post.author.username) и @\($0.username)") } ?? "@\(post.author.username)")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(.ink)
                                 .lineLimit(1)
@@ -139,7 +139,7 @@ struct PostHeader<MenuContent: View>: View {
                     .frame(width: 38, height: 38)
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel("Действия с постом")
+            .accessibilityLabel(L("Действия с постом"))
         }
     }
 }
@@ -154,7 +154,7 @@ struct PostTitleBlock: View {
                 .foregroundStyle(.ink)
                 .multilineTextAlignment(.leading)
             if !post.description.isEmpty {
-                Text(post.description)
+                Text(verbatim: post.description)
                     .font(.system(size: 15))
                     .foregroundStyle(Color.ink.opacity(0.6))
                     .multilineTextAlignment(.leading)
@@ -218,7 +218,7 @@ struct PostWorkoutSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if workout.exercises.isEmpty {
-                Text("Без записанных подходов")
+                Text(L("Без записанных подходов"))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.5))
                     .padding(16)
@@ -254,7 +254,7 @@ struct PostWorkoutSummary: View {
                 }
             }
             if workout.exercises.count > limit {
-                Text("и ещё \(workout.exercises.count - limit)")
+                Text(L("и ещё \(workout.exercises.count - limit)"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.45))
                     .padding(.horizontal, 14)
@@ -290,7 +290,7 @@ struct PostActions: View {
                 }
             }
             .buttonStyle(.pressable)
-            .accessibilityLabel(post.liked ? "Убрать лайк" : "Лайк")
+            .accessibilityLabel(post.liked ? L("Убрать лайк") : L("Лайк"))
 
             Button(action: onComments) {
                 HStack(spacing: 6) {
@@ -306,7 +306,7 @@ struct PostActions: View {
                 }
             }
             .buttonStyle(.pressable)
-            .accessibilityLabel("Комментарии")
+            .accessibilityLabel(L("Комментарии"))
             Spacer()
         }
     }
@@ -413,7 +413,7 @@ struct PostWorkoutSlide: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if workout.exercises.isEmpty {
-                Text("Без записанных подходов")
+                Text(L("Без записанных подходов"))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.5))
             }
@@ -442,7 +442,7 @@ struct PostWorkoutSlide: View {
             }
             if workout.exercises.count > limit {
                 let rest = workout.exercises.count - limit
-                Text("ещё \(rest) \(RuPlural.word(rest, "упражнение", "упражнения", "упражнений"))")
+                Text(L("ещё \(rest) \(RuPlural.word(rest, "упражнение", "упражнения", "упражнений"))"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Color.ink.opacity(0.5))
                     .frame(maxWidth: .infinity)
@@ -465,7 +465,7 @@ struct PostWorkoutSets: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(workout.program.map { "ТРЕНИРОВКА · \($0.uppercased())" } ?? "ТРЕНИРОВКА")
+            Text(workout.program.map { L("ТРЕНИРОВКА · \($0.uppercased())") } ?? L("ТРЕНИРОВКА"))
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Color.ink.opacity(0.45))
@@ -488,7 +488,7 @@ struct PostWorkoutSets: View {
                                 .foregroundStyle(.ink)
                                 .monospacedDigit()
                             if set.record {
-                                Label("рекорд", systemImage: "trophy.fill")
+                                Label(L("рекорд"), systemImage: "trophy.fill")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(Theme.warning)
                             }
@@ -533,12 +533,12 @@ struct PostDetailView: View {
                 PostHeader(post: post, onOpenAuthor: { openAuthor?(post.author.username) }) {
                     if social.me?.id == post.author.id {
                         Button(role: .destructive) { confirmDelete = true } label: {
-                            Label("Удалить пост", systemImage: "trash")
+                            Label(L("Удалить пост"), systemImage: "trash")
                         }
                     }
                     if social.isSignedIn {
                         Button { sharing = true } label: {
-                            Label("Отправить другу", systemImage: "paperplane")
+                            Label(L("Отправить другу"), systemImage: "paperplane")
                         }
                     }
                 }
@@ -579,13 +579,13 @@ struct PostDetailView: View {
                     .navigationTitle(post.title)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .confirmationAction) { Button("Готово") { showingSets = false } }
+                        ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { showingSets = false } }
                     }
             }
             .presentationDetents([.medium, .large])
         }
-        .confirmationDialog("Удалить тренировку из ленты?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Удалить", role: .destructive) {
+        .confirmationDialog(L("Удалить тренировку из ленты?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button(L("Удалить"), role: .destructive) {
                 Task {
                     do {
                         try await social.deletePost(post.id)
@@ -596,7 +596,7 @@ struct PostDetailView: View {
                     }
                 }
             }
-            Button("Отмена", role: .cancel) {}
+            Button(L("Отмена"), role: .cancel) {}
         }
         .navigationTitle(post.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -614,14 +614,14 @@ struct PostDetailView: View {
 
     private var commentsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(comments.isEmpty ? "КОММЕНТАРИИ" : "КОММЕНТАРИИ · \(comments.count)")
+            Text(comments.isEmpty ? L("КОММЕНТАРИИ") : L("КОММЕНТАРИИ · \(comments.count)"))
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Color.ink.opacity(0.45))
             if loading && comments.isEmpty {
                 ProgressView().tint(.ink).frame(maxWidth: .infinity)
             } else if comments.isEmpty {
-                Text("Пока тихо. Напиши первым — поддержи или спроси про технику.")
+                Text(L("Пока тихо. Напиши первым — поддержи или спроси про технику."))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.5))
             }
@@ -656,9 +656,9 @@ struct PostDetailView: View {
                         .foregroundStyle(Color.ink.opacity(0.4))
                 }
                 (comment.replyToUsername.map { Text("@\($0) ").foregroundColor(Theme.accent) } ?? Text(""))
-                    + Text(comment.text).foregroundColor(Color.ink.opacity(0.88))
+                    + Text(verbatim: comment.text).foregroundColor(Color.ink.opacity(0.88))
                 if social.isSignedIn {
-                    Button("Ответить") { compose(replyTo: comment) }
+                    Button(L("Ответить")) { compose(replyTo: comment) }
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.5))
                         .padding(.top, 2)
@@ -671,10 +671,10 @@ struct PostDetailView: View {
         .contextMenu {
             Button {
                 UIPasteboard.general.string = comment.text
-            } label: { Label("Скопировать", systemImage: "doc.on.doc") }
+            } label: { Label(L("Скопировать"), systemImage: "doc.on.doc") }
             if canDelete(comment) {
                 Button(role: .destructive) { delete(comment) } label: {
-                    Label(comment.isReply ? "Удалить ответ" : "Удалить комментарий", systemImage: "trash")
+                    Label(comment.isReply ? L("Удалить ответ") : L("Удалить комментарий"), systemImage: "trash")
                 }
             }
         }
@@ -694,7 +694,7 @@ struct PostDetailView: View {
             Button { compose(replyTo: nil) } label: {
                 HStack(spacing: 10) {
                     AvatarView(imageId: social.me?.avatar, username: social.me?.username ?? "s", size: 32)
-                    Text("Написать комментарий…")
+                    Text(L("Написать комментарий…"))
                         .font(.system(size: 15))
                         .foregroundStyle(Color.ink.opacity(0.45))
                     Spacer()
@@ -705,7 +705,7 @@ struct PostDetailView: View {
             }
             .buttonStyle(.pressable)
         } else {
-            Text("Создай профиль во вкладке «Профиль», чтобы комментировать")
+            Text(L("Создай профиль во вкладке «Профиль», чтобы комментировать"))
                 .font(.system(size: 13))
                 .foregroundStyle(Color.ink.opacity(0.5))
                 .frame(maxWidth: .infinity)
@@ -716,7 +716,7 @@ struct PostDetailView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(replyingTo.map { "Ответ @\($0.author.username)" } ?? "Комментарий")
+                Text(replyingTo.map { L("Ответ @\($0.author.username)") } ?? L("Комментарий"))
                     .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
@@ -727,7 +727,7 @@ struct PostDetailView: View {
                             .font(.system(size: 20))
                             .foregroundStyle(Color.ink.opacity(0.4))
                     }
-                    .accessibilityLabel("Не отвечать, а написать к посту")
+                    .accessibilityLabel(L("Не отвечать, а написать к посту"))
                 }
             }
             if let replyingTo {
@@ -737,7 +737,7 @@ struct PostDetailView: View {
                     .lineLimit(1)
             }
             HStack(alignment: .bottom, spacing: 10) {
-                TextField(replyingTo == nil ? "Поддержи или спроси про технику" : "Твой ответ", text: $draft, axis: .vertical)
+                TextField(replyingTo == nil ? L("Поддержи или спроси про технику") : L("Твой ответ"), text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($typing)
                     .font(.system(size: 16))
@@ -755,7 +755,7 @@ struct PostDetailView: View {
                     .background(canSend ? Color.ink : Color.tone(0.3), in: Circle())
                 }
                 .disabled(!canSend)
-                .accessibilityLabel("Отправить")
+                .accessibilityLabel(L("Отправить"))
             }
             if let error {
                 Text(error).font(.system(size: 12)).foregroundStyle(Theme.warning)

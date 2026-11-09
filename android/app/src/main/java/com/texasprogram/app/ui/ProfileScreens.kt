@@ -65,7 +65,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -233,7 +232,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                     RoundIcon(Icons.Filled.Share, "Поделиться профилем") {
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, "Я тренируюсь в STRAIN — найди меня: @${me.username}")
+                            putExtra(Intent.EXTRA_TEXT, L("Я тренируюсь в STRAIN — найди меня: @${me.username}"))
                         }
                         context.startActivity(Intent.createChooser(intent, null))
                     }
@@ -592,7 +591,7 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues, onAva
         user.live?.let { LiveBadge(it) }
         user.bodyLine?.let { Text(it, color = Theme.ink.copy(alpha = 0.55f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         if (user.bio.isNotBlank()) {
-            Text(user.bio, color = Theme.ink.copy(alpha = 0.75f), fontSize = 15.sp, textAlign = TextAlign.Center)
+            RawText(user.bio, color = Theme.ink.copy(alpha = 0.75f), fontSize = 15.sp, textAlign = TextAlign.Center)
         }
     }
 }

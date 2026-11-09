@@ -172,6 +172,6 @@ final class AppUpdater {
     /// «30 октября» из «2026-10-30».
     static func dayText(_ date: String?) -> String? {
         guard let date, let day = TrainingHeatmap.date(date) else { return nil }
-        return day.formatted(.dateTime.day().month(.wide).locale(Locale(identifier: "ru_RU")))
+        return day.formatted(.dateTime.day().month(.wide).locale(L10n.locale))
     }
 }

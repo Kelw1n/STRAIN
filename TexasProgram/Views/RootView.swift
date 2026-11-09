@@ -152,9 +152,9 @@ struct ProgramSelectionView: View {
                             .shadow(color: Theme.accent.opacity(0.35), radius: 18, y: 10)
                             .scaleEffect(breathe ? 1.05 : 1)
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Выбери программу")
+                            Text(L("Выбери программу"))
                                 .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
-                            Text("После выбора введи свои максимумы. Вернуться сюда можно полным сбросом в настройках.")
+                            Text(L("После выбора введи свои максимумы. Вернуться сюда можно полным сбросом в настройках."))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -195,7 +195,7 @@ struct ProgramSelectionView: View {
             .toolbar {
                 if canCancel {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Отмена", action: onCancel)
+                        Button(L("Отмена"), action: onCancel)
                     }
                 }
             }
@@ -218,10 +218,10 @@ struct ProgramSelectionView: View {
                     .frame(width: 44, height: 44)
                     .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Есть резервная копия?")
+                    Text(L("Есть резервная копия?"))
                         .font(.headline)
                         .foregroundStyle(.primary)
-                    Text(restoreError ?? "Восстанови профили, отметки и замеры из файла STRAIN — с iPhone или Android.")
+                    Text(restoreError ?? L("Восстанови профили, отметки и замеры из файла STRAIN — с iPhone или Android."))
                         .font(.footnote)
                         .foregroundStyle(restoreError == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.warning))
                         .multilineTextAlignment(.leading)
@@ -337,30 +337,30 @@ struct SetupView: View {
                     .appearIn(0)
 
                     CardView {
-                        Text("Твои 5ПМ").font(.title3.weight(.bold))
+                        Text(L("Твои 5ПМ")).font(.title3.weight(.bold))
                         NumberField(title: "Приседания", text: $squat)
                         NumberField(title: "Жим лёжа", text: $bench)
                         NumberField(title: "Становая тяга", text: $deadlift)
-                        Text("Шаг округления: 2,5 кг").font(.caption).foregroundStyle(.secondary)
+                        Text(L("Шаг округления: 2,5 кг")).font(.caption).foregroundStyle(.secondary)
                     }
                     .appearIn(1)
 
                     CardView {
-                        Text("Уровень пикирования").font(.title3.weight(.bold))
-                        Picker("Уровень", selection: $level) {
+                        Text(L("Уровень пикирования")).font(.title3.weight(.bold))
+                        Picker(L("Уровень"), selection: $level) {
                             ForEach(TrainingLevel.allCases) { Text($0.rawValue).tag($0) }
                         }
                         .pickerStyle(.segmented)
-                        Text("Для первого прохождения рекомендуется «Начальный».")
+                        Text(L("Для первого прохождения рекомендуется «Начальный»."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .appearIn(2)
 
                     CardView {
                         HStack {
-                            Text("Дополнительные упражнения").font(.title3.weight(.bold))
+                            Text(L("Дополнительные упражнения")).font(.title3.weight(.bold))
                             Spacer()
-                            Button(showAllOptions ? "Скрыть" : "Выбрать") {
+                            Button(showAllOptions ? L("Скрыть") : L("Выбрать")) {
                                 withAnimation(Motion.card) { showAllOptions.toggle() }
                             }
                             .font(.subheadline.weight(.semibold))
@@ -374,7 +374,7 @@ struct SetupView: View {
                             }
                             .transition(.opacity.combined(with: .offset(y: -8)))
                         } else {
-                            Text("Необязательные упражнения можно добавить сейчас или позже в настройках.")
+                            Text(L("Необязательные упражнения можно добавить сейчас или позже в настройках."))
                                 .font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
@@ -393,7 +393,7 @@ struct SetupView: View {
                             press: selection[.press]
                         ))
                     } label: {
-                        Label("Построить программу", systemImage: "sparkles")
+                        Label(L("Построить программу"), systemImage: "sparkles")
                     }
                     .buttonStyle(.gradientProminent)
                     .disabled(!validMaxes)
@@ -405,11 +405,11 @@ struct SetupView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
-            .navigationTitle("Техасский метод")
+            .navigationTitle(L("Техасский метод"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onBack) { Label("Назад", systemImage: "chevron.left") }
+                    Button(action: onBack) { Label(L("Назад"), systemImage: "chevron.left") }
                         .buttonStyle(.pressable)
                 }
             }
@@ -445,11 +445,11 @@ struct UpperLowerSetupView: View {
                     .appearIn(0)
 
                     CardView {
-                        Text("Твои 1ПМ").font(.title3.weight(.bold))
+                        Text(L("Твои 1ПМ")).font(.title3.weight(.bold))
                         NumberField(title: "Приседания", text: $squat)
                         NumberField(title: "Жим лёжа", text: $bench)
                         NumberField(title: "Становая тяга", text: $deadlift)
-                        Text("Рабочие веса округляются к 5 кг, как в исходной таблице.")
+                        Text(L("Рабочие веса округляются к 5 кг, как в исходной таблице."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .appearIn(1)
@@ -462,15 +462,15 @@ struct UpperLowerSetupView: View {
                                 .frame(width: 42, height: 42)
                                 .background(Theme.recordGradient, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Жим 14").font(.headline)
-                                Text("Отдельный раздел с волной жима и своим прогрессом.")
+                                Text(L("Жим 14")).font(.headline)
+                                Text(L("Отдельный раздел с волной жима и своим прогрессом."))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         Divider().opacity(0.4)
-                        Label("7 недель · 28 тренировок", systemImage: "calendar")
+                        Label(L("7 недель · 28 тренировок"), systemImage: "calendar")
                             .font(.subheadline.weight(.semibold))
-                        Text("Понедельник — тяжёлый верх, вторник — тяжёлый низ, четверг — объёмный верх, пятница — объёмный низ. Дни недели можно поменять в настройках.")
+                        Text(L("Понедельник — тяжёлый верх, вторник — тяжёлый низ, четверг — объёмный верх, пятница — объёмный низ. Дни недели можно поменять в настройках."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .appearIn(2)
@@ -478,7 +478,7 @@ struct UpperLowerSetupView: View {
                     Button {
                         onSave(UpperLowerInput(squat1RM: value(squat), bench1RM: value(bench), deadlift1RM: value(deadlift)))
                     } label: {
-                        Label("Построить программу", systemImage: "sparkles")
+                        Label(L("Построить программу"), systemImage: "sparkles")
                     }
                     .buttonStyle(.gradientProminent)
                     .disabled(!validMaxes)
@@ -490,11 +490,11 @@ struct UpperLowerSetupView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
-            .navigationTitle("Верх / Низ")
+            .navigationTitle(L("Верх / Низ"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onBack) { Label("Назад", systemImage: "chevron.left") }
+                    Button(action: onBack) { Label(L("Назад"), systemImage: "chevron.left") }
                         .buttonStyle(.pressable)
                 }
             }
@@ -530,7 +530,7 @@ struct NumberField: View {
                     .multilineTextAlignment(.trailing)
                     .font(.system(size: 18, weight: .bold, design: Theme.fontDesign))
                     .frame(width: 62)
-                Text("кг").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(L("кг")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 10)
@@ -548,7 +548,7 @@ struct NumberField: View {
                 .background(Theme.accent.opacity(0.14), in: Circle())
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(delta > 0 ? "Увеличить \(title)" : "Уменьшить \(title)")
+        .accessibilityLabel(delta > 0 ? L("Увеличить \(title)") : L("Уменьшить \(title)"))
     }
 }
 
@@ -558,7 +558,7 @@ struct ExercisePicker: View {
 
     var body: some View {
         Menu {
-            Button("Не выбрано") { value = nil }
+            Button(L("Не выбрано")) { value = nil }
             ForEach(category.options, id: \.self) { option in
                 Button(option) { value = option }
             }
@@ -566,7 +566,7 @@ struct ExercisePicker: View {
             HStack {
                 Text(category.rawValue).foregroundStyle(.primary)
                 Spacer()
-                Text(value ?? "Не выбрано")
+                Text(value ?? L("Не выбрано"))
                     .foregroundStyle(value == nil ? Color.secondary : Theme.accent)
                     .lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down")

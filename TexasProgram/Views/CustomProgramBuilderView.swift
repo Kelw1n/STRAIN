@@ -28,24 +28,24 @@ struct CustomProgramBuilderView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Название") {
-                    TextField("Как назвать", text: $program.name)
+                Section(L("Название")) {
+                    TextField(L("Как назвать"), text: $program.name)
                 }
 
                 Section {
-                    Picker("Схема", selection: $program.template) {
+                    Picker(L("Схема"), selection: $program.template) {
                         ForEach(SplitTemplate.allCases) { Text($0.rawValue).tag($0) }
                     }
-                    Stepper("Недель: \(program.weeks)", value: $program.weeks, in: 1...24)
+                    Stepper(L("Недель: \(program.weeks)"), value: $program.weeks, in: 1...24)
                 } header: {
-                    Text("Разбивка")
+                    Text(L("Разбивка"))
                 } footer: {
                     Text(program.template.explanation)
                 }
 
                 ForEach($program.days) { $day in
                     Section {
-                        TextField("Название дня", text: $day.title)
+                        TextField(L("Название дня"), text: $day.title)
                         ForEach(day.exercises) { exercise in
                             Button {
                                 editing = CustomExerciseDraft(dayID: day.id, exercise: exercise)
@@ -65,11 +65,11 @@ struct CustomProgramBuilderView: View {
                         Button {
                             editing = CustomExerciseDraft(dayID: day.id, exercise: nil)
                         } label: {
-                            Label("Добавить упражнение", systemImage: "plus.circle.fill")
+                            Label(L("Добавить упражнение"), systemImage: "plus.circle.fill")
                         }
                     } header: {
                         HStack {
-                            Text("День \(day.number)")
+                            Text(L("День \(day.number)"))
                             Spacer()
                             if !day.exercises.isEmpty { EditButton().font(.footnote) }
                         }
@@ -85,15 +85,15 @@ struct CustomProgramBuilderView: View {
                     .disabled(!program.isRunnable)
                 } footer: {
                     Text(program.isRunnable
-                         ? "Дни лягут на календарь по настройкам расписания. Программу можно будет править из «Своих упражнений»."
-                         : "Чтобы запустить, добавь хотя бы одно упражнение в каждый день.")
+                         ? L("Дни лягут на календарь по настройкам расписания. Программу можно будет править из «Своих упражнений».")
+                         : L("Чтобы запустить, добавь хотя бы одно упражнение в каждый день."))
                 }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Назад", action: onBack)
+                    Button(L("Назад"), action: onBack)
                 }
             }
             // Смена схемы пересобирает дни: у неё своё число и свои названия.
@@ -153,20 +153,20 @@ private struct CustomExerciseForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Упражнение") {
-                    TextField("Название", text: $name)
-                    Stepper("Подходов: \(sets)", value: $sets, in: 1...12)
-                    TextField("Повторения, например 5 или 8–12", text: $reps)
+                Section(L("Упражнение")) {
+                    TextField(L("Название"), text: $name)
+                    Stepper(L("Подходов: \(sets)"), value: $sets, in: 1...12)
+                    TextField(L("Повторения, например 5 или 8–12"), text: $reps)
                 }
 
                 Section {
-                    TextField("Вес, кг", text: $weightText).keyboardType(.decimalPad)
-                    TextField("Или подпись: RPE 8, свой вес", text: $loadText)
-                    TextField("Прибавка за неделю, кг", text: $incrementText).keyboardType(.decimalPad)
+                    TextField(L("Вес, кг"), text: $weightText).keyboardType(.decimalPad)
+                    TextField(L("Или подпись: RPE 8, свой вес"), text: $loadText)
+                    TextField(L("Прибавка за неделю, кг"), text: $incrementText).keyboardType(.decimalPad)
                 } header: {
-                    Text("Нагрузка")
+                    Text(L("Нагрузка"))
                 } footer: {
-                    Text("Прибавка работает только вместе с весом: каждую следующую неделю к нему добавится указанное и округлится до блина.")
+                    Text(L("Прибавка работает только вместе с весом: каждую следующую неделю к нему добавится указанное и округлится до блина."))
                 }
 
                 Section {
@@ -182,7 +182,7 @@ private struct CustomExerciseForm: View {
                         ))
                         dismiss()
                     } label: {
-                        Label(draft.exercise == nil ? "Добавить" : "Сохранить", systemImage: "checkmark.circle.fill")
+                        Label(draft.exercise == nil ? L("Добавить") : L("Сохранить"), systemImage: "checkmark.circle.fill")
                     }
                     .disabled(trimmedName.isEmpty)
 
@@ -191,15 +191,15 @@ private struct CustomExerciseForm: View {
                             onDelete(draft.dayID, existing.id)
                             dismiss()
                         } label: {
-                            Label("Убрать из дня", systemImage: "trash")
+                            Label(L("Убрать из дня"), systemImage: "trash")
                         }
                     }
                 }
             }
-            .navigationTitle(draft.exercise == nil ? "Новое упражнение" : "Упражнение")
+            .navigationTitle(draft.exercise == nil ? L("Новое упражнение") : L("Упражнение"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
             }
             .onAppear {
                 guard !loaded else { return }

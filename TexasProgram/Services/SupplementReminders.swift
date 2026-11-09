@@ -91,8 +91,8 @@ enum SupplementReminders {
                 guard current == generation else { return }
                 for item in planned {
                     let content = UNMutableNotificationContent()
-                    content.title = "Добавки"
-                    content.body = item.body
+                    content.title = L("Добавки")
+                    content.body = L(item.body)
                     content.sound = .default
                     UNUserNotificationCenter.current().add(UNNotificationRequest(
                         identifier: item.identifier,

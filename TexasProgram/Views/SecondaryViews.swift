@@ -79,11 +79,11 @@ struct InstructionsView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
-            .navigationTitle("Инструкция")
+            .navigationTitle(L("Инструкция"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     if let onClose {
-                        Button("Готово", action: onClose).font(.body.weight(.semibold))
+                        Button(L("Готово"), action: onClose).font(.body.weight(.semibold))
                     }
                 }
             }
@@ -94,7 +94,7 @@ struct InstructionsView: View {
         CardView {
             Label("RPE", systemImage: "gauge.with.dots.needle.50percent")
                 .font(.title3.weight(.bold))
-            Text("RPE — субъективная оценка оставшихся повторов в запасе. Записывай ощущения и регулируй нагрузку, если восстановление отличается от обычного.")
+            Text(L("RPE — субъективная оценка оставшихся повторов в запасе. Записывай ощущения и регулируй нагрузку, если восстановление отличается от обычного."))
                 .font(.subheadline).foregroundStyle(.secondary)
             VStack(spacing: 8) {
                 rpeRow("RPE 7", "3 повтора в запасе", 0.7)
@@ -207,16 +207,16 @@ struct SettingsView: View {
                     Button {
                         closeThen(onAddProfile)
                     } label: {
-                        Label("Добавить профиль", systemImage: "person.badge.plus")
+                        Label(L("Добавить профиль"), systemImage: "person.badge.plus")
                     }
                 } header: {
-                    Text("Профили")
+                    Text(L("Профили"))
                 } footer: {
-                    Text("У каждого профиля своя программа, максимумы, расписание и отметки.")
+                    Text(L("У каждого профиля своя программа, максимумы, расписание и отметки."))
                 }
 
-                Section("Имя профиля") {
-                    TextField("Твоё имя или псевдоним", text: $profile.name)
+                Section(L("Имя профиля")) {
+                    TextField(L("Твоё имя или псевдоним"), text: $profile.name)
                         .autocorrectionDisabled()
                 }
 
@@ -225,25 +225,25 @@ struct SettingsView: View {
                     Button {
                         showGuide = true
                     } label: {
-                        Label("Как устроена программа", systemImage: "book.closed.fill")
+                        Label(L("Как устроена программа"), systemImage: "book.closed.fill")
                     }
                 } footer: {
-                    Text("С чего начать, сколько отдыхать, что такое RPE и особенности твоей программы.")
+                    Text(L("С чего начать, сколько отдыхать, что такое RPE и особенности твоей программы."))
                 }
 
                 Section(profile.maximumLabel) {
-                    TextField("Приседания", value: $profile.squat5RM, format: .number).keyboardType(.decimalPad)
-                    TextField("Жим лёжа", value: $profile.bench5RM, format: .number).keyboardType(.decimalPad)
-                    TextField("Становая тяга", value: $profile.deadlift5RM, format: .number).keyboardType(.decimalPad)
+                    TextField(L("Приседания"), value: $profile.squat5RM, format: .number).keyboardType(.decimalPad)
+                    TextField(L("Жим лёжа"), value: $profile.bench5RM, format: .number).keyboardType(.decimalPad)
+                    TextField(L("Становая тяга"), value: $profile.deadlift5RM, format: .number).keyboardType(.decimalPad)
                 }
 
                 if profile.programKind == .fullBody {
                     Section {
-                        Picker("Стаж", selection: $profile.fullBodyLevel) {
+                        Picker(L("Стаж"), selection: $profile.fullBodyLevel) {
                             ForEach(FullBodyLevel.allCases) { Text($0.rawValue).tag($0) }
                         }
                     } header: {
-                        Text("Сколько ходишь в зал")
+                        Text(L("Сколько ходишь в зал"))
                     } footer: {
                         Text(profile.fullBodyLevel.explanation)
                     }
@@ -254,33 +254,33 @@ struct SettingsView: View {
                             ExercisePicker(category: category, value: binding(for: category))
                         }
                     } header: {
-                        Text("Подсобка")
+                        Text(L("Подсобка"))
                     } footer: {
-                        Text("Эти упражнения идут в каждой тренировке.")
+                        Text(L("Эти упражнения идут в каждой тренировке."))
                     }
                 }
 
                 if profile.programKind == .texas {
-                    Section("Уровень") {
-                        Picker("Уровень", selection: $profile.level) {
+                    Section(L("Уровень")) {
+                        Picker(L("Уровень"), selection: $profile.level) {
                             ForEach(TrainingLevel.allCases) { Text($0.rawValue).tag($0) }
                         }
                         .pickerStyle(.segmented)
                     }
-                    Section("Дополнительные упражнения") {
+                    Section(L("Дополнительные упражнения")) {
                         ForEach(AdditionalExerciseCategory.allCases) { category in
                             ExercisePicker(category: category, value: binding(for: category))
                         }
                     }
-                    Section("После 12 недель") {
+                    Section(L("После 12 недель")) {
                         Button {
                             showPeaking = true
                         } label: {
-                            Label("Открыть модуль пикирования", systemImage: "mountain.2.fill")
+                            Label(L("Открыть модуль пикирования"), systemImage: "mountain.2.fill")
                         }
                         Text(profile.completedDayCount >= 36
-                             ? "Основная программа пройдена — можно запускать."
-                             : "Рассчитано на тех, кто прошёл основную программу: отмечено \(profile.completedDayCount) из 36. Запустить можно и раньше, отметки основного цикла сохранятся отдельно и вернутся после отмены.")
+                             ? L("Основная программа пройдена — можно запускать.")
+                             : L("Рассчитано на тех, кто прошёл основную программу: отмечено \(profile.completedDayCount) из 36. Запустить можно и раньше, отметки основного цикла сохранятся отдельно и вернутся после отмены."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -289,63 +289,63 @@ struct SettingsView: View {
                     Button {
                         showNewCycle = true
                     } label: {
-                        Label("Начать новый цикл", systemImage: "arrow.triangle.2.circlepath")
+                        Label(L("Начать новый цикл"), systemImage: "arrow.triangle.2.circlepath")
                     }
                 } header: {
-                    Text("Цикл \(profile.cycleNumber)")
+                    Text(L("Цикл \(profile.cycleNumber)"))
                 } footer: {
-                    Text("Программа начнётся заново с новыми максимумами. Отметки прошлого цикла спрячутся, история и графики останутся сквозными.")
+                    Text(L("Программа начнётся заново с новыми максимумами. Отметки прошлого цикла спрячутся, история и графики останутся сквозными."))
                 }
 
                 if profile.supportsAutoregulation {
                     Section {
-                        Toggle("Подстраивать веса", isOn: $profile.autoregulationEnabled)
+                        Toggle(L("Подстраивать веса"), isOn: $profile.autoregulationEnabled)
                     } header: {
-                        Text("Авторегуляция")
+                        Text(L("Авторегуляция"))
                     } footer: {
-                        Text("После тяжёлого дня приложение спросит, как прошёл рабочий подход по каждому движению, и посчитает следующую неделю от ответа. Каждое движение идёт своим темпом. Пока не отвечаешь, прибавка обычная — 2,5 кг.")
+                        Text(L("После тяжёлого дня приложение спросит, как прошёл рабочий подход по каждому движению, и посчитает следующую неделю от ответа. Каждое движение идёт своим темпом. Пока не отвечаешь, прибавка обычная — 2,5 кг."))
                     }
                 }
 
                 Section {
-                    Toggle("Вести вес подсобки", isOn: $profile.accessoryProgressionEnabled)
+                    Toggle(L("Вести вес подсобки"), isOn: $profile.accessoryProgressionEnabled)
                 } header: {
-                    Text("Подсобка")
+                    Text(L("Подсобка"))
                 } footer: {
-                    Text("У подсобки в плане веса нет — только повторы. Приложение возьмёт вес из прошлой тренировки и подскажет, когда прибавить: сначала добираешь верх диапазона во всех подходах, потом растёт вес на шаг прибавки. Три тренировки подряд без роста — предложит сбросить вес и набрать заново. Выключишь — вернутся просто РПЕ и повторы.")
+                    Text(L("У подсобки в плане веса нет — только повторы. Приложение возьмёт вес из прошлой тренировки и подскажет, когда прибавить: сначала добираешь верх диапазона во всех подходах, потом растёт вес на шаг прибавки. Три тренировки подряд без роста — предложит сбросить вес и набрать заново. Выключишь — вернутся просто РПЕ и повторы."))
                 }
 
                 Section {
-                    Picker("Шаг прибавки", selection: $profile.defaultWeightStep) {
+                    Picker(L("Шаг прибавки"), selection: $profile.defaultWeightStep) {
                         ForEach(ProgramProfile.weightStepOptions, id: \.self) { step in
                             Text(ProgramProfile.weightStepTitle(step)).tag(step)
                         }
                     }
                 } header: {
-                    Text("Блины в зале")
+                    Text(L("Блины в зале"))
                 } footer: {
-                    Text(ProgramProfile.weightStepHint(profile.defaultWeightStep) + " Для отдельного упражнения шаг можно поменять в его меню на тренировке или в подсказке под упражнением — например, 2,5 кг на блоке и 5 кг на жиме, если мелких блинов нет.")
+                    Text(ProgramProfile.weightStepHint(profile.defaultWeightStep) + L(" Для отдельного упражнения шаг можно поменять в его меню на тренировке или в подсказке под упражнением — например, 2,5 кг на блоке и 5 кг на жиме, если мелких блинов нет."))
                 }
 
                 Section {
-                    Toggle("Напоминать о тренировке", isOn: $profile.reminderEnabled)
+                    Toggle(L("Напоминать о тренировке"), isOn: $profile.reminderEnabled)
                     if profile.reminderEnabled {
-                        DatePicker("Время", selection: reminderTime, displayedComponents: .hourAndMinute)
+                        DatePicker(L("Время"), selection: reminderTime, displayedComponents: .hourAndMinute)
                     }
                 } header: {
-                    Text("Напоминания")
+                    Text(L("Напоминания"))
                 } footer: {
                     Text(profile.reminderEnabled
-                         ? "Придёт в дни расписания: \(profile.weekdays.map { RuDate.short(weekday: $0) }.joined(separator: ", ")). Меняешь дни ниже — напоминания переезжают за ними."
-                         : "Уведомление в дни, которые стоят в расписании. Веса в нём не пишутся: они меняются каждую неделю, а уведомление система повторяет одно и то же.")
+                         ? L("Придёт в дни расписания: \(profile.weekdays.map { RuDate.short(weekday: $0) }.joined(separator: ", ")). Меняешь дни ниже — напоминания переезжают за ними.")
+                         : L("Уведомление в дни, которые стоят в расписании. Веса в нём не пишутся: они меняются каждую неделю, а уведомление система повторяет одно и то же."))
                 }
 
                 Section {
-                    Toggle("Не гасить экран", isOn: $profile.keepScreenOn)
+                    Toggle(L("Не гасить экран"), isOn: $profile.keepScreenOn)
                 } header: {
-                    Text("В зале")
+                    Text(L("В зале"))
                 } footer: {
-                    Text("Пока открыта тренировка, экран не уходит в сон. Телефон на лавке между подходами перестанет тухнуть.")
+                    Text(L("Пока открыта тренировка, экран не уходит в сон. Телефон на лавке между подходами перестанет тухнуть."))
                 }
 
                 if !profile.activeSkips.isEmpty {
@@ -354,7 +354,7 @@ struct SettingsView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.title)
-                                    Text(item.holdsProgression ? "веса задержаны" : "без задержки")
+                                    Text(item.holdsProgression ? L("веса задержаны") : L("без задержки"))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -367,19 +367,19 @@ struct SettingsView: View {
                             }
                         }
                     } header: {
-                        Text("Пропущено")
+                        Text(L("Пропущено"))
                     } footer: {
-                        Text("Пока пропуск с задержкой не закрыт, веса следующих недель стоят на месте. Отметишь тренировку — задержка снимется сама.")
+                        Text(L("Пока пропуск с задержкой не закрыт, веса следующих недель стоят на месте. Отметишь тренировку — задержка снимется сама."))
                     }
                 }
 
                 Section {
-                    Picker("Порядок", selection: $profile.scheduleMode) {
+                    Picker(L("Порядок"), selection: $profile.scheduleMode) {
                         ForEach(ScheduleMode.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
                 } header: {
-                    Text("Порядок тренировок")
+                    Text(L("Порядок тренировок"))
                 } footer: {
                     Text(profile.scheduleMode.explanation)
                 }
@@ -393,23 +393,23 @@ struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Дни недели")
+                    Text(L("Дни недели"))
                 } footer: {
                     Text(profile.scheduleMode == .queue
-                         ? "Дни, в которые ты ходишь в зал. Очередь раздаёт тренировки именно по ним."
-                         : "День недели задаёт тип тренировки. Поменяешь здесь — поменяется и то, что приложение предложит в этот день.")
+                         ? L("Дни, в которые ты ходишь в зал. Очередь раздаёт тренировки именно по ним.")
+                         : L("День недели задаёт тип тренировки. Поменяешь здесь — поменяется и то, что приложение предложит в этот день."))
                 }
 
                 if profile.programKind.hasBenchWave {
-                    Section("Жим 14") {
+                    Section(L("Жим 14")) {
                         HStack {
-                            Label("Отмечено тренировок", systemImage: "waveform.path.ecg")
+                            Label(L("Отмечено тренировок"), systemImage: "waveform.path.ecg")
                             Spacer()
                             Text("\(profile.completedBenchCount) / \(UpperLowerCalculator.benchSessionCount)")
                                 .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                                 .foregroundStyle(Theme.recordGradient)
                         }
-                        Button("Сбросить отметки жима", role: .destructive) {
+                        Button(L("Сбросить отметки жима"), role: .destructive) {
                             withAnimation(Motion.card) { profile.completedBenchSessions = [] }
                         }
                         .disabled(profile.completedBenchCount == 0)
@@ -420,51 +420,51 @@ struct SettingsView: View {
                     Button {
                         exportBackup()
                     } label: {
-                        Label("Сохранить копию", systemImage: "square.and.arrow.up")
+                        Label(L("Сохранить копию"), systemImage: "square.and.arrow.up")
                     }
                     Button {
                         showImporter = true
                     } label: {
-                        Label("Загрузить копию", systemImage: "square.and.arrow.down")
+                        Label(L("Загрузить копию"), systemImage: "square.and.arrow.down")
                     }
                     Button {
                         exportCSV()
                     } label: {
-                        Label("Выгрузить таблицу", systemImage: "tablecells")
+                        Label(L("Выгрузить таблицу"), systemImage: "tablecells")
                     }
                     if let backupMessage {
                         Text(backupMessage).font(.caption).foregroundStyle(Theme.success)
                     }
                 } header: {
-                    Text("Резервная копия")
+                    Text(L("Резервная копия"))
                 } footer: {
-                    Text("Копия — файл со всеми профилями, максимумами, расписанием и историей; тот же формат читает версия для Android. Таблица — записанные подходы в CSV, открывается в Excel.")
+                    Text(L("Копия — файл со всеми профилями, максимумами, расписанием и историей; тот же формат читает версия для Android. Таблица — записанные подходы в CSV, открывается в Excel."))
                 }
 
                 Section {
-                    Toggle("Звуковой сигнал отдыха", isOn: $restTimerSoundEnabled)
+                    Toggle(L("Звуковой сигнал отдыха"), isOn: $restTimerSoundEnabled)
                 } header: {
-                    Text("Таймер отдыха")
+                    Text(L("Таймер отдыха"))
                 } footer: {
-                    Text("Короткий звуковой отсчёт за 3, 2, 1 секунды до окончания отдыха и сигнал завершения.")
+                    Text(L("Короткий звуковой отсчёт за 3, 2, 1 секунды до окончания отдыха и сигнал завершения."))
                 }
 
                 Section {
-                    Toggle("Разминочные подходы", isOn: $warmUpEnabled)
+                    Toggle(L("Разминочные подходы"), isOn: $warmUpEnabled)
                 } header: {
-                    Text("Разминка")
+                    Text(L("Разминка"))
                 } footer: {
-                    Text("Перед рабочим весом в упражнениях со штангой — разминка: пустой гриф, 40, 60 и 80% от рабочего. В записи тренировки, объём и рекорды она не идёт.")
+                    Text(L("Перед рабочим весом в упражнениях со штангой — разминка: пустой гриф, 40, 60 и 80% от рабочего. В записи тренировки, объём и рекорды она не идёт."))
                 }
 
                 Section {
                     AppVersionRow()
                 } header: {
-                    Text("Приложение")
+                    Text(L("Приложение"))
                 }
 
                 Section {
-                    Picker("Тема", selection: $appearance) {
+                    Picker(L("Тема"), selection: $appearance) {
                         ForEach(AppAppearance.allCases) { option in
                             Text(option.title).tag(option)
                         }
@@ -472,32 +472,40 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
+                    Picker(L("Язык"), selection: Binding(
+                        get: { AppLanguage.current },
+                        set: { AppLanguage.save($0) }
+                    )) {
+                        ForEach(AppLanguage.allCases) { option in
+                            Text(verbatim: option.title).tag(option)
+                        }
+                    }
                     // Только там, где стекло настоящее: до iOS 26 оно нарисовано и не меняется.
                     if GlassPreference.isSupported {
-                        Toggle("Прозрачное стекло, как в iOS 26", isOn: $clearGlass)
+                        Toggle(L("Прозрачное стекло, как в iOS 26"), isOn: $clearGlass)
                     }
                 } header: {
-                    Text("Оформление")
+                    Text(L("Оформление"))
                 } footer: {
                     Text(GlassPreference.isSupported
-                         ? "«Как в системе» — тема меняется вместе с iPhone. Прозрачное стекло: панель вкладок, поле ввода в переписке и кнопки поверх фото — сквозь него видно, что под ним, а края преломляют свет. Выключишь — стекло станет матовым, как в iOS 27."
-                         : "«Как в системе» — тема меняется вместе с iPhone: днём светлая, вечером тёмная, если так настроено.")
+                         ? L("«Как в системе» — тема меняется вместе с iPhone. Прозрачное стекло: панель вкладок, поле ввода в переписке и кнопки поверх фото — сквозь него видно, что под ним, а края преломляют свет. Выключишь — стекло станет матовым, как в iOS 27.")
+                         : L("«Как в системе» — тема меняется вместе с iPhone: днём светлая, вечером тёмная, если так настроено."))
                 }
 
                 if HealthKitService.shared.deviceSupportsHealth && !HealthKitService.shared.isAvailable {
                     Section {
-                        Label("Недоступно в этой сборке", systemImage: "heart.slash")
+                        Label(L("Недоступно в этой сборке"), systemImage: "heart.slash")
                             .foregroundStyle(.secondary)
                     } header: {
-                        Text("Apple Здоровье")
+                        Text(L("Apple Здоровье"))
                     } footer: {
-                        Text("Приложение установлено с бесплатным Apple ID, а «Здоровье» Apple открывает только приложениям с платным аккаунтом разработчика. Тренировки, рекорды и вес тела всё равно хранятся в STRAIN.")
+                        Text(L("Приложение установлено с бесплатным Apple ID, а «Здоровье» Apple открывает только приложениям с платным аккаунтом разработчика. Тренировки, рекорды и вес тела всё равно хранятся в STRAIN."))
                     }
                 }
 
                 if HealthKitService.shared.isAvailable {
                     Section {
-                        Toggle("Синхронизация с HealthKit", isOn: Binding(
+                        Toggle(L("Синхронизация с HealthKit"), isOn: Binding(
                             get: { HealthKitService.shared.isEnabled },
                             set: { enabled in
                                 HealthKitService.shared.isEnabled = enabled
@@ -509,26 +517,26 @@ struct SettingsView: View {
                             }
                         ))
                     } header: {
-                        Text("Apple Здоровье")
+                        Text(L("Apple Здоровье"))
                     } footer: {
-                        Text("Автоматически сохраняет тренировки в приложении «Здоровье» и позволяет подтягивать вес тела.")
+                        Text(L("Автоматически сохраняет тренировки в приложении «Здоровье» и позволяет подтягивать вес тела."))
                     }
                 }
 
                 Section {
-                    Button(profiles.count > 1 ? "Удалить этот профиль" : "Сбросить профиль", role: .destructive) { showReset = true }
+                    Button(profiles.count > 1 ? L("Удалить этот профиль") : L("Сбросить профиль"), role: .destructive) { showReset = true }
                     Text(profiles.count > 1
-                         ? "Удалит максимумы, программу и отметки этого профиля. Остальные профили останутся."
-                         : "Удалит максимумы, выбранную программу и все отметки, затем вернёт на стартовый выбор.")
+                         ? L("Удалит максимумы, программу и отметки этого профиля. Остальные профили останутся.")
+                         : L("Удалит максимумы, выбранную программу и все отметки, затем вернёт на стартовый выбор."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
             .scrollContentBackground(.hidden)
             .screenBackground()
-            .navigationTitle("Настройки")
+            .navigationTitle(L("Настройки"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }.font(.body.weight(.semibold))
+                    Button(L("Готово")) { dismiss() }.font(.body.weight(.semibold))
                 }
             }
         }
@@ -546,10 +554,10 @@ struct SettingsView: View {
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
             importBackup(result)
         }
-        .confirmationDialog(profiles.count > 1 ? "Удалить профиль «\(profile.name)»?" : "Полностью сбросить профиль?",
+        .confirmationDialog(profiles.count > 1 ? L("Удалить профиль «\(profile.name)»?") : L("Полностью сбросить профиль?"),
                             isPresented: $showReset, titleVisibility: .visible) {
-            Button(profiles.count > 1 ? "Удалить профиль" : "Сбросить", role: .destructive) { closeThen(onDeleteProfile) }
-            Button("Отмена", role: .cancel) {}
+            Button(profiles.count > 1 ? L("Удалить профиль") : L("Сбросить"), role: .destructive) { closeThen(onDeleteProfile) }
+            Button(L("Отмена"), role: .cancel) {}
         }
     }
 
@@ -690,7 +698,7 @@ struct PeakingView: View {
                     .appearIn(0)
 
                     CardView {
-                        Text("Свежие 5ПМ").font(.headline)
+                        Text(L("Свежие 5ПМ")).font(.headline)
                         peakField("Приседания", peakBinding(\.peakSquat5RM, fallback: profile.squat5RM))
                         peakField("Жим лёжа", peakBinding(\.peakBench5RM, fallback: profile.bench5RM))
                         peakField("Становая тяга", peakBinding(\.peakDeadlift5RM, fallback: profile.deadlift5RM))
@@ -702,7 +710,7 @@ struct PeakingView: View {
                                 profile.peakingActive = true
                             }
                         } label: {
-                            Label(profile.peakingActive ? "Пикирование активно" : "Запустить пикирование",
+                            Label(profile.peakingActive ? L("Пикирование активно") : L("Запустить пикирование"),
                                   systemImage: profile.peakingActive ? "checkmark.circle.fill" : "mountain.2.fill")
                         }
                         .buttonStyle(GradientButtonStyle(
@@ -711,15 +719,15 @@ struct PeakingView: View {
                         ))
                         .disabled(profile.peakingActive)
                         Text(profile.peakingActive
-                             ? "«Сегодня» и «План» показывают пиковый цикл. Отметки основной программы сохранены отдельно и вернутся после отмены."
-                             : "После запуска «Сегодня» и «План» переключатся на пиковый цикл.")
+                             ? L("«Сегодня» и «План» показывают пиковый цикл. Отметки основной программы сохранены отдельно и вернутся после отмены.")
+                             : L("После запуска «Сегодня» и «План» переключатся на пиковый цикл."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .appearIn(1)
 
                     ForEach(Array(plan.weeks.enumerated()), id: \.element.id) { index, week in
                         CardView {
-                            Text("Неделя \(week.number)").font(.headline)
+                            Text(L("Неделя \(week.number)")).font(.headline)
                             ForEach(week.days) { day in
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(day.title)
@@ -737,7 +745,7 @@ struct PeakingView: View {
                     }
 
                     if profile.peakingActive {
-                        Button("Отменить пикирование", role: .destructive) {
+                        Button(L("Отменить пикирование"), role: .destructive) {
                             withAnimation(Motion.card) {
                                 profile.peakingActive = false
                                 profile.peakSquat5RM = nil
@@ -757,11 +765,11 @@ struct PeakingView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
-            .navigationTitle("Пикирование")
+            .navigationTitle(L("Пикирование"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }.font(.body.weight(.semibold))
+                    Button(L("Готово")) { dismiss() }.font(.body.weight(.semibold))
                 }
             }
         }
@@ -771,12 +779,12 @@ struct PeakingView: View {
         HStack {
             Text(title).font(.subheadline)
             Spacer()
-            TextField("кг", value: value, format: .number)
+            TextField(L("кг"), value: value, format: .number)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
                 .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))
                 .frame(width: 80)
-            Text("кг").font(.caption).foregroundStyle(.secondary)
+            Text(L("кг")).font(.caption).foregroundStyle(.secondary)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)

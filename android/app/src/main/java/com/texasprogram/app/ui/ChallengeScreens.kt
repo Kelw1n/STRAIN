@@ -42,7 +42,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -708,7 +707,7 @@ object ChallengeShareCard {
         val inner = WIDTH - pad * 2
         val top = pad + u(18f)
         canvas.drawText("STRAIN", pad, top, paint(18f, white(1f), black).apply { letterSpacing = 0.12f })
-        val label = "ЧЕЛЛЕНДЖ"
+        val label = L("ЧЕЛЛЕНДЖ")
         val labelPaint = paint(11f, white(0.8f), bold).apply { letterSpacing = 0.12f }
         canvas.drawText(label, WIDTH - pad - labelPaint.measureText(label), top, labelPaint)
 
@@ -744,8 +743,9 @@ object ChallengeShareCard {
             val number = paint(15f, ChallengePlace.color(member.place).toArgb(), black)
             canvas.drawText("${member.place ?: 0}", pad + u(14f), rowY, number)
             val detail = paint(15f, white(1f), black)
-            val detailWidth = detail.measureText(member.detail)
-            canvas.drawText(member.detail, WIDTH - pad - u(14f) - detailWidth, rowY, detail)
+            val detailText = L(member.detail)
+            val detailWidth = detail.measureText(detailText)
+            canvas.drawText(detailText, WIDTH - pad - u(14f) - detailWidth, rowY, detail)
             val name = paint(15f, white(1f), bold)
             canvas.drawText(fit("@${member.user.username}", name, inner - u(60f) - detailWidth), pad + u(40f), rowY, name)
             rowY += u(28f)
@@ -753,6 +753,7 @@ object ChallengeShareCard {
         return bitmap
     }
 
+    /// Перевод и многоточие, если не влезает в ширину.
     private fun fit(text: String, paint: TextPaint, width: Float): String =
-        TextUtils.ellipsize(text, paint, width, TextUtils.TruncateAt.END).toString()
+        TextUtils.ellipsize(L(text), paint, width, TextUtils.TruncateAt.END).toString()
 }

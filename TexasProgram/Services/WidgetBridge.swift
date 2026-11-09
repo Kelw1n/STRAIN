@@ -14,10 +14,10 @@ enum WidgetBridge {
 
         guard let focus = schedule.focus else {
             WidgetStore.save(WidgetSnapshot(
-                relative: "Цикл завершён",
+                relative: L("Цикл завершён"),
                 dateText: RuDate.dayMonth(now, calendar: calendar),
                 weekText: "",
-                title: profile.programKind.rawValue,
+                title: L(profile.programKind.rawValue),
                 benchSession: nil,
                 benchTopWeight: nil,
                 doneDays: profile.completedDayCount,
@@ -34,10 +34,10 @@ enum WidgetBridge {
         }
 
         WidgetStore.save(WidgetSnapshot(
-            relative: schedule.relativeTitle(for: focus),
+            relative: L(schedule.relativeTitle(for: focus)),
             dateText: RuDate.dayMonth(focus.date, calendar: calendar),
-            weekText: "Неделя \(focus.week)",
-            title: focus.fullTitle,
+            weekText: L("Неделя \(focus.week)"),
+            title: L(focus.fullTitle),
             benchSession: focus.benchSession,
             benchTopWeight: bench.map { Int($0.topWeight.rounded()) },
             doneDays: profile.completedDayCount,

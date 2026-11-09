@@ -161,7 +161,7 @@ class ReminderReceiver : BroadcastReceiver() {
         manager.createNotificationChannel(
             NotificationChannel(
                 ReminderScheduler.CHANNEL,
-                "Напоминание о тренировке",
+                L("Напоминание о тренировке"),
                 NotificationManager.IMPORTANCE_DEFAULT
             )
         )
@@ -169,9 +169,9 @@ class ReminderReceiver : BroadcastReceiver() {
         val day = ReminderScheduler.dayOf(intent)
         val notification = NotificationCompat.Builder(context, ReminderScheduler.CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_rest)
-            .setContentTitle(ReminderScheduler.title(ReminderScheduler.offsetOf(intent)))
+            .setContentTitle(L(ReminderScheduler.title(ReminderScheduler.offsetOf(intent))))
             // Ресивер не знает режима расписания — берём общий текст, если дня нет.
-            .setContentText(ReminderScheduler.body(day, ScheduleMode.WEEKDAY))
+            .setContentText(L(ReminderScheduler.body(day, ScheduleMode.WEEKDAY)))
             .setAutoCancel(true)
             .setContentIntent(
                 PendingIntent.getActivity(

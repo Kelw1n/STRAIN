@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.LocalizedDateFormat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -31,7 +32,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -281,7 +281,7 @@ private fun BannerIcon(icon: ImageVector) {
     }
 }
 
-private val changeDate = DateTimeFormatter.ofPattern("d MMMM", Locale.forLanguageTag("ru"))
+private val changeDate = LocalizedDateFormat("d MMMM", "MMMM d")
 
 /// Изменения по версиям, новые сверху: номер, дата и пункты.
 @Composable
@@ -298,7 +298,7 @@ fun ChangesList(changes: List<AppUpdater.Change>, modifier: Modifier = Modifier,
     ) {
         changes.forEach { change ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val date = change.date?.let { runCatching { LocalDate.parse(it).format(changeDate) }.getOrNull() }
+                val date = change.date?.let { runCatching { changeDate.format(LocalDate.parse(it)) }.getOrNull() }
                 Text(
                     listOfNotNull(change.versionName.ifBlank { null }, date).joinToString(" · "),
                     color = Theme.ink.copy(alpha = 0.5f),

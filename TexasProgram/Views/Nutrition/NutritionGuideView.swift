@@ -27,7 +27,7 @@ struct NutritionGuideView: View {
                         "ИИ Google раскладывает тарелку на продукты и оценивает граммы на глаз — ошибка бывает 20–30%. Этикетку он читает точнее.",
                         "Для метода точность не главное: если каждый день считать одинаково, среднее за неделю всё равно найдёт поддержку."
                     ])
-                    Text("Метод — Лимар, @freedom_limar. Приложение просто ведёт записи и считает за тебя.")
+                    Text(L("Метод — Лимар, @freedom_limar. Приложение просто ведёт записи и считает за тебя."))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.ink.opacity(0.4))
                         .padding(.horizontal, 4)
@@ -38,11 +38,11 @@ struct NutritionGuideView: View {
             }
             .scrollIndicators(.hidden)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Как это работает")
+            .navigationTitle(L("Как это работает"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }
@@ -129,7 +129,7 @@ struct GeminiKeySheet: View {
                         instruction(3, "Вставь его ниже и нажми «Проверить и сохранить».")
                         if let url = URL(string: "https://aistudio.google.com/apikey") {
                             Link(destination: url) {
-                                Label("Открыть Google AI Studio", systemImage: "arrow.up.right.square")
+                                Label(L("Открыть Google AI Studio"), systemImage: "arrow.up.right.square")
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(Theme.accent)
                             }
@@ -139,7 +139,7 @@ struct GeminiKeySheet: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         NutritionCaption(text: saved ? "Ключ сохранён" : "Твой ключ")
-                        SecureField(saved ? "Вставь новый, чтобы заменить" : "AIza…", text: $key)
+                        SecureField(saved ? L("Вставь новый, чтобы заменить") : "AIza…", text: $key)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(size: 16, weight: .semibold, design: .monospaced))
@@ -165,14 +165,14 @@ struct GeminiKeySheet: View {
                                 success = false
                                 message = "Ключ удалён с телефона."
                             } label: {
-                                Text("Удалить ключ")
+                                Text(L("Удалить ключ"))
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(Theme.record)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
                             }
                         }
-                        Text("Если Google пишет, что страна не поддерживается, — включи VPN.")
+                        Text(L("Если Google пишет, что страна не поддерживается, — включи VPN."))
                             .font(.system(size: 12))
                             .foregroundStyle(Color.ink.opacity(0.4))
                             .fixedSize(horizontal: false, vertical: true)
@@ -186,11 +186,11 @@ struct GeminiKeySheet: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Ключ Google")
+            .navigationTitle(L("Ключ Google"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }

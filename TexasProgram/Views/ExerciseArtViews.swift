@@ -67,7 +67,7 @@ struct ExerciseArtSheet: View {
                 .id(art.revision)
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
 
-            Text("Стандартная иллюстрация подбирается по названию. Можно поставить свою — она будет у этого упражнения во всех тренировках.")
+            Text(L("Стандартная иллюстрация подбирается по названию. Можно поставить свою — она будет у этого упражнения во всех тренировках."))
                 .font(.footnote)
                 .foregroundStyle(Color.ink.opacity(0.5))
                 .multilineTextAlignment(.center)
@@ -75,7 +75,7 @@ struct ExerciseArtSheet: View {
 
             VStack(spacing: 10) {
                 PhotosPicker(selection: $pick, matching: .images) {
-                    Label("Выбрать из галереи", systemImage: "photo.on.rectangle")
+                    Label(L("Выбрать из галереи"), systemImage: "photo.on.rectangle")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.canvas)
                         .frame(maxWidth: .infinity)
@@ -88,7 +88,7 @@ struct ExerciseArtSheet: View {
                     Button(role: .destructive) {
                         withAnimation(Motion.snappy) { art.removeCustomImage(for: name) }
                     } label: {
-                        Text("Вернуть стандартную")
+                        Text(L("Вернуть стандартную"))
                             .font(.system(size: 15, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)

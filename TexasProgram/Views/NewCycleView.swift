@@ -39,17 +39,17 @@ struct NewCycleView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Цикл \(profile.cycleNumber) закрыт. Отметки начнутся заново, а история и графики останутся сквозными — будет видно, как ты рос от цикла к циклу.")
+                    Text(L("Цикл \(profile.cycleNumber) закрыт. Отметки начнутся заново, а история и графики останутся сквозными — будет видно, как ты рос от цикла к циклу."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
                 Section {
-                    TextField("Приседания", text: $squatText).keyboardType(.decimalPad)
-                    TextField("Жим лёжа", text: $benchText).keyboardType(.decimalPad)
-                    TextField("Становая тяга", text: $deadliftText).keyboardType(.decimalPad)
+                    TextField(L("Приседания"), text: $squatText).keyboardType(.decimalPad)
+                    TextField(L("Жим лёжа"), text: $benchText).keyboardType(.decimalPad)
+                    TextField(L("Становая тяга"), text: $deadliftText).keyboardType(.decimalPad)
                 } header: {
-                    Text("Новый \(profile.maximumLabel)")
+                    Text(L("Новый \(profile.maximumLabel)"))
                 } footer: {
                     if let hint { Text(hint) }
                 }
@@ -58,20 +58,20 @@ struct NewCycleView: View {
                     Button {
                         confirming = true
                     } label: {
-                        Label("Начать цикл \(profile.cycleNumber + 1)", systemImage: "arrow.triangle.2.circlepath")
+                        Label(L("Начать цикл \(profile.cycleNumber + 1)"), systemImage: "arrow.triangle.2.circlepath")
                     }
                     .disabled(!isReady)
                 } footer: {
-                    Text("Пикирование выключится, отметки жимовой волны обнулятся. Прошлый цикл никуда не денется: его записи остаются в истории.")
+                    Text(L("Пикирование выключится, отметки жимовой волны обнулятся. Прошлый цикл никуда не денется: его записи остаются в истории."))
                 }
             }
-            .navigationTitle("Новый цикл")
+            .navigationTitle(L("Новый цикл"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
             }
-            .confirmationDialog("Начать новый цикл?", isPresented: $confirming, titleVisibility: .visible) {
-                Button("Начать") {
+            .confirmationDialog(L("Начать новый цикл?"), isPresented: $confirming, titleVisibility: .visible) {
+                Button(L("Начать")) {
                     guard let squat = number(squatText),
                           let bench = number(benchText),
                           let deadlift = number(deadliftText) else { return }
@@ -79,9 +79,9 @@ struct NewCycleView: View {
                     dismiss()
                     onStarted()
                 }
-                Button("Отмена", role: .cancel) {}
+                Button(L("Отмена"), role: .cancel) {}
             } message: {
-                Text("Отметки текущего цикла спрячутся, программа начнётся с первой недели.")
+                Text(L("Отметки текущего цикла спрячутся, программа начнётся с первой недели."))
             }
             .onAppear {
                 guard !loaded else { return }

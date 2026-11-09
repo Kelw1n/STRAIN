@@ -55,15 +55,15 @@ struct FoodPhotoSheet: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle(title.isEmpty ? "Фото еды" : title)
+            .navigationTitle(title.isEmpty ? L("Фото еды") : title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") { dismiss() }
+                    Button(L("Отмена")) { dismiss() }
                         .foregroundStyle(Color.ink.opacity(0.7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Добавить") {
+                    Button(L("Добавить")) {
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                         onAdd(items)
                         dismiss()
@@ -87,7 +87,7 @@ struct FoodPhotoSheet: View {
     private var workingBadge: some View {
         HStack(spacing: 8) {
             ProgressView().tint(.ink)
-            Text("ИИ разбирает фото…")
+            Text(L("ИИ разбирает фото…"))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.ink)
         }
@@ -119,7 +119,7 @@ struct FoodPhotoSheet: View {
             HStack(alignment: .firstTextBaseline) {
                 NutritionCaption(text: "Всего на фото")
                 Spacer()
-                Text("точность: \(confidence)")
+                Text(L("точность: \(confidence)"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(confidence == "низкая" ? Theme.warning : Color.ink.opacity(0.45))
             }
@@ -129,7 +129,7 @@ struct FoodPhotoSheet: View {
                     .monospacedDigit()
                     .foregroundStyle(.ink)
                     .contentTransition(.numericText())
-                Text("ккал")
+                Text(L("ккал"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(Color.ink.opacity(0.5))
             }
@@ -150,7 +150,7 @@ struct FoodPhotoSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             NutritionCaption(text: "Поправить словами")
             HStack(spacing: 10) {
-                TextField("Например: там 200 г риса, курица без кожи", text: $note, axis: .vertical)
+                TextField(L("Например: там 200 г риса, курица без кожи"), text: $note, axis: .vertical)
                     .lineLimit(1...4)
                     .font(.system(size: 15))
                     .foregroundStyle(.ink)
@@ -168,9 +168,9 @@ struct FoodPhotoSheet: View {
                 }
                 .buttonStyle(.pressable)
                 .disabled(!sendable)
-                .accessibilityLabel("Пересчитать")
+                .accessibilityLabel(L("Пересчитать"))
             }
-            Text("ИИ оценивает порцию на глаз и может ошибиться на 20–30%. Для метода это не страшно: главное — считать одинаково каждый день.")
+            Text(L("ИИ оценивает порцию на глаз и может ошибиться на 20–30%. Для метода это не страшно: главное — считать одинаково каждый день."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
@@ -251,7 +251,7 @@ private struct RecognizedFoodEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                TextField("Продукт", text: $item.name)
+                TextField(L("Продукт"), text: $item.name)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.ink)
                 Button(action: onRemove) {
@@ -261,7 +261,7 @@ private struct RecognizedFoodEditor: View {
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Убрать продукт")
+                .accessibilityLabel(L("Убрать продукт"))
             }
             HStack(spacing: 8) {
                 AmountField(title: "Порция", value: gramsBinding)

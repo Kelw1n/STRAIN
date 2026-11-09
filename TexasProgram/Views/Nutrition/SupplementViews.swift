@@ -52,7 +52,7 @@ struct SupplementsCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 NutritionCaption(text: "Добавки")
                 if state.required > 0 {
-                    Text(state.isComplete ? "Всё выпито" : "Выпито \(state.taken) из \(state.required)")
+                    Text(state.isComplete ? L("Всё выпито") : L("Выпито \(state.taken) из \(state.required)"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(state.isComplete ? Theme.success : .ink)
                         .contentTransition(.numericText())
@@ -64,7 +64,7 @@ struct SupplementsCard: View {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Theme.accent)
-                    Text("\(streak) " + RuPlural.word(streak, "день", "дня", "дней"))
+                    Text("\(streak) " + RuPlural.word(streak, L("день"), L("дня"), L("дней")))
                         .font(.system(size: 13, weight: .bold, design: Theme.fontDesign))
                         .monospacedDigit()
                         .foregroundStyle(.ink)
@@ -73,7 +73,7 @@ struct SupplementsCard: View {
                 .frame(height: 30)
                 .background(Color.tone(0.13), in: Capsule())
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Серия \(streak) " + RuPlural.word(streak, "день", "дня", "дней") + " подряд")
+                .accessibilityLabel(L("Серия \(streak) ") + RuPlural.word(streak, L("день"), L("дня"), L("дней")) + L(" подряд"))
             }
             Button { adding = true } label: {
                 Image(systemName: "plus")
@@ -83,13 +83,13 @@ struct SupplementsCard: View {
                     .background(Color.tone(0.14), in: Circle())
             }
             .buttonStyle(.pressable)
-            .accessibilityLabel("Добавить добавку")
+            .accessibilityLabel(L("Добавить добавку"))
         }
     }
 
     private var empty: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Креатин, омега-3, витамины — отмечай в одно касание, а напоминание не даст забыть.")
+            Text(L("Креатин, омега-3, витамины — отмечай в одно касание, а напоминание не даст забыть."))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.7))
                 .fixedSize(horizontal: false, vertical: true)
@@ -145,15 +145,15 @@ struct SupplementsCard: View {
         }
         .buttonStyle(.pressable)
         .contextMenu {
-            Button { editing = item } label: { Label("Изменить", systemImage: "pencil") }
+            Button { editing = item } label: { Label(L("Изменить"), systemImage: "pencil") }
             Button(role: .destructive) {
                 withAnimation(Motion.snappy) { store.deleteSupplement(item) }
             } label: {
-                Label("Удалить", systemImage: "trash")
+                Label(L("Удалить"), systemImage: "trash")
             }
         }
         .accessibilityLabel("\(item.name), \(taken ? "выпито" : "не выпито")")
-        .accessibilityHint("Нажми, чтобы отметить. Удержи, чтобы изменить.")
+        .accessibilityHint(L("Нажми, чтобы отметить. Удержи, чтобы изменить."))
     }
 
     private func detail(_ item: Supplement, intake: SupplementIntake?) -> String {
@@ -201,7 +201,7 @@ struct SupplementsCard: View {
         }
         .padding(.top, 4)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("За неделю всё выпито в \(days.filter(\.isComplete).count) из 7 дней")
+        .accessibilityLabel(L("За неделю всё выпито в \(days.filter(\.isComplete).count) из 7 дней"))
     }
 }
 
@@ -285,7 +285,7 @@ struct SupplementSheet: View {
                             onDelete()
                             dismiss()
                         } label: {
-                            Text("Удалить добавку")
+                            Text(L("Удалить добавку"))
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(Theme.record)
                                 .frame(maxWidth: .infinity)
@@ -300,15 +300,15 @@ struct SupplementSheet: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle(original == nil ? "Новая добавка" : "Добавка")
+            .navigationTitle(original == nil ? L("Новая добавка") : L("Добавка"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") { dismiss() }
+                    Button(L("Отмена")) { dismiss() }
                         .foregroundStyle(Color.ink.opacity(0.7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Сохранить", action: save)
+                    Button(L("Сохранить"), action: save)
                         .font(.body.weight(.bold))
                         .foregroundStyle(trimmedName.isEmpty ? Color.ink.opacity(0.3) : Theme.accent)
                         .disabled(trimmedName.isEmpty)
@@ -389,7 +389,7 @@ struct SupplementSheet: View {
                 }
             }
             if slot == .workout {
-                Text("В дни без тренировки её не ждём — серия не рвётся.")
+                Text(L("В дни без тренировки её не ждём — серия не рвётся."))
                     .font(.system(size: 12))
                     .foregroundStyle(Color.ink.opacity(0.4))
             }
@@ -401,21 +401,21 @@ struct SupplementSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle(isOn: $remind.animation(Motion.snappy)) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Напоминание")
+                    Text(L("Напоминание"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.ink)
-                    Text("Каждый день, пока не отметишь")
+                    Text(L("Каждый день, пока не отметишь"))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.ink.opacity(0.45))
                 }
             }
             .tint(Theme.accent)
             if remind {
-                DatePicker("Время", selection: $time, displayedComponents: .hourAndMinute)
+                DatePicker(L("Время"), selection: $time, displayedComponents: .hourAndMinute)
                     .datePickerStyle(.wheel)
                     .labelsHidden()
                     .frame(maxWidth: .infinity)
-                    .environment(\.locale, Locale(identifier: "ru_RU"))
+                    .environment(\.locale, L10n.locale)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }

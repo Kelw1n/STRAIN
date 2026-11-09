@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Refresh
+import com.texasprogram.app.service.AppLanguage
 import com.texasprogram.app.service.FullBodyLevel
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Upload
@@ -38,7 +39,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -349,6 +349,21 @@ fun SettingsScreen(
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
+                SectionLabel("Язык")
+                val languages = AppLanguage.entries
+                val language = AppLanguage.current(context)
+                SegmentedControl(
+                    // Названия языков — каждое на своём языке, без перевода.
+                    options = languages.map { it.title },
+                    selectedIndex = languages.indexOf(language)
+                ) { index ->
+                    val chosen = languages[index]
+                    if (chosen != language) {
+                        AppLanguage.save(context, chosen)
+                        // Экраны пересобираются заново уже на новом языке.
+                        context.findActivity()?.recreate()
+                    }
+                }
             }
         }
 
@@ -806,4 +821,14 @@ fun DecimalField(value: String, label: String, onValueChange: (String) -> Unit, 
             cursorColor = Theme.accent
         )
     )
+}
+
+/// Activity под Compose-контекстом: он бывает обёрнут в ContextWrapper.
+private fun android.content.Context.findActivity(): android.app.Activity? {
+    var current: android.content.Context? = this
+    while (current is android.content.ContextWrapper) {
+        if (current is android.app.Activity) return current
+        current = current.baseContext
+    }
+    return null
 }

@@ -68,11 +68,11 @@ struct TemplatesView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .screenBackground()
-            .navigationTitle("Мои тренировки")
+            .navigationTitle(L("Мои тренировки"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Закрыть") { dismiss() }.foregroundStyle(Color.ink.opacity(0.7))
+                    Button(L("Закрыть")) { dismiss() }.foregroundStyle(Color.ink.opacity(0.7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -80,7 +80,7 @@ struct TemplatesView: View {
                     } label: {
                         Image(systemName: "plus").font(.system(size: 15, weight: .bold)).foregroundStyle(.ink)
                     }
-                    .accessibilityLabel("Создать тренировку")
+                    .accessibilityLabel(L("Создать тренировку"))
                 }
             }
             .task(id: tab) { if tab == .community { await loadCommunity() } }
@@ -110,13 +110,13 @@ struct TemplatesView: View {
                 onEdit: { editing = EditorTarget(template: target.template, isNew: false) }
             )
         }
-        .confirmationDialog("Удалить «\(deleting?.name ?? "")»?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
-            Button("Удалить", role: .destructive) {
+        .confirmationDialog(L("Удалить «\(deleting?.name ?? "")»?"), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button(L("Удалить"), role: .destructive) {
                 if let deleting { withAnimation(Motion.snappy) { profile.deleteTemplate(deleting.id) } }
                 deleting = nil
             }
         } message: {
-            Text("Прошлые тренировки по ней останутся в истории.")
+            Text(L("Прошлые тренировки по ней останутся в истории."))
         }
     }
 
@@ -155,7 +155,7 @@ struct TemplatesView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.ink.opacity(0.45))
-            TextField(tab == .community ? "Поиск программы" : "Поиск тренировки", text: $query)
+            TextField(tab == .community ? L("Поиск программы") : L("Поиск тренировки"), text: $query)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.ink)
         }
@@ -173,10 +173,10 @@ struct TemplatesView: View {
                 Image(systemName: "square.stack.3d.up")
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(Theme.accent)
-                Text("Своих тренировок пока нет")
+                Text(L("Своих тренировок пока нет"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.ink)
-                Text("Собери тренировку из упражнений библиотеки или возьми готовую в «Каталоге». Программа при этом не меняется.")
+                Text(L("Собери тренировку из упражнений библиотеки или возьми готовую в «Каталоге». Программа при этом не меняется."))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.55))
                     .multilineTextAlignment(.center)
@@ -196,26 +196,26 @@ struct TemplatesView: View {
                 row(template.name, subtitle: template.summary, badge: template.isShared ? "в профиле" : nil) {
                     preview = PreviewTarget(template: template, author: nil, isOwn: true)
                 } menu: {
-                    Button { start(template) } label: { Label("Начать", systemImage: "play.fill") }
-                    Button { editing = EditorTarget(template: template, isNew: false) } label: { Label("Изменить", systemImage: "pencil") }
+                    Button { start(template) } label: { Label(L("Начать"), systemImage: "play.fill") }
+                    Button { editing = EditorTarget(template: template, isNew: false) } label: { Label(L("Изменить"), systemImage: "pencil") }
                     Button {
                         profile.saveTemplate(template.copy(named: template.name + " (копия)"))
-                    } label: { Label("Дублировать", systemImage: "plus.square.on.square") }
+                    } label: { Label(L("Дублировать"), systemImage: "plus.square.on.square") }
                     Button {
                         var shared = template
                         shared.isShared.toggle()
                         profile.saveTemplate(shared)
                     } label: {
-                        Label(template.isShared ? "Убрать из профиля" : "Показывать в профиле",
+                        Label(template.isShared ? L("Убрать из профиля") : L("Показывать в профиле"),
                               systemImage: template.isShared ? "eye.slash" : "person.crop.circle.badge.checkmark")
                     }
-                    Button(role: .destructive) { deleting = template } label: { Label("Удалить", systemImage: "trash") }
+                    Button(role: .destructive) { deleting = template } label: { Label(L("Удалить"), systemImage: "trash") }
                 }
             }
             Button { start(WorkoutTemplate(name: "Тренировка")) } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "play.fill").font(.system(size: 13, weight: .bold))
-                    Text("Пустая тренировка").font(.system(size: 15, weight: .bold))
+                    Text(L("Пустая тренировка")).font(.system(size: 15, weight: .bold))
                 }
                 .foregroundStyle(.ink)
                 .frame(maxWidth: .infinity)
@@ -234,11 +234,11 @@ struct TemplatesView: View {
             row(template.name, subtitle: template.summary + " · " + template.groups().prefix(3).joined(separator: ", ")) {
                 preview = PreviewTarget(template: template, author: nil, isOwn: false)
             } menu: {
-                Button { start(template) } label: { Label("Начать", systemImage: "play.fill") }
+                Button { start(template) } label: { Label(L("Начать"), systemImage: "play.fill") }
                 Button {
                     profile.saveTemplate(template.copy())
                     tab = .mine
-                } label: { Label("Сохранить себе", systemImage: "square.and.arrow.down") }
+                } label: { Label(L("Сохранить себе"), systemImage: "square.and.arrow.down") }
             }
         }
     }
@@ -262,11 +262,11 @@ struct TemplatesView: View {
                     badge: item.program.isTemplate ? nil : "программа") {
                     preview = PreviewTarget(template: template, author: item.author.username, isOwn: false)
                 } menu: {
-                    Button { start(template) } label: { Label("Начать", systemImage: "play.fill") }
+                    Button { start(template) } label: { Label(L("Начать"), systemImage: "play.fill") }
                     Button {
                         profile.saveTemplate(template.copy())
                         tab = .mine
-                    } label: { Label("Сохранить себе", systemImage: "square.and.arrow.down") }
+                    } label: { Label(L("Сохранить себе"), systemImage: "square.and.arrow.down") }
                 }
             }
         }
@@ -302,7 +302,7 @@ struct TemplatesView: View {
             Button(action: open) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(title.isEmpty ? "Без названия" : title)
+                        Text(title.isEmpty ? L("Без названия") : title)
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(.ink)
                             .lineLimit(1)
@@ -333,7 +333,7 @@ struct TemplatesView: View {
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel("Действия: \(title)")
+            .accessibilityLabel(L("Действия: \(title)"))
         }
         .padding(.leading, 16)
         .padding(.trailing, 8)
@@ -360,7 +360,7 @@ struct TemplatePreviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(template.name.isEmpty ? "Без названия" : template.name)
+                        Text(template.name.isEmpty ? L("Без названия") : template.name)
                             .font(.system(size: 26, weight: .heavy, design: Theme.fontDesign))
                             .foregroundStyle(.ink)
                         Text([author.map { "@\($0)" }, template.summary].compactMap { $0 }.joined(separator: " · "))
@@ -414,7 +414,7 @@ struct TemplatePreviewView: View {
             .screenBackground()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() }.fontWeight(.bold) }
+                ToolbarItem(placement: .topBarTrailing) { Button(L("Готово")) { dismiss() }.fontWeight(.bold) }
             }
         }
         .presentationDetents([.medium, .large])

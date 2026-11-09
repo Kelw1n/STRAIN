@@ -21,7 +21,7 @@ struct RebrnRestTimerCard: View {
                             }
                             .frame(width: 14, height: 14)
 
-                        Text("отдых")
+                        Text(L("отдых"))
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(Theme.accent)
                     }
@@ -38,7 +38,7 @@ struct RebrnRestTimerCard: View {
                     ExerciseThumb(name: timer.exerciseName ?? "", size: 44)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(timer.exerciseName ?? "Отдых между подходами")
+                        Text(timer.exerciseName ?? L("Отдых между подходами"))
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(.ink)
                             .lineLimit(1)
@@ -110,7 +110,7 @@ struct RebrnRestTimerCard: View {
                         timer.stop()
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     } label: {
-                        Text("Пропустить")
+                        Text(L("Пропустить"))
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 22)

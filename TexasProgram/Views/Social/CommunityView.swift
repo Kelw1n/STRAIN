@@ -22,10 +22,10 @@ struct CommunityView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if social.isSignedIn {
-                        Picker("Раздел", selection: $section) {
-                            Text("Люди").tag(Part.people)
-                            Text(social.challengeInvites > 0 ? "Рейтинг · \(social.challengeInvites)" : "Рейтинг").tag(Part.rating)
-                            Text(social.unreadMessages > 0 ? "Чаты · \(social.unreadMessages)" : "Чаты").tag(Part.messages)
+                        Picker(L("Раздел"), selection: $section) {
+                            Text(L("Люди")).tag(Part.people)
+                            Text(social.challengeInvites > 0 ? L("Рейтинг · \(social.challengeInvites)") : L("Рейтинг")).tag(Part.rating)
+                            Text(social.unreadMessages > 0 ? L("Чаты · \(social.unreadMessages)") : L("Чаты")).tag(Part.messages)
                         }
                         .pickerStyle(.segmented)
                     }
@@ -51,7 +51,7 @@ struct CommunityView: View {
                 if section == .rating { ratingVersion += 1 }
             }
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Друзья")
+            .navigationTitle(L("Друзья"))
             .navigationBarTitleDisplayMode(.large)
             .navigationDestination(for: FeedRoute.self) { route in
                 route.destination(path: $path) { _, _ in }
@@ -77,7 +77,7 @@ struct CommunityView: View {
                     Image(systemName: "person.crop.circle.badge.plus")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(Theme.accent)
-                    Text("Создай профиль, чтобы подписываться на друзей")
+                    Text(L("Создай профиль, чтобы подписываться на друзей"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.ink)
                         .multilineTextAlignment(.leading)
@@ -92,7 +92,7 @@ struct CommunityView: View {
             .buttonStyle(.pressable)
         }
 
-        Text(query.isEmpty ? "НЕДАВНО ТРЕНИРОВАЛИСЬ" : "НАЙДЕНО")
+        Text(query.isEmpty ? L("НЕДАВНО ТРЕНИРОВАЛИСЬ") : L("НАЙДЕНО"))
             .font(.system(size: 12, weight: .bold))
             .tracking(1.2)
             .foregroundStyle(Color.ink.opacity(0.45))
@@ -101,7 +101,7 @@ struct CommunityView: View {
         if let error, people.isEmpty {
             SocialErrorCard(message: error) { Task { await search() } }
         } else if people.isEmpty && !loading {
-            Text(query.isEmpty ? "Пока никого. Позови друзей в STRAIN — их юзернеймы появятся здесь." : "Никого с таким юзернеймом")
+            Text(query.isEmpty ? L("Пока никого. Позови друзей в STRAIN — их юзернеймы появятся здесь.") : L("Никого с таким юзернеймом"))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.5))
                 .padding(.vertical, 12)
@@ -129,7 +129,7 @@ struct CommunityView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Color.ink.opacity(0.45))
-            TextField("Найти по юзернейму", text: $query)
+            TextField(L("Найти по юзернейму"), text: $query)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .font(.system(size: 16))
@@ -232,7 +232,7 @@ struct PeopleListView: View {
                 if let error {
                     SocialErrorCard(message: error) { Task { await reload() } }.padding(16)
                 } else if people.isEmpty && !loading {
-                    Text("Пока никого")
+                    Text(L("Пока никого"))
                         .font(.system(size: 15))
                         .foregroundStyle(Color.ink.opacity(0.5))
                         .padding(30)

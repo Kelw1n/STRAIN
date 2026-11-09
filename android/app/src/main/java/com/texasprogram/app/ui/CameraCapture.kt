@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -97,7 +96,7 @@ fun rememberCameraLauncher(onPhoto: (Uri) -> Unit): CameraLauncher {
     val currentOnPhoto by rememberUpdatedState(onPhoto)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) showing = true
-        else Toast.makeText(context, "Разреши доступ к камере в настройках телефона", Toast.LENGTH_LONG).show()
+        else Toast.makeText(context, L("Разреши доступ к камере в настройках телефона"), Toast.LENGTH_LONG).show()
     }
     if (showing) {
         CameraCaptureDialog(

@@ -1,5 +1,7 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.LocalizedDateFormat
+import com.texasprogram.app.service.L10n
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -16,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,8 +48,10 @@ import java.util.Locale
 private val Cell = 12.dp
 private val Gap = 3.dp
 private val MonthsHeight = 16.dp
-private val monthNames = listOf("янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек")
-private val heatmapDay = DateTimeFormatter.ofPattern("EE, d MMMM", Locale.forLanguageTag("ru"))
+private val monthNames: List<String>
+    get() = if (L10n.isEnglish) listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    else listOf("янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек")
+private val heatmapDay = LocalizedDateFormat("EE, d MMMM", "EEE, MMMM d")
 
 internal fun heatmapColor(level: Int): Color = when (level) {
     1 -> Theme.accent.copy(alpha = 0.3f)
@@ -161,7 +164,7 @@ fun ProfileHeatmapCard(levels: List<Int>, today: LocalDate = LocalDate.now()) {
             val day = today.minusDays((cells.size - 1 - chosen).toLong())
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(heatmapColor(cells[chosen])))
-                Text("${day.format(heatmapDay)} — ${heatmapWord(cells[chosen])}", color = Theme.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("${heatmapDay.format(day)} — ${heatmapWord(cells[chosen])}", color = Theme.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

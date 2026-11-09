@@ -79,12 +79,12 @@ object FoodRecognizer {
 
     suspend fun recognize(context: Context, photo: Uri, key: String): RecognizedMeal {
         val jpeg = withContext(Dispatchers.IO) { uploadJPEG(context, photo) } ?: throw Failure.Unreadable
-        return parse(ask(photoPrompt, jpeg, key))
+        return parse(ask(photoPrompt + languageNote, jpeg, key))
     }
 
     /// Пересчёт после поправки словами: «там 200 г, а не 150», «это без сахара».
     suspend fun correct(meal: RecognizedMeal, note: String, key: String): RecognizedMeal =
-        parse(ask(correctionPrompt(meal, note), null, key))
+        parse(ask(correctionPrompt(meal, note) + languageNote, null, key))
 
     /// Проверка ключа без фото — список моделей отвечает и на бесплатном ключе.
     suspend fun checkKey(key: String) {
@@ -379,6 +379,10 @@ object FoodRecognizer {
     // MARK: Промпты
 
     /// Промпт из Butterfly без изменений: этикетка важнее оценки на глаз.
+    /// В английском интерфейсе названия блюд и продуктов приходят по-английски.
+    val languageNote: String
+        get() = if (L10n.isEnglish) "\n- title и name пиши на английском (in English), а не на русском." else ""
+
     val photoPrompt = """
         Проанализируй фото еды. Верни только валидный JSON. Не используй Markdown и не добавляй пояснения до или после JSON.
 

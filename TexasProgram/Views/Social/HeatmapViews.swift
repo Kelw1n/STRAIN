@@ -15,14 +15,13 @@ struct ProfileHeatmapCard: View {
     private static let cell: CGFloat = 12
     private static let gap: CGFloat = 3
     private static let monthsHeight: CGFloat = 16
-    private static let monthNames = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+    private static var monthNames: [String] {
+        L10n.isEnglish
+            ? ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            : ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+    }
 
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "EE, d MMMM"
-        return formatter
-    }()
+    private static let dayFormatter = LocalizedDateFormat(ru: "EE, d MMMM", en: "EEE, MMMM d")
 
     static func color(_ level: Int) -> Color {
         switch level {
@@ -51,7 +50,7 @@ struct ProfileHeatmapCard: View {
         let workouts = TrainingHeatmap.workouts(levels)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("ГОД ТРЕНИРОВОК")
+                Text(L("ГОД ТРЕНИРОВОК"))
                     .font(.system(size: 13, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(Color.ink.opacity(0.5))
@@ -70,7 +69,7 @@ struct ProfileHeatmapCard: View {
         .padding(18)
         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Год тренировок: \(workouts) \(RuPlural.word(workouts, "тренировка", "тренировки", "тренировок"))")
+        .accessibilityLabel(L("Год тренировок: \(workouts) \(RuPlural.word(workouts, "тренировка", "тренировки", "тренировок"))"))
     }
 
     private func grid(cells: [Int], columns: Int) -> some View {
@@ -123,13 +122,13 @@ struct ProfileHeatmapCard: View {
             }
         } else {
             HStack(spacing: 4) {
-                Text("Меньше")
+                Text(L("Меньше"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.45))
                 ForEach(0..<5, id: \.self) { level in
                     RoundedRectangle(cornerRadius: 3).fill(Self.color(level)).frame(width: 12, height: 12)
                 }
-                Text("Больше")
+                Text(L("Больше"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.45))
             }

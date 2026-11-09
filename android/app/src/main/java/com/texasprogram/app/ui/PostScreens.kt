@@ -53,7 +53,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -241,9 +240,9 @@ fun PostHeader(post: SocialPost, onOpenAuthor: () -> Unit, onDelete: (() -> Unit
 
 private fun shareText(post: SocialPost): String = buildString {
     appendLine("@${post.author.username} — ${post.title}")
-    appendLine("Время ${SocialFormat.duration(post.durationSeconds)} · объём ${SocialFormat.grouped(post.volumeKg)} кг")
+    appendLine(L("Время ${SocialFormat.duration(post.durationSeconds)} · объём ${SocialFormat.grouped(post.volumeKg)} кг"))
     post.workout.exercises.forEach { exercise ->
-        exercise.best?.let { appendLine("${exercise.name}: ${exercise.sets.size} × ${it.text}") }
+        exercise.best?.let { appendLine("${L(exercise.name)}: ${exercise.sets.size} × ${L(it.text)}") }
     }
     append("STRAIN")
 }
@@ -253,7 +252,7 @@ fun PostTitleBlock(post: SocialPost) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(post.title, color = Theme.ink, fontSize = 22.sp, fontWeight = FontWeight.Black)
         if (post.description.isNotBlank()) {
-            Text(post.description, color = Theme.ink.copy(alpha = 0.6f), fontSize = 15.sp)
+            RawText(post.description, color = Theme.ink.copy(alpha = 0.6f), fontSize = 15.sp)
         }
     }
 }
@@ -891,7 +890,7 @@ private fun CommentSheet(
                 }
             }
             replyingTo?.let {
-                Text(it.text, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                RawText(it.text, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(

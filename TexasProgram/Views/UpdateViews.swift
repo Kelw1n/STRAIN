@@ -115,7 +115,7 @@ private struct UpdateCard: View {
                         .frame(width: 32, height: 32)
                         .background(Color.ink.opacity(0.12), in: Circle())
                 }
-                .accessibilityLabel("Позже")
+                .accessibilityLabel(L("Позже"))
             }
         }
     }
@@ -126,7 +126,7 @@ private struct UpdateCard: View {
             withAnimation(Motion.maybe(Motion.sheet, reduce: reduceMotion)) { expanded = !isExpanded }
         } label: {
             HStack(spacing: 4) {
-                Text("Что нового")
+                Text(L("Что нового"))
                     .font(.system(size: 14, weight: .semibold))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 12, weight: .bold))
@@ -137,7 +137,7 @@ private struct UpdateCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isExpanded ? "Скрыть, что нового" : "Показать, что нового")
+        .accessibilityLabel(isExpanded ? L("Скрыть, что нового") : L("Показать, что нового"))
     }
 }
 
@@ -168,7 +168,7 @@ struct ChangesList: View {
                             .foregroundStyle(Color.ink.opacity(0.5))
                         let points = change.points
                         if points.isEmpty {
-                            Text("Исправления и улучшения").font(.system(size: 14)).foregroundStyle(.ink)
+                            Text(L("Исправления и улучшения")).font(.system(size: 14)).foregroundStyle(.ink)
                         }
                         ForEach(points.indices, id: \.self) { index in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -195,7 +195,7 @@ struct AppVersionRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Версия \(AppUpdater.installedName)")
+                Text(L("Версия \(AppUpdater.installedName)"))
                 Text(status)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -204,10 +204,10 @@ struct AppVersionRow: View {
             if checking {
                 ProgressView()
             } else if updater.available != nil {
-                Button("Скачать") { UIApplication.shared.open(AppUpdater.ipaURL) }
+                Button(L("Скачать")) { UIApplication.shared.open(AppUpdater.ipaURL) }
                     .buttonStyle(.borderedProminent)
             } else {
-                Button("Проверить") {
+                Button(L("Проверить")) {
                     checking = true
                     Task {
                         await updater.check(force: true)

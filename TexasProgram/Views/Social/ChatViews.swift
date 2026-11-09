@@ -23,10 +23,10 @@ struct ChatListView: View {
                     Image(systemName: "bubble.left.and.bubble.right")
                         .font(.system(size: 30, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.35))
-                    Text("Сообщений пока нет")
+                    Text(L("Сообщений пока нет"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.ink)
-                    Text("Открой профиль друга и нажми «Написать».")
+                    Text(L("Открой профиль друга и нажми «Написать»."))
                         .font(.system(size: 14))
                         .foregroundStyle(Color.ink.opacity(0.55))
                         .multilineTextAlignment(.center)
@@ -102,12 +102,12 @@ struct ChatRow: View {
                 }
                 HStack {
                     if let live = chat.live, chat.unread == 0 {
-                        Text("Тренируется · \(live.line)")
+                        Text(L("Тренируется · \(live.line)"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Theme.success)
                             .lineLimit(1)
                     } else {
-                        Text((chat.last.fromMe ? "Вы: " : "") + chat.last.preview)
+                        Text((chat.last.fromMe ? L("Вы: ") : "") + chat.last.preview)
                             .font(.system(size: 14, weight: chat.unread > 0 ? .semibold : .regular))
                             .foregroundStyle(Color.ink.opacity(chat.unread > 0 ? 0.9 : 0.5))
                             .lineLimit(1)
@@ -193,7 +193,7 @@ struct ChatView: View {
                             if loadingOlder {
                                 ProgressView().tint(.ink)
                             } else {
-                                Text("Ранние сообщения")
+                                Text(L("Ранние сообщения"))
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(Theme.accent)
                             }
@@ -203,7 +203,7 @@ struct ChatView: View {
                     if loading && messages.isEmpty {
                         ProgressView().tint(.ink).padding(30)
                     } else if messages.isEmpty {
-                        Text("Напиши первым — например, позови на тренировку.")
+                        Text(L("Напиши первым — например, позови на тренировку."))
                             .font(.system(size: 14))
                             .foregroundStyle(Color.ink.opacity(0.5))
                             .multilineTextAlignment(.center)
@@ -339,16 +339,16 @@ struct ChatView: View {
             ChatWorkoutDetail(workout: opened.workout, author: opened.author)
         }
         .confirmationDialog(
-            failed.flatMap { $0.clientId }.flatMap { social.pendingFailures[$0] } ?? "Сообщение не отправлено",
+            failed.flatMap { $0.clientId }.flatMap { social.pendingFailures[$0] } ?? L("Сообщение не отправлено"),
             isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } }),
             titleVisibility: .visible,
             presenting: failed
         ) { message in
-            Button("Повторить") {
+            Button(L("Повторить")) {
                 if let clientId = message.clientId { social.retryPending(clientId) }
             }
-            Button("Удалить", role: .destructive) { delete(message) }
-            Button("Отмена", role: .cancel) {}
+            Button(L("Удалить"), role: .destructive) { delete(message) }
+            Button(L("Отмена"), role: .cancel) {}
         }
         .onAppear {
             AppChrome.shared.hidesTabBar = true
@@ -413,7 +413,7 @@ struct ChatView: View {
                     .padding(.vertical, 6)
                     .chatGlass(Capsule())
             } else if waitingForNetwork {
-                Label("Нет связи — сообщения уйдут сами, когда она появится", systemImage: "wifi.slash")
+                Label(L("Нет связи — сообщения уйдут сами, когда она появится"), systemImage: "wifi.slash")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.8))
                     .padding(.horizontal, 12)
@@ -458,7 +458,7 @@ struct ChatView: View {
                             .foregroundStyle(.white, .black.opacity(0.6))
                     }
                     .offset(x: 6, y: -6)
-                    .accessibilityLabel("Убрать фото")
+                    .accessibilityLabel(L("Убрать фото"))
                 }
                 .padding(6)
                 .chatGlass(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -470,10 +470,10 @@ struct ChatView: View {
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 } else {
                 Menu {
-                    Button { showingCamera = true } label: { Label("Снять фото", systemImage: "camera") }
+                    Button { showingCamera = true } label: { Label(L("Снять фото"), systemImage: "camera") }
                         .disabled(!CameraPicker.isAvailable)
                     // Не PhotosPicker прямо в меню: оттуда он на iOS не открывается.
-                    Button { showingGallery = true } label: { Label("Из галереи", systemImage: "photo.on.rectangle") }
+                    Button { showingGallery = true } label: { Label(L("Из галереи"), systemImage: "photo.on.rectangle") }
                 } label: {
                     Image(systemName: "paperclip")
                         .font(.system(size: 18, weight: .semibold))
@@ -485,9 +485,9 @@ struct ChatView: View {
                 }
                 .disabled(editing != nil)
                 .opacity(editing == nil ? 1 : 0.4)
-                .accessibilityLabel("Прикрепить фото")
+                .accessibilityLabel(L("Прикрепить фото"))
 
-                TextField(editing == nil ? "Сообщение" : "Новый текст", text: $draft, axis: .vertical)
+                TextField(editing == nil ? L("Сообщение") : L("Новый текст"), text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($typing)
                     .font(.system(size: 16))
@@ -512,7 +512,7 @@ struct ChatView: View {
                 }
                 .buttonStyle(PressableStyle(scale: 0.88))
                 .disabled(!canSend)
-                .accessibilityLabel(editing == nil ? "Отправить" : "Сохранить")
+                .accessibilityLabel(editing == nil ? L("Отправить") : L("Сохранить"))
                 .animation(Motion.snappy, value: canSend)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
@@ -615,7 +615,7 @@ struct ChatView: View {
                         finishRecording()
                     }
             )
-            .accessibilityLabel("Голосовое: удерживай и говори")
+            .accessibilityLabel(L("Голосовое: удерживай и говори"))
     }
 
     private func beginRecording() {
@@ -971,7 +971,7 @@ struct TypingBubble: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(Color.tone(0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .accessibilityLabel("Печатает")
+            .accessibilityLabel(L("Печатает"))
             Spacer(minLength: 60)
         }
         .onAppear { bouncing = true }
@@ -1019,7 +1019,7 @@ struct MessageBubble: View {
                 }
                 if failure != nil {
                     Button(action: onFailedTap) {
-                        Label("Не отправлено — нажми", systemImage: "exclamationmark.circle.fill")
+                        Label(L("Не отправлено — нажми"), systemImage: "exclamationmark.circle.fill")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Theme.record)
                     }
@@ -1095,7 +1095,7 @@ struct MessageBubble: View {
             } else if let workout = message.workout {
                 ChatWorkoutCard(workout: workout, fromMe: message.fromMe) { onOpenWorkout(workout) }
             } else if !message.text.isEmpty {
-                Text(message.text)
+                Text(verbatim: message.text)
                     .font(.system(size: 16))
                     .foregroundStyle(message.fromMe ? Color.white : Color.ink.opacity(0.92))
                     .textSelection(.enabled)
@@ -1105,7 +1105,7 @@ struct MessageBubble: View {
             }
             HStack(spacing: 4) {
                 if message.edited {
-                    Text("изменено")
+                    Text(L("изменено"))
                 }
                 Text(message.date, format: .dateTime.hour().minute())
                 if message.fromMe {
@@ -1141,25 +1141,25 @@ struct MessageBubble: View {
                     }
                 }
                 .controlGroupStyle(.palette)
-                Button(action: onReply) { Label("Ответить", systemImage: "arrowshape.turn.up.left") }
+                Button(action: onReply) { Label(L("Ответить"), systemImage: "arrowshape.turn.up.left") }
             }
             if message.canForward {
-                Button(action: onForward) { Label("Переслать", systemImage: "arrowshape.turn.up.right") }
+                Button(action: onForward) { Label(L("Переслать"), systemImage: "arrowshape.turn.up.right") }
             }
             if message.canEdit {
-                Button(action: onEdit) { Label("Изменить", systemImage: "pencil") }
+                Button(action: onEdit) { Label(L("Изменить"), systemImage: "pencil") }
             }
             if !message.text.isEmpty && message.voice == nil && message.workout == nil {
                 Button {
                     UIPasteboard.general.string = message.text
-                } label: { Label("Скопировать", systemImage: "doc.on.doc") }
+                } label: { Label(L("Скопировать"), systemImage: "doc.on.doc") }
             }
             if failure != nil {
-                Button(action: onFailedTap) { Label("Повторить", systemImage: "arrow.clockwise") }
+                Button(action: onFailedTap) { Label(L("Повторить"), systemImage: "arrow.clockwise") }
             }
             if message.fromMe {
                 Button(role: .destructive, action: onDelete) {
-                    Label(message.isLocal ? "Не отправлять" : "Удалить", systemImage: "trash")
+                    Label(message.isLocal ? L("Не отправлять") : L("Удалить"), systemImage: "trash")
                 }
             }
         }
@@ -1183,7 +1183,7 @@ struct MessageBubble: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(quote.fromMe ? "Вы" : "@\(username)")
+                Text(quote.fromMe ? L("Вы") : "@\(username)")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(message.fromMe ? Color.white : Theme.accent)
                     .lineLimit(1)
@@ -1377,7 +1377,7 @@ struct VoiceMessageContent: View {
             }
             .buttonStyle(.pressable)
             .disabled(isLocal)
-            .accessibilityLabel(playing ? "Пауза" : "Слушать голосовое, \(Int(voice.duration.rounded())) с")
+            .accessibilityLabel(playing ? L("Пауза") : L("Слушать голосовое, \(Int(voice.duration.rounded())) с"))
 
             TimelineView(.animation(paused: !playing)) { _ in
                 VStack(alignment: .leading, spacing: 3) {
@@ -1409,7 +1409,7 @@ struct VoiceMessageContent: View {
                                 .fill(fromMe ? Color.white : Theme.accent)
                                 .frame(width: 6, height: 6)
                                 .transition(.scale.combined(with: .opacity))
-                                .accessibilityLabel("Не прослушано")
+                                .accessibilityLabel(L("Не прослушано"))
                         }
                         Spacer(minLength: 0)
                         if playing {
@@ -1423,7 +1423,7 @@ struct VoiceMessageContent: View {
                                     .contentTransition(.numericText())
                             }
                             .buttonStyle(.pressable)
-                            .accessibilityLabel("Скорость \(rateText)")
+                            .accessibilityLabel(L("Скорость \(rateText)"))
                             .transition(.scale.combined(with: .opacity))
                         }
                     }
@@ -1501,7 +1501,7 @@ struct VoiceRecordingStrip: View {
             HStack(spacing: 3) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 12, weight: .bold))
-                Text("отмена")
+                Text(L("отмена"))
                     .font(.system(size: 14, weight: .semibold))
             }
             .foregroundStyle(Color.ink.opacity(0.6))
@@ -1573,7 +1573,7 @@ struct ImageViewer: View {
                     .chatGlass(Circle(), interactive: true)
             }
             .padding(16)
-            .accessibilityLabel("Закрыть")
+            .accessibilityLabel(L("Закрыть"))
         }
     }
 }

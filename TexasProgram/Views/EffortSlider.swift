@@ -52,8 +52,8 @@ struct EffortSlider: View {
         .background(Color.tone(0.086), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.ink.opacity(0.08), lineWidth: 1))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Усилие")
-        .accessibilityValue(score.map { "\($0) из 10, \(EffortScale.titles[$0] ?? "")" } ?? "не указано")
+        .accessibilityLabel(L("Усилие"))
+        .accessibilityValue(score.map { L("\($0) из 10, \(EffortScale.titles[$0] ?? "")") } ?? L("не указано"))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: set(min((score ?? 0) + 1, 10))
@@ -85,7 +85,7 @@ struct EffortSlider: View {
                     .frame(height: 36)
             }
             Spacer()
-            Text(score.flatMap { EffortScale.titles[$0] } ?? "Можно пропустить")
+            Text(score.flatMap { EffortScale.titles[$0] } ?? L("Можно пропустить"))
                 .font(.system(size: 14, weight: score == nil ? .medium : .semibold))
                 .foregroundStyle(score.map { EffortScale.color($0) } ?? Color.ink.opacity(0.4))
                 .contentTransition(.opacity)

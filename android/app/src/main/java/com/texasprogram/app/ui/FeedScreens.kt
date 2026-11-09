@@ -35,7 +35,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -630,7 +629,7 @@ fun PersonRow(person: SocialUserShort, onOpen: () -> Unit, onChange: (SocialUser
                     LevelChip(person.level)
                 }
                 if (person.bio.isNotBlank()) {
-                    Text(person.bio, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    RawText(person.bio, color = Theme.ink.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

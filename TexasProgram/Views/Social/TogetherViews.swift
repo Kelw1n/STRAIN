@@ -16,7 +16,7 @@ struct TogetherInviteBanner: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
-                Text("зовёт на тренировку")
+                Text(L("зовёт на тренировку"))
                     .font(.system(size: 13))
                     .foregroundStyle(Color.ink.opacity(0.65))
                     .lineLimit(2)
@@ -30,9 +30,9 @@ struct TogetherInviteBanner: View {
                     .frame(width: 36, height: 36)
                     .background(Color.ink.opacity(0.12), in: Circle())
             }
-            .accessibilityLabel("Отказаться")
+            .accessibilityLabel(L("Отказаться"))
             Button { respond(accept: true) } label: {
-                Text("Принять")
+                Text(L("Принять"))
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.canvas)
                     .padding(.horizontal, 14)
@@ -72,7 +72,7 @@ struct PartnerStatus: View {
             AvatarView(imageId: together.partner.avatar, username: together.partner.username, size: compact ? 34 : 42)
                 .overlay(Circle().strokeBorder(together.partnerLive != nil ? Theme.success : Color.ink.opacity(0.2), lineWidth: 2).padding(-3))
             VStack(alignment: .leading, spacing: 2) {
-                Text("Вместе с @\(together.partner.username)")
+                Text(L("Вместе с @\(together.partner.username)"))
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
@@ -103,17 +103,17 @@ struct TogetherCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("СОВМЕСТНАЯ ТРЕНИРОВКА")
+            Text(L("СОВМЕСТНАЯ ТРЕНИРОВКА"))
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Color.ink.opacity(0.5))
             HStack(spacing: 10) {
                 PartnerStatus(together: together)
-                Button("Выйти") { confirmLeave = true }
+                Button(L("Выйти")) { confirmLeave = true }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.6))
             }
-            Text("Начни тренировку как обычно — друг увидит твои подходы, а пост выйдет на двоих.")
+            Text(L("Начни тренировку как обычно — друг увидит твои подходы, а пост выйдет на двоих."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.45))
                 .fixedSize(horizontal: false, vertical: true)
@@ -121,8 +121,8 @@ struct TogetherCard: View {
         .padding(14)
         .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.success.opacity(0.25), lineWidth: 1))
-        .confirmationDialog("Выйти из совместной тренировки?", isPresented: $confirmLeave, titleVisibility: .visible) {
-            Button("Выйти", role: .destructive) {
+        .confirmationDialog(L("Выйти из совместной тренировки?"), isPresented: $confirmLeave, titleVisibility: .visible) {
+            Button(L("Выйти"), role: .destructive) {
                 Task { try? await SocialService.shared.respondTogether(together.id, "leave") }
             }
         }
@@ -174,7 +174,7 @@ struct InviteBubble: View {
                         .frame(width: 40, height: 40)
                         .background(Theme.success.opacity(0.85), in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(message.fromMe ? "Ты зовёшь @\(username)" : "Тренируемся вместе?")
+                        Text(message.fromMe ? L("Ты зовёшь @\(username)") : L("Тренируемся вместе?"))
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.ink)
                         Text(invite.statusText)
@@ -256,7 +256,7 @@ struct InviteButton: View {
                         Image(systemName: "figure.strengthtraining.traditional")
                             .font(.system(size: 16, weight: .bold))
                     }
-                    Text("Тренироваться вместе")
+                    Text(L("Тренироваться вместе"))
                         .font(.system(size: 16, weight: .bold))
                 }
                 .foregroundStyle(.ink)

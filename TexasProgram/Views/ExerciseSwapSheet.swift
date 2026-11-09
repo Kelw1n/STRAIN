@@ -39,7 +39,7 @@ struct ExerciseSwapSheet: View {
                         scopePicker(exercise)
                         let marked = exercise.sets.filter(\.isDone).count
                         if marked > 0 {
-                            Text("Отмеченные подходы этого упражнения (\(marked)) снимутся — их место займёт новое.")
+                            Text(L("Отмеченные подходы этого упражнения (\(marked)) снимутся — их место займёт новое."))
                                 .font(.system(size: 12))
                                 .foregroundStyle(Theme.warning)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -52,11 +52,11 @@ struct ExerciseSwapSheet: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Заменить упражнение")
+            .navigationTitle(L("Заменить упражнение"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") { dismiss() }.foregroundStyle(.ink)
+                    Button(L("Отмена")) { dismiss() }.foregroundStyle(.ink)
                 }
             }
             .task { load() }
@@ -67,11 +67,11 @@ struct ExerciseSwapSheet: View {
         HStack(spacing: 12) {
             ExerciseThumb(name: exercise.prescription.name, size: 52)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Вместо «\(exercise.prescription.name)»")
+                Text(L("Вместо «\(exercise.prescription.name)»"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(2)
-                Text("\(RuPlural.sets(exercise.sets.count)) по \(exercise.prescription.reps) — схема остаётся")
+                Text(L("\(RuPlural.sets(exercise.sets.count)) по \(exercise.prescription.reps) — схема остаётся"))
                     .font(.system(size: 13))
                     .foregroundStyle(Color.ink.opacity(0.5))
             }
@@ -120,12 +120,12 @@ struct ExerciseSwapSheet: View {
 
     private var customField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("СВОЁ УПРАЖНЕНИЕ")
+            Text(L("СВОЁ УПРАЖНЕНИЕ"))
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Color.ink.opacity(0.45))
             HStack(spacing: 8) {
-                TextField("Название", text: $custom)
+                TextField(L("Название"), text: $custom)
                     .focused($typing)
                     .submitLabel(.done)
                     .onSubmit(chooseCustom)
@@ -134,7 +134,7 @@ struct ExerciseSwapSheet: View {
                     .padding(.horizontal, 14)
                     .frame(height: 46)
                     .background(Color.tone(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                Button("Заменить", action: chooseCustom)
+                Button(L("Заменить"), action: chooseCustom)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.canvas)
                     .padding(.horizontal, 14)
@@ -149,13 +149,13 @@ struct ExerciseSwapSheet: View {
     @ViewBuilder
     private func scopePicker(_ exercise: ActiveExerciseState) -> some View {
         if profile.isProgramLift(exercise.prescription) {
-            Text("Это основное движение программы — его меняем только на сегодня, в следующий раз оно вернётся.")
+            Text(L("Это основное движение программы — его меняем только на сегодня, в следующий раз оно вернётся."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.45))
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                Picker("Насколько", selection: $scope) {
+                Picker(L("Насколько"), selection: $scope) {
                     ForEach(SwapScope.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)

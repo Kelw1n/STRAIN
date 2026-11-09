@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.LocalizedDateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +26,6 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -138,7 +138,7 @@ private fun RecordTotalLine(total: Double, bodyWeight: Double?) {
 
 // MARK: - Все рекорды
 
-private val recordDate = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("ru"))
+private val recordDate = LocalizedDateFormat("d MMM yyyy", "MMM d, yyyy")
 
 /// Все рекорды человека. В своём профиле строка открывает историю движения.
 @Composable
@@ -220,7 +220,7 @@ private fun RecordRow(record: SocialRecord, opens: Boolean, onOpen: () -> Unit) 
                     Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Theme.accent, modifier = Modifier.size(12.dp))
                 }
             }
-            val detail = if (record.date > 0) "${record.setText} · ${PersonalRecords.localDate(record).format(recordDate)}" else record.setText
+            val detail = if (record.date > 0) "${record.setText} · ${recordDate.format(PersonalRecords.localDate(record))}" else record.setText
             Text(detail, color = Theme.ink.copy(alpha = 0.5f), fontSize = 12.sp)
         }
         Spacer(Modifier.width(8.dp))

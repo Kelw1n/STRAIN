@@ -16,7 +16,7 @@ struct TrainingRecapEntryCard: View {
                     Image(systemName: "sparkles")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(Theme.accent)
-                    Text("ИТОГИ")
+                    Text(L("ИТОГИ"))
                         .font(.system(size: 12, weight: .bold))
                         .tracking(1.2)
                         .foregroundStyle(Color.ink.opacity(0.55))
@@ -29,7 +29,7 @@ struct TrainingRecapEntryCard: View {
                                 opened = TrainingRecap.build(profile, period: period)
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(period.isYear ? "Год" : "Месяц")
+                                    Text(period.isYear ? L("Год") : L("Месяц"))
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(Color.ink.opacity(0.75))
                                     Text(period.title)
@@ -192,7 +192,7 @@ struct TrainingRecapView: View {
                             .background(Color.black.opacity(0.25), in: Circle())
                     }
                     .buttonStyle(.pressable)
-                    .accessibilityLabel("Закрыть")
+                    .accessibilityLabel(L("Закрыть"))
                 }
             }
             .padding(.horizontal, 14)
@@ -246,7 +246,7 @@ struct TrainingRecapView: View {
         case .intro:
             VStack(alignment: .leading, spacing: 18) {
                 Spacer()
-                Text("Твой \(recap.period.name)")
+                Text(L("Твой \(recap.period.name)"))
                     .font(.system(size: 44, weight: .black, design: Theme.fontDesign))
                     .foregroundStyle(.ink)
                     .minimumScaleFactor(0.6)
@@ -254,40 +254,40 @@ struct TrainingRecapView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     CountUpText(value: Double(recap.workouts)) { "\(Int($0.rounded()))" }
                         .font(.system(size: 96, weight: .black, design: Theme.fontDesign))
-                    Text(RuPlural.word(recap.workouts, "тренировка", "тренировки", "тренировок"))
+                    Text(RuPlural.word(recap.workouts, L("тренировка"), L("тренировки"), L("тренировок")))
                         .font(.system(size: 24, weight: .bold))
                 }
                 .foregroundStyle(.ink)
                 if recap.previousWorkouts > 0 {
-                    Text(changeLine(now: recap.workouts, before: recap.previousWorkouts, noun: "тренировок"))
+                    Text(changeLine(now: recap.workouts, before: recap.previousWorkouts, noun: L("тренировок")))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.85))
                 }
                 Spacer()
-                Label("Нажми, чтобы листать", systemImage: "hand.tap.fill")
+                Label(L("Нажми, чтобы листать"), systemImage: "hand.tap.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.7))
             }
         case .time:
             VStack(alignment: .leading, spacing: 16) {
                 Spacer()
-                Text("Время в зале")
+                Text(L("Время в зале"))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Color.ink.opacity(0.85))
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     CountUpText(value: Double(recap.hours)) { "\(Int($0.rounded()))" }
                         .font(.system(size: 88, weight: .black, design: Theme.fontDesign))
-                    Text("ч")
+                    Text(L("ч"))
                         .font(.system(size: 30, weight: .heavy))
                     CountUpText(value: Double(recap.minutes)) { "\(Int($0.rounded()))" }
                         .font(.system(size: 56, weight: .black, design: Theme.fontDesign))
-                    Text("мин")
+                    Text(L("мин"))
                         .font(.system(size: 24, weight: .heavy))
                 }
                 .foregroundStyle(.ink)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
-                Text("\(RuPlural.sets(recap.sets)) и \(SocialFormat.grouped(Double(recap.reps))) \(RuPlural.word(recap.reps, "повтор", "повтора", "повторов")) \(recap.period.inPhrase)")
+                Text(L("\(RuPlural.sets(recap.sets)) и \(SocialFormat.grouped(Double(recap.reps))) \(RuPlural.word(recap.reps, "повтор", "повтора", "повторов")) \(recap.period.inPhrase)"))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.85))
                 RecapBars(values: recap.buckets, labels: barLabels)
@@ -298,25 +298,25 @@ struct TrainingRecapView: View {
         case .volume:
             VStack(alignment: .leading, spacing: 16) {
                 Spacer()
-                Text("Поднято \(recap.period.inPhrase)")
+                Text(L("Поднято \(recap.period.inPhrase)"))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Color.ink.opacity(0.85))
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     CountUpText(value: recap.volumeKg / 1000) { String(format: "%.1f", $0).replacingOccurrences(of: ".", with: ",") }
                         .font(.system(size: 96, weight: .black, design: Theme.fontDesign))
-                    Text("т")
+                    Text(L("т"))
                         .font(.system(size: 36, weight: .heavy))
                 }
                 .foregroundStyle(.ink)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 if let comparison = recap.volumeComparison {
-                    Text("Это \(comparison) 🐘")
+                    Text(L("Это \(comparison) 🐘"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.ink)
                 }
                 if let change = recap.volumeChange {
-                    Text(change >= 0 ? "На \(change)% больше, чем \(previousPhrase)" : "На \(-change)% меньше, чем \(previousPhrase)")
+                    Text(change >= 0 ? L("На \(change)% больше, чем \(previousPhrase)") : L("На \(-change)% меньше, чем \(previousPhrase)"))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.85))
                 }
@@ -333,18 +333,18 @@ struct TrainingRecapView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         CountUpText(value: Double(recap.records)) { "\(Int($0.rounded()))" }
                             .font(.system(size: 96, weight: .black, design: Theme.fontDesign))
-                        Text(RuPlural.word(recap.records, "рекорд", "рекорда", "рекордов"))
+                        Text(RuPlural.word(recap.records, L("рекорд"), L("рекорда"), L("рекордов")))
                             .font(.system(size: 26, weight: .bold))
                     }
                     .foregroundStyle(.ink)
                 } else {
-                    Text("Рекордов не было — значит, всё впереди")
+                    Text(L("Рекордов не было — значит, всё впереди"))
                         .font(.system(size: 26, weight: .heavy))
                         .foregroundStyle(.ink)
                 }
                 if let heaviest = recap.heaviest {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Самый тяжёлый подход")
+                        Text(L("Самый тяжёлый подход"))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color.ink.opacity(0.8))
                         Text("\(heaviest.name) · \(WeightFormat.kilogramsPrecise(heaviest.bestWeight)) × \(heaviest.bestReps)")
@@ -360,7 +360,7 @@ struct TrainingRecapView: View {
         case .favorite:
             VStack(alignment: .leading, spacing: 16) {
                 Spacer()
-                Text("Любимое упражнение")
+                Text(L("Любимое упражнение"))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Color.ink.opacity(0.85))
                 if let favorite = recap.favorite {
@@ -380,7 +380,7 @@ struct TrainingRecapView: View {
                 }
                 if !recap.topByVolume.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("БОЛЬШЕ ВСЕГО ПОДНЯТО")
+                        Text(L("БОЛЬШЕ ВСЕГО ПОДНЯТО"))
                             .font(.system(size: 12, weight: .heavy))
                             .tracking(1.1)
                             .foregroundStyle(Color.ink.opacity(0.7))
@@ -393,7 +393,7 @@ struct TrainingRecapView: View {
                                     .font(.system(size: 17, weight: .bold))
                                     .lineLimit(1)
                                 Spacer()
-                                Text("\(SocialFormat.grouped(stat.volumeKg)) кг")
+                                Text(L("\(SocialFormat.grouped(stat.volumeKg)) кг"))
                                     .font(.system(size: 16, weight: .heavy, design: Theme.fontDesign))
                                     .monospacedDigit()
                             }
@@ -415,18 +415,18 @@ struct TrainingRecapView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     CountUpText(value: Double(recap.longestWeekStreak)) { "\(Int($0.rounded()))" }
                         .font(.system(size: 96, weight: .black, design: Theme.fontDesign))
-                    Text(RuPlural.word(recap.longestWeekStreak, "неделя", "недели", "недель") + " подряд")
+                    Text(RuPlural.word(recap.longestWeekStreak, L("неделя"), L("недели"), L("недель")) + L(" подряд"))
                         .font(.system(size: 24, weight: .bold))
                 }
                 .foregroundStyle(.ink)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
-                Text("Самая длинная серия: каждую неделю — хотя бы одна тренировка. Всего недель с тренировками — \(recap.activeWeeks).")
+                Text(L("Самая длинная серия: каждую неделю — хотя бы одна тренировка. Всего недель с тренировками — \(recap.activeWeeks)."))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
                 if let weekday = recap.busiestWeekday {
-                    Text("Чаще всего ты тренировался(-ась) по \(Self.weekdayDative[weekday])")
+                    Text(L("Чаще всего ты тренировался(-ась) по \(Self.weekdayDative[weekday])"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -445,7 +445,7 @@ struct TrainingRecapView: View {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     if let image = TrainingRecapCard.render(recap) { shareImage = ShareImage(image: image) }
                 } label: {
-                    Label("Поделиться в сторис", systemImage: "square.and.arrow.up")
+                    Label(L("Поделиться в сторис"), systemImage: "square.and.arrow.up")
                         .font(.system(size: 16, weight: .heavy))
                         .foregroundStyle(.canvas)
                         .frame(maxWidth: .infinity)
@@ -453,7 +453,7 @@ struct TrainingRecapView: View {
                         .background(Color.ink, in: Capsule())
                 }
                 .buttonStyle(.pressable)
-                Button("Сначала") { go(-page) }
+                Button(L("Сначала")) { go(-page) }
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.85))
                 Spacer(minLength: 0)
@@ -595,7 +595,7 @@ struct TrainingRecapCard: View {
                     .font(.system(size: 18, weight: .black, design: Theme.fontDesign))
                     .tracking(2)
                 Spacer()
-                Text(recap.period.isYear ? "ИТОГИ ГОДА" : "ИТОГИ МЕСЯЦА")
+                Text(recap.period.isYear ? L("ИТОГИ ГОДА") : L("ИТОГИ МЕСЯЦА"))
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.2)
                     .foregroundStyle(Color.ink.opacity(0.75))

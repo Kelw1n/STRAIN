@@ -36,7 +36,7 @@ struct ProfileTabView: View {
                             path: $path,
                             primaryAction: {
                                 Button { showingEdit = true } label: {
-                                    Text("Редактировать")
+                                    Text(L("Редактировать"))
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundStyle(.ink)
                                         .frame(maxWidth: .infinity)
@@ -85,7 +85,7 @@ struct ProfileTabView: View {
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.ink)
                     }
-                    .accessibilityLabel("Настройки")
+                    .accessibilityLabel(L("Настройки"))
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -247,7 +247,7 @@ struct UserProfileView: View {
                                     FollowButton(isFollowing: user.isFollowing) { toggleFollow(user) }
                                         .disabled(busy)
                                     Button { path.append(FeedRoute.chat(user.username)) } label: {
-                                        Text("Написать")
+                                        Text(L("Написать"))
                                             .font(.system(size: 16, weight: .bold))
                                             .foregroundStyle(.ink)
                                             .frame(maxWidth: .infinity)
@@ -376,8 +376,8 @@ struct ProfileContent<Action: View>: View {
             achievementsCard
             recordsCard
             Picker("", selection: $tab) {
-                Text("Тренировки").tag(0)
-                Text("Программы").tag(1)
+                Text(L("Тренировки")).tag(0)
+                Text(L("Программы")).tag(1)
             }
             .pickerStyle(.segmented)
             if tab == 0 { postsList } else { programsList }
@@ -410,10 +410,10 @@ struct ProfileContent<Action: View>: View {
                     LevelChip(level: user.level, large: true, opens: true)
                 }
                 .buttonStyle(.pressable)
-                .accessibilityHint("Открыть уровень")
+                .accessibilityHint(L("Открыть уровень"))
             }
             if user.challengeWins > 0 {
-                Label("\(user.challengeWins) \(RuPlural.word(user.challengeWins, "победа", "победы", "побед")) в челленджах", systemImage: "trophy.fill")
+                Label(L("\(user.challengeWins) \(RuPlural.word(user.challengeWins, "победа", "победы", "побед")) в челленджах"), systemImage: "trophy.fill")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(ChallengePlace.color(1))
             }
@@ -448,8 +448,8 @@ struct ProfileContent<Action: View>: View {
                 pressingAvatar = pressing && user.avatar != nil
             }
             .accessibilityAddTraits(user.avatar == nil ? [] : .isButton)
-            .accessibilityLabel(user.avatar == nil ? "" : "Аватарка @\(user.username)")
-            .accessibilityHint(user.avatar == nil ? "" : "Открыть на весь экран")
+            .accessibilityLabel(user.avatar == nil ? "" : L("Аватарка @\(user.username)"))
+            .accessibilityHint(user.avatar == nil ? "" : L("Открыть на весь экран"))
             .avatarViewer(isPresented: $viewingAvatar, imageId: user.avatar, username: user.username)
             .sheet(isPresented: $showingLevel) {
                 if let levelProfile {
@@ -485,12 +485,12 @@ struct ProfileContent<Action: View>: View {
         Button(action: onAchievements) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text("ДОСТИЖЕНИЯ")
+                    Text(L("ДОСТИЖЕНИЯ"))
                         .font(.system(size: 13, weight: .bold))
                         .tracking(1.4)
                         .foregroundStyle(Color.ink.opacity(0.5))
                     Spacer()
-                    Text("Все \(achievedCount)")
+                    Text(L("Все \(achievedCount)"))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(Color.ink.opacity(0.6))
                     Image(systemName: "chevron.right")
@@ -498,7 +498,7 @@ struct ProfileContent<Action: View>: View {
                         .foregroundStyle(Color.ink.opacity(0.4))
                 }
                 if badges.isEmpty {
-                    Text("Первая медаль — за первую тренировку")
+                    Text(L("Первая медаль — за первую тренировку"))
                         .font(.system(size: 14))
                         .foregroundStyle(Color.ink.opacity(0.5))
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -529,7 +529,7 @@ struct ProfileContent<Action: View>: View {
         if let postsError, posts.isEmpty {
             SocialErrorCard(message: postsError)
         } else if posts.isEmpty && !loadingPosts {
-            Text(user.isMe ? "Опубликуй тренировку в конце занятия — она появится здесь." : "Тренировок пока нет")
+            Text(user.isMe ? L("Опубликуй тренировку в конце занятия — она появится здесь.") : L("Тренировок пока нет"))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.5))
                 .multilineTextAlignment(.center)
@@ -556,7 +556,7 @@ struct ProfileContent<Action: View>: View {
     @ViewBuilder
     private var programsList: some View {
         if programs.isEmpty {
-            Text("Программа не выбрана")
+            Text(L("Программа не выбрана"))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.5))
                 .padding(.vertical, 20)
@@ -660,19 +660,19 @@ struct SignUpView: View {
                     .frame(height: 150)
                     .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     .overlay(alignment: .bottomLeading) {
-                        Text("Профиль STRAIN")
+                        Text(L("Профиль STRAIN"))
                             .font(.system(size: 30, weight: .heavy, design: Theme.fontDesign))
                             .foregroundStyle(.ink)
                             .padding(18)
                     }
 
-                Text("Публикуй тренировки с фото, подписывайся на друзей, ставь лайки и пиши комментарии. Свои веса и программа видны в профиле.")
+                Text(L("Публикуй тренировки с фото, подписывайся на друзей, ставь лайки и пиши комментарии. Свои веса и программа видны в профиле."))
                     .font(.system(size: 15))
                     .foregroundStyle(Color.ink.opacity(0.65))
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("ЮЗЕРНЕЙМ")
+                    Text(L("ЮЗЕРНЕЙМ"))
                         .font(.system(size: 12, weight: .bold))
                         .tracking(1.2)
                         .foregroundStyle(Color.ink.opacity(0.45))
@@ -689,7 +689,7 @@ struct SignUpView: View {
                     .padding(.horizontal, 16)
                     .frame(height: 54)
                     .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    Text("Латиница, цифры, точка и подчёркивание, от 3 до 24 символов. Поменять можно потом.")
+                    Text(L("Латиница, цифры, точка и подчёркивание, от 3 до 24 символов. Поменять можно потом."))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.ink.opacity(0.45))
                 }
@@ -697,7 +697,7 @@ struct SignUpView: View {
                 Button(action: register) {
                     HStack {
                         if busy { ProgressView().tint(.canvas) }
-                        Text("Создать профиль")
+                        Text(L("Создать профиль"))
                     }
                     .font(.system(size: 17, weight: .heavy, design: Theme.fontDesign))
                     .foregroundStyle(.canvas)
@@ -717,24 +717,24 @@ struct SignUpView: View {
 
                 DisclosureGroup(isExpanded: $showingCode) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Код входа есть в настройках профиля на старом телефоне («Редактировать» → «Код входа»). Он же лежит в резервной копии STRAIN.")
+                        Text(L("Код входа есть в настройках профиля на старом телефоне («Редактировать» → «Код входа»). Он же лежит в резервной копии STRAIN."))
                             .font(.system(size: 13))
                             .foregroundStyle(Color.ink.opacity(0.55))
                             .fixedSize(horizontal: false, vertical: true)
-                        TextField("Код входа", text: $code)
+                        TextField(L("Код входа"), text: $code)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(size: 14, design: .monospaced))
                             .padding(12)
                             .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        Button("Войти по коду", action: signIn)
+                        Button(L("Войти по коду"), action: signIn)
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(Theme.accent)
                             .disabled(busy || code.isEmpty)
                     }
                     .padding(.top, 10)
                 } label: {
-                    Text("У меня уже есть профиль")
+                    Text(L("У меня уже есть профиль"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.ink)
                 }
@@ -816,15 +816,15 @@ struct EditProfileView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Профиль")
+            .navigationTitle(L("Профиль"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
+                    Button(L("Отмена")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) {
-                        if saving { ProgressView() } else { Text("Готово").bold() }
+                        if saving { ProgressView() } else { Text(L("Готово")).bold() }
                     }
                     .disabled(saving || uploading != nil)
                 }
@@ -834,16 +834,16 @@ struct EditProfileView: View {
             .onChange(of: avatarItem) { _, item in upload(item, kind: .avatar) }
             .onChange(of: coverItem) { _, item in upload(item, kind: .cover) }
             .cameraSheet(isPresented: $showingCamera) { image in upload(image, kind: .avatar) }
-            .confirmationDialog("Выйти из профиля на этом телефоне?", isPresented: $confirmSignOut, titleVisibility: .visible) {
-                Button("Выйти", role: .destructive) {
+            .confirmationDialog(L("Выйти из профиля на этом телефоне?"), isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button(L("Выйти"), role: .destructive) {
                     social.signOut()
                     dismiss()
                 }
             } message: {
-                Text("Профиль останется на сервере. Вернуться можно по коду входа — сохрани его перед выходом.")
+                Text(L("Профиль останется на сервере. Вернуться можно по коду входа — сохрани его перед выходом."))
             }
-            .confirmationDialog("Удалить профиль навсегда?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Удалить профиль и все посты", role: .destructive) {
+            .confirmationDialog(L("Удалить профиль навсегда?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button(L("Удалить профиль и все посты"), role: .destructive) {
                     Task {
                         do {
                             try await social.deleteAccount()
@@ -854,7 +854,7 @@ struct EditProfileView: View {
                     }
                 }
             } message: {
-                Text("Пропадут все посты, фото, лайки и комментарии. Тренировки в приложении останутся.")
+                Text(L("Пропадут все посты, фото, лайки и комментарии. Тренировки в приложении останутся."))
             }
         }
     }
@@ -871,7 +871,7 @@ struct EditProfileView: View {
                 .overlay { if uploading == "cover" { ProgressView().tint(.ink) } }
                 .overlay(alignment: .topTrailing) {
                     PhotosPicker(selection: $coverItem, matching: .images) {
-                        Label("Изменить обложку", systemImage: "photo")
+                        Label(L("Изменить обложку"), systemImage: "photo")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.ink)
                             .padding(.horizontal, 12)
@@ -881,13 +881,13 @@ struct EditProfileView: View {
                     .padding(10)
                 }
             Menu {
-                Button { showingCamera = true } label: { Label("Снять фото", systemImage: "camera") }
+                Button { showingCamera = true } label: { Label(L("Снять фото"), systemImage: "camera") }
                 // Не PhotosPicker прямо в меню: оттуда он на iOS не открывается.
                 Button { showingAvatarGallery = true } label: {
-                    Label("Выбрать из галереи", systemImage: "photo.on.rectangle")
+                    Label(L("Выбрать из галереи"), systemImage: "photo.on.rectangle")
                 }
                 if social.me?.avatar != nil {
-                    Button(role: .destructive) { clearAvatar() } label: { Label("Убрать фото", systemImage: "trash") }
+                    Button(role: .destructive) { clearAvatar() } label: { Label(L("Убрать фото"), systemImage: "trash") }
                 }
             } label: {
                 ZStack(alignment: .bottomTrailing) {
@@ -912,14 +912,14 @@ struct EditProfileView: View {
     private var fields: some View {
         VStack(spacing: 0) {
             row(icon: "at", title: "Юзернейм") {
-                TextField("юзернейм", text: $username)
+                TextField(L("юзернейм"), text: $username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .multilineTextAlignment(.trailing)
             }
             divider
             row(icon: "text.alignleft", title: "О себе") {
-                TextField("Не заполнено", text: $bio, axis: .vertical)
+                TextField(L("Не заполнено"), text: $bio, axis: .vertical)
                     .lineLimit(1...4)
                     .multilineTextAlignment(.trailing)
             }
@@ -931,15 +931,15 @@ struct EditProfileView: View {
             }
             divider
             row(icon: "scalemass", title: "Вес") {
-                Text(profile.latestBodyWeight.map { WeightFormat.kilogramsPrecise($0) } ?? "из «Замеров веса»")
+                Text(profile.latestBodyWeight.map { WeightFormat.kilogramsPrecise($0) } ?? L("из «Замеров веса»"))
                     .foregroundStyle(Color.ink.opacity(0.55))
             }
             divider
             Toggle(isOn: $showBody) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Показывать рост и вес")
+                    Text(L("Показывать рост и вес"))
                         .font(.system(size: 16, weight: .semibold))
-                    Text("В шапке профиля. Сила к весу в достижениях видна всегда.")
+                    Text(L("В шапке профиля. Сила к весу в достижениях видна всегда."))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.ink.opacity(0.45))
                 }
@@ -950,9 +950,9 @@ struct EditProfileView: View {
             divider
             Toggle(isOn: Binding(get: { social.sharesLive }, set: { social.sharesLive = $0 })) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Показывать, что я тренируюсь")
+                    Text(L("Показывать, что я тренируюсь"))
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Подписчики увидят упражнение и подходы, пока идёт тренировка.")
+                    Text(L("Подписчики увидят упражнение и подходы, пока идёт тренировка."))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.ink.opacity(0.45))
                 }
@@ -969,7 +969,7 @@ struct EditProfileView: View {
             Button { withAnimation(Motion.snappy) { showingCode.toggle() } } label: {
                 HStack {
                     Image(systemName: "key.fill").foregroundStyle(Theme.accent).frame(width: 26)
-                    Text("Код входа на другом телефоне").font(.system(size: 16, weight: .semibold)).foregroundStyle(.ink)
+                    Text(L("Код входа на другом телефоне")).font(.system(size: 16, weight: .semibold)).foregroundStyle(.ink)
                     Spacer()
                     Image(systemName: showingCode ? "chevron.up" : "chevron.down")
                         .font(.system(size: 12, weight: .bold))
@@ -988,11 +988,11 @@ struct EditProfileView: View {
                         UIPasteboard.general.string = token
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                     } label: {
-                        Label("Скопировать", systemImage: "doc.on.doc")
+                        Label(L("Скопировать"), systemImage: "doc.on.doc")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Theme.accent)
                     }
-                    Text("С этим кодом в профиль может войти кто угодно — не публикуй его. Он также сохраняется в резервной копии.")
+                    Text(L("С этим кодом в профиль может войти кто угодно — не публикуй его. Он также сохраняется в резервной копии."))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.ink.opacity(0.45))
                         .fixedSize(horizontal: false, vertical: true)
@@ -1002,13 +1002,13 @@ struct EditProfileView: View {
             }
             divider
             Button { confirmSignOut = true } label: {
-                Text("Выйти из профиля").font(.system(size: 16, weight: .semibold)).foregroundStyle(.ink)
+                Text(L("Выйти из профиля")).font(.system(size: 16, weight: .semibold)).foregroundStyle(.ink)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
             }
             .buttonStyle(PressableStyle(scale: 0.985))
             divider
             Button { confirmDelete = true } label: {
-                Text("Удалить профиль").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.record)
+                Text(L("Удалить профиль")).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.record)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
             }
             .buttonStyle(PressableStyle(scale: 0.985))
@@ -1135,11 +1135,11 @@ struct AchievementsView: View {
                     Text("\(progress.filter { $0.level > 0 }.count)")
                         .font(.system(size: 52, weight: .heavy, design: Theme.fontDesign))
                         .foregroundStyle(.ink)
-                    Text("из \(progress.count)")
+                    Text(L("из \(progress.count)"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(Color.ink.opacity(0.5))
                     Spacer()
-                    Text("ВЗЯТО")
+                    Text(L("ВЗЯТО"))
                         .font(.system(size: 13, weight: .bold))
                         .tracking(1.6)
                         .foregroundStyle(Color.ink.opacity(0.4))
@@ -1176,7 +1176,7 @@ struct AchievementsView: View {
             .padding(.horizontal, 16)
         }
         .background(Color.canvas.ignoresSafeArea())
-        .navigationTitle("Достижения")
+        .navigationTitle(L("Достижения"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -1249,7 +1249,7 @@ struct BadgeListView: View {
                         Text(AchievementKind(rawValue: badge.id)?.title ?? badge.id)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.ink)
-                        Text("Уровень \(badge.level)")
+                        Text(L("Уровень \(badge.level)"))
                             .font(.system(size: 12))
                             .foregroundStyle(Color.ink.opacity(0.5))
                     }
@@ -1257,12 +1257,12 @@ struct BadgeListView: View {
             }
             .padding(16)
             if badges.isEmpty {
-                Text("Медалей пока нет").foregroundStyle(Color.ink.opacity(0.5)).padding(30)
+                Text(L("Медалей пока нет")).foregroundStyle(Color.ink.opacity(0.5)).padding(30)
             }
             Spacer(minLength: 120)
         }
         .background(Color.canvas.ignoresSafeArea())
-        .navigationTitle("Достижения")
+        .navigationTitle(L("Достижения"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

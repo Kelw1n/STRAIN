@@ -86,7 +86,9 @@ enum AchievementKind: String, CaseIterable, Identifiable, Sendable {
     func format(_ value: Double) -> String {
         switch self {
         case .iron:
-            return value < 1000 ? "\(Int(value.rounded())) кг" : WeightFormat.decimal((value / 100).rounded() / 10) + " т"
+            return value < 1000
+                ? "\(Int(value.rounded()))" + (L10n.isEnglish ? " kg" : " кг")
+                : WeightFormat.decimal((value / 100).rounded() / 10) + (L10n.isEnglish ? " t" : " т")
         case .bench, .squat, .deadlift, .total:
             return "×" + WeightFormat.decimal((value * 100).rounded() / 100)
         default:

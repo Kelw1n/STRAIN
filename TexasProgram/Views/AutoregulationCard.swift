@@ -29,7 +29,7 @@ struct AutoregulationCard: View {
             CardView(padding: 16, spacing: 14) {
                 HStack(spacing: 8) {
                     Image(systemName: "dial.medium").font(.footnote.weight(.bold)).foregroundStyle(Theme.accent)
-                    Text("Как прошёл тяжёлый подход").font(.subheadline.weight(.semibold))
+                    Text(L("Как прошёл тяжёлый подход")).font(.subheadline.weight(.semibold))
                 }
 
                 ForEach(lifts, id: \.lift) { item in
@@ -53,7 +53,7 @@ struct AutoregulationCard: View {
                     }
                 }
 
-                Text("Ответ меняет вес только этого движения на следующую неделю. Без ответа неделя идёт с обычной прибавкой.")
+                Text(L("Ответ меняет вес только этого движения на следующую неделю. Без ответа неделя идёт с обычной прибавкой."))
                     .font(.caption2).foregroundStyle(.tertiary)
             }
         }
@@ -85,10 +85,10 @@ struct StallNotice: View {
         let stalled = profile.stalledLifts
         if !stalled.isEmpty {
             CardView(padding: 16, spacing: 8) {
-                Label("Прогресс встал", systemImage: "exclamationmark.triangle.fill")
+                Label(L("Прогресс встал"), systemImage: "exclamationmark.triangle.fill")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(Theme.warning)
-                Text(stalled.map(\.rawValue).joined(separator: ", ") + " — два раза подряд не добрал повторения. Линейная прибавка здесь кончилась: имеет смысл начать новый цикл с пересчитанных максимумов.")
+                Text(stalled.map(\.rawValue).joined(separator: ", ") + L(" — два раза подряд не добрал повторения. Линейная прибавка здесь кончилась: имеет смысл начать новый цикл с пересчитанных максимумов."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -111,19 +111,19 @@ struct WorkoutNoteCard: View {
         CardView(padding: 16, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "note.text").font(.footnote.weight(.bold)).foregroundStyle(Theme.accent)
-                Text("Заметка").font(.subheadline.weight(.semibold))
+                Text(L("Заметка")).font(.subheadline.weight(.semibold))
                 Spacer(minLength: 6)
                 // Заметка многострочная, поэтому Return переносит строку и убрать
                 // клавиатуру им нельзя. Кнопка рядом с заголовком закрывает её
                 // одним касанием, не заставляя листать экран.
                 if typing {
-                    Button("Готово") { typing = false }
+                    Button(L("Готово")) { typing = false }
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                         .buttonStyle(.pressable)
                 }
             }
-            TextField("Как прошло, что болело, как спал", text: $text, axis: .vertical)
+            TextField(L("Как прошло, что болело, как спал"), text: $text, axis: .vertical)
                 .lineLimit(2...6)
                 .font(.footnote)
                 .focused($typing)
@@ -134,10 +134,10 @@ struct WorkoutNoteCard: View {
                     // Панель над самой клавиатурой — привычное место для «Готово».
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
-                        Button("Готово") { typing = false }
+                        Button(L("Готово")) { typing = false }
                     }
                 }
-            Text("Через месяц по этой строке будет понятно, почему неделя вышла такой.")
+            Text(L("Через месяц по этой строке будет понятно, почему неделя вышла такой."))
                 .font(.caption2).foregroundStyle(.tertiary)
         }
         .onAppear {

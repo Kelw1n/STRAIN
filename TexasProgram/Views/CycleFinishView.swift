@@ -11,11 +11,11 @@ struct ProgramFinishedCard: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("ПРОГРАММА ПРОЙДЕНА")
+                        Text(L("ПРОГРАММА ПРОЙДЕНА"))
                             .font(.system(size: 11, weight: .bold))
                             .tracking(1.2)
                             .foregroundStyle(Theme.accent)
-                        Text("\(recap.weeks) \(RuPlural.word(recap.weeks, "неделя", "недели", "недель")) позади")
+                        Text(L("\(recap.weeks) \(RuPlural.word(recap.weeks, "неделя", "недели", "недель")) позади"))
                             .font(.system(size: 20, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(.ink)
                     }
@@ -32,7 +32,7 @@ struct ProgramFinishedCard: View {
                     }
                 }
                 HStack {
-                    Text("Что дальше")
+                    Text(L("Что дальше"))
                         .font(.system(size: 15, weight: .bold))
                     Spacer()
                     Image(systemName: "arrow.right")
@@ -106,10 +106,10 @@ struct CycleFinishView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
-            .navigationTitle(profile.isProgramFinished ? "Цикл \(profile.cycleNumber) пройден" : "Новый цикл")
+            .navigationTitle(profile.isProgramFinished ? L("Цикл \(profile.cycleNumber) пройден") : L("Новый цикл"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Закрыть")) { dismiss() } }
             }
             .sheet(isPresented: $showingEditor) { editor }
             .sheet(isPresented: $showingManual) {
@@ -120,14 +120,14 @@ struct CycleFinishView: View {
                 }
             }
             .sheet(isPresented: $showingPeaking) { PeakingView(profile: profile) }
-            .confirmationDialog("Повторить цикл с теми же весами?", isPresented: $confirmRepeat, titleVisibility: .visible) {
-                Button("Повторить") {
+            .confirmationDialog(L("Повторить цикл с теми же весами?"), isPresented: $confirmRepeat, titleVisibility: .visible) {
+                Button(L("Повторить")) {
                     profile.repeatCycle()
                     dismiss()
                 }
-                Button("Отмена", role: .cancel) {}
+                Button(L("Отмена"), role: .cancel) {}
             } message: {
-                Text("Программа начнётся с первой недели с прежними стартовыми весами. История и графики останутся.")
+                Text(L("Программа начнётся с первой недели с прежними стартовыми весами. История и графики останутся."))
             }
         }
     }
@@ -249,7 +249,7 @@ struct CycleFinishView: View {
                     .padding(.horizontal, 4)
             }
             if next.changes.isEmpty {
-                Text("В программе нет упражнений с прибавкой веса — стартовые веса останутся прежними.")
+                Text(L("В программе нет упражнений с прибавкой веса — стартовые веса останутся прежними."))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.55))
                     .padding(.horizontal, 4)
@@ -264,7 +264,7 @@ struct CycleFinishView: View {
                 .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
             if !isCustom {
-                Text("Это прикидка от весов, до которых ты дошёл. Если есть возможность — проверь \(profile.maximumLabel) на первой тяжёлой тренировке и поправь числа.")
+                Text(L("Это прикидка от весов, до которых ты дошёл. Если есть возможность — проверь \(profile.maximumLabel) на первой тяжёлой тренировке и поправь числа."))
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.ink.opacity(0.5))
                     .padding(.horizontal, 4)
@@ -280,7 +280,7 @@ struct CycleFinishView: View {
             Button {
                 start()
             } label: {
-                Text(feel == nil ? "Выбери ответ выше" : "Начать цикл \(nextNumber)")
+                Text(feel == nil ? L("Выбери ответ выше") : L("Начать цикл \(nextNumber)"))
                     .font(.system(size: 16, weight: .black, design: Theme.fontDesign))
                     .foregroundStyle(.canvas)
                     .frame(maxWidth: .infinity)

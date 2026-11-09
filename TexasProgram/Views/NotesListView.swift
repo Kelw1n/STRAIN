@@ -30,8 +30,8 @@ struct NotesListView: View {
             LazyVStack(spacing: 12) {
                 if notes.isEmpty {
                     CardView {
-                        Text("Заметок пока нет").font(.headline)
-                        Text("Поле для заметки есть на каждой тренировке — под списком упражнений. Через месяц по ним будет понятно, почему неделя вышла такой.")
+                        Text(L("Заметок пока нет")).font(.headline)
+                        Text(L("Поле для заметки есть на каждой тренировке — под списком упражнений. Через месяц по ним будет понятно, почему неделя вышла такой."))
                             .font(.footnote).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -55,7 +55,7 @@ struct NotesListView: View {
                             }
                             .buttonStyle(.pressable)
                         }
-                        Text(note.text)
+                        Text(verbatim: note.text)
                             .font(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -69,7 +69,7 @@ struct NotesListView: View {
         }
         .scrollIndicators(.hidden)
         .screenBackground()
-        .navigationTitle("Заметки")
+        .navigationTitle(L("Заметки"))
         .navigationBarTitleDisplayMode(.inline)
     }
 

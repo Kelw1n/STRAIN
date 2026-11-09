@@ -1,5 +1,7 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.LocalizedDateFormat
+import com.texasprogram.app.service.L
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.material.icons.filled.CloudOff
@@ -128,7 +130,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -272,8 +273,8 @@ internal fun ChatRow(chat: SocialChat, onOpen: () -> Unit) {
                         modifier = Modifier.weight(1f)
                     )
                 } else {
-                    Text(
-                        (if (chat.last.fromMe) "Вы: " else "") + chat.last.preview,
+                    RawText(
+                        (if (chat.last.fromMe) L("Вы: ") else "") + chat.last.preview,
                         color = Theme.ink.copy(alpha = if (chat.unread > 0) 0.9f else 0.5f),
                         fontSize = 14.sp,
                         fontWeight = if (chat.unread > 0) FontWeight.SemiBold else FontWeight.Normal,
@@ -811,7 +812,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
             val edited = editing
             val quoted = replyingTo
             if (edited != null) {
-                ComposerBanner(Icons.Filled.Edit, "Изменить сообщение", edited.text.ifEmpty { "📷 Фото" }, "Не изменять") { cancelEditing() }
+                ComposerBanner(Icons.Filled.Edit, "Изменить сообщение", edited.text.ifEmpty { L("📷 Фото") }, "Не изменять") { cancelEditing() }
             } else if (quoted != null) {
                 ComposerBanner(
                     Icons.AutoMirrored.Filled.Reply,
@@ -973,7 +974,7 @@ private fun ComposerBanner(icon: ImageVector, title: String, text: String, close
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text(text, color = Theme.ink.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            RawText(text, color = Theme.ink.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Box(Modifier.size(32.dp).pressable(onClick = onClose).clip(CircleShape), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, contentDescription = close, tint = Theme.ink.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
@@ -1108,12 +1109,14 @@ private fun LocalImage(model: Any, modifier: Modifier) {
     coil.compose.AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier)
 }
 
+private val chatDay = LocalizedDateFormat("d MMMM", "MMMM d")
+
 private fun dayTitle(day: LocalDate): String {
     val today = LocalDate.now()
     return when (day) {
         today -> "Сегодня"
         today.minusDays(1) -> "Вчера"
-        else -> day.format(DateTimeFormatter.ofPattern("d MMMM", Locale.forLanguageTag("ru")))
+        else -> chatDay.format(day)
     }
 }
 
@@ -1242,7 +1245,7 @@ internal fun MessageBubble(
                     } else if (workout != null) {
                         ChatWorkoutCard(workout, message.fromMe) { onOpenWorkout(workout) }
                     } else if (message.text.isNotEmpty()) {
-                        Text(message.text, color = bubbleInk, fontSize = 16.sp, modifier = Modifier.padding(horizontal = if (hasImage) 9.dp else 0.dp))
+                        RawText(message.text, color = bubbleInk, fontSize = 16.sp, modifier = Modifier.padding(horizontal = if (hasImage) 9.dp else 0.dp))
                     }
                     // Время всегда справа, как в Telegram.
                     Row(
@@ -1417,7 +1420,7 @@ private fun QuoteBlock(quote: SocialMessageQuote, name: String, onMine: Boolean,
         Column {
             Text(name, color = if (onMine) Theme.ink else Theme.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             // Длинная цитата не раздувает пузырь — обрезается.
-            Text(
+            RawText(
                 quote.preview,
                 color = Theme.ink.copy(alpha = 0.75f),
                 fontSize = 13.sp,

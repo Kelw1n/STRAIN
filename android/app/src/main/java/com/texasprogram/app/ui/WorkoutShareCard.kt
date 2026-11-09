@@ -37,7 +37,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -155,12 +154,14 @@ object WorkoutShareCard {
             canvas.drawBitmap(mark, null, RectF(pad, pad, pad + w, pad + h), markPaint)
         }
         val datePaint = paint(13f, alpha(WHITE, 0.75f), medium)
-        canvas.drawText(summary.dateText, WIDTH - pad - datePaint.measureText(summary.dateText), pad + u(15f), datePaint)
+        val dateText = L(summary.dateText)
+        canvas.drawText(dateText, WIDTH - pad - datePaint.measureText(dateText), pad + u(15f), datePaint)
 
         // Низ карточки собираем снизу вверх: сначала меряем, потом рисуем.
         val titlePaint = paint(26f, WHITE, black)
+        val titleText = L(summary.title).uppercase()
         val title = StaticLayout.Builder
-            .obtain(summary.title.uppercase(), 0, summary.title.length, titlePaint, width.toInt())
+            .obtain(titleText, 0, titleText.length, titlePaint, width.toInt())
             .setMaxLines(2)
             .setEllipsize(TextUtils.TruncateAt.END)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -203,7 +204,7 @@ object WorkoutShareCard {
                 y += u(34f) + u(10f)
             }
             if (rest > 0) {
-                canvas.drawText("и ещё ${RuPlural.exercises(rest)}", pad, y + u(10f), paint(12f, alpha(WHITE, 0.5f), medium))
+                canvas.drawText(L("и ещё ${RuPlural.exercises(rest)}"), pad, y + u(10f), paint(12f, alpha(WHITE, 0.5f), medium))
             }
         }
         return bitmap
@@ -267,7 +268,7 @@ object WorkoutShareCard {
         values.forEachIndexed { index, (value, title) ->
             val cx = box.left + column * (index + 0.5f)
             canvas.drawText(value, cx, box.top + u(33f), valuePaint)
-            canvas.drawText(title, cx, box.top + u(52f), titlePaint)
+            canvas.drawText(L(title), cx, box.top + u(52f), titlePaint)
         }
     }
 
@@ -284,20 +285,21 @@ object WorkoutShareCard {
         canvas.restore()
 
         val bestPaint = paint(13f, alpha(WHITE, 0.9f), bold)
-        val best = (if (line.isRecord) "🏆 " else "") + line.best
+        val best = (if (line.isRecord) "🏆 " else "") + L(line.best)
         val bestWidth = bestPaint.measureText(best)
         canvas.drawText(best, left + width - bestWidth, top + thumb / 2 + u(4.5f), bestPaint)
 
         val textLeft = left + thumb + u(10f)
         val namePaint = paint(14f, WHITE, bold)
         val available = (width - thumb - u(10f) - bestWidth - u(10f)).coerceAtLeast(u(40f))
-        val name = TextUtils.ellipsize(line.name, namePaint, available, TextUtils.TruncateAt.END).toString()
+        val name = TextUtils.ellipsize(L(line.name), namePaint, available, TextUtils.TruncateAt.END).toString()
         canvas.drawText(name, textLeft, top + u(15f), namePaint)
         canvas.drawText(RuPlural.sets(line.doneSets), textLeft, top + u(30f), paint(11f, alpha(WHITE, 0.5f), medium))
     }
 
     private fun tonnageText(value: Double): String =
-        if (value < 1000) "${value.toInt()} кг" else String.format(java.util.Locale.US, "%.1f т", value / 1000).replace('.', ',')
+        if (value < 1000) "${value.toInt()}" + (if (L10n.isEnglish) " kg" else " кг")
+        else String.format(java.util.Locale.US, "%.1f", value / 1000).let { if (L10n.isEnglish) "$it t" else it.replace('.', ',') + " т" }
 
     /// Картинка — во временную папку, оттуда системное «Поделиться» отдаёт её
     /// в Instagram, Telegram или галерею. Разрешение на память не нужно.
@@ -312,7 +314,7 @@ object WorkoutShareCard {
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             context.startActivity(
-                Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                Intent.createChooser(send, L(title)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }
     }

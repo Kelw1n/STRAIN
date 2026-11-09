@@ -86,14 +86,14 @@ struct FeedView: View {
                                         }
                                     }
                             }
-                            .accessibilityLabel(social.unseenActivity > 0 ? "Активность, есть новое" : "Активность")
+                            .accessibilityLabel(social.unseenActivity > 0 ? L("Активность, есть новое") : L("Активность"))
                         }
                         Button(action: onFindPeople) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(.ink)
                         }
-                        .accessibilityLabel("Найти людей")
+                        .accessibilityLabel(L("Найти людей"))
                     }
                 }
             }
@@ -137,14 +137,14 @@ struct FeedView: View {
 
     private var scopeMenu: some View {
         Menu {
-            Picker("Лента", selection: $scope) {
+            Picker(L("Лента"), selection: $scope) {
                 ForEach(SocialService.FeedScope.allCases) { item in
-                    Text(item == .all ? "Все в STRAIN" : "Мои подписки").tag(item)
+                    Text(item == .all ? L("Все в STRAIN") : L("Мои подписки")).tag(item)
                 }
             }
         } label: {
             HStack(spacing: 6) {
-                Text(scope == .all ? "Главное" : "Подписки")
+                Text(scope == .all ? L("Главное") : L("Подписки"))
                     .font(.system(size: 30, weight: .heavy, design: Theme.fontDesign))
                     .foregroundStyle(.ink)
                 // Без профиля подписок нет — и выбирать нечего.
@@ -171,7 +171,7 @@ struct FeedView: View {
                         .foregroundStyle(Theme.accent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(social.isFlushing ? "Публикую тренировку…" : "Тренировка ждёт отправки")
+                    Text(social.isFlushing ? L("Публикую тренировку…") : L("Тренировка ждёт отправки"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.ink)
                     if let message = social.outboxError, !social.isFlushing {
@@ -184,12 +184,12 @@ struct FeedView: View {
                 Spacer()
                 if !social.isFlushing {
                     VStack(alignment: .trailing, spacing: 8) {
-                        Button("Отправить") { social.flushOutbox() }
+                        Button(L("Отправить")) { social.flushOutbox() }
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Theme.accent)
                         // Сервер отказал — пост не застрянет в очереди навсегда.
                         if social.outboxError != nil {
-                            Button("Удалить") { confirmDiscard = true }
+                            Button(L("Удалить")) { confirmDiscard = true }
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Color.ink.opacity(0.5))
                         }
@@ -199,28 +199,28 @@ struct FeedView: View {
             .padding(16)
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .padding(.top, 8)
-            .confirmationDialog("Не публиковать тренировку?", isPresented: $confirmDiscard, titleVisibility: .visible) {
-                Button("Убрать из очереди", role: .destructive) {
+            .confirmationDialog(L("Не публиковать тренировку?"), isPresented: $confirmDiscard, titleVisibility: .visible) {
+                Button(L("Убрать из очереди"), role: .destructive) {
                     for draft in social.outbox { social.discard(draft) }
                 }
-                Button("Отмена", role: .cancel) {}
+                Button(L("Отмена"), role: .cancel) {}
             } message: {
-                Text("Пост не уйдёт в ленту. Сама тренировка останется в приложении.")
+                Text(L("Пост не уйдёт в ленту. Сама тренировка останется в приложении."))
             }
         }
     }
 
     private var signUpTeaser: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Делись тренировками")
+            Text(L("Делись тренировками"))
                 .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
                 .foregroundStyle(.ink)
-            Text("Создай профиль: в конце тренировки сделаешь фото — и оно появится здесь вместе с весами и подходами. Друзья поставят лайк или напишут комментарий.")
+            Text(L("Создай профиль: в конце тренировки сделаешь фото — и оно появится здесь вместе с весами и подходами. Друзья поставят лайк или напишут комментарий."))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.6))
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onCreateProfile) {
-                Text("Создать профиль")
+                Text(L("Создать профиль"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.canvas)
                     .padding(.horizontal, 18)
@@ -240,18 +240,18 @@ struct FeedView: View {
             Image(systemName: scope == .all ? "figure.strengthtraining.traditional" : "person.2")
                 .font(.system(size: 34, weight: .semibold))
                 .foregroundStyle(Color.ink.opacity(0.35))
-            Text(scope == .all ? "В ленте пока пусто" : "Здесь появятся тренировки тех, на кого ты подписан")
+            Text(scope == .all ? L("В ленте пока пусто") : L("Здесь появятся тренировки тех, на кого ты подписан"))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.ink)
                 .multilineTextAlignment(.center)
             Text(scope == .all
-                 ? "Закончи тренировку и опубликуй её — будешь первым."
-                 : "Найди друзей по юзернейму и подпишись.")
+                 ? L("Закончи тренировку и опубликуй её — будешь первым.")
+                 : L("Найди друзей по юзернейму и подпишись."))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.55))
                 .multilineTextAlignment(.center)
             if scope == .following {
-                Button("Найти людей", action: onFindPeople)
+                Button(L("Найти людей"), action: onFindPeople)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.accent)
                     .padding(.top, 4)

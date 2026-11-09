@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L10n
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.LinearGradient
@@ -43,7 +44,6 @@ import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -99,7 +99,10 @@ private val Progression.MonthTier.genitive: String
     }
 
 private object ProgressionText {
-    fun experience(value: Int): String = String.format(java.util.Locale.forLanguageTag("ru-RU"), "%,d", value) + " опыта"
+    fun experience(value: Int): String {
+        val number = String.format(L10n.locale, "%,d", value)
+        return if (L10n.isEnglish) "$number XP" else "$number опыта"
+    }
 
     fun toNext(level: Progression.Level): String {
         val left = level.toNext ?: return "Все уровни взяты"
@@ -602,7 +605,7 @@ object LevelShareCard {
         val inner = WIDTH - pad * 2
         val top = pad + u(18f)
         canvas.drawText("STRAIN", pad, top, paint(18f, white(1f), black).apply { letterSpacing = 0.12f })
-        val label = "НОВЫЙ УРОВЕНЬ"
+        val label = L("НОВЫЙ УРОВЕНЬ")
         val labelPaint = paint(11f, white(0.8f), bold).apply { letterSpacing = 0.12f }
         canvas.drawText(label, WIDTH - pad - labelPaint.measureText(label), top, labelPaint)
 
@@ -622,10 +625,10 @@ object LevelShareCard {
         val number = paint(62f, white(1f), black).apply { textAlign = Paint.Align.CENTER }
         canvas.drawText("${level.level}", cx, cy + u(14f), number)
         val unit = paint(16f, white(0.6f), bold).apply { textAlign = Paint.Align.CENTER }
-        canvas.drawText("УР.", cx, cy + u(40f), unit)
+        canvas.drawText(L("УР."), cx, cy + u(40f), unit)
 
         var y = HEIGHT * 0.66f
-        canvas.drawText("Уровень ${level.level}", pad, y, paint(20f, white(0.8f), bold))
+        canvas.drawText(L("Уровень ${level.level}"), pad, y, paint(20f, white(0.8f), bold))
         y += u(52f)
         val titlePaint = paint(44f, white(1f), black)
         canvas.drawText(fit(level.title, titlePaint, inner), pad, y, titlePaint)
@@ -634,6 +637,7 @@ object LevelShareCard {
         return bitmap
     }
 
+    /// Перевод и многоточие, если не влезает в ширину.
     private fun fit(text: String, paint: TextPaint, width: Float): String =
-        TextUtils.ellipsize(text, paint, width, TextUtils.TruncateAt.END).toString()
+        TextUtils.ellipsize(L(text), paint, width, TextUtils.TruncateAt.END).toString()
 }

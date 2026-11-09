@@ -32,7 +32,7 @@ struct TemplateEditorView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
-                    TextField("Название тренировки", text: $draft.name)
+                    TextField(L("Название тренировки"), text: $draft.name)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.ink)
                         .padding(.horizontal, 16)
@@ -47,7 +47,7 @@ struct TemplateEditorView: View {
                     Button { picking = true } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "plus").font(.system(size: 15, weight: .bold))
-                            Text("Добавить упражнения").font(.system(size: 15, weight: .bold))
+                            Text(L("Добавить упражнения")).font(.system(size: 15, weight: .bold))
                         }
                         .foregroundStyle(draft.exercises.isEmpty ? Color.canvas : Color.ink)
                         .frame(maxWidth: .infinity)
@@ -65,33 +65,33 @@ struct TemplateEditorView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .screenBackground()
-            .navigationTitle(isNew ? "Новая тренировка" : "Тренировка")
+            .navigationTitle(isNew ? L("Новая тренировка") : L("Тренировка"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") {
+                    Button(L("Отмена")) {
                         if changed { confirmingExit = true } else { dismiss() }
                     }
                     .foregroundStyle(Color.ink.opacity(0.7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Сохранить", action: save)
+                    Button(L("Сохранить"), action: save)
                         .font(.body.weight(.bold))
                         .foregroundStyle(canSave ? Theme.accent : Color.ink.opacity(0.3))
                         .disabled(!canSave)
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Готово") {
+                    Button(L("Готово")) {
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     }
                 }
             }
-            .confirmationDialog("Выйти без сохранения?", isPresented: $confirmingExit, titleVisibility: .visible) {
-                Button("Выйти", role: .destructive) { dismiss() }
-                Button("Остаться", role: .cancel) {}
+            .confirmationDialog(L("Выйти без сохранения?"), isPresented: $confirmingExit, titleVisibility: .visible) {
+                Button(L("Выйти"), role: .destructive) { dismiss() }
+                Button(L("Остаться"), role: .cancel) {}
             } message: {
-                Text("Изменения в тренировке пропадут.")
+                Text(L("Изменения в тренировке пропадут."))
             }
         }
         .interactiveDismissDisabled(changed)
@@ -150,7 +150,7 @@ struct TemplateEditorView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "timer").font(.system(size: 11, weight: .bold))
-                            Text("Отдых " + RestFormat.text(exercise.restSeconds)).font(.system(size: 12, weight: .semibold))
+                            Text(L("Отдых ") + RestFormat.text(exercise.restSeconds)).font(.system(size: 12, weight: .semibold))
                             Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
                         }
                         .foregroundStyle(Theme.accent)
@@ -159,14 +159,14 @@ struct TemplateEditorView: View {
                 Spacer(minLength: 4)
                 Menu {
                     if index > 0 {
-                        Button { move(index, by: -1) } label: { Label("Выше", systemImage: "arrow.up") }
+                        Button { move(index, by: -1) } label: { Label(L("Выше"), systemImage: "arrow.up") }
                     }
                     if index < draft.exercises.count - 1 {
-                        Button { move(index, by: 1) } label: { Label("Ниже", systemImage: "arrow.down") }
+                        Button { move(index, by: 1) } label: { Label(L("Ниже"), systemImage: "arrow.down") }
                     }
                     Button(role: .destructive) {
                         _ = withAnimation(Motion.snappy) { draft.exercises.remove(at: index) }
-                    } label: { Label("Убрать упражнение", systemImage: "trash") }
+                    } label: { Label(L("Убрать упражнение"), systemImage: "trash") }
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 15, weight: .bold))
@@ -174,13 +174,13 @@ struct TemplateEditorView: View {
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Действия: \(exercise.name)")
+                .accessibilityLabel(L("Действия: \(exercise.name)"))
             }
 
             HStack {
-                Text("ПОДХОД").frame(width: 64, alignment: .leading)
-                Text("КГ").frame(maxWidth: .infinity)
-                Text("ПОВТ").frame(maxWidth: .infinity)
+                Text(L("ПОДХОД")).frame(width: 64, alignment: .leading)
+                Text(L("КГ")).frame(maxWidth: .infinity)
+                Text(L("ПОВТ")).frame(maxWidth: .infinity)
                 Color.clear.frame(width: 30)
             }
             .font(.system(size: 11, weight: .bold))
@@ -198,7 +198,7 @@ struct TemplateEditorView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus").font(.system(size: 12, weight: .bold))
-                    Text("Подход").font(.system(size: 14, weight: .bold))
+                    Text(L("Подход")).font(.system(size: 14, weight: .bold))
                 }
                 .foregroundStyle(.ink)
                 .frame(maxWidth: .infinity)
@@ -230,7 +230,7 @@ struct TemplateEditorView: View {
             }
             .frame(width: 30)
             .disabled(draft.exercises[exercise].sets.count <= 1)
-            .accessibilityLabel("Убрать подход \(set + 1)")
+            .accessibilityLabel(L("Убрать подход \(set + 1)"))
         }
     }
 
