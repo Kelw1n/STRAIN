@@ -580,6 +580,13 @@ final class ProgramProfile {
         squat5RM = squat
         bench5RM = bench
         deadlift5RM = deadlift
+        // «Эвтаназия» считается от максимумов внутри своего входа — иначе новый цикл шёл бы со старыми.
+        if var euthanasia = euthanasiaInput {
+            euthanasia.squat.oneRepMax = squat
+            euthanasia.press.oneRepMax = bench
+            euthanasia.pull.oneRepMax = deadlift
+            euthanasiaInput = euthanasia
+        }
         // Волна жима считается от нуля: её номера не привязаны к пространству имён.
         completedBenchSessions = []
         lastCompletionDate = nil

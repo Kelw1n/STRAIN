@@ -12,6 +12,7 @@ struct WorkoutHubView: View {
     @State private var showingToday = false
     @State private var showingTemplates = false
     @State private var showingLibrary = false
+    @State private var showingCycleFinish = false
 
     var body: some View {
         // Расписание — один раз за проход: каждое обращение к profile.schedule
@@ -69,6 +70,8 @@ struct WorkoutHubView: View {
                         // Карточка сегодняшней программы
                         if let focus {
                             todaysWorkoutPreview(workout: focus)
+                        } else if profile.isProgramFinished {
+                            ProgramFinishedCard(profile: profile) { showingCycleFinish = true }
                         } else {
                             restDayCard
                         }
@@ -152,6 +155,9 @@ struct WorkoutHubView: View {
                 TemplatesView(profile: profile) { template in
                     WorkoutSessionManager.shared.startTemplate(template, profile: profile)
                 }
+            }
+            .sheet(isPresented: $showingCycleFinish) {
+                CycleFinishView(profile: profile)
             }
             .sheet(isPresented: $showingLibrary) {
                 ExerciseLibraryView(profile: profile)

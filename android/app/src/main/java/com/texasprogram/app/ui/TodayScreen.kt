@@ -31,7 +31,9 @@ import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.isProgramFinished
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.service.RuDate
 import com.texasprogram.app.service.ScheduledWorkout
@@ -69,6 +72,11 @@ fun TodayScreen(
     val focus = schedule.focus
     val listState = rememberLazyListState()
     val exercises = remember(profile, focus) { focus?.let { profile.exercises(it) } ?: emptyList() }
+    var showingCycleFinish by remember { androidx.compose.runtime.mutableStateOf(false) }
+    val finished = remember(profile) { profile.isProgramFinished }
+    if (showingCycleFinish) {
+        CycleFinishSheet(profile, onUpdate = onUpdateProfile) { showingCycleFinish = false }
+    }
 
     LazyColumn(
         state = listState,
@@ -81,7 +89,10 @@ fun TodayScreen(
         }
 
         if (focus == null) {
-            item(key = "finished") { FinishedCard(profile, Modifier.appearIn(0)) }
+            item(key = "finished") {
+                if (finished) ProgramFinishedCard(profile) { showingCycleFinish = true }
+                else FinishedCard(profile, Modifier.appearIn(0))
+            }
             return@LazyColumn
         }
 
@@ -378,12 +389,9 @@ private fun FinishedCard(profile: ProgramProfile, modifier: Modifier = Modifier)
                 tint = Theme.success,
                 modifier = Modifier.size(54.dp)
             )
-            Text("Цикл завершён", color = Theme.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("В плане пока пусто", color = Theme.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Text(
-                if (profile.programKind == TrainingProgramKind.TEXAS)
-                    "Все 12 недель отмечены. Можно запустить пикирование из настроек."
-                else
-                    "Все 7 недель программы «Верх / Низ» отмечены.",
+                "Добавь тренировки в программу, и они появятся здесь.",
                 color = Theme.textSecondary,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center

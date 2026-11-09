@@ -536,7 +536,10 @@ struct SettingsView: View {
         .sheet(isPresented: $showGuide) {
             InstructionsView(programKind: profile.programKind, onClose: { showGuide = false })
         }
-        .sheet(isPresented: $showNewCycle) { NewCycleView(profile: profile) }
+        .sheet(isPresented: $showNewCycle) {
+            // У своей программы максимумов нет — новый цикл считается от её весов.
+            if profile.programKind == .custom { CycleFinishView(profile: profile) } else { NewCycleView(profile: profile) }
+        }
         .sheet(item: $shareItem) { item in
             ShareSheet(url: item.url).presentationDetents([.medium])
         }

@@ -585,7 +585,12 @@ fun SettingsScreen(
     }
 
     if (showNewCycle) {
-        NewCycleDialog(profile, onDismiss = { showNewCycle = false }, onUpdate = onUpdate)
+        // У своей программы максимумов нет — новый цикл считается от её весов.
+        if (profile.programKind == TrainingProgramKind.CUSTOM) {
+            CycleFinishSheet(profile, onUpdate = onUpdate) { showNewCycle = false }
+        } else {
+            NewCycleDialog(profile, onDismiss = { showNewCycle = false }, onUpdate = onUpdate)
+        }
     }
 
     if (showDelete) {

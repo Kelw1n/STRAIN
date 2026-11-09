@@ -238,11 +238,13 @@ private fun weekWord(count: Int): String {
 fun NewCycleDialog(
     profile: ProgramProfile,
     onDismiss: () -> Unit,
-    onUpdate: (ProgramProfile) -> Unit
+    onUpdate: (ProgramProfile) -> Unit,
+    /// Подсказанные максимумы — из экрана конца программы.
+    suggested: Triple<Double, Double, Double>? = null
 ) {
-    var squat by remember { mutableStateOf(formatWeight(profile.squat5RM)) }
-    var bench by remember { mutableStateOf(formatWeight(profile.bench5RM)) }
-    var deadlift by remember { mutableStateOf(formatWeight(profile.deadlift5RM)) }
+    var squat by remember { mutableStateOf(formatWeight(suggested?.first ?: profile.squat5RM)) }
+    var bench by remember { mutableStateOf(formatWeight(suggested?.second ?: profile.bench5RM)) }
+    var deadlift by remember { mutableStateOf(formatWeight(suggested?.third ?: profile.deadlift5RM)) }
 
     fun number(text: String) = text.replace(',', '.').trim().toDoubleOrNull()?.takeIf { it > 0 }
     val isReady = number(squat) != null && number(bench) != null && number(deadlift) != null

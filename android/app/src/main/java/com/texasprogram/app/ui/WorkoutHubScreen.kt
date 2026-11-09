@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.isProgramFinished
 import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.ScheduledWorkout
 import com.texasprogram.app.service.WorkoutSessionManager
@@ -66,6 +67,7 @@ fun WorkoutHubScreen(
     var showingGoal by remember { mutableStateOf(false) }
     var showingTemplates by remember { mutableStateOf(false) }
     var showingLibrary by remember { mutableStateOf(false) }
+    var showingCycleFinish by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     remember { com.texasprogram.app.model.ExerciseLibrary.load(context) }
     val today = remember { LocalDate.now() }
@@ -156,6 +158,10 @@ fun WorkoutHubScreen(
                         workout = focus
                     )
                 }
+            } else if (profile.isProgramFinished) {
+                item(key = "finished") {
+                    ProgramFinishedCard(profile) { showingCycleFinish = true }
+                }
             } else {
                 item(key = "rest") {
                     RestDayCard()
@@ -241,6 +247,9 @@ fun WorkoutHubScreen(
     }
     if (showingGoal) {
         GoalSheet(profile, onSave = onUpdateProfile) { showingGoal = false }
+    }
+    if (showingCycleFinish) {
+        CycleFinishSheet(profile, onUpdate = onUpdateProfile) { showingCycleFinish = false }
     }
 }
 

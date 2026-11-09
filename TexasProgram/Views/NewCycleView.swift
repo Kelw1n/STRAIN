@@ -8,6 +8,10 @@ import SwiftUI
 struct NewCycleView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var profile: ProgramProfile
+    /// Подсказанные максимумы — из экрана конца программы.
+    var suggested: (squat: Double, bench: Double, deadlift: Double)? = nil
+    /// Цикл начат — закрыть и экран, который открыл этот.
+    var onStarted: () -> Void = {}
 
     @State private var squatText = ""
     @State private var benchText = ""
@@ -73,6 +77,7 @@ struct NewCycleView: View {
                           let deadlift = number(deadliftText) else { return }
                     profile.startNewCycle(squat: squat, bench: bench, deadlift: deadlift)
                     dismiss()
+                    onStarted()
                 }
                 Button("Отмена", role: .cancel) {}
             } message: {
@@ -81,9 +86,9 @@ struct NewCycleView: View {
             .onAppear {
                 guard !loaded else { return }
                 loaded = true
-                squatText = WeightFormat.plain(profile.squat5RM)
-                benchText = WeightFormat.plain(profile.bench5RM)
-                deadliftText = WeightFormat.plain(profile.deadlift5RM)
+                squatText = WeightFormat.plain(suggested?.squat ?? profile.squat5RM)
+                benchText = WeightFormat.plain(suggested?.bench ?? profile.bench5RM)
+                deadliftText = WeightFormat.plain(suggested?.deadlift ?? profile.deadlift5RM)
             }
         }
     }

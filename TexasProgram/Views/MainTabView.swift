@@ -314,6 +314,7 @@ struct TodayView: View {
     var onOpenBench: ((Int) -> Void)?
     var onStartWorkout: ((ScheduledWorkout) -> Void)?
     @State private var customizing: ScheduledWorkout?
+    @State private var showingCycleFinish = false
     @State private var entryTarget: SetEntryTarget?
     /// Имя движения, чью историю открыли: `navigationDestination` ждёт Hashable.
     @State private var historyFor: String?
@@ -401,6 +402,7 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle("Сегодня")
+            .sheet(isPresented: $showingCycleFinish) { CycleFinishView(profile: profile) }
             .sheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)
             }
@@ -553,24 +555,27 @@ struct TodayView: View {
         }
     }
 
+    @ViewBuilder
     private var finished: some View {
-        CardView(padding: 28) {
-            VStack(spacing: 14) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 54))
-                    .foregroundStyle(Theme.successGradient)
-                    .symbolEffect(.pulse)
-                Text("Цикл завершён").font(.title2.weight(.bold))
-                Text(profile.programKind == .texas
-                     ? "Все 12 недель отмечены. Можно запустить пикирование из настроек."
-                     : "Все 7 недель программы «Верх / Низ» отмечены.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+        if profile.isProgramFinished {
+            ProgramFinishedCard(profile: profile) { showingCycleFinish = true }
+                .padding(.top, 12)
+        } else {
+            CardView(padding: 28) {
+                VStack(spacing: 14) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 44))
+                        .foregroundStyle(Theme.accent)
+                    Text("В плане пока пусто").font(.title3.weight(.bold))
+                    Text("Добавь тренировки в программу, и они появятся здесь.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.top, 40)
         }
-        .padding(.top, 40)
     }
 }
 
