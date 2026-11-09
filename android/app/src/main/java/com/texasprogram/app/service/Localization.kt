@@ -1,7 +1,9 @@
 package com.texasprogram.app.service
 
 import android.content.Context
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAccessor
 import java.util.Locale
@@ -107,11 +109,12 @@ object L10n {
 
     /// Словарь из текста JSON. Снимки экранов кладут его сюда сами: у них нет приложения.
     internal fun install(text: String) {
-        val json = JSONObject(text)
+        // kotlinx, а не org.json: тот работает только на телефоне, а словарь читают и тесты.
+        val json = Json.parseToJsonElement(text).jsonObject
         val plain = HashMap<String, String>()
         val patterns = ArrayList<Triple<Template, Int, String>>()
-        for (key in json.keys()) {
-            val value = json.getString(key)
+        for ((key, element) in json) {
+            val value = element.jsonPrimitive.content
             if (!key.contains("{}")) { plain[key] = value; continue }
             val literal = key.replace("{}", "")
             // Шаблон без русских букв вне подстановок поймал бы что угодно.
