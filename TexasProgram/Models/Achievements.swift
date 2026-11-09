@@ -573,7 +573,7 @@ enum Progression {
         let tier: MonthTier
 
         var id: String { "\(year)-\(month)" }
-        var title: String { "\(Progression.monthNames[month]) \(year)" }
+        var title: String { "\(L(Progression.monthNames[month])) \(year)" }
     }
 
     static let monthNames = ["", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",

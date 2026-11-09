@@ -179,7 +179,7 @@ struct PersonRow: View {
                             LevelChip(level: person.level)
                         }
                         if !person.bio.isEmpty {
-                            Text(person.bio)
+                            Text(verbatim: person.bio)
                                 .font(.system(size: 13))
                                 .foregroundStyle(Color.ink.opacity(0.5))
                                 .lineLimit(1)

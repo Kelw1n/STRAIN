@@ -23,7 +23,7 @@ struct TrainingRecap: Equatable {
         /// «Октябрь 2026», «2026 год».
         var title: String {
             switch self {
-            case .month(let year, let month): return "\(TrainingRecap.monthNames[month].capitalized) \(year)"
+            case .month(let year, let month): return "\(L(TrainingRecap.monthNames[month].capitalized)) \(year)"
             case .year(let year): return "\(year) год"
             }
         }
@@ -31,7 +31,7 @@ struct TrainingRecap: Equatable {
         /// «октябрь», «2026» — в подписях вроде «Твой октябрь».
         var name: String {
             switch self {
-            case .month(_, let month): return TrainingRecap.monthNames[month]
+            case .month(_, let month): return L(TrainingRecap.monthNames[month])
             case .year(let year): return "\(year)"
             }
         }

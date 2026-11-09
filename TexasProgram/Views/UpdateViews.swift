@@ -100,7 +100,7 @@ private struct UpdateCard: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.ink)
                     .lineLimit(1)
-                Text(AppUpdater.summary(changes, fallback: fallback))
+                Text(verbatim: AppUpdater.summary(changes, fallback: fallback))
                     .font(.system(size: 13))
                     .foregroundStyle(Color.ink.opacity(0.65))
                     .lineLimit(2)
@@ -173,7 +173,8 @@ struct ChangesList: View {
                         ForEach(points.indices, id: \.self) { index in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("•").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.accent)
-                                Text(points[index])
+                                // Новости версии приходят с сервера по-русски — показываем как есть.
+                                Text(verbatim: points[index])
                                     .font(.system(size: 14))
                                     .foregroundStyle(.ink)
                                     .fixedSize(horizontal: false, vertical: true)

@@ -426,7 +426,7 @@ struct ProfileContent<Action: View>: View {
                     .foregroundStyle(Color.ink.opacity(0.55))
             }
             if !user.bio.isEmpty {
-                Text(user.bio)
+                Text(verbatim: user.bio)
                     .font(.system(size: 15))
                     .foregroundStyle(Color.ink.opacity(0.75))
                     .multilineTextAlignment(.center)

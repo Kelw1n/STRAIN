@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -101,7 +102,7 @@ fun PartnerStatus(together: SocialTogether, compact: Boolean = false, modifier: 
     val line = when {
         together.partnerDone -> "уже закончил(а)"
         live == null -> "ещё не начал(а)"
-        else -> live.line + if (live.setsTotal > 0) " · подходов ${live.setsDone} из ${live.setsTotal}" else ""
+        else -> L(live.line) + if (live.setsTotal > 0) L(" · подходов ${live.setsDone} из ${live.setsTotal}") else ""
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         val size = if (compact) 34.dp else 42.dp

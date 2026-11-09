@@ -72,15 +72,19 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
 /// узнаётся по шаблону «Неделя {} из {}», а подставленные куски переводятся
 /// отдельно — так «Заменено на «Приседания»» становится «Replaced with “Squats”».
 enum L10n {
+    /// `weak` — шаблон с короткой неизменной частью («{} и {}»): годится, только если перевёл всё.
     private struct Template {
         let regex: NSRegularExpression
         let target: String
+        let weak: Bool
     }
 
     private struct Table {
         let exact: [String: String]
         /// Те же фразы капсом: «ЖИМ ЛЁЖА» в заголовках, собранных через `uppercased()`.
         let upper: [String: String]
+        /// И строчными: «жим лёжа» внутри фразы, собранной через `lowercased()`.
+        let lower: [String: String]
         let templates: [Template]
         /// Куски фраз, к которым в коде приклеено число или имя: «был(а) » + «5 минут назад»,
         /// «Жим лёжа» + « · тест 1ПМ». Длинные проверяются первыми.
@@ -89,6 +93,10 @@ enum L10n {
     }
 
     /// Разделители, по которым дробится собранная из кусков строка: «Жим лёжа · тест 1ПМ».
+    private static let number = try! NSRegularExpression(pattern: "^([+−-]?\\d[\\d .,]*?) (\\D.*)$", options: [.dotMatchesLineSeparators])
+
+    private static let tailNumber = try! NSRegularExpression(pattern: "^(\\D.*?) (\\d[\\d .,]*)$", options: [.dotMatchesLineSeparators])
+
     private static let separators = [" · ", "\n", "; ", ", "]
 
     private static let lock = NSLock()
@@ -99,7 +107,7 @@ enum L10n {
         guard let url = Bundle.main.url(forResource: "i18n-en", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let raw = try? JSONDecoder().decode([String: String].self, from: data)
-        else { return Table(exact: [:], upper: [:], templates: [], prefixes: [], suffixes: []) }
+        else { return Table(exact: [:], upper: [:], lower: [:], templates: [], prefixes: [], suffixes: []) }
         var exact: [String: String] = [:]
         var templates: [(Template, Int, String)] = []
         for (key, value) in raw {
@@ -107,8 +115,15 @@ enum L10n {
             let literal = key.replacingOccurrences(of: "{}", with: "")
             // Шаблон без русских букв вне подстановок поймал бы что угодно.
             guard literal.unicodeScalars.contains(where: isCyrillic) else { continue }
-            guard let regex = try? NSRegularExpression(pattern: pattern(key), options: [.dotMatchesLineSeparators]) else { continue }
-            templates.append((Template(regex: regex, target: value), literal.count, key))
+            let weak = literal.filter(\.isLetter).count <= 3
+            if let regex = try? NSRegularExpression(pattern: pattern(key), options: [.dotMatchesLineSeparators]) {
+                templates.append((Template(regex: regex, target: value, weak: weak), literal.count, key))
+            }
+            // Тот же шаблон капсом: «ДЕНЬ 3» в заголовках через `uppercased()`.
+            let upperKey = key.uppercased()
+            if upperKey != key, let regex = try? NSRegularExpression(pattern: pattern(upperKey), options: [.dotMatchesLineSeparators]) {
+                templates.append((Template(regex: regex, target: value.uppercased(), weak: weak), literal.count, upperKey))
+            }
         }
         let pieces = exact.filter { key, _ in
             key.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 && key.unicodeScalars.contains(where: isCyrillic)
@@ -129,10 +144,14 @@ enum L10n {
             }
         }
         var upper: [String: String] = [:]
-        for (key, value) in exact { upper[key.uppercased()] = value.uppercased() }
+        var lower: [String: String] = [:]
+        for (key, value) in exact {
+            upper[key.uppercased()] = value.uppercased()
+            lower[key.lowercased()] = value
+        }
         // Чем длиннее неизменная часть, тем точнее шаблон: такие проверяем первыми.
         let ordered = templates.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.2 < $1.2 }.map(\.0)
-        return Table(exact: exact, upper: upper, templates: ordered, prefixes: prefixes, suffixes: suffixes)
+        return Table(exact: exact, upper: upper, lower: lower, templates: ordered, prefixes: prefixes, suffixes: suffixes)
     }()
 
     /// Регулярка шаблона. Подстановка вплотную к русской букве («Ж{}», «{}м») — число, а не слово:
@@ -171,7 +190,9 @@ enum L10n {
         lock.lock()
         if let hit = cache[text] { lock.unlock(); return hit }
         lock.unlock()
-        let result = translate(text, depth: 0)
+        // Неразрывные пробелы ставит типографика экранов — в словаре их нет.
+        let plain = text.replacingOccurrences(of: "\u{00A0}", with: " ").replacingOccurrences(of: "\u{202F}", with: " ")
+        let result = translate(plain, depth: 0)
         lock.lock()
         if cache.count > 5000 { cache.removeAll() }
         cache[text] = result
@@ -189,6 +210,9 @@ enum L10n {
         if trimmed == trimmed.uppercased(), let hit = table.upper[trimmed] {
             return text.replacingOccurrences(of: trimmed, with: hit)
         }
+        if trimmed == trimmed.lowercased(), let hit = table.lower[trimmed] {
+            return text.replacingOccurrences(of: trimmed, with: lowerFirst(hit))
+        }
         guard depth < 3 else { return text }
         let range = NSRange(text.startIndex..., in: text)
         for template in table.templates {
@@ -198,7 +222,22 @@ enum L10n {
                 guard let part = Range(match.range(at: index), in: text) else { values.append(""); continue }
                 values.append(self.part(String(text[part]), depth: depth + 1))
             }
-            return fill(template.target, values)
+            let result = fill(template.target, values)
+            // Короткий шаблон («{} и {}») с недопереведённым остатком дал бы кашу из двух языков.
+            if template.weak, result.unicodeScalars.contains(where: isCyrillic) { continue }
+            return result
+        }
+        // «3 тренировки» → «3 workouts»: число и слово, переведённое целиком.
+        if let match = number.firstMatch(in: text, range: range),
+           let count = Range(match.range(at: 1), in: text), let word = Range(match.range(at: 2), in: text) {
+            let rest = part(String(text[word]), depth: depth + 1)
+            if !rest.unicodeScalars.contains(where: isCyrillic) { return String(text[count]) + " " + rest }
+        }
+        // «Ноябрь 2026» → «November 2026»: слово, переведённое целиком, и число.
+        if let match = tailNumber.firstMatch(in: text, range: range),
+           let words = Range(match.range(at: 1), in: text), let count = Range(match.range(at: 2), in: text) {
+            let head = part(String(text[words]), depth: depth + 1)
+            if !head.unicodeScalars.contains(where: isCyrillic) { return head + " " + String(text[count]) }
         }
         for (key, value) in table.prefixes where text.count > key.count && text.hasPrefix(key) {
             return value + part(String(text.dropFirst(key.count)), depth: depth + 1)
@@ -211,6 +250,13 @@ enum L10n {
             return text.components(separatedBy: separator).map { part($0, depth: depth + 1) }.joined(separator: separator)
         }
         return text
+    }
+
+    /// «Bench press» → «bench press», но «RPE» остаётся «RPE».
+    private static func lowerFirst(_ text: String) -> String {
+        let characters = Array(text)
+        guard characters.count > 1, characters[1].isLowercase else { return text }
+        return characters[0].lowercased() + String(characters.dropFirst())
     }
 
     private static func part(_ text: String, depth: Int) -> String {

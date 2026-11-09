@@ -50,11 +50,14 @@ enum class AppLanguage(val code: String) {
 /// помечены `{}`. Собранная во время работы фраза («Неделя 3 из 12») узнаётся
 /// по шаблону «Неделя {} из {}», а подставленные куски переводятся отдельно.
 object L10n {
-    private class Template(val regex: Regex, val target: String)
+    /// `weak` — шаблон с короткой неизменной частью («{} и {}»): годится, только если перевёл всё.
+    private class Template(val regex: Regex, val target: String, val weak: Boolean)
 
     @Volatile private var exact: Map<String, String> = emptyMap()
     /// Те же фразы капсом: «ЖИМ ЛЁЖА» в заголовках, собранных через `uppercase()`.
     @Volatile private var upper: Map<String, String> = emptyMap()
+    /// И строчными: «жим лёжа» внутри фразы, собранной через `lowercase()`.
+    @Volatile private var lower: Map<String, String> = emptyMap()
     @Volatile private var templates: List<Template> = emptyList()
     /// Куски фраз, к которым в коде приклеено число или имя: «был(а) » + «5 минут назад»,
     /// «Жим лёжа» + « · тест 1ПМ». Длинные проверяются первыми.
@@ -106,14 +109,20 @@ object L10n {
     internal fun install(text: String) {
         val json = JSONObject(text)
         val plain = HashMap<String, String>()
-        val patterns = ArrayList<Pair<Template, Int>>()
+        val patterns = ArrayList<Triple<Template, Int, String>>()
         for (key in json.keys()) {
             val value = json.getString(key)
             if (!key.contains("{}")) { plain[key] = value; continue }
             val literal = key.replace("{}", "")
             // Шаблон без русских букв вне подстановок поймал бы что угодно.
             if (!literal.any(::isCyrillic)) continue
-            patterns += Template(Regex(pattern(key), RegexOption.DOT_MATCHES_ALL), value) to literal.length
+            val weak = literal.count { it.isLetter() } <= 3
+            patterns += Triple(Template(Regex(pattern(key), RegexOption.DOT_MATCHES_ALL), value, weak), literal.length, key)
+            // Тот же шаблон капсом: «ДЕНЬ 3» в заголовках через `uppercase()`.
+            val upperKey = key.uppercase()
+            if (upperKey != key) {
+                patterns += Triple(Template(Regex(pattern(upperKey), RegexOption.DOT_MATCHES_ALL), value.uppercase(), weak), literal.length, upperKey)
+            }
         }
         val pieces = plain.entries.filter { it.key.trim().length >= 2 && it.key.any(::isCyrillic) }.sortedBy { it.key }
         prefixes = pieces.filter { it.key.endsWith(' ') }
@@ -127,8 +136,9 @@ object L10n {
         }
         exact = plain
         upper = plain.entries.associate { it.key.uppercase() to it.value.uppercase() }
+        lower = plain.entries.associate { it.key.lowercase() to it.value }
         // Чем длиннее неизменная часть, тем точнее шаблон: такие проверяем первыми.
-        templates = patterns.sortedByDescending { it.second }.map { it.first }
+        templates = patterns.sortedWith(compareByDescending<Triple<Template, Int, String>> { it.second }.thenBy { it.third }).map { it.first }
         loaded = true
         synchronized(cache) { cache.clear() }
     }
@@ -159,7 +169,8 @@ object L10n {
         if (!isEnglish || text.none(::isCyrillic)) return text
         if (!loaded) ensureLoaded()
         synchronized(cache) { cache[text]?.let { return it } }
-        val result = translate(text, 0)
+        // Неразрывные пробелы ставит типографика экранов — в словаре их нет.
+        val result = translate(text.replace('\u00A0', ' ').replace('\u202F', ' '), 0)
         synchronized(cache) {
             if (cache.size > 5000) cache.clear()
             cache[text] = result
@@ -168,6 +179,10 @@ object L10n {
     }
 
     /// Разделители, по которым дробится собранная из кусков строка: «Жим лёжа · тест 1ПМ».
+    private val number = Regex("^([+−-]?\\d[\\d .,]*?) (\\D.*)$", RegexOption.DOT_MATCHES_ALL)
+
+    private val tailNumber = Regex("^(\\D.*?) (\\d[\\d .,]*)$", RegexOption.DOT_MATCHES_ALL)
+
     private val separators = listOf(" · ", "\n", "; ", ", ")
 
     private fun translate(text: String, depth: Int): String {
@@ -176,11 +191,24 @@ object L10n {
         val trimmed = text.trim()
         if (trimmed != text) exact[trimmed]?.let { return text.replace(trimmed, it) }
         if (trimmed == trimmed.uppercase()) upper[trimmed]?.let { return text.replace(trimmed, it) }
+        if (trimmed == trimmed.lowercase()) lower[trimmed]?.let { return text.replace(trimmed, lowerFirst(it)) }
         if (depth >= 3) return text
         for (template in templates) {
             val match = template.regex.matchEntire(text) ?: continue
-            val values = match.groupValues.drop(1).map { part(it, depth + 1) }
-            return fill(template.target, values)
+            val result = fill(template.target, match.groupValues.drop(1).map { part(it, depth + 1) })
+            // Короткий шаблон («{} и {}») с недопереведённым остатком дал бы кашу из двух языков.
+            if (template.weak && result.any(::isCyrillic)) continue
+            return result
+        }
+        // «3 тренировки» → «3 workouts»: число и слово, переведённое целиком.
+        number.matchEntire(text)?.let { match ->
+            val rest = part(match.groupValues[2], depth + 1)
+            if (rest.none(::isCyrillic)) return match.groupValues[1] + " " + rest
+        }
+        // «Ноябрь 2026» → «November 2026»: слово, переведённое целиком, и число.
+        tailNumber.matchEntire(text)?.let { match ->
+            val head = part(match.groupValues[1], depth + 1)
+            if (head.none(::isCyrillic)) return head + " " + match.groupValues[2]
         }
         for ((key, value) in prefixes) {
             if (text.length > key.length && text.startsWith(key)) return value + part(text.substring(key.length), depth + 1)
@@ -195,6 +223,10 @@ object L10n {
         }
         return text
     }
+
+    /// «Bench press» → «bench press», но «RPE» остаётся «RPE».
+    private fun lowerFirst(text: String): String =
+        if (text.length > 1 && text[1].isLowerCase()) text[0].lowercaseChar() + text.substring(1) else text
 
     private fun part(text: String, depth: Int): String = if (text.any(::isCyrillic)) translate(text, depth) else text
 

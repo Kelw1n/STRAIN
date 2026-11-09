@@ -164,9 +164,9 @@ final class AppUpdater {
             ?? fallback.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
         if changes.count > 1 {
             let word = RuPlural.word(changes.count, "обновление", "обновления", "обновлений")
-            return "\(changes.count) \(word) с твоей версии · \(first)"
+            return L("\(changes.count) \(word) с твоей версии") + " · " + first
         }
-        return first.isEmpty ? "Исправления и улучшения" : first
+        return first.isEmpty ? L("Исправления и улучшения") : first
     }
 
     /// «30 октября» из «2026-10-30».

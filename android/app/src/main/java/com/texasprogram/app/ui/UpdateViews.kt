@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L
 import com.texasprogram.app.service.LocalizedDateFormat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -129,13 +130,14 @@ fun AppUpdateBanner(modifier: Modifier = Modifier, state: State = AppUpdater.sta
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
+                    // Сводка уже переведена, а новости версии с сервера показываются как есть.
+                    RawText(
                         when (current) {
                             is State.Downloading ->
-                                if (current.progress < 0f) "Секунду…" else "${(current.progress * 100).toInt()}%"
-                            is State.NeedsPermission -> "Один раз: включи «Разрешить из этого источника» и вернись"
-                            is State.Ready -> "Нажми «Обновить» в окне Android"
-                            is State.Failed -> current.message
+                                if (current.progress < 0f) L("Секунду…") else "${(current.progress * 100).toInt()}%"
+                            is State.NeedsPermission -> L("Один раз: включи «Разрешить из этого источника» и вернись")
+                            is State.Ready -> L("Нажми «Обновить» в окне Android")
+                            is State.Failed -> L(current.message)
                             else -> summary(changes, release.notes)
                         },
                         color = Theme.ink.copy(alpha = 0.65f),
@@ -227,7 +229,7 @@ private fun WhatsNewBanner(visible: Boolean, modifier: Modifier) {
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("STRAIN обновлён до ${newest.versionName}", color = Theme.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(summary(list, newest.notes), color = Theme.ink.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    RawText(summary(list, newest.notes), color = Theme.ink.copy(alpha = 0.65f), fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -312,7 +314,8 @@ fun ChangesList(changes: List<AppUpdater.Change>, modifier: Modifier = Modifier,
                 points.forEach { point ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("•", color = Theme.accent, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold)
-                        Text(point, color = Theme.ink, fontSize = 14.sp, lineHeight = 19.sp)
+                        // Новости версии приходят с сервера по-русски — показываем как есть.
+                        RawText(point, color = Theme.ink, fontSize = 14.sp, lineHeight = 19.sp)
                     }
                 }
             }
@@ -324,9 +327,9 @@ fun ChangesList(changes: List<AppUpdater.Change>, modifier: Modifier = Modifier,
 private fun summary(changes: List<AppUpdater.Change>, fallback: String): String {
     val first = changes.firstOrNull()?.points?.firstOrNull() ?: fallback.lines().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
     return when {
-        changes.size > 1 -> "${changes.size} ${com.texasprogram.app.service.RuPlural.word(changes.size, "обновление", "обновления", "обновлений")} с твоей версии · $first"
+        changes.size > 1 -> L("${changes.size} ${com.texasprogram.app.service.RuPlural.word(changes.size, "обновление", "обновления", "обновлений")} с твоей версии") + " · " + first
         first.isNotEmpty() -> first
-        else -> "Исправления и улучшения"
+        else -> L("Исправления и улучшения")
     }
 }
 
@@ -358,7 +361,7 @@ fun AppVersionCard(modifier: Modifier = Modifier) {
             )
             release != null -> {
                 val changes = AppUpdater.pending.ifEmpty { release.changes(since = AppUpdater.installedVersionCode(context)) }
-                Text(summary(changes, release.notes), color = Theme.textTertiary, fontSize = 12.sp)
+                RawText(summary(changes, release.notes), color = Theme.textTertiary, fontSize = 12.sp)
                 if (changes.isNotEmpty()) {
                     ExpandToggle(expanded, Modifier) { expanded = !expanded }
                     AnimatedVisibility(visible = expanded) { ChangesList(changes) }

@@ -91,7 +91,7 @@ struct PartnerStatus: View {
     private var line: String {
         if together.partnerDone { return "уже закончил(а)" }
         guard let live = together.partnerLive else { return "ещё не начал(а)" }
-        let sets = live.setsTotal > 0 ? " · подходов \(live.setsDone) из \(live.setsTotal)" : ""
+        let sets = live.setsTotal > 0 ? L(" · подходов \(live.setsDone) из \(live.setsTotal)") : ""
         return live.line + sets
     }
 }

@@ -1,5 +1,6 @@
 package com.texasprogram.app.model
 
+import com.texasprogram.app.service.L
 import java.time.LocalDate
 import kotlin.math.max
 import kotlin.math.min
@@ -163,7 +164,7 @@ object Progression {
     /// Награда за месяц: получить её можно только в этом месяце, потом она остаётся.
     data class MonthAward(val year: Int, val month: Int, val workouts: Int, val tier: MonthTier) {
         val id: String get() = "$year-$month"
-        val title: String get() = "${monthNames[month]} $year"
+        val title: String get() = "${L(monthNames[month])} $year"
     }
 
     val monthNames = listOf(

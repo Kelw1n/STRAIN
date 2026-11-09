@@ -132,7 +132,7 @@ struct StreakCalendarSheet: View {
 
     static func monthTitle(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month], from: date)
-        return "\(monthNames[(parts.month ?? 1) - 1]) \(parts.year ?? 0)"
+        return "\(L(monthNames[(parts.month ?? 1) - 1])) \(parts.year ?? 0)"
     }
 }
 
