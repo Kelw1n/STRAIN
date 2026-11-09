@@ -231,7 +231,7 @@ struct SettingsView: View {
                     Text(L("С чего начать, сколько отдыхать, что такое RPE и особенности твоей программы."))
                 }
 
-                Section(profile.maximumLabel) {
+                Section(L(profile.maximumLabel)) {
                     TextField(L("Приседания"), value: $profile.squat5RM, format: .number).keyboardType(.decimalPad)
                     TextField(L("Жим лёжа"), value: $profile.bench5RM, format: .number).keyboardType(.decimalPad)
                     TextField(L("Становая тяга"), value: $profile.deadlift5RM, format: .number).keyboardType(.decimalPad)

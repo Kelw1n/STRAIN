@@ -356,7 +356,7 @@ struct SupplementSheet: View {
     }
 
     private func field(_ placeholder: String, text: Binding<String>) -> some View {
-        TextField(placeholder, text: text)
+        TextField(L(placeholder), text: text)
             .focused($typing)
             .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(.ink)

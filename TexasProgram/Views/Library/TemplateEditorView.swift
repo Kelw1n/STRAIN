@@ -272,7 +272,7 @@ private struct TemplateNumberField: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        TextField(placeholder, text: $text)
+        TextField(L(placeholder), text: $text)
             .keyboardType(decimal ? .decimalPad : .numberPad)
             .focused($focused)
             .multilineTextAlignment(.center)

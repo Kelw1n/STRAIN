@@ -113,7 +113,7 @@ struct AmountField: View {
                 .tracking(0.8)
                 .foregroundStyle(Color.ink.opacity(0.45))
             HStack(spacing: 3) {
-                TextField(placeholder, text: $text)
+                TextField(L(placeholder), text: $text)
                     .keyboardType(.decimalPad)
                     .focused($focused)
                     .font(.system(size: 17, weight: .bold, design: Theme.fontDesign))

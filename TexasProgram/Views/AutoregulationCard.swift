@@ -41,7 +41,7 @@ struct AutoregulationCard: View {
                                 .font(.footnote.weight(.bold).monospacedDigit())
                                 .foregroundStyle(Theme.accentGradient)
                         }
-                        Picker(item.lift.rawValue, selection: binding(for: item.lift)) {
+                        Picker(L(item.lift.rawValue), selection: binding(for: item.lift)) {
                             ForEach(LiftOutcome.allCases) { Text($0.rawValue).tag(Optional($0)) }
                         }
                         .pickerStyle(.segmented)
