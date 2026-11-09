@@ -1,5 +1,7 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L10n
+import com.texasprogram.app.service.L
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap

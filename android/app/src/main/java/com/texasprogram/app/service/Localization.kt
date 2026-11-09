@@ -64,7 +64,19 @@ object L10n {
     /// на русском он не нужен вовсе.
     fun init(context: Context) {
         appContext = context.applicationContext
+        keepRussianForExistingUsers(context)
         isEnglish = AppLanguage.current(context).resolved == AppLanguage.EN
+    }
+
+    /// Кто уже пользовался приложением до английского, остаётся на русском,
+    /// даже если телефон на английском: язык не должен смениться сам после
+    /// обновления. Новая установка выбора не имеет — берётся язык телефона.
+    private fun keepRussianForExistingUsers(context: Context) {
+        val settings = context.getSharedPreferences(AppLanguage.PREFS, Context.MODE_PRIVATE)
+        if (settings.contains(AppLanguage.KEY)) return
+        val store = context.getSharedPreferences("strain.store", Context.MODE_PRIVATE)
+        if (!store.contains("profiles")) return
+        settings.edit().putString(AppLanguage.KEY, AppLanguage.RU.code).apply()
     }
 
     @Synchronized
@@ -81,6 +93,11 @@ object L10n {
 
     private fun load(context: Context) {
         val text = runCatching { context.assets.open("i18n-en.json").bufferedReader().use { it.readText() } }.getOrNull() ?: return
+        install(text)
+    }
+
+    /// Словарь из текста JSON. Снимки экранов кладут его сюда сами: у них нет приложения.
+    internal fun install(text: String) {
         val json = JSONObject(text)
         val plain = HashMap<String, String>()
         val patterns = ArrayList<Pair<Template, Int>>()
@@ -96,6 +113,8 @@ object L10n {
         exact = plain
         // Чем длиннее неизменная часть, тем точнее шаблон: такие проверяем первыми.
         templates = patterns.sortedByDescending { it.second }.map { it.first }
+        loaded = true
+        synchronized(cache) { cache.clear() }
     }
 
     /// Язык для дат и чисел: «12 марта» или «March 12».

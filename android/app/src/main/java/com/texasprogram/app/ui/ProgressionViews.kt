@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L
 import com.texasprogram.app.service.L10n
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas

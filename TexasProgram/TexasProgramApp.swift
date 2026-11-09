@@ -19,6 +19,7 @@ struct TexasProgramApp: App {
         // Фото ленты по одному адресу не меняются: пусть лежат в кэше,
         // а не качаются заново при каждой прокрутке.
         URLCache.shared = URLCache(memoryCapacity: 40 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
+        AppLanguage.keepRussianForExistingUsers()
         AppLanguage.shareWithWidgets()
     }
 

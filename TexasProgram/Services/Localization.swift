@@ -45,6 +45,18 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         shareWithWidgets()
     }
 
+    /// Кто уже пользовался приложением до английского, остаётся на русском,
+    /// даже если iPhone на английском: язык не должен смениться сам после обновления.
+    /// Новая установка выбора не имеет — берётся язык телефона.
+    static func keepRussianForExistingUsers() {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: storageKey) == nil else { return }
+        let store = URL.applicationSupportDirectory.appending(path: "default.store")
+        guard FileManager.default.fileExists(atPath: store.path) else { return }
+        defaults.set(AppLanguage.ru.rawValue, forKey: storageKey)
+        L10n.reload()
+    }
+
     /// Виджету и Live Activity — уже раскрытый язык: «как в системе» они не узнают.
     static func shareWithWidgets() {
         UserDefaults(suiteName: appGroup)?.set(current.resolved.rawValue, forKey: storageKey)
