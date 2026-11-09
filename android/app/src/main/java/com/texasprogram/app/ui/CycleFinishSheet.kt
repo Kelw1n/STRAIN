@@ -123,12 +123,12 @@ private fun Stat(value: String, caption: String, modifier: Modifier = Modifier) 
 /// Итоги цикла и выбор, как начинать следующий. Тот же экран — CycleFinishView на iOS.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CycleFinishSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, onDismiss: () -> Unit) {
+fun CycleFinishSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, initialFeel: CycleFeel? = null, onDismiss: () -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = rememberHapticEngine()
     val recap = remember { profile.cycleRecap }
     val hint = remember { profile.cycleFeelHint }
-    var feel by remember { mutableStateOf<CycleFeel?>(null) }
+    var feel by remember { mutableStateOf(initialFeel) }
     var editing by remember { mutableStateOf<CustomProgram?>(null) }
     var manual by remember { mutableStateOf(false) }
     var confirmRepeat by remember { mutableStateOf(false) }
@@ -141,12 +141,7 @@ fun CycleFinishSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit
         onDismiss()
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = state,
-        containerColor = SheetBackground,
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
-    ) {
+    val body: @Composable () -> Unit = {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -262,6 +257,17 @@ fun CycleFinishSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit
                 Secondary("Повторить с теми же весами") { confirmRepeat = true }
             }
         }
+    }
+    // На снимках экрана лист рисуется прямо на экране: всплывающее окно туда не попадает.
+    if (LocalNutritionSheetInline.current) {
+        Box(Modifier.background(SheetBackground).padding(top = 24.dp)) { body() }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = state,
+            containerColor = SheetBackground,
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+        ) { body() }
     }
 
     val base = editing

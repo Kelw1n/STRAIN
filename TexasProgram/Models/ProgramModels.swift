@@ -545,7 +545,8 @@ final class ProgramProfile {
                 // окончательный. Упражнения, которых нет в списке, идут в конец —
                 // их могли добавить после перестановки.
                 if let order = edits.last(where: { $0.kind == .order })?.order {
-                    let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
+                    // Повтор в порядке (копия с другой платформы) не должен ронять приложение.
+                    let rank = Dictionary(order.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })
                     // Сортировка в Swift не обещает устойчивости, поэтому вторым
                     // ключом идёт исходная позиция: упражнения вне списка сохранят ряд.
                     list = list.enumerated()

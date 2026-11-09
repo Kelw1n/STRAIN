@@ -436,6 +436,28 @@ final class SnapshotTests: XCTestCase {
         try snap("45-templates-empty", height: 1300) { TemplatesView(profile: ProgramProfile(input: .demo), onStart: { _ in }) }
     }
 
+    /// Конец программы: карточка и экран выбора — пустой и с ответом.
+    @MainActor func testCycleFinish() throws {
+        let program = CustomProgram(name: "Моя программа", template: .upperLower, weeks: 2, days: [
+            CustomDay(number: 1, title: "ВЕРХ", exercises: [
+                CustomExercise(name: "Жим лёжа", sets: 3, reps: "5", kilograms: 80, loadText: nil, weeklyIncrement: 2.5),
+                CustomExercise(name: "Тяга штанги в наклоне", sets: 3, reps: "8", kilograms: 60, loadText: nil, weeklyIncrement: 2.5)
+            ]),
+            CustomDay(number: 2, title: "НИЗ", exercises: [
+                CustomExercise(name: "Приседания", sets: 3, reps: "5", kilograms: 100, loadText: nil, weeklyIncrement: 5),
+                CustomExercise(name: "Подтягивания", sets: 3, reps: "8", kilograms: nil, loadText: "свой вес", weeklyIncrement: 0)
+            ])
+        ])
+        let profile = ProgramProfile(customProgram: program)
+        for week in 1...2 { for day in 1...2 { profile.toggleCompleted(week: week, day: day, effort: "8/10") } }
+        try snap("47-cycle-card", height: 700) {
+            ScrollView { ProgramFinishedCard(profile: profile, onOpen: {}).padding(16) }.screenBackground()
+        }
+        try snap("48-cycle-finish", height: 2000) { CycleFinishView(profile: profile) }
+        try snap("49-cycle-finish-hard", height: 2400) { CycleFinishView(profile: profile, feel: .hard) }
+        try snap("49b-cycle-finish-texas", height: 2400) { CycleFinishView(profile: ProgramProfile(input: .demo), feel: .normal) }
+    }
+
     @MainActor func testGoalSettings() throws {
         let profile = ProgramProfile(input: .demo)
         profile.reminderEnabled = true

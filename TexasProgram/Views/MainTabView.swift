@@ -775,7 +775,7 @@ struct PlanView: View {
         // Даты берём из расписания: в режиме очереди день недели у тренировки
         // определяется её местом в очереди, а не номером дня.
         let dates = Dictionary(
-            uniqueKeysWithValues: profile.schedule.allPending.map { ($0.id, $0) }
+            profile.schedule.allPending.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }
         )
         return NavigationStack {
             ScrollView {

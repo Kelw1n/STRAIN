@@ -80,8 +80,9 @@ struct CycleFinishView: View {
     private let recap: CycleRecap
     private let hint: CycleFeelHint?
 
-    init(profile: ProgramProfile) {
+    init(profile: ProgramProfile, feel: CycleFeel? = nil) {
         self.profile = profile
+        _feel = State(initialValue: feel)
         recap = profile.cycleRecap
         hint = profile.cycleFeelHint
     }

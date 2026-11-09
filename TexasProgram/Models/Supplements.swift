@@ -136,9 +136,22 @@ enum SupplementTracker {
     /// не ждали (только «с тренировкой», а тренировки не было), серию не рвёт.
     static func streak(data: SupplementData, trainedDays: Set<Date>, today: Date = Date(), calendar: Calendar = .current) -> Int {
         guard let first = data.items.map({ calendar.startOfDay(for: $0.created) }).min() else { return 0 }
+        // Отметки раскладываем по дням один раз: раньше каждый из 400 дней
+        // заново перебирал все отметки, и через год экран питания подтормаживал.
+        var takenByDay: [Date: Set<UUID>] = [:]
+        for intake in data.taken {
+            takenByDay[calendar.startOfDay(for: intake.date), default: []].insert(intake.supplementID)
+        }
+        let items = data.items.map { (item: $0, since: calendar.startOfDay(for: $0.created)) }
+        func dayState(_ day: Date) -> (required: Int, complete: Bool) {
+            let trained = trainedDays.contains(day)
+            let required = items.filter { $0.since <= day && ($0.item.slot != .workout || trained) }
+            let taken = takenByDay[day] ?? []
+            return (required.count, !required.isEmpty && required.allSatisfy { taken.contains($0.item.id) })
+        }
         var day = calendar.startOfDay(for: today)
         var count = 0
-        if !state(on: day, data: data, trainedDays: trainedDays, calendar: calendar).isComplete {
+        if !dayState(day).complete {
             guard let yesterday = calendar.date(byAdding: .day, value: -1, to: day) else { return 0 }
             day = yesterday
         }
@@ -146,13 +159,13 @@ enum SupplementTracker {
         // а проход по дням не должен расти без конца.
         for _ in 0..<400 {
             guard day >= first else { break }
-            let state = state(on: day, data: data, trainedDays: trainedDays, calendar: calendar)
+            let state = dayState(day)
             if state.required > 0 {
-                guard state.isComplete else { break }
+                guard state.complete else { break }
                 count += 1
             }
             guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
-            day = previous
+            day = calendar.startOfDay(for: previous)
         }
         return count
     }
