@@ -275,7 +275,7 @@ struct GoalSettingsSheet: View {
         let calendar = Calendar.current
         let days = calendar.dateComponents([.day], from: goalStart, to: end).day ?? 0
         let total = max(1, Int(ceil(Double(days) / 7)))
-        let endText = "до \(calendar.component(.day, from: end)) \(RuDate.monthGenitive[calendar.component(.month, from: end)])"
+        let endText = "до \(RuDate.dayMonth(end, calendar: calendar))"
         let today = calendar.startOfDay(for: Date())
         guard today >= goalStart else { return "\(total) " + RuPlural.word(total, "неделя", "недели", "недель") + " · " + endText }
         let week = min(total, (calendar.dateComponents([.day], from: goalStart, to: today).day ?? 0) / 7 + 1)
