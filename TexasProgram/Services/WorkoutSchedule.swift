@@ -5,6 +5,12 @@ enum RuPlural {
     static func word(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
         // В английском две формы: одна штука и всё остальное (0, 2, 21, 105).
         if L10n.isEnglish { return abs(count) == 1 ? L10n.tr(one) : L10n.tr(many) }
+        return russian(count, one, few, many)
+    }
+
+    /// Всегда по-русски, какой бы язык ни был выбран: для текста, который уходит
+    /// на сервер и который видят другие люди. Переводится уже при показе.
+    static func russian(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
         let value = abs(count)
         if (11...14).contains(value % 100) { return many }
         switch value % 10 {

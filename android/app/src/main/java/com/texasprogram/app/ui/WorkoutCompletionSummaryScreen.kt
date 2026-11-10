@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -91,7 +92,7 @@ fun WorkoutCompletionSummaryScreen(
     val haptic = LocalHapticFeedback.current
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    var workoutTitle by remember { mutableStateOf<String>(workout.fullTitle) }
+    var workoutTitle by remember { mutableStateOf<String>(L(workout.fullTitle)) }
     var workoutDescription by remember {
         mutableStateOf<String>(
             if (WorkoutSessionManager.noteText.isNotEmpty()) WorkoutSessionManager.noteText
@@ -441,7 +442,7 @@ fun WorkoutCompletionSummaryScreen(
 
             // КАРТОЧКА ДЛЯ СТОРИС
             ShareCardSection(
-                title = workoutTitle.ifBlank { workout.fullTitle },
+                title = workoutTitle.ifBlank { L(workout.fullTitle) },
                 durationSeconds = durationSeconds,
                 photo = selectedImages.firstOrNull()
             )
@@ -476,7 +477,7 @@ fun WorkoutCompletionSummaryScreen(
                         // Пост в ленту и карточки друзьям — до завершения: потом подходы сессии уже сброшены.
                         if (SocialService.isSignedIn && (publishToFeed || recipients.isNotEmpty())) {
                             val draft = feedDraft(
-                                title = workoutTitle.ifBlank { workout.fullTitle },
+                                title = workoutTitle.ifBlank { L(workout.fullTitle) },
                                 description = workoutDescription.trim(),
                                 durationSeconds = durationSeconds,
                                 effort = effortScore,

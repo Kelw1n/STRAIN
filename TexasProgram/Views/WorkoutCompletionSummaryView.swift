@@ -125,7 +125,7 @@ struct WorkoutCompletionSummaryView: View {
             }
         }
         .onAppear {
-            workoutTitle = workout.fullTitle
+            workoutTitle = L(workout.fullTitle)
             workoutDescription = sessionManager.noteText.isEmpty
                 ? profile.note(week: workout.week, day: workout.day.number)
                 : sessionManager.noteText
@@ -345,7 +345,7 @@ struct WorkoutCompletionSummaryView: View {
         return SocialPostDraft(
             clientId: UUID().uuidString.lowercased(),
             createdAt: Date(),
-            title: workoutTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? workout.fullTitle : workoutTitle,
+            title: workoutTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L(workout.fullTitle) : workoutTitle,
             description: workoutDescription.trimmingCharacters(in: .whitespacesAndNewlines),
             durationSeconds: durationSeconds,
             volumeKg: sessionManager.totalTonnage,
@@ -472,7 +472,7 @@ struct WorkoutCompletionSummaryView: View {
 
     private var shareSummary: WorkoutShareSummary {
         WorkoutShareSummary.current(
-            title: workoutTitle.isEmpty ? workout.fullTitle : workoutTitle,
+            title: workoutTitle.isEmpty ? L(workout.fullTitle) : workoutTitle,
             durationSeconds: durationSeconds
         )
     }

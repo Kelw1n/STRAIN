@@ -84,6 +84,11 @@ object L10n {
     /// обновления. Новая установка выбора не имеет — берётся язык телефона.
     private fun keepRussianForExistingUsers(context: Context) {
         val settings = context.getSharedPreferences(AppLanguage.PREFS, Context.MODE_PRIVATE)
+        // Проверяем один раз — при первом запуске версии с английским. Иначе новая
+        // установка на английском телефоне со второго запуска стала бы русской:
+        // к тому времени данные приложения уже есть.
+        if (settings.getBoolean("app_language_checked", false)) return
+        settings.edit().putBoolean("app_language_checked", true).apply()
         if (settings.contains(AppLanguage.KEY)) return
         val store = context.getSharedPreferences("strain.store", Context.MODE_PRIVATE)
         if (!store.contains("profiles")) return

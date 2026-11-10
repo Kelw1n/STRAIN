@@ -10,9 +10,15 @@ import java.time.temporal.ChronoUnit
 /// Склонение по числу: «1 подход», «2 подхода», «5 подходов».
 object RuPlural {
     fun word(count: Int, one: String, few: String, many: String): String {
-        val value = kotlin.math.abs(count)
         // В английском две формы: «1 set», «2 sets».
-        if (L10n.isEnglish) return if (value == 1) L10n.tr(one) else L10n.tr(many)
+        if (L10n.isEnglish) return if (kotlin.math.abs(count) == 1) L10n.tr(one) else L10n.tr(many)
+        return russian(count, one, few, many)
+    }
+
+    /// Всегда по-русски, какой бы язык ни был выбран: для текста, который уходит
+    /// на сервер и который видят другие люди. Переводится уже при показе.
+    fun russian(count: Int, one: String, few: String, many: String): String {
+        val value = kotlin.math.abs(count)
         if (value % 100 in 11..14) return many
         return when (value % 10) {
             1 -> one

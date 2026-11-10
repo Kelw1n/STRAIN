@@ -50,6 +50,12 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     /// Новая установка выбора не имеет — берётся язык телефона.
     static func keepRussianForExistingUsers() {
         let defaults = UserDefaults.standard
+        // Проверяем один раз — при первом запуске версии с английским. Иначе новая
+        // установка на английском iPhone со второго запуска стала бы русской:
+        // к тому времени данные приложения уже есть.
+        let checked = "app_language_checked"
+        guard !defaults.bool(forKey: checked) else { return }
+        defaults.set(true, forKey: checked)
         guard defaults.string(forKey: storageKey) == nil else { return }
         let store = URL.applicationSupportDirectory.appending(path: "default.store")
         guard FileManager.default.fileExists(atPath: store.path) else { return }

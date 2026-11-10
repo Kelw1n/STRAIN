@@ -211,7 +211,7 @@ enum ChallengeScoring {
 
         switch kind {
         case .workouts:
-            return Result(score: Double(count), detail: "\(count) \(RuPlural.word(count, "тренировка", "тренировки", "тренировок"))")
+            return Result(score: Double(count), detail: "\(count) \(RuPlural.russian(count, "тренировка", "тренировки", "тренировок"))")
 
         case .volume:
             let volume = inWindow.keys.sorted().reduce(0.0) { $0 + tonnage($1) }
