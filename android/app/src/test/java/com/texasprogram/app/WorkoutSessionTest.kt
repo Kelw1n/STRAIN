@@ -167,6 +167,21 @@ class WorkoutSessionTest {
         assertNull(profile.setEntry(w.week, w.day.number, ex.prescription, 0))
     }
 
+    /// Тренировку по расписанию на другой день начали сегодня — в заголовке сегодняшний
+    /// день недели («СРЕДА · ДЕНЬ 3»), а не плановый («ПЯТНИЦА · ДЕНЬ 3»).
+    @Test
+    fun earlyWorkoutShowsTodaysWeekday() {
+        val pending = profile.schedule().allPending
+        val today = java.time.LocalDate.now()
+        val future = pending.firstOrNull { it.date.isAfter(today) } ?: return
+        manager.startWorkout(future, profile)
+        val active = manager.activeWorkout!!
+        assertEquals(future.id, active.id)
+        assertEquals(com.texasprogram.app.service.RuDate.weekdayOf(today), active.weekday)
+        assertEquals(today, active.date)
+        assertTrue(active.fullTitle.startsWith(com.texasprogram.app.service.RuDate.full(active.weekday).uppercase()))
+    }
+
     @Test
     fun requestStartAsksBeforeReplacing() {
         val pending = profile.schedule().allPending

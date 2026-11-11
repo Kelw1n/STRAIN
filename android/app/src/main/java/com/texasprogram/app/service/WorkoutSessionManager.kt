@@ -757,8 +757,8 @@ object WorkoutSessionManager {
                 ScheduledWorkout(
                     week = session.week,
                     day = day,
-                    date = LocalDate.now(),
-                    weekday = profile.weekday(session.day),
+                    date = startedOn,
+                    weekday = RuDate.weekdayOf(startedOn),
                     isCompleted = profile.isCompleted(session.week, session.day),
                     benchSession = session.benchSession
                 )
