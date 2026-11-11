@@ -254,9 +254,16 @@ final class WorkoutSessionManager {
             return
         }
 
-        activeWorkout = workout
+        // Тренируешься сегодня — в заголовке сегодняшний день недели, даже если по
+        // расписанию тренировка стояла на другой: «ПЯТНИЦА» в среду выглядела ошибкой.
+        let now = Date()
+        activeWorkout = ScheduledWorkout(
+            week: workout.week, day: workout.day, date: now,
+            weekday: WorkoutScheduler.trainingCalendar().component(.weekday, from: now),
+            isCompleted: workout.isCompleted, benchSession: workout.benchSession
+        )
         profileID = profile.profileID
-        startDate = Date()
+        startDate = now
         startSnapshot = profile.snapshotDay(week: workout.week, day: workout.day.number)
         noteText = profile.note(week: workout.week, day: workout.day.number)
         showingZeroSetsAlert = false

@@ -271,7 +271,10 @@ object WorkoutSessionManager {
             expand()
             return
         }
-        activeWorkout = workout
+        // Тренируешься сегодня — в заголовке сегодняшний день недели, даже если по
+        // расписанию тренировка стояла на другой: «ПЯТНИЦА» в среду выглядела ошибкой.
+        val today = java.time.LocalDate.now()
+        activeWorkout = workout.copy(date = today, weekday = RuDate.weekdayOf(today))
         profileId = profile.id
         startMillis = now
         noteText = profile.note(workout.week, workout.day.number)
@@ -744,8 +747,11 @@ object WorkoutSessionManager {
             clearSaved()
             return
         }
+        // День недели — того дня, когда тренировку начали, а не дня по расписанию.
+        val startedOn = java.time.Instant.ofEpochMilli(session.startMillis).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
         val workout = profile.schedule().allPending
             .firstOrNull { it.week == session.week && it.day.number == session.day }
+            ?.copy(date = startedOn, weekday = RuDate.weekdayOf(startedOn))
             ?: run {
                 val day = profile.dayPlan(session.week, session.day) ?: return
                 ScheduledWorkout(
