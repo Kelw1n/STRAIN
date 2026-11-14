@@ -470,9 +470,7 @@ fun WorkoutCompletionSummaryScreen(
                     .height(54.dp)
                     .pressable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val updatedProfile = if (workoutDescription.isNotEmpty()) {
-                            profile.setNote(workoutDescription, workout.week, workout.day.number)
-                        } else profile
+                        val updatedProfile = profile.setNote(workoutDescription, workout.week, workout.day.number)
 
                         // Пост в ленту и карточки друзьям — до завершения: потом подходы сессии уже сброшены.
                         if (SocialService.isSignedIn && (publishToFeed || recipients.isNotEmpty())) {

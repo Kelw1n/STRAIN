@@ -281,6 +281,26 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertFalse(manager.isRunning)
     }
 
+    func testEachProfileKeepsItsOwnActiveSession() throws {
+        let first = texas()
+        let second = texas()
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: try XCTUnwrap(first.schedule.focus), profile: first)
+        manager.setWeight(81, exIdx: 0, sIdx: 0, profile: first)
+
+        manager.detachIfOtherProfile(second)
+        manager.startWorkout(workout: try XCTUnwrap(second.schedule.focus), profile: second)
+        manager.setWeight(93, exIdx: 0, sIdx: 0, profile: second)
+
+        manager.detachIfOtherProfile(first)
+        manager.restoreIfNeeded(for: first)
+        XCTAssertEqual(manager.exercises.first?.sets.first?.weight, 81.0)
+        manager.discardWorkout(profile: first)
+
+        manager.restoreIfNeeded(for: second)
+        XCTAssertEqual(manager.exercises.first?.sets.first?.weight, 93.0)
+    }
+
     // MARK: - Перестановка
 
     func testReorderShiftsNeighboursTowardsTheGap() {

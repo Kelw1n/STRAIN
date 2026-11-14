@@ -285,6 +285,31 @@ function timeParam(value) {
     return Number.isFinite(ms) && ms > 0 && ms <= 8.64e15 ? new Date(ms) : null;
 }
 
+// В курсоре храним время PostgreSQL с микросекундами и ID для равных дат.
+function cursorTime(column) {
+    return `to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+}
+
+function writeCursor(time, id) {
+    return Buffer.from(JSON.stringify([time, id])).toString('base64url');
+}
+
+function readCursor(value) {
+    if (typeof value !== 'string' || value.length > 512 || !/^[\w-]+$/.test(value)) return null;
+    try {
+        const cursor = JSON.parse(Buffer.from(value, 'base64url').toString());
+        if (!Array.isArray(cursor) || cursor.length !== 2) return null;
+        const [time, id] = cursor;
+        if (typeof time !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(time)
+            || time.startsWith('0000') || typeof id !== 'string' || !id || id.length > 128 || id.includes('\0')) return null;
+        const parsed = new Date(time);
+        if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 19) !== time.slice(0, 19)) return null;
+        return cursor;
+    } catch {
+        return null;
+    }
+}
+
 // Сколько строк отдать: целое в пределах, иначе — по умолчанию.
 function limitParam(value, fallback, max) {
     return Math.min(max, Math.max(1, Math.floor(Number(value)) || fallback));
@@ -552,7 +577,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     // MARK: Пост в ответе
 
     const POST_SELECT = `
-        SELECT p.*, u.username, u.avatar_id, u.stats->'level' AS author_level,
+        SELECT p.*, ${cursorTime('p.created_at')} AS page_time, u.username, u.avatar_id, u.stats->'level' AS author_level,
             (SELECT count(*) FROM likes l WHERE l.post_id = p.id)::int AS like_count,
             (SELECT count(*) FROM comments c WHERE c.post_id = p.id)::int AS comment_count,
             EXISTS (SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $1) AS liked
@@ -579,16 +604,33 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         liked: row.liked
     });
 
-    function page(req) {
-        return {
-            before: timeParam(req.query.before) || new Date(Date.now() + 60_000),
-            limit: limitParam(req.query.limit, PAGE, 50)
-        };
+    async function postPage(req, params, filter) {
+        const limit = limitParam(req.query.limit, PAGE, 50);
+        const cursor = readCursor(req.query.before);
+        let range;
+        if (cursor) {
+            params.push(...cursor);
+            range = `(p.created_at, p.id) < ($${params.length - 1}::timestamptz, $${params.length})`;
+        } else {
+            params.push(timeParam(req.query.before) || new Date(Date.now() + 60_000));
+            range = `p.created_at < $${params.length}`;
+        }
+        params.push(limit);
+        const rows = await q(
+            `${POST_SELECT} WHERE ${filter} AND ${range}
+             ORDER BY p.created_at DESC, p.id DESC LIMIT $${params.length}`, params
+        );
+        return pageResult(rows, limit);
     }
 
     function pageResult(rows, limit) {
         const posts = rows.map(postView);
-        return { posts, next: posts.length === limit ? posts[posts.length - 1].createdAt : null };
+        const last = rows.length === limit ? rows[rows.length - 1] : null;
+        return {
+            posts,
+            next: last ? posts[posts.length - 1].createdAt : null,
+            nextCursor: last ? writeCursor(last.page_time, last.id) : null
+        };
     }
 
     // MARK: Регистрация и вход
@@ -687,12 +729,7 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
     router.get('/users/:username/posts', wrap(async (req, res) => {
         const me = await viewer(req);
         const user = await userByName(req.params.username, 'id');
-        const { before, limit } = page(req);
-        const rows = await q(
-            `${POST_SELECT} WHERE p.user_id = $2 AND p.created_at < $3 ORDER BY p.created_at DESC LIMIT $4`,
-            [me ? me.id : '', user.id, before, limit]
-        );
-        res.json(pageResult(rows, limit));
+        res.json(await postPage(req, [me ? me.id : '', user.id], 'p.user_id = $2'));
     }));
 
     // MARK: Программы сообщества
@@ -883,17 +920,12 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     router.get('/feed', wrap(async (req, res) => {
         const me = await viewer(req);
-        const { before, limit } = page(req);
         const following = req.query.scope === 'following';
         if (following && !me) throw new HttpError(401, 'Нужно войти в профиль STRAIN');
-        const rows = following
-            ? await q(
-                `${POST_SELECT} WHERE (p.user_id = $1 OR p.user_id IN (SELECT followee FROM follows WHERE follower = $1))
-                 AND p.created_at < $2 ORDER BY p.created_at DESC LIMIT $3`,
-                [me.id, before, limit]
-            )
-            : await q(`${POST_SELECT} WHERE p.created_at < $2 ORDER BY p.created_at DESC LIMIT $3`, [me ? me.id : '', before, limit]);
-        res.json(pageResult(rows, limit));
+        const filter = following
+            ? '(p.user_id = $1 OR p.user_id IN (SELECT followee FROM follows WHERE follower = $1))'
+            : 'TRUE';
+        res.json(await postPage(req, [me ? me.id : ''], filter));
     }));
 
     router.post('/posts/:id/like', wrap(async (req, res) => {
@@ -1027,7 +1059,8 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         });
 
     const MESSAGE_SELECT = `
-        SELECT m.*, r.id AS reply_id, r.text AS reply_text, r.image AS reply_image, r.voice AS reply_voice,
+        SELECT m.*, ${cursorTime('m.created_at')} AS page_time, ${cursorTime('m.updated_at')} AS change_time,
+               r.id AS reply_id, r.text AS reply_text, r.image AS reply_image, r.voice AS reply_voice,
                r.sender AS reply_sender, r.deleted_at IS NOT NULL AS reply_deleted,
                t.status AS t_status, t.created_at AS t_created, t.responded_at AS t_responded,
                t.inviter_done AS t_inviter_done, t.invitee_done AS t_invitee_done,
@@ -1117,27 +1150,38 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const other = await userByName(req.params.username, SHORT);
         const serverTime = Date.now();
         const before = timeParam(req.query.before);
+        const olderCursor = readCursor(req.query.before);
         const after = timeParam(req.query.after);
         const since = timeParam(req.query.since);
         const limit = limitParam(req.query.limit, 50, 100);
-        const params = [me.id, other.id, limit];
+        const pagedChanges = Boolean(since && req.query.changes === '1');
+        const changeCursor = pagedChanges ? readCursor(req.query.changeCursor) : null;
+        const params = [me.id, other.id, pagedChanges ? limit + 1 : limit];
         // Время в ответе — в миллисекундах, а в базе — в микросекундах: сравниваем
         // по миллисекундам, иначе «новее, чем последнее» вернуло бы его же.
         let range = 'AND m.deleted_at IS NULL';
         if (since) {
             params.push(since);
-            range = `AND date_trunc('milliseconds', m.updated_at) >= $${params.length}`;
+            range = `AND m.updated_at >= $${params.length}`;
+            if (changeCursor) {
+                params.push(...changeCursor);
+                range += ` AND (m.updated_at, m.id) > ($${params.length - 1}::timestamptz, $${params.length})`;
+            }
         } else if (after) {
             params.push(after);
             range = `AND m.deleted_at IS NULL AND date_trunc('milliseconds', m.created_at) > $${params.length}`;
+        } else if (olderCursor) {
+            params.push(...olderCursor);
+            range = `AND m.deleted_at IS NULL AND (m.created_at, m.id) < ($${params.length - 1}::timestamptz, $${params.length})`;
         } else if (before) {
             params.push(before);
             range = `AND m.deleted_at IS NULL AND date_trunc('milliseconds', m.created_at) < $${params.length}`;
         }
+        const order = pagedChanges ? 'm.updated_at, m.id' : 'm.created_at DESC, m.id DESC';
         const rows = await q(
             `${MESSAGE_SELECT}
              WHERE ${PAIR_SQL} ${range}
-             ORDER BY m.created_at DESC LIMIT $3`,
+             ORDER BY ${order} LIMIT $3`,
             params
         );
         await q(
@@ -1145,12 +1189,17 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
              WHERE sender = $1 AND recipient = $2 AND read_at IS NULL AND deleted_at IS NULL`,
             [other.id, me.id]
         );
+        const moreChanges = pagedChanges && rows.length > limit;
+        if (moreChanges) rows.pop();
+        const last = rows[rows.length - 1];
         const messages = rows.map((row) => messageView(row, me));
         const typedAt = typing.get(`${other.id}:${me.id}`) || 0;
         res.json({
             user: shortUser(other),
             messages,
             next: !since && rows.length === limit ? messages[messages.length - 1].createdAt : null,
+            nextCursor: !since && rows.length === limit ? writeCursor(last.page_time, last.id) : null,
+            changeCursor: moreChanges ? writeCursor(last.change_time, last.id) : null,
             // С запасом: часы базы и сервера могут чуть расходиться, а повтор
             // уже полученного приложение просто заменит тем же.
             serverTime: serverTime - SINCE_OVERLAP_MS,

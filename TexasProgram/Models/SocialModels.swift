@@ -281,6 +281,9 @@ struct SocialPost: Codable, Hashable, Identifiable, Sendable {
 struct SocialFeedPage: Codable, Sendable {
     let posts: [SocialPost]
     let next: Double?
+    var nextCursor: String?
+
+    var olderCursor: String? { nextCursor ?? next.map { String($0) } }
 }
 
 struct SocialComment: Codable, Hashable, Identifiable, Sendable {
@@ -828,8 +831,12 @@ struct SocialChatPage: Codable, Sendable {
     let user: SocialUserShort
     let messages: [SocialMessage]
     let next: Double?
+    var nextCursor: String?
+
+    var olderCursor: String? { nextCursor ?? next.map { String($0) } }
     /// Время сервера на момент ответа: с него начинается следующее обновление.
     var serverTime: Double?
+    var changeCursor: String?
     var typing: Bool?
     var lastSeen: Double?
     var live: SocialLive?

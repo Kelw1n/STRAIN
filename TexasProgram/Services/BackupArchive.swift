@@ -298,13 +298,16 @@ enum BackupService {
     /// модели SwiftData роняет приложение.
     @discardableResult
     static func restore(_ archive: BackupArchive, into context: ModelContext, existing: [ProgramProfile]) -> Int {
+        var profiles = existing
         for snapshot in archive.profiles {
-            if let match = existing.first(where: { $0.profileID.uuidString == snapshot.id }) {
+            let id = UUID(uuidString: snapshot.id)
+            if let match = profiles.first(where: { $0.profileID == id }) {
                 fill(match, from: snapshot)
             } else {
                 let result = ProgramProfile(input: .demo, name: snapshot.name)
                 fill(result, from: snapshot)
                 context.insert(result)
+                profiles.append(result)
             }
         }
         try? context.save()

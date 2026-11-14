@@ -19,6 +19,21 @@ final class CrossPlatformBackupTests: XCTestCase {
         return Dictionary(uniqueKeysWithValues: profiles.map { ($0.name, $0) })
     }
 
+    func testReimportOfAndroidBackupUpdatesTheSameProfiles() throws {
+        var archive = try BackupService.archive(from: Data(Self.fromAndroid.utf8))
+        for index in archive.profiles.indices { archive.profiles[index].id = archive.profiles[index].id.lowercased() }
+
+        let container = try ModelContainer(for: ProgramProfile.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let context = ModelContext(container)
+        BackupService.restore(archive, into: context, existing: [])
+        let firstImport = try context.fetch(FetchDescriptor<ProgramProfile>())
+        archive.profiles[0].name = "Обновлённый профиль"
+        BackupService.restore(archive, into: context, existing: firstImport)
+        let secondImport = try context.fetch(FetchDescriptor<ProgramProfile>())
+        XCTAssertEqual(secondImport.count, archive.profiles.count)
+        XCTAssertTrue(secondImport.contains { $0.name == "Обновлённый профиль" })
+    }
+
     func testBackupFromAndroidOpensOnIphone() throws {
         let restored = try restore(Self.fromAndroid)
         XCTAssertEqual(restored.count, 4)

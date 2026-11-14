@@ -605,8 +605,8 @@ struct SettingsView: View {
             // Сразу открываем восстановленный профиль: иначе после переустановки
             // на экране остаётся новый пустой, и кажется, что копия не применилась.
             backupMessage = "Восстановлено профилей: \(count). Открыт «\(first.name)»."
-            if first.id != profile.profileID.uuidString {
-                closeThen { activeProfileID = first.id }
+            if let id = UUID(uuidString: first.id), id != profile.profileID {
+                closeThen { activeProfileID = id.uuidString }
             }
         } catch {
             backupMessage = "Файл не читается как копия STRAIN"

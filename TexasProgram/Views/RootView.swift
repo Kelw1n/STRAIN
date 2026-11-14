@@ -10,7 +10,8 @@ struct RootView: View {
     @State private var isAddingProfile = false
 
     private var activeProfile: ProgramProfile? {
-        profiles.first { $0.profileID.uuidString == activeProfileID } ?? profiles.first
+        let id = UUID(uuidString: activeProfileID)
+        return profiles.first { $0.profileID == id } ?? profiles.first
     }
 
     var body: some View {
@@ -51,7 +52,9 @@ struct RootView: View {
         BackupService.restore(archive, into: modelContext, existing: profiles)
         NutritionStore.shared.reload()
         SocialService.shared.adoptBackupToken(archive.socialToken)
-        if let first = archive.profiles.first { activeProfileID = first.id }
+        if let first = archive.profiles.first, let id = UUID(uuidString: first.id) {
+            activeProfileID = id.uuidString
+        }
         isAddingProfile = false
     }
 

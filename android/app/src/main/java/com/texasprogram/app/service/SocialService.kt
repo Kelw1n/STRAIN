@@ -404,13 +404,13 @@ object SocialService {
 
     enum class FeedScope(val title: String, val query: String) { ALL("Все", "all"), FOLLOWING("Подписки", "following") }
 
-    suspend fun feed(scope: FeedScope, before: Double? = null): SocialFeedPage {
-        val tail = before?.let { "&before=${it.toLong()}" }.orEmpty()
+    suspend fun feed(scope: FeedScope, before: String? = null): SocialFeedPage {
+        val tail = before?.let { "&before=${q(it)}" }.orEmpty()
         return decode(call("GET", "/feed?scope=${scope.query}$tail"))
     }
 
-    suspend fun posts(username: String, before: Double? = null): SocialFeedPage {
-        val tail = before?.let { "?before=${it.toLong()}" }.orEmpty()
+    suspend fun posts(username: String, before: String? = null): SocialFeedPage {
+        val tail = before?.let { "?before=${q(it)}" }.orEmpty()
         return decode(call("GET", "/users/${q(username)}/posts$tail"))
     }
 
@@ -500,11 +500,12 @@ object SocialService {
 
     /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,
     /// `since` — всё, что появилось или поменялось с `serverTime` прошлого ответа.
-    suspend fun messages(username: String, before: Double? = null, after: Double? = null, since: Double? = null): SocialChatPage {
+    suspend fun messages(username: String, before: String? = null, after: Double? = null, since: Double? = null, changeCursor: String? = null): SocialChatPage {
         val query = listOfNotNull(
-            before?.let { "before=${it.toLong()}" },
+            before?.let { "before=${q(it)}" },
             after?.let { "after=${it.toLong()}" },
-            since?.let { "since=${it.toLong()}" }
+            since?.let { "since=${it.toLong()}&changes=1" },
+            changeCursor?.let { "changeCursor=${q(it)}" }
         )
         val tail = if (query.isEmpty()) "" else "?" + query.joinToString("&")
         return decode(call("GET", "/chats/${q(username)}/messages$tail", requiresAuth = true))

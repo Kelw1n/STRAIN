@@ -431,6 +431,7 @@ final class WorkoutSessionManager {
     }
 
     private func reset() {
+        if let profileID { clearSaved(for: profileID) }
         startSnapshot = nil
         profileID = nil
         swapUndo = ProgramProfile.SwapUndo()
@@ -440,7 +441,6 @@ final class WorkoutSessionManager {
         activeWorkout = nil
         isPresented = false
         exercises = []
-        clearSaved()
     }
 
     // MARK: - Подходы
@@ -636,9 +636,22 @@ final class WorkoutSessionManager {
 
     /// Тренировка переживает выгрузку приложения: iOS закрывает свёрнутые
     /// приложения, пока человек отдыхает между подходами с другим приложением.
-    private static var saveURL: URL {
+    private static var legacySaveURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("active-workout.json")
+    }
+
+    private static var sessionsURL: URL {
+        legacySaveURL.deletingLastPathComponent().appendingPathComponent("active-workouts", isDirectory: true)
+    }
+
+    private static func saveURL(for id: UUID) -> URL {
+        sessionsURL.appendingPathComponent(id.uuidString + ".json")
+    }
+
+    private static func readSession(at url: URL) -> SavedSession? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(SavedSession.self, from: data)
     }
 
     /// Запись откладывается до конца текущего прохода: ввод веса меняет
@@ -665,13 +678,22 @@ final class WorkoutSessionManager {
             swapUndo: swapUndo
         )
         guard let data = try? JSONEncoder().encode(session) else { return }
-        let url = Self.saveURL
+        let url = Self.saveURL(for: profileID)
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: url, options: .atomic)
     }
 
+    private func clearSaved(for id: UUID) {
+        try? FileManager.default.removeItem(at: Self.saveURL(for: id))
+        if Self.readSession(at: Self.legacySaveURL)?.profileID == id {
+            try? FileManager.default.removeItem(at: Self.legacySaveURL)
+        }
+    }
+
+    /// Очистка хранилища между тестами.
     func clearSaved() {
-        try? FileManager.default.removeItem(at: Self.saveURL)
+        try? FileManager.default.removeItem(at: Self.sessionsURL)
+        try? FileManager.default.removeItem(at: Self.legacySaveURL)
     }
 
     /// Профиль удалён: его тренировка — и идущая, и отложенная при смене
@@ -679,10 +701,8 @@ final class WorkoutSessionManager {
     func forgetProfile(_ id: UUID) {
         if activeWorkout != nil, profileID == id {
             reset()
-        } else if let data = try? Data(contentsOf: Self.saveURL),
-                  let session = try? JSONDecoder().decode(SavedSession.self, from: data),
-                  session.profileID == id {
-            clearSaved()
+        } else {
+            clearSaved(for: id)
         }
     }
 
@@ -699,13 +719,13 @@ final class WorkoutSessionManager {
     /// свёрнутым: внизу появляется плашка «продолжить».
     func restoreIfNeeded(for profile: ProgramProfile) {
         guard activeWorkout == nil,
-              let data = try? Data(contentsOf: Self.saveURL),
-              let session = try? JSONDecoder().decode(SavedSession.self, from: data),
+              let session = Self.readSession(at: Self.saveURL(for: profile.profileID))
+                ?? Self.readSession(at: Self.legacySaveURL),
               session.profileID == profile.profileID
         else { return }
         // Тренировку, начатую больше суток назад, не поднимаем: её забыли.
         guard Date().timeIntervalSince(session.startDate) < 24 * 3600 else {
-            clearSaved()
+            clearSaved(for: profile.profileID)
             return
         }
         activeWorkout = session.workout

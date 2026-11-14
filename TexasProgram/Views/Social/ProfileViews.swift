@@ -11,7 +11,7 @@ struct ProfileTabView: View {
 
     @State private var path = NavigationPath()
     @State private var posts: [SocialPost] = []
-    @State private var next: Double?
+    @State private var next: String?
     @State private var loadingPosts = false
     @State private var postsError: String?
     @State private var showingEdit = false
@@ -120,7 +120,7 @@ struct ProfileTabView: View {
         do {
             let page = try await social.posts(of: me.username)
             posts = page.posts
-            next = page.next
+            next = page.olderCursor
             postsError = nil
         } catch {
             postsError = error.socialMessage
@@ -134,7 +134,7 @@ struct ProfileTabView: View {
         if let page = try? await social.posts(of: username, before: next) {
             let known = Set(posts.map(\.id))
             posts.append(contentsOf: page.posts.filter { !known.contains($0.id) })
-            self.next = page.next
+            self.next = page.olderCursor
         }
     }
 }
@@ -223,7 +223,7 @@ struct UserProfileView: View {
 
     @State private var user: SocialUser?
     @State private var posts: [SocialPost] = []
-    @State private var next: Double?
+    @State private var next: String?
     @State private var loading = true
     @State private var error: String?
     @State private var busy = false
@@ -290,7 +290,7 @@ struct UserProfileView: View {
             user = try await loadedUser
             let loadedPage = try await page
             posts = loadedPage.posts
-            next = loadedPage.next
+            next = loadedPage.olderCursor
             error = nil
         } catch {
             self.error = error.socialMessage
@@ -304,7 +304,7 @@ struct UserProfileView: View {
         if let page = try? await SocialService.shared.posts(of: username, before: next) {
             let known = Set(posts.map(\.id))
             posts.append(contentsOf: page.posts.filter { !known.contains($0.id) })
-            self.next = page.next
+            self.next = page.olderCursor
         }
     }
 

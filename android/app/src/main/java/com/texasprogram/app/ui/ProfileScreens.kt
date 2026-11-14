@@ -126,7 +126,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
     val navigator = rememberSocialNavigator()
     val context = LocalContext.current
     val posts = remember { mutableStateListOf<SocialPost>() }
-    var next by remember { mutableStateOf<Double?>(null) }
+    var next by remember { mutableStateOf<String?>(null) }
     var loadingPosts by remember { mutableStateOf(false) }
     var postsError by remember { mutableStateOf<String?>(null) }
     val me = SocialService.me
@@ -145,7 +145,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
             val page = SocialService.posts(username)
             posts.clear()
             posts.addAll(page.posts)
-            next = page.next
+            next = page.olderCursor
             postsError = null
         } catch (e: SocialException) {
             postsError = e.message
@@ -192,7 +192,7 @@ fun ProfileTabScreen(profile: ProgramProfile, contentPadding: PaddingValues, onS
                                     // Повтор поста дал бы два одинаковых ключа — LazyColumn падает.
                                     val known = posts.map { it.id }.toSet()
                                     posts.addAll(page.posts.filter { it.id !in known })
-                                    next = page.next
+                                    next = page.olderCursor
                                 }
                                 loadingPosts = false
                             }
@@ -263,7 +263,7 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
     val cached = remember(username) { SocialService.userCache[username] }
     var user by remember { mutableStateOf(cached?.first) }
     val posts = remember { mutableStateListOf<SocialPost>().apply { cached?.let { addAll(it.second.posts) } } }
-    var next by remember { mutableStateOf(cached?.second?.next) }
+    var next by remember { mutableStateOf(cached?.second?.olderCursor) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -276,7 +276,7 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
             user = loaded
             posts.clear()
             posts.addAll(page.posts)
-            next = page.next
+            next = page.olderCursor
             error = null
             SocialService.userCache[username] = loaded to page
         } catch (e: SocialException) {
@@ -309,7 +309,7 @@ fun UserProfileScreen(username: String, navigator: SocialNavigator, contentPaddi
                             runCatching { SocialService.posts(username, cursor) }.onSuccess { page ->
                                 val known = posts.map { it.id }.toSet()
                                 posts.addAll(page.posts.filter { it.id !in known })
-                                next = page.next
+                                next = page.olderCursor
                             }
                             loading = false
                         }

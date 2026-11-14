@@ -397,14 +397,14 @@ final class SocialService {
         var id: String { rawValue }
     }
 
-    func feed(_ scope: FeedScope, before: Double? = nil) async throws -> SocialFeedPage {
+    func feed(_ scope: FeedScope, before: String? = nil) async throws -> SocialFeedPage {
         var query = [URLQueryItem(name: "scope", value: scope == .all ? "all" : "following")]
-        if let before { query.append(URLQueryItem(name: "before", value: String(Int(before)))) }
+        if let before { query.append(URLQueryItem(name: "before", value: before)) }
         return try await request("GET", "/feed", query: query)
     }
 
-    func posts(of username: String, before: Double? = nil) async throws -> SocialFeedPage {
-        let query = before.map { [URLQueryItem(name: "before", value: String(Int($0)))] } ?? []
+    func posts(of username: String, before: String? = nil) async throws -> SocialFeedPage {
+        let query = before.map { [URLQueryItem(name: "before", value: $0)] } ?? []
         return try await request("GET", "/users/\(username)/posts", query: query)
     }
 
@@ -500,11 +500,15 @@ final class SocialService {
 
     /// Сообщения переписки, новые первыми. `after` — только пришедшие позже,
     /// `since` — всё, что появилось или поменялось с `serverTime` прошлого ответа.
-    func messages(with username: String, before: Double? = nil, after: Double? = nil, since: Double? = nil) async throws -> SocialChatPage {
+    func messages(with username: String, before: String? = nil, after: Double? = nil, since: Double? = nil, changeCursor: String? = nil) async throws -> SocialChatPage {
         var query: [URLQueryItem] = []
-        if let before { query.append(URLQueryItem(name: "before", value: String(Int(before)))) }
+        if let before { query.append(URLQueryItem(name: "before", value: before)) }
         if let after { query.append(URLQueryItem(name: "after", value: String(Int(after)))) }
-        if let since { query.append(URLQueryItem(name: "since", value: String(Int(since)))) }
+        if let since {
+            query.append(URLQueryItem(name: "since", value: String(Int(since))))
+            query.append(URLQueryItem(name: "changes", value: "1"))
+        }
+        if let changeCursor { query.append(URLQueryItem(name: "changeCursor", value: changeCursor)) }
         return try await request("GET", "/chats/\(username)/messages", query: query, requiresAuth: true)
     }
 

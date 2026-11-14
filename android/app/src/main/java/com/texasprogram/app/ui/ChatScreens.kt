@@ -308,7 +308,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
     val density = LocalDensity.current
     var user by remember { mutableStateOf<SocialUserShort?>(null) }
     val messages = remember { mutableStateListOf<SocialMessage>() }
-    var older by remember { mutableStateOf<Double?>(null) }
+    var older by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var draft by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -438,7 +438,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
         try {
             val page = SocialService.messages(username)
             absorb(page)
-            older = page.next
+            older = page.nextCursor ?: page.next?.toString()
             applyChanges(page.messages)
             error = null
         } catch (e: SocialException) {
@@ -461,14 +461,24 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                 continue
             }
             // Всё, что поменялось с прошлого раза: новые сообщения, реакции, прочтение, правки, удаление.
-            runCatching { SocialService.messages(username, since = since) }.onSuccess { page ->
-                absorb(page)
-                if (error != null && SocialService.chatOffline.not()) error = null
+            var cursor: String? = null
+            var incoming = false
+            do {
+                val page = try {
+                    SocialService.messages(username, since = since, changeCursor = cursor)
+                } catch (_: SocialException) {
+                    break
+                }
                 val known = messages.map { it.id }.toSet()
-                val incoming = page.messages.any { !it.fromMe && !it.deleted && it.id !in known }
+                incoming = incoming || page.messages.any { !it.fromMe && !it.deleted && it.id !in known }
                 applyChanges(page.messages)
-                if (incoming) SocialService.refreshUnread()
-            }
+                cursor = page.changeCursor
+                if (cursor == null) {
+                    absorb(page)
+                    if (error != null && SocialService.chatOffline.not()) error = null
+                }
+            } while (cursor != null)
+            if (incoming) SocialService.refreshUnread()
         }
     }
 
@@ -702,7 +712,7 @@ fun ChatScreen(username: String, contentPadding: PaddingValues, navigator: Socia
                                 val cursor = older ?: return@pressable
                                 scope.launch {
                                     runCatching { SocialService.messages(username, before = cursor) }.onSuccess { page ->
-                                        older = page.next
+                                        older = page.nextCursor ?: page.next?.toString()
                                         applyChanges(page.messages)
                                     }
                                 }

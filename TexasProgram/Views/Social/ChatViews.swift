@@ -142,7 +142,7 @@ struct ChatView: View {
 
     @State private var user: SocialUserShort?
     @State private var messages: [SocialMessage] = []
-    @State private var older: Double?
+    @State private var older: String?
     @State private var loading = true
     @State private var loadingOlder = false
     @State private var draft = ""
@@ -752,7 +752,7 @@ struct ChatView: View {
         do {
             let page = try await social.messages(with: username)
             absorb(page)
-            older = page.next
+            older = page.olderCursor
             // Первая загрузка — сразу на месте, без вылетающих пузырей.
             apply(page.messages, animated: !messages.contains { !$0.isLocal })
             error = nil
@@ -767,12 +767,19 @@ struct ChatView: View {
             await loadLatest()
             return
         }
-        guard let page = try? await social.messages(with: username, since: since) else { return }
-        absorb(page)
-        if error == SocialError.offline.message { error = nil }
-        let known = Set(messages.map(\.id))
-        let hadIncoming = page.messages.contains { !$0.fromMe && !$0.deleted && !known.contains($0.id) }
-        apply(page.messages)
+        var cursor: String?
+        var hadIncoming = false
+        repeat {
+            guard let page = try? await social.messages(with: username, since: since, changeCursor: cursor) else { return }
+            let known = Set(messages.map(\.id))
+            hadIncoming = hadIncoming || page.messages.contains { !$0.fromMe && !$0.deleted && !known.contains($0.id) }
+            apply(page.messages)
+            cursor = page.changeCursor
+            if cursor == nil {
+                absorb(page)
+                if error == SocialError.offline.message { error = nil }
+            }
+        } while cursor != nil
         if hadIncoming { await social.refreshUnread() }
     }
 
@@ -781,7 +788,7 @@ struct ChatView: View {
         loadingOlder = true
         defer { loadingOlder = false }
         if let page = try? await social.messages(with: username, before: older) {
-            self.older = page.next
+            self.older = page.olderCursor
             apply(page.messages, animated: false)
         }
     }

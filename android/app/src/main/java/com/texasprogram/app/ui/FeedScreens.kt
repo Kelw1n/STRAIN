@@ -108,7 +108,7 @@ fun FeedScreen(
     val scope = rememberCoroutineScope()
     var feedScope by rememberSaveable { mutableStateOf(SocialService.FeedScope.ALL) }
     val posts = remember { mutableStateListOf<SocialPost>() }
-    var next by remember { mutableStateOf<Double?>(null) }
+    var next by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     var loadingMore by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -118,7 +118,7 @@ fun FeedScreen(
     var tabRefreshing by remember { mutableStateOf(false) }
 
     fun cache() {
-        SocialService.feedCache[feedScope] = SocialFeedPage(posts.toList(), next)
+        SocialService.feedCache[feedScope] = SocialFeedPage(posts.toList(), nextCursor = next)
     }
 
     fun replace(id: String, value: SocialPost?) {
@@ -138,7 +138,7 @@ fun FeedScreen(
         val cached = SocialService.feedCache[feedScope]
         if (cached != null && posts.isEmpty()) {
             posts.addAll(cached.posts)
-            next = cached.next
+            next = cached.olderCursor
         }
         loading = true
         SocialService.flushOutbox()
@@ -146,7 +146,7 @@ fun FeedScreen(
             val page = SocialService.feed(feedScope)
             posts.clear()
             posts.addAll(page.posts)
-            next = page.next
+            next = page.olderCursor
             error = null
             cache()
         } catch (e: SocialException) {
@@ -203,7 +203,7 @@ fun FeedScreen(
             runCatching { SocialService.feed(feedScope, cursor) }.onSuccess { page ->
                 val known = posts.map { it.id }.toSet()
                 posts.addAll(page.posts.filter { it.id !in known })
-                next = page.next
+                next = page.olderCursor
                 cache()
             }
             loadingMore = false
@@ -247,7 +247,7 @@ fun FeedScreen(
                                             val cached = SocialService.feedCache[item]
                                             posts.clear()
                                             posts.addAll(cached?.posts.orEmpty())
-                                            next = cached?.next
+                                            next = cached?.olderCursor
                                             feedScope = item
                                         }
                                     }

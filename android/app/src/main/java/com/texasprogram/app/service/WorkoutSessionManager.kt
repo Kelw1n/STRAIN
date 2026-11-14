@@ -36,7 +36,10 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.time.LocalDate
+import java.util.Base64
 import java.util.concurrent.atomic.AtomicLong
 
 // MARK: - Состояние сессии
@@ -157,14 +160,17 @@ object WorkoutSessionManager {
     private var snapshotLog: Map<String, SetEntry> = emptyMap()
     private var profileId: String? = null
 
-    private var storeFile: File? = null
+    private var storeDirectory: File? = null
+    private val storageLock = Any()
+    private var writeGeneration = 0L
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var saveJob: Job? = null
 
     /// Где лежит сохранённая тренировка. Вызывается один раз при запуске.
     fun attach(dir: File) {
-        storeFile = File(dir, "active-workout.json")
+        cancelSave()
+        storeDirectory = dir
     }
 
     // MARK: Время и сводка
@@ -510,6 +516,8 @@ object WorkoutSessionManager {
     }
 
     private fun reset() {
+        cancelSave()
+        profileId?.let(::clearSavedFor)
         activeWorkout = null
         isPresented = false
         showingZeroSetsAlert = false
@@ -521,7 +529,6 @@ object WorkoutSessionManager {
         swapUndo = SwapUndo()
         swapTarget = null
         exercises.clear()
-        clearSaved()
     }
 
     // MARK: Подходы
@@ -656,28 +663,50 @@ object WorkoutSessionManager {
     /// состояние на каждую цифру, писать файл на каждую незачем.
     private fun save() {
         val session = currentSession() ?: return
-        val file = storeFile ?: return
-        saveJob?.cancel()
+        val file = sessionFile(session.profileId) ?: return
+        val generation = cancelSave()
         saveJob = ioScope.launch {
             delay(200)
-            write(file, session)
+            write(file, session, generation)
         }
     }
 
     /// Немедленная запись — при уходе приложения в фон.
     fun writeNow() {
         val session = currentSession() ?: return
-        val file = storeFile ?: return
-        saveJob?.cancel()
-        write(file, session)
+        val file = sessionFile(session.profileId) ?: return
+        write(file, session, cancelSave())
     }
 
-    private fun write(file: File, session: SavedSession) {
-        runCatching {
+    private fun cancelSave(): Long {
+        saveJob?.cancel()
+        return synchronized(storageLock) { ++writeGeneration }
+    }
+
+    private fun sessionsDirectory(): File? = storeDirectory?.let { File(it, "active-workouts") }
+
+    private fun sessionFile(id: String): File? {
+        // Профиль из резервной копии может иметь произвольный строковый ID.
+        val filename = Base64.getUrlEncoder().withoutPadding().encodeToString(id.toByteArray(Charsets.UTF_8))
+        return sessionsDirectory()?.let { File(it, "$filename.json") }
+    }
+
+    private fun legacyFile(): File? = storeDirectory?.let { File(it, "active-workout.json") }
+
+    private fun readSession(file: File?): SavedSession? = file?.let {
+        runCatching { json.decodeFromString(SavedSession.serializer(), it.readText()) }.getOrNull()
+    }
+
+    private fun write(file: File, session: SavedSession, generation: Long) {
+        val data = runCatching { json.encodeToString(SavedSession.serializer(), session) }.getOrNull() ?: return
+        synchronized(storageLock) {
+            if (generation != writeGeneration) return
             val tmp = File(file.parentFile, file.name + ".tmp")
-            tmp.writeText(json.encodeToString(SavedSession.serializer(), session))
-            if (!tmp.renameTo(file)) {
-                file.writeText(tmp.readText())
+            try {
+                file.parentFile?.mkdirs()
+                tmp.writeText(data)
+                Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: java.io.IOException) {
                 tmp.delete()
             }
         }
@@ -704,9 +733,19 @@ object WorkoutSessionManager {
         )
     }
 
+    private fun clearSavedFor(id: String) = synchronized(storageLock) {
+        sessionFile(id)?.delete()
+        val legacy = legacyFile()
+        if (readSession(legacy)?.profileId == id) legacy?.delete()
+    }
+
+    /// Очистка хранилища между тестами.
     fun clearSaved() {
-        saveJob?.cancel()
-        storeFile?.let { runCatching { it.delete() } }
+        cancelSave()
+        synchronized(storageLock) {
+            sessionsDirectory()?.deleteRecursively()
+            legacyFile()?.delete()
+        }
     }
 
     /// Профиль удалён: его тренировка — и идущая, и отложенная при смене
@@ -716,14 +755,12 @@ object WorkoutSessionManager {
             reset()
             return
         }
-        val file = storeFile?.takeIf { it.exists() } ?: return
-        val session = runCatching { json.decodeFromString(SavedSession.serializer(), file.readText()) }.getOrNull()
-        if (session?.profileId == id) clearSaved()
+        clearSavedFor(id)
     }
 
     /// Для тестов: забыть тренировку в памяти, не трогая файл, — как после выгрузки.
     fun forgetForTesting() {
-        saveJob?.cancel()
+        cancelSave()
         activeWorkout = null
         isPresented = false
         profileId = null
@@ -734,14 +771,12 @@ object WorkoutSessionManager {
     /// «продолжить». Начатую больше суток назад не поднимаем: её забыли.
     fun restoreIfNeeded(profile: ProgramProfile, now: Long = System.currentTimeMillis()) {
         if (activeWorkout != null) return
-        val file = storeFile ?: return
-        if (!file.exists()) return
-        val session = runCatching {
-            json.decodeFromString(SavedSession.serializer(), file.readText())
-        }.getOrNull() ?: return
+        val session = synchronized(storageLock) {
+            readSession(sessionFile(profile.id)) ?: readSession(legacyFile())
+        } ?: return
         if (session.profileId != profile.id) return
         if (now - session.startMillis > 24 * 3600 * 1000L) {
-            clearSaved()
+            clearSavedFor(profile.id)
             return
         }
         val workout = profile.schedule().allPending
@@ -767,7 +802,7 @@ object WorkoutSessionManager {
                 bestBefore = saved.bestBefore
             )
         }
-        if (restored.isEmpty()) return
+        if (restored.isEmpty() && session.exercises.isNotEmpty()) return
         activeWorkout = workout
         profileId = session.profileId
         startMillis = session.startMillis

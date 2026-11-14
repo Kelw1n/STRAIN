@@ -2,6 +2,7 @@ package com.texasprogram.app
 
 import com.texasprogram.app.model.ProgramInput
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.WorkoutTemplate
 import com.texasprogram.app.service.ExerciseArt
 import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.ScheduledWorkout
@@ -234,7 +235,42 @@ class WorkoutSessionTest {
         manager.forgetForTesting()
         manager.restoreIfNeeded(profile, now = System.currentTimeMillis() + 25 * 3600 * 1000L)
         assertFalse(manager.isRunning)
-        assertFalse(File(dir, "active-workout.json").exists())
+        assertTrue(File(dir, "active-workouts").listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun eachProfileKeepsItsOwnActiveSession() {
+        val second = ProgramProfile.texas(ProgramInput.demo)
+        start()
+        manager.updateNote("Первый профиль")
+        manager.detachIfOtherProfile(second)
+        manager.startWorkout(workout(second), second)
+        manager.updateNote("Второй профиль")
+
+        manager.detachIfOtherProfile(profile)
+        manager.restoreIfNeeded(profile)
+        assertTrue(manager.isRunning)
+        assertEquals("Первый профиль", manager.noteText)
+        manager.discardWorkout(profile, update)
+
+        manager.restoreIfNeeded(second)
+        assertTrue(manager.isRunning)
+        assertEquals("Второй профиль", manager.noteText)
+    }
+
+    @Test
+    fun emptyFreeWorkoutSurvivesProcessDeath() {
+        manager.startTemplate(WorkoutTemplate(name = "Тренировка"), profile, update)
+        val id = manager.activeWorkout?.id
+        assertNotNull(id)
+        manager.writeNow()
+
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(profile)
+
+        assertEquals(id, manager.activeWorkout?.id)
+        assertTrue(manager.exercises.isEmpty())
+        assertFalse(manager.isPresented)
     }
 
     @Test

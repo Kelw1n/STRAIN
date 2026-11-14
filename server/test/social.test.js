@@ -666,6 +666,63 @@ test('лента, профили, подписки, фото и коммента
         assert.equal((await call('GET', `/images/${photoId}`)).status, 404);
     });
 
+
+    await t.test('время и ID сохраняют посты и сообщения на границе страниц', async () => {
+        const time = '2020-01-01T00:00:00.123456Z';
+        const before = Date.parse('2020-01-02');
+        const ids = ['cursor-history-a', 'cursor-history-b'];
+        await social.pool().query(
+            `INSERT INTO posts (id, user_id, client_id, title, created_at)
+             SELECT id, $1, id, id, $2 FROM unnest($3::text[]) AS id`,
+            [me.user.id, time, ids]
+        );
+        await social.pool().query(
+            `INSERT INTO messages (id, sender, recipient, text, created_at)
+             SELECT id, $1, $2, id, $3 FROM unnest($4::text[]) AS id`,
+            [me.user.id, friend.user.id, time, ids]
+        );
+        const routes = [
+            ['/feed?limit=1&before=', 'posts'],
+            ['/users/tim/posts?limit=1&before=', 'posts'],
+            ['/chats/semobsessed/messages?limit=1&before=', 'messages']
+        ];
+        for (const [route, key] of routes) {
+            const first = (await call('GET', route + before, { token: me.token })).data;
+            assert.equal(first[key][0]?.id, ids[1]);
+            assert.equal(first.next, Date.parse(time), 'старый клиент получает числовой курсор');
+            assert.ok(first.nextCursor);
+            const second = (await call('GET', route + first.nextCursor, { token: me.token })).data;
+            assert.equal(second[key][0]?.id, ids[0]);
+        }
+    });
+
+    await t.test('синхронизация чата читает все страницы изменений', async () => {
+        const base = Date.now() - 20_000;
+        const time = new Date(base + 1).toISOString();
+        await social.pool().query(
+            `INSERT INTO messages (id, sender, recipient, text, created_at, updated_at)
+             SELECT 'cursor-change-' || n, $1, $2, 'test', $3, $3 FROM generate_series(1, 51) n`,
+            [me.user.id, friend.user.id, time]
+        );
+        const url = '/chats/semobsessed/messages?changes=1&since=' + base;
+        const first = (await call('GET', url, { token: me.token })).data;
+        assert.equal(first.messages.length, 50);
+        assert.ok(first.changeCursor);
+        const received = new Set(first.messages.map(message => message.id));
+        let cursor = first.changeCursor;
+        for (let page = 0; page < 5 && cursor; page++) {
+            const result = (await call('GET', url + '&changeCursor=' + cursor, { token: me.token })).data;
+            assert.ok(result.messages.length);
+            for (const message of result.messages) {
+                assert.equal(received.has(message.id), false);
+                received.add(message.id);
+            }
+            cursor = result.changeCursor;
+        }
+        assert.equal(cursor, null);
+        assert.equal([...received].filter(id => id.startsWith('cursor-change-')).length, 51);
+    });
+
     await t.test('удаление профиля', async () => {
         assert.equal((await call('DELETE', '/me', { token: friend.token })).status, 200);
         assert.equal((await call('GET', '/users/semobsessed')).status, 404);

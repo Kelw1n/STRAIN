@@ -7,7 +7,7 @@ struct FeedView: View {
 
     @State private var scope: SocialService.FeedScope = .all
     @State private var posts: [SocialPost] = []
-    @State private var next: Double?
+    @State private var next: String?
     @State private var loading = false
     @State private var loadingMore = false
     @State private var error: String?
@@ -128,10 +128,10 @@ struct FeedView: View {
         .onChange(of: scope) { _, value in
             // Другая лента — сразу показываем её прошлую версию, если она была.
             posts = social.feedCache[value]?.posts ?? []
-            next = social.feedCache[value]?.next
+            next = social.feedCache[value]?.olderCursor
         }
         .onChange(of: posts) { _, value in
-            social.feedCache[scope] = SocialFeedPage(posts: value, next: next)
+            social.feedCache[scope] = SocialFeedPage(posts: value, next: nil, nextCursor: next)
         }
     }
 
@@ -271,7 +271,7 @@ struct FeedView: View {
         if !social.isSignedIn && scope == .following { scope = .all; return }
         if posts.isEmpty, let cached = social.feedCache[scope] {
             posts = cached.posts
-            next = cached.next
+            next = cached.olderCursor
         }
         loading = true
         defer { loading = false }
@@ -282,7 +282,7 @@ struct FeedView: View {
         }
         do {
             let page = try await social.feed(scope)
-            next = page.next
+            next = page.olderCursor
             posts = page.posts
             error = nil
         } catch {
@@ -296,7 +296,7 @@ struct FeedView: View {
         defer { loadingMore = false }
         if let page = try? await social.feed(scope, before: next) {
             let known = Set(posts.map(\.id))
-            self.next = page.next
+            self.next = page.olderCursor
             posts.append(contentsOf: page.posts.filter { !known.contains($0.id) })
         }
     }

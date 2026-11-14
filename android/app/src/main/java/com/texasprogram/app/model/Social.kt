@@ -157,7 +157,13 @@ data class SocialPost(
 }
 
 @Serializable
-data class SocialFeedPage(val posts: List<SocialPost> = emptyList(), val next: Double? = null)
+data class SocialFeedPage(
+    val posts: List<SocialPost> = emptyList(),
+    val next: Double? = null,
+    val nextCursor: String? = null
+) {
+    val olderCursor: String? get() = nextCursor ?: next?.toString()
+}
 
 @Serializable
 data class SocialComment(
@@ -413,6 +419,8 @@ data class SocialChatPage(
     val next: Double? = null,
     /// Время сервера на момент ответа: с него начинается следующее обновление.
     val serverTime: Double? = null,
+    val changeCursor: String? = null,
+    val nextCursor: String? = null,
     val typing: Boolean = false,
     val lastSeen: Double? = null,
     val live: SocialLive? = null

@@ -617,13 +617,7 @@ struct WorkoutCompletionSummaryView: View {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
 
         // Сохраняем заметку к тренировке
-        if !workoutDescription.isEmpty {
-            profile.setNote(
-                workoutDescription,
-                week: workout.week,
-                day: workout.day.number
-            )
-        }
+        profile.setNote(workoutDescription, week: workout.week, day: workout.day.number)
 
         // Пост в ленту и карточки друзьям — до завершения: потом подходы сессии уже сброшены.
         if SocialService.shared.isSignedIn && (publishToFeed || !recipients.isEmpty) {
