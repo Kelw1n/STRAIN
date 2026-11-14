@@ -1,5 +1,6 @@
 package com.texasprogram.app.model
 
+import com.texasprogram.app.service.L10n
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -103,7 +104,7 @@ fun formatPlain(value: Double): String = formatWeight(value)
 
 /// Тоннаж: до тонны — в килограммах, дальше — в тоннах с одним знаком.
 fun formatTonnage(value: Double): String {
-    if (value < 1000) return "${Math.round(value)} кг"
+    if (value < 1000) return "${Math.round(value)}" + if (L10n.isEnglish) " kg" else " кг"
     val tons = Math.round(value / 100.0) / 10.0
-    return "${tons.toString().replace('.', ',')} т"
+    return if (L10n.isEnglish) "$tons t" else "${tons.toString().replace('.', ',')} т"
 }

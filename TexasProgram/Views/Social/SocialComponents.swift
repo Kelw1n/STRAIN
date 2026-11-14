@@ -197,7 +197,7 @@ struct MedalView: View {
                 .shadow(color: .black.opacity(level > 0 ? 0.35 : 0), radius: 2, y: 1)
         }
         .frame(width: size, height: size * 0.9)
-        .accessibilityLabel("\(kind?.title ?? "Медаль"), уровень \(level)")
+        .accessibilityLabel(L("\(kind?.title ?? "Медаль"), уровень \(level)"))
     }
 }
 
@@ -331,7 +331,7 @@ struct FollowButton: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             action()
         }) {
-            Text(isFollowing ? "Вы подписаны" : "Подписаться")
+            Text(isFollowing ? L("Вы подписаны") : L("Подписаться"))
                 .font(.system(size: compact ? 13 : 16, weight: .bold))
                 .foregroundStyle(isFollowing ? Color.ink : Color.canvas)
                 .padding(.horizontal, compact ? 14 : 0)
@@ -361,7 +361,7 @@ struct SocialErrorCard: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             if let retry {
-                Button("Повторить", action: retry)
+                Button(L("Повторить"), action: retry)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.accent)
             }

@@ -545,7 +545,8 @@ final class ProgramProfile {
                 // окончательный. Упражнения, которых нет в списке, идут в конец —
                 // их могли добавить после перестановки.
                 if let order = edits.last(where: { $0.kind == .order })?.order {
-                    let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
+                    // Повтор в порядке (копия с другой платформы) не должен ронять приложение.
+                    let rank = Dictionary(order.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })
                     // Сортировка в Swift не обещает устойчивости, поэтому вторым
                     // ключом идёт исходная позиция: упражнения вне списка сохранят ряд.
                     list = list.enumerated()
@@ -580,6 +581,13 @@ final class ProgramProfile {
         squat5RM = squat
         bench5RM = bench
         deadlift5RM = deadlift
+        // «Эвтаназия» считается от максимумов внутри своего входа — иначе новый цикл шёл бы со старыми.
+        if var euthanasia = euthanasiaInput {
+            euthanasia.squat.oneRepMax = squat
+            euthanasia.press.oneRepMax = bench
+            euthanasia.pull.oneRepMax = deadlift
+            euthanasiaInput = euthanasia
+        }
         // Волна жима считается от нуля: её номера не привязаны к пространству имён.
         completedBenchSessions = []
         lastCompletionDate = nil

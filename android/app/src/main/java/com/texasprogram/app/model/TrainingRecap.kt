@@ -1,5 +1,6 @@
 package com.texasprogram.app.model
 
+import com.texasprogram.app.service.L
 import com.texasprogram.app.service.RuDate
 import com.texasprogram.app.service.RuPlural
 import java.time.LocalDate
@@ -50,13 +51,13 @@ data class TrainingRecap(
 
         /// «Октябрь 2026», «2026 год».
         val title: String get() = when (this) {
-            is Month -> "${MONTHS[month].replaceFirstChar { it.uppercase() }} $year"
+            is Month -> "${L(MONTHS[month].replaceFirstChar { it.uppercase() })} $year"
             is Year -> "$year год"
         }
 
         /// «октябрь», «2026» — в подписях вроде «Твой октябрь».
         val name: String get() = when (this) {
-            is Month -> MONTHS[month]
+            is Month -> L(MONTHS[month])
             is Year -> "$year"
         }
 

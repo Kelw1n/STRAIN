@@ -13,7 +13,7 @@ struct HistoryCard: View {
     var body: some View {
         if !recent.isEmpty {
             CardView {
-                Text("Последние тренировки").font(.title3.weight(.bold))
+                Text(L("Последние тренировки")).font(.title3.weight(.bold))
                 ForEach(recent) { record in
                     HStack(spacing: 10) {
                         Text(RuDate.short(weekday: Calendar.current.component(.weekday, from: record.date)).uppercased())
@@ -21,8 +21,8 @@ struct HistoryCard: View {
                             .foregroundStyle(Theme.accent)
                             .frame(width: 24, alignment: .leading)
                         Text(record.week == ProgramProfile.freeWeek
-                             ? (freeTitles[record.day] ?? "Своя тренировка")
-                             : "Неделя \(record.week) · день \(record.day)")
+                             ? (freeTitles[record.day] ?? L("Своя тренировка"))
+                             : L("Неделя \(record.week) · день \(record.day)"))
                             .font(.caption)
                         Spacer(minLength: 4)
                         Text(RuDate.dayMonth(record.date))

@@ -28,10 +28,10 @@ struct CoachEntryCard: View {
                         .frame(width: 46, height: 46)
                         .background(Theme.accent.opacity(0.15), in: Circle())
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("ИИ-тренер")
+                        Text(L("ИИ-тренер"))
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(.ink)
-                        Text("Спроси про застой, прогресс, восстановление и питание — он видит твои тренировки.")
+                        Text(L("Спроси про застой, прогресс, восстановление и питание — он видит твои тренировки."))
                             .font(.system(size: 13))
                             .foregroundStyle(Color.ink.opacity(0.5))
                             .fixedSize(horizontal: false, vertical: true)
@@ -49,7 +49,7 @@ struct CoachEntryCard: View {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     opened = CoachLaunch(review: true)
                 } label: {
-                    Label("Разбор прошлой недели", systemImage: "calendar.badge.checkmark")
+                    Label(L("Разбор прошлой недели"), systemImage: "calendar.badge.checkmark")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.canvas)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -100,7 +100,7 @@ struct CoachView: View {
                         if thinking {
                             HStack(spacing: 8) {
                                 ProgressView().tint(.ink)
-                                Text("Тренер думает…")
+                                Text(L("Тренер думает…"))
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(Color.ink.opacity(0.6))
                             }
@@ -112,7 +112,7 @@ struct CoachView: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(Theme.record)
                                 if let lastQuestion {
-                                    Button("Повторить") { Task { await ask(lastQuestion, retry: true) } }
+                                    Button(L("Повторить")) { Task { await ask(lastQuestion, retry: true) } }
                                         .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(Theme.accent)
                                 }
@@ -139,25 +139,25 @@ struct CoachView: View {
                     Task { await ask(question) }
                 }
             }
-            .navigationTitle("ИИ-тренер")
+            .navigationTitle(L("ИИ-тренер"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
-                        Button { showingKey = true } label: { Label("Ключ Google AI", systemImage: "key") }
-                        Button(role: .destructive) { confirmClear = true } label: { Label("Очистить переписку", systemImage: "trash") }
+                        Button { showingKey = true } label: { Label(L("Ключ Google AI"), systemImage: "key") }
+                        Button(role: .destructive) { confirmClear = true } label: { Label(L("Очистить переписку"), systemImage: "trash") }
                     } label: {
                         Image(systemName: "ellipsis.circle").foregroundStyle(.ink)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }
             }
-            .confirmationDialog("Очистить переписку с тренером?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Очистить", role: .destructive) {
+            .confirmationDialog(L("Очистить переписку с тренером?"), isPresented: $confirmClear, titleVisibility: .visible) {
+                Button(L("Очистить"), role: .destructive) {
                     messages = []
                     CoachHistory.delete(profile.profileID)
                 }
@@ -166,7 +166,7 @@ struct CoachView: View {
                 hasKey = GeminiKeychain.load() != nil
                 // Ключ вставили ради разбора недели — сразу его и просим.
                 if hasKey, startReview, !messages.contains(where: { $0.reviewWeek == Coach.reviewWeek() }) {
-                    Task { await ask(Coach.reviewPrompt, review: Coach.reviewWeek()) }
+                    Task { await ask(L(Coach.reviewPrompt), review: Coach.reviewWeek()) }
                 }
             }) {
                 GeminiKeySheet(
@@ -178,7 +178,7 @@ struct CoachView: View {
                 messages = CoachHistory.read(profile.profileID)
                 if startReview && !startedReview {
                     startedReview = true
-                    await ask(Coach.reviewPrompt, review: Coach.reviewWeek())
+                    await ask(L(Coach.reviewPrompt), review: Coach.reviewWeek())
                 }
             }
         }
@@ -186,15 +186,15 @@ struct CoachView: View {
 
     private var keyCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Нужен ключ Google AI")
+            Text(L("Нужен ключ Google AI"))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.ink)
-            Text("Тренер работает на ИИ Google Gemini по твоему бесплатному ключу. Если ключ уже есть для фото еды — он подойдёт.")
+            Text(L("Тренер работает на ИИ Google Gemini по твоему бесплатному ключу. Если ключ уже есть для фото еды — он подойдёт."))
                 .font(.system(size: 13))
                 .foregroundStyle(Color.ink.opacity(0.6))
                 .fixedSize(horizontal: false, vertical: true)
             Button { showingKey = true } label: {
-                Text("Вставить ключ")
+                Text(L("Вставить ключ"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.canvas)
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -211,11 +211,11 @@ struct CoachView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(Theme.accent)
-            Text("Привет! Я вижу твою программу, подходы за полтора месяца, вес тела и питание.")
+            Text(L("Привет! Я вижу твою программу, подходы за полтора месяца, вес тела и питание."))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Программу сам не меняю: если предложу сбросить вес или поменять шаг прибавки — появится кнопка «Применить».")
+            Text(L("Программу сам не меняю: если предложу сбросить вес или поменять шаг прибавки — появится кнопка «Применить»."))
                 .font(.system(size: 13))
                 .foregroundStyle(Color.ink.opacity(0.5))
                 .fixedSize(horizontal: false, vertical: true)
@@ -243,7 +243,7 @@ struct CoachView: View {
         }
         thinking = true
         defer { thinking = false }
-        let system = Coach.system + "\n\nДАННЫЕ:\n" + Coach.context(for: profile, nutrition: NutritionStore.read(profile.profileID))
+        let system = Coach.system + Coach.languageNote + "\n\nДАННЫЕ:\n" + Coach.context(for: profile, nutrition: NutritionStore.read(profile.profileID))
         // Последние реплики: первой должна идти реплика человека.
         var turns = messages.suffix(16).map { (role: $0.role == .user ? "user" : "model", text: $0.text) }
         while turns.first?.role == "model" { turns.removeFirst() }
@@ -290,7 +290,7 @@ private struct CoachComposer: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(Coach.quickQuestions, id: \.self) { question in
-                        Button { onAsk(question) } label: {
+                        Button { onAsk(L(question)) } label: {
                             Text(question)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.ink)
@@ -306,7 +306,7 @@ private struct CoachComposer: View {
             }
             .scrollIndicators(.hidden)
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Спроси тренера", text: $draft, axis: .vertical)
+                TextField(L("Спроси тренера"), text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($focused)
                     .font(.system(size: 16))
@@ -355,7 +355,7 @@ private struct CoachBubble: View {
         if message.role == .user {
             HStack {
                 Spacer(minLength: 48)
-                Text(message.text)
+                Text(verbatim: message.text)
                     .font(.system(size: 15))
                     .foregroundStyle(.canvas)
                     .padding(.horizontal, 14)
@@ -365,7 +365,7 @@ private struct CoachBubble: View {
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 if message.reviewWeek != nil {
-                    Label("Разбор недели", systemImage: "calendar.badge.checkmark")
+                    Label(L("Разбор недели"), systemImage: "calendar.badge.checkmark")
                         .font(.system(size: 12, weight: .heavy))
                         .foregroundStyle(Theme.accent)
                 }
@@ -395,7 +395,7 @@ private struct CoachBubble: View {
         if applied || resolved != nil {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(resolved?.title ?? "Применено")
+                    Text(resolved?.title ?? L("Применено"))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.ink)
                     if let detail = resolved?.detail, !applied {
@@ -407,11 +407,11 @@ private struct CoachBubble: View {
                 }
                 Spacer(minLength: 8)
                 if applied {
-                    Label("Готово", systemImage: "checkmark.circle.fill")
+                    Label(L("Готово"), systemImage: "checkmark.circle.fill")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Theme.success)
                 } else {
-                    Button("Применить") { onApply(index) }
+                    Button(L("Применить")) { onApply(index) }
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.canvas)
                         .padding(.horizontal, 12)

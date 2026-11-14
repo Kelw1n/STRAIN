@@ -57,8 +57,8 @@ struct GoalSettingsSheet: View {
                         }
 
                         Text(isReady
-                             ? "\(need) \(RuPlural.word(need, "тренировка", "тренировки", "тренировок")) в неделю — столько же дней в программе."
-                             : "Выбери \(need) \(RuPlural.word(need, "день", "дня", "дней")) — столько тренировок в неделе программы. Сейчас \(selectedDays.count).")
+                             ? L("\(need) \(RuPlural.word(need, "тренировка", "тренировки", "тренировок")) в неделю — столько же дней в программе.")
+                             : L("Выбери \(need) \(RuPlural.word(need, "день", "дня", "дней")) — столько тренировок в неделе программы. Сейчас \(selectedDays.count)."))
                             .font(.system(size: 12))
                             .foregroundStyle(isReady ? Color.ink.opacity(0.45) : Theme.warning)
                             .fixedSize(horizontal: false, vertical: true)
@@ -72,7 +72,7 @@ struct GoalSettingsSheet: View {
                             row("Начало") {
                                 DatePicker("", selection: $goalStart, displayedComponents: .date)
                                     .labelsHidden()
-                                    .environment(\.locale, Locale(identifier: "ru_RU"))
+                                    .environment(\.locale, L10n.locale)
                             }
                             Divider().overlay(Color.ink.opacity(0.06)).padding(.horizontal, 16)
                             row("Длительность") {
@@ -105,12 +105,12 @@ struct GoalSettingsSheet: View {
                             row("Время") {
                                 Menu {
                                     Picker("", selection: $ownTimes.animation(Motion.snappy)) {
-                                        Text("Одинаковое").tag(false)
-                                        Text("Своё у каждого дня").tag(true)
+                                        Text(L("Одинаковое")).tag(false)
+                                        Text(L("Своё у каждого дня")).tag(true)
                                     }
                                 } label: {
                                     HStack(spacing: 4) {
-                                        Text(ownTimes ? "Своё у каждого дня" : "Одинаковое")
+                                        Text(ownTimes ? L("Своё у каждого дня") : L("Одинаковое"))
                                         Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
                                     }
                                     .font(.system(size: 15, weight: .semibold))
@@ -140,7 +140,7 @@ struct GoalSettingsSheet: View {
                     VStack(alignment: .leading, spacing: 10) {
                         sectionTitle("НАПОМИНАНИЯ")
                         VStack(spacing: 0) {
-                            Toggle("Напоминать", isOn: $reminderEnabled.animation(Motion.snappy))
+                            Toggle(L("Напоминать"), isOn: $reminderEnabled.animation(Motion.snappy))
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.ink)
                                 .tint(Theme.accent)
@@ -178,7 +178,7 @@ struct GoalSettingsSheet: View {
                         }
                         .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         if reminderEnabled {
-                            Text("\(offsets.count) " + RuPlural.word(offsets.count, "напоминание", "напоминания", "напоминаний") + " на тренировку, до трёх.")
+                            Text("\(offsets.count) " + RuPlural.word(offsets.count, L("напоминание"), L("напоминания"), L("напоминаний")) + L(" на тренировку, до трёх."))
                                 .font(.system(size: 12))
                                 .foregroundStyle(Color.ink.opacity(0.45))
                         }
@@ -190,7 +190,7 @@ struct GoalSettingsSheet: View {
                     Button {
                         saveGoal()
                     } label: {
-                        Text("СОХРАНИТЬ ЦЕЛЬ")
+                        Text(L("СОХРАНИТЬ ЦЕЛЬ"))
                             .font(.system(size: 16, weight: .bold, design: Theme.fontDesign))
                             .tracking(1.0)
                             .foregroundStyle(isReady ? .canvas : Color.ink.opacity(0.4))
@@ -206,7 +206,7 @@ struct GoalSettingsSheet: View {
                 .padding(.top, 14)
             }
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Цель")
+            .navigationTitle(L("Цель"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -219,7 +219,7 @@ struct GoalSettingsSheet: View {
                             .padding(8)
                             .background(Color.ink.opacity(0.12), in: Circle())
                     }
-                    .accessibilityLabel("Назад")
+                    .accessibilityLabel(L("Назад"))
                 }
             }
         }
@@ -275,7 +275,7 @@ struct GoalSettingsSheet: View {
         let calendar = Calendar.current
         let days = calendar.dateComponents([.day], from: goalStart, to: end).day ?? 0
         let total = max(1, Int(ceil(Double(days) / 7)))
-        let endText = "до \(calendar.component(.day, from: end)) \(RuDate.monthGenitive[calendar.component(.month, from: end)])"
+        let endText = "до \(RuDate.dayMonth(end, calendar: calendar))"
         let today = calendar.startOfDay(for: Date())
         guard today >= goalStart else { return "\(total) " + RuPlural.word(total, "неделя", "недели", "недель") + " · " + endText }
         let week = min(total, (calendar.dateComponents([.day], from: goalStart, to: today).day ?? 0) / 7 + 1)

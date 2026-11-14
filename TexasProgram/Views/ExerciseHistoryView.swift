@@ -35,9 +35,9 @@ struct ExerciseHistoryView: View {
 
     private var empty: some View {
         CardView {
-            Text("Здесь пока пусто")
+            Text(L("Здесь пока пусто"))
                 .font(.headline)
-            Text("Нажми на счётчик подходов справа в карточке упражнения — или удерживай кружок. Ещё быстрее: «Всё прошло по плану» под таймером отдыха закрывает день плановыми весами.")
+            Text(L("Нажми на счётчик подходов справа в карточке упражнения — или удерживай кружок. Ещё быстрее: «Всё прошло по плану» под таймером отдыха закрывает день плановыми весами."))
                 .font(.footnote).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -50,7 +50,7 @@ struct ExerciseHistoryView: View {
         let delta = last - first
         return HighlightCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("ЛУЧШИЙ ПОДХОД")
+                Text(L("ЛУЧШИЙ ПОДХОД"))
                     .font(.caption2.weight(.bold)).tracking(1.3)
                     .foregroundStyle(Theme.accentGradient)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -64,8 +64,8 @@ struct ExerciseHistoryView: View {
                     }
                 }
                 Text(delta > 0
-                     ? "было \(WeightFormat.kilogramsPrecise(first)) — за \(points.count) \(workoutWord(points.count))"
-                     : "записано \(points.count) \(workoutWord(points.count))")
+                     ? L("было \(WeightFormat.kilogramsPrecise(first)) — за \(points.count) \(workoutWord(points.count))")
+                     : L("записано \(points.count) \(workoutWord(points.count))"))
                     .font(.caption).foregroundStyle(.secondary)
 
                 HStack(spacing: 18) {
@@ -88,7 +88,7 @@ struct ExerciseHistoryView: View {
     /// План линией, факт точками: видно и то, что назначено, и то, что вышло.
     private var chart: some View {
         CardView {
-            Text("Вес по неделям").font(.title3.weight(.bold))
+            Text(L("Вес по неделям")).font(.title3.weight(.bold))
             Chart {
                 ForEach(points) { point in
                     if let planned = point.planned {
@@ -155,7 +155,7 @@ struct ExerciseHistoryView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if let planned = point.planned, planned != point.best {
-                Text("по плану было \(WeightFormat.kilogramsPrecise(planned))")
+                Text(L("по плану было \(WeightFormat.kilogramsPrecise(planned))"))
                     .font(.caption2)
                     .foregroundStyle(point.best < planned ? Theme.warning : Theme.success)
             }
@@ -196,8 +196,8 @@ struct ExerciseHistoryList: View {
                 }
                 if names.isEmpty {
                     CardView {
-                        Text("Записей пока нет").font(.headline)
-                        Text("Нажми на счётчик подходов в карточке упражнения и впиши, сколько получилось. Как появятся записи, движения соберутся сюда.")
+                        Text(L("Записей пока нет")).font(.headline)
+                        Text(L("Нажми на счётчик подходов в карточке упражнения и впиши, сколько получилось. Как появятся записи, движения соберутся сюда."))
                             .font(.footnote).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -228,7 +228,7 @@ struct ExerciseHistoryList: View {
         }
         .scrollIndicators(.hidden)
         .screenBackground()
-        .navigationTitle("История")
+        .navigationTitle(L("История"))
         .navigationBarTitleDisplayMode(.inline)
         // Переход по значению: так вкладка может вернуться к началу, сбросив путь.
         .navigationDestination(for: HistoryExercise.self) { item in
@@ -253,15 +253,15 @@ struct ExerciseHistoryList: View {
     private func backfillCard(_ pending: Int) -> some View {
         HighlightCard {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Есть отмеченные тренировки", systemImage: "clock.arrow.circlepath")
+                Label(L("Есть отмеченные тренировки"), systemImage: "clock.arrow.circlepath")
                     .font(.subheadline.weight(.bold))
-                Text("\(pending) \(workoutWord(pending)) отмечено, но веса в них не записаны. Можно проставить плановые — история посчитается задним числом.")
+                Text(L("\(pending) \(workoutWord(pending)) отмечено, но веса в них не записаны. Можно проставить плановые — история посчитается задним числом."))
                     .font(.footnote).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {
                     confirming = true
                 } label: {
-                    Text("Заполнить по отметкам")
+                    Text(L("Заполнить по отметкам"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -271,17 +271,17 @@ struct ExerciseHistoryList: View {
                 .buttonStyle(.pressable)
             }
         }
-        .confirmationDialog("Заполнить историю плановыми весами?",
+        .confirmationDialog(L("Заполнить историю плановыми весами?"),
                             isPresented: $confirming, titleVisibility: .visible) {
-            Button("Заполнить") {
+            Button(L("Заполнить")) {
                 let filled = profile.backfillHistoryFromMarks()
                 withAnimation(Motion.maybe(Motion.card, reduce: reduceMotion)) {
                     filledMessage = "Заполнено \(filled) \(workoutWord(filled)). Что помнишь иначе — поправь через счётчик подходов."
                 }
             }
-            Button("Отмена", role: .cancel) {}
+            Button(L("Отмена"), role: .cancel) {}
         } message: {
-            Text("Возьмутся веса из плана этих недель. Там, где ты уже вводил свои числа, ничего не изменится. Упражнения без веса в плане — по РПЕ и на количество — пропустятся.")
+            Text(L("Возьмутся веса из плана этих недель. Там, где ты уже вводил свои числа, ничего не изменится. Упражнения без веса в плане — по РПЕ и на количество — пропустятся."))
         }
     }
 

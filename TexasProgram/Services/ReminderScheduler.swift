@@ -68,8 +68,8 @@ enum ReminderScheduler {
                 let minutes = training - offset
                 guard minutes >= 0 else { return [] }
                 let content = UNMutableNotificationContent()
-                content.title = offset == 0 ? "Сегодня тренировка" : "Тренировка \(TrainingGoal.inText(offset))"
-                content.body = body(for: index + 1, profile: profile)
+                content.title = L(offset == 0 ? "Сегодня тренировка" : "Тренировка \(TrainingGoal.inText(offset))")
+                content.body = L(body(for: index + 1, profile: profile))
                 content.sound = .default
                 let identifier = prefix + "\(weekday)" + suffix(offset)
 

@@ -42,7 +42,7 @@ struct ChatTargetSheet: View {
                 if loading && shown.isEmpty {
                     ProgressView().tint(.ink).frame(maxWidth: .infinity).listRowBackground(Color.clear)
                 } else if shown.isEmpty {
-                    Text(searching ? "Никого не нашли" : "Пока не с кем — найди друга по юзернейму")
+                    Text(searching ? L("Никого не нашли") : L("Пока не с кем — найди друга по юзернейму"))
                         .font(.system(size: 14))
                         .foregroundStyle(Color.ink.opacity(0.5))
                         .listRowBackground(Color.clear)
@@ -77,7 +77,7 @@ struct ChatTargetSheet: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
             }
             .task {
                 recent = await ChatRecipients.load()
@@ -117,7 +117,7 @@ struct WorkoutRecipientsPicker: View {
     var body: some View {
         Group {
             if loaded && friends.isEmpty {
-                Text("Подпишись на друзей или напиши кому-нибудь — и здесь можно будет отправить им тренировку.")
+                Text(L("Подпишись на друзей или напиши кому-нибудь — и здесь можно будет отправить им тренировку."))
                     .font(.system(size: 12))
                     .foregroundStyle(Color.ink.opacity(0.5))
                     .fixedSize(horizontal: false, vertical: true)
@@ -189,7 +189,7 @@ struct ChatWorkoutCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "dumbbell.fill")
-                    Text("ТРЕНИРОВКА")
+                    Text(L("ТРЕНИРОВКА"))
                         .tracking(1.1)
                     if workout.records > 0 {
                         Spacer(minLength: 4)
@@ -235,7 +235,7 @@ struct ChatWorkoutCard: View {
                         }
                         if workout.workout.exercises.count > 3 {
                             let rest = workout.workout.exercises.count - 3
-                            Text("и ещё \(rest) \(RuPlural.word(rest, "упражнение", "упражнения", "упражнений"))")
+                            Text(L("и ещё \(rest) \(RuPlural.word(rest, "упражнение", "упражнения", "упражнений"))"))
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(ink.opacity(0.5))
                         }
@@ -245,7 +245,7 @@ struct ChatWorkoutCard: View {
                 }
 
                 HStack(spacing: 4) {
-                    Text("Открыть")
+                    Text(L("Открыть"))
                     Image(systemName: "chevron.right")
                 }
                 .font(.system(size: 13, weight: .bold))
@@ -255,7 +255,7 @@ struct ChatWorkoutCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel("Тренировка «\(workout.title)»")
+        .accessibilityLabel(L("Тренировка «\(workout.title)»"))
     }
 
     private func stat(_ value: String, _ title: String) -> some View {
@@ -303,7 +303,7 @@ struct ChatWorkoutDetail: View {
             .navigationTitle(workout.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
             }
         }
         .presentationDetents([.medium, .large])

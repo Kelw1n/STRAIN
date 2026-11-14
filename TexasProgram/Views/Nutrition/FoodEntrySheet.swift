@@ -34,7 +34,7 @@ struct FoodEntrySheet: View {
                             onDelete()
                             dismiss()
                         } label: {
-                            Text("Удалить запись")
+                            Text(L("Удалить запись"))
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(Theme.record)
                                 .frame(maxWidth: .infinity)
@@ -49,15 +49,15 @@ struct FoodEntrySheet: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle(original == nil ? "Добавить еду" : "Запись")
+            .navigationTitle(original == nil ? L("Добавить еду") : L("Запись"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") { dismiss() }
+                    Button(L("Отмена")) { dismiss() }
                         .foregroundStyle(Color.ink.opacity(0.7))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Сохранить", action: save)
+                    Button(L("Сохранить"), action: save)
                         .font(.body.weight(.bold))
                         .foregroundStyle(effectiveKcal > 0 ? Theme.accent : Color.ink.opacity(0.3))
                         .disabled(effectiveKcal <= 0)
@@ -70,7 +70,7 @@ struct FoodEntrySheet: View {
     private var nameCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             NutritionCaption(text: "Что съел")
-            TextField("Например, гречка с курицей", text: $name)
+            TextField(L("Например, гречка с курицей"), text: $name)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.ink)
                 .padding(.horizontal, 14)
@@ -91,7 +91,7 @@ struct FoodEntrySheet: View {
                 AmountField(title: "Жиры", value: $fat)
                 AmountField(title: "Углеводы", value: $carbs)
             }
-            Text("Не вписал калории — они посчитаются по Б/Ж/У: 4 ккал в грамме белка и углеводов, 9 — в грамме жира. Порцию можно не писать.")
+            Text(L("Не вписал калории — они посчитаются по Б/Ж/У: 4 ккал в грамме белка и углеводов, 9 — в грамме жира. Порцию можно не писать."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
@@ -116,7 +116,7 @@ struct FoodEntrySheet: View {
                                 .foregroundStyle(Color.ink.opacity(0.45))
                         }
                         Spacer()
-                        Text("\(NutritionFormat.kcal(entry.nutrients.kcal)) ккал")
+                        Text(L("\(NutritionFormat.kcal(entry.nutrients.kcal)) ккал"))
                             .font(.system(size: 14, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(Color.ink.opacity(0.8))
                     }

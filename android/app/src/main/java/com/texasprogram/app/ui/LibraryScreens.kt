@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -42,7 +43,6 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -597,7 +597,7 @@ fun TemplatesSheet(
                             actions = listOf(
                                 TemplateMenuAction("Начать", Icons.Filled.PlayArrow) { start(template) },
                                 TemplateMenuAction("Изменить", Icons.Filled.Edit) { editing = template to false },
-                                TemplateMenuAction("Дублировать", Icons.Filled.ContentCopy) { update(current.saveTemplate(template.duplicate(template.name + " (копия)"))) },
+                                TemplateMenuAction("Дублировать", Icons.Filled.ContentCopy) { update(current.saveTemplate(template.duplicate(template.name + L(" (копия)")))) },
                                 TemplateMenuAction(
                                     if (template.isShared) "Убрать из профиля" else "Показывать в профиле",
                                     if (template.isShared) Icons.Filled.VisibilityOff else Icons.Filled.Visibility

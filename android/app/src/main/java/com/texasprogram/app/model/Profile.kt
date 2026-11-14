@@ -880,6 +880,14 @@ data class ProgramProfile(
             squat5RM = squat,
             bench5RM = bench,
             deadlift5RM = deadlift,
+            // «Эвтаназия» считается от максимумов внутри своего входа — иначе новый цикл шёл бы со старыми.
+            euthanasiaInput = euthanasiaInput?.let {
+                it.copy(
+                    squat = it.squat.copy(oneRepMax = squat),
+                    press = it.press.copy(oneRepMax = bench),
+                    pull = it.pull.copy(oneRepMax = deadlift)
+                )
+            },
             completedBenchSessions = emptyList(),
             lastCompletionEpochDay = null,
             cycleStartedEpochDay = today.toEpochDay(),

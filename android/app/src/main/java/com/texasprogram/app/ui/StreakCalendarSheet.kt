@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L
 import androidx.compose.material.icons.filled.Check
 import com.texasprogram.app.model.goalEnd
 import com.texasprogram.app.model.goalWeek
@@ -37,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -71,7 +71,7 @@ private val monthNames = listOf(
     "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
 )
 
-fun monthTitle(date: LocalDate): String = "${monthNames[date.monthValue - 1]} ${date.year}"
+fun monthTitle(date: LocalDate): String = "${L(monthNames[date.monthValue - 1])} ${date.year}"
 
 /// Полные недели (пн–вс), покрывающие месяц: соседние дни тоже показываем, приглушёнными.
 fun calendarWeeks(month: LocalDate): List<List<LocalDate>> {

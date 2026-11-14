@@ -48,14 +48,14 @@ struct LevelRing: View {
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(.ink)
-                Text("УР.")
+                Text(L("УР."))
                     .font(.system(size: max(9, size * 0.13), weight: .heavy))
                     .foregroundStyle(Color.ink.opacity(0.5))
             }
         }
         .frame(width: size, height: size)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Уровень \(level)")
+        .accessibilityLabel(L("Уровень \(level)"))
     }
 }
 
@@ -96,7 +96,8 @@ private extension Progression.MonthTier {
 
 private enum ProgressionText {
     static func experience(_ value: Int) -> String {
-        "\(value.formatted(.number.grouping(.automatic).locale(Locale(identifier: "ru_RU")))) опыта"
+        let number = value.formatted(.number.grouping(.automatic).locale(L10n.locale))
+        return L10n.isEnglish ? "\(number) XP" : "\(number) опыта"
     }
 
     static func toNext(_ level: Progression.Level) -> String {
@@ -126,7 +127,7 @@ struct LevelChip: View {
     var body: some View {
         if let level {
             HStack(spacing: 4) {
-                Text(large ? "Уровень \(level) · \(Progression.title(for: level))" : "ур. \(level)")
+                Text(large ? L("Уровень \(level) · \(Progression.title(for: level))") : L("ур. \(level)"))
                     .monospacedDigit()
                 if opens {
                     Image(systemName: "chevron.right")
@@ -140,7 +141,7 @@ struct LevelChip: View {
             .background(Theme.accent.opacity(0.16), in: Capsule())
             .fixedSize()
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Уровень \(level)")
+            .accessibilityLabel(L("Уровень \(level)"))
         }
     }
 }
@@ -185,7 +186,7 @@ struct LevelCard: View {
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel("Уровень \(level.level), \(level.title). \(ProgressionText.toNext(level))")
+        .accessibilityLabel(L("Уровень \(level.level), \(level.title). \(ProgressionText.toNext(level))"))
         .sheet(isPresented: $showing) { LevelSheet(profile: profile) }
     }
 }
@@ -215,11 +216,11 @@ struct LevelSheet: View {
             }
             .scrollIndicators(.hidden)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Уровень")
+            .navigationTitle(L("Уровень"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }
@@ -243,7 +244,7 @@ struct LevelSheet: View {
                         Text(tier.title)
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(reached ? .ink : Color.ink.opacity(0.45))
-                        Text("\(tier.workouts) трен.")
+                        Text(L("\(tier.workouts) трен."))
                             .font(.system(size: 11))
                             .foregroundStyle(Color.ink.opacity(0.4))
                     }
@@ -252,7 +253,7 @@ struct LevelSheet: View {
                     .background(Color.tone(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
-            Text("Награду месяца можно взять только в этом месяце — потом она остаётся в коллекции.")
+            Text(L("Награду месяца можно взять только в этом месяце — потом она остаётся в коллекции."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
@@ -269,7 +270,7 @@ struct LevelSheet: View {
                                     .foregroundStyle(.ink)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
-                                Text("\(award.tier.title) · \(award.workouts) трен.")
+                                Text(L("\(award.tier.title) · \(award.workouts) трен."))
                                     .font(.system(size: 11))
                                     .foregroundStyle(Color.ink.opacity(0.5))
                             }
@@ -313,11 +314,11 @@ struct UserLevelSheet: View {
             }
             .scrollIndicators(.hidden)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Уровень")
+            .navigationTitle(L("Уровень"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }
@@ -363,7 +364,7 @@ private struct LevelHeroCard: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.45))
             } else {
-                Text("Уровень \(level)")
+                Text(L("Уровень \(level)"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.6))
             }
@@ -390,7 +391,7 @@ private struct LevelComparisonCard: View {
         HStack(spacing: 14) {
             LevelRing(level: mine, fraction: 1, size: 48, lineWidth: 4)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Ты — \(Progression.title(for: mine))")
+                Text(L("Ты — \(Progression.title(for: mine))"))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.ink)
                 Text(verdict)
@@ -423,7 +424,7 @@ private struct LevelRulesCard: View {
             rule(goalTitle, "+\(Progression.weekGoalXP)")
             rule("Серия недель подряд", "до +50%")
             rule("Место в челлендже", "до +300")
-            Text("Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся.")
+            Text(L("Каждая следующая неделя с тренировкой даёт +10% ко всему опыту недели. Пропустил неделю — серия начинается заново, опыт остаётся."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
@@ -477,7 +478,7 @@ private struct LevelTitlesCard: View {
                         .font(.system(size: 15, weight: current ? .heavy : .semibold))
                         .foregroundStyle(current ? Theme.accent : (reached ? .ink : Color.ink.opacity(0.4)))
                     Spacer()
-                    Text("ур. \(item.levels)")
+                    Text(L("ур. \(item.levels)"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.4))
                     if reached {
@@ -549,14 +550,14 @@ struct LevelUpOverlay: View {
                     LevelRing(level: barLevel, fraction: barFraction, size: 120, lineWidth: 10)
                 }
                 .frame(height: 140)
-                Text("+\(shownXP) опыта")
+                Text(L("+\(shownXP) опыта"))
                     .font(.system(size: 32, weight: .black, design: Theme.fontDesign))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(.ink)
                 if let reachedLevel {
                     VStack(spacing: 4) {
-                        Text("НОВЫЙ УРОВЕНЬ")
+                        Text(L("НОВЫЙ УРОВЕНЬ"))
                             .font(.system(size: 12, weight: .heavy))
                             .tracking(1.4)
                             .foregroundStyle(Theme.accent)
@@ -575,7 +576,7 @@ struct LevelUpOverlay: View {
                         Button {
                             if let image = LevelShareCard.render(end) { shareImage = ShareImage(image: image) }
                         } label: {
-                            Label("Поделиться", systemImage: "square.and.arrow.up")
+                            Label(L("Поделиться"), systemImage: "square.and.arrow.up")
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundStyle(.ink)
                                 .frame(maxWidth: .infinity)
@@ -585,7 +586,7 @@ struct LevelUpOverlay: View {
                         .buttonStyle(.pressable)
                     }
                     Button(action: onClose) {
-                        Text("Отлично")
+                        Text(L("Отлично"))
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.canvas)
                             .frame(maxWidth: .infinity)
@@ -671,7 +672,7 @@ struct LevelShareCard: View {
                     .font(.system(size: 18, weight: .black, design: Theme.fontDesign))
                     .tracking(2)
                 Spacer()
-                Text("НОВЫЙ УРОВЕНЬ")
+                Text(L("НОВЫЙ УРОВЕНЬ"))
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.4)
                     .foregroundStyle(Color.ink.opacity(0.8))
@@ -680,7 +681,7 @@ struct LevelShareCard: View {
             LevelRing(level: level.level, fraction: 1, size: 170, lineWidth: 14)
                 .frame(maxWidth: .infinity)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Уровень \(level.level)")
+                Text(L("Уровень \(level.level)"))
                     .font(.system(size: 20, weight: .heavy))
                     .foregroundStyle(Color.ink.opacity(0.8))
                 Text(level.title)

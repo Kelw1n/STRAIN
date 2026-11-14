@@ -67,11 +67,11 @@ struct DayCustomizeView: View {
                 orderSection
                 if !dayEdits.isEmpty { resetSection }
             }
-            .navigationTitle("Настройка упражнений")
+            .navigationTitle(L("Настройка упражнений"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }.font(.body.weight(.semibold))
+                    Button(L("Готово")) { dismiss() }.font(.body.weight(.semibold))
                 }
             }
             .onAppear { ordering = current }
@@ -99,12 +99,12 @@ struct DayCustomizeView: View {
 
     private var scopeSection: some View {
         Section {
-            Picker("Куда применить", selection: $scope) {
+            Picker(L("Куда применить"), selection: $scope) {
                 ForEach(PlanEditScope.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
         } header: {
-            Text("Применить изменения")
+            Text(L("Применить изменения"))
         } footer: {
             Text(scope.explanation)
         }
@@ -155,23 +155,23 @@ struct DayCustomizeView: View {
                     Button(role: .destructive) {
                         profile.hideExercise(exercise, week: week, day: day.number, scope: scope)
                     } label: {
-                        Label("Убрать", systemImage: "eye.slash")
+                        Label(L("Убрать"), systemImage: "eye.slash")
                     }
 
                     if currentEdit != nil {
                         Button {
                             if let currentEdit { profile.removeEdit(currentEdit) }
                         } label: {
-                            Label("Сброс", systemImage: "arrow.uturn.backward")
+                            Label(L("Сброс"), systemImage: "arrow.uturn.backward")
                         }
                         .tint(.blue)
                     }
                 }
             }
         } header: {
-            Text("Упражнения программы")
+            Text(L("Упражнения программы"))
         } footer: {
-            Text("Нажмите на любое упражнение, чтобы изменить его название, подходы, повторения, вес или убрать из дня.")
+            Text(L("Нажмите на любое упражнение, чтобы изменить его название, подходы, повторения, вес или убрать из дня."))
         }
     }
 
@@ -210,7 +210,7 @@ struct DayCustomizeView: View {
                 .buttonStyle(PressableStyle(scale: 0.985))
                 .swipeActions {
                     Button(role: .destructive) { profile.removeEdit(item) } label: {
-                        Label("Удалить", systemImage: "trash")
+                        Label(L("Удалить"), systemImage: "trash")
                     }
                 }
             }
@@ -218,14 +218,14 @@ struct DayCustomizeView: View {
             Button {
                 draft = ExerciseDraft()
             } label: {
-                Label("Добавить новое упражнение", systemImage: "plus.circle.fill")
+                Label(L("Добавить новое упражнение"), systemImage: "plus.circle.fill")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(Theme.accent)
             }
         } header: {
-            Text("Свои добавленные упражнения")
+            Text(L("Свои добавленные упражнения"))
         } footer: {
-            Text("Нажмите на созданное упражнение, чтобы отредактировать его или удалить.")
+            Text(L("Нажмите на созданное упражнение, чтобы отредактировать его или удалить."))
         }
     }
 
@@ -244,22 +244,22 @@ struct DayCustomizeView: View {
             }
         } header: {
             HStack {
-                Text("Порядок выполнения")
+                Text(L("Порядок выполнения"))
                 Spacer()
                 EditButton().font(.footnote)
             }
         } footer: {
-            Text("Нажмите «Изменить» и перетащите за полоски, чтобы поменять порядок.")
+            Text(L("Нажмите «Изменить» и перетащите за полоски, чтобы поменять порядок."))
         }
     }
 
     private var resetSection: some View {
         Section {
-            Button("Вернуть стандартную программу дня", role: .destructive) {
+            Button(L("Вернуть стандартную программу дня"), role: .destructive) {
                 profile.removeEdits(week: week, day: day.number)
             }
         } footer: {
-            Text("Снимет все замены, убранные упражнения и добавленные движения этого дня.")
+            Text(L("Снимет все замены, убранные упражнения и добавленные движения этого дня."))
         }
     }
 
@@ -357,23 +357,23 @@ private struct ExerciseFormView: View {
 
     var body: some View {
         Form {
-            Section("Название и повторения") {
-                TextField("Название упражнения", text: $draft.name)
+            Section(L("Название и повторения")) {
+                TextField(L("Название упражнения"), text: $draft.name)
                     .textInputAutocapitalization(.sentences)
                     .font(.body.weight(.semibold))
 
-                Stepper("Подходов: \(draft.sets)", value: $draft.sets, in: 1...15)
-                TextField("Повторения (например 8–12 или 5)", text: $draft.reps)
+                Stepper(L("Подходов: \(draft.sets)"), value: $draft.sets, in: 1...15)
+                TextField(L("Повторения (например 8–12 или 5)"), text: $draft.reps)
             }
 
             Section {
-                TextField("Вес (например 80 или 102.5)", text: $draft.weightText)
+                TextField(L("Вес (например 80 или 102.5)"), text: $draft.weightText)
                     .keyboardType(.decimalPad)
-                TextField("Или подсказка: RPE 8, до отказа, разминка", text: $draft.loadText)
+                TextField(L("Или подсказка: RPE 8, до отказа, разминка"), text: $draft.loadText)
             } header: {
-                Text("Рабочий вес / Нагрузка")
+                Text(L("Рабочий вес / Нагрузка"))
             } footer: {
-                Text("Если указать вес числом, STRAIN рассчитает разминочные подходы и блины.")
+                Text(L("Если указать вес числом, STRAIN рассчитает разминочные подходы и блины."))
             }
 
             Section {
@@ -383,7 +383,7 @@ private struct ExerciseFormView: View {
                 } label: {
                     HStack {
                         Spacer()
-                        Text("Сохранить изменения")
+                        Text(L("Сохранить изменения"))
                             .font(.body.weight(.bold))
                             .foregroundStyle(.ink)
                         Spacer()
@@ -404,7 +404,7 @@ private struct ExerciseFormView: View {
                     } label: {
                         HStack {
                             Spacer()
-                            Label(isReplacing ? "Убрать это упражнение из дня" : "Удалить упражнение", systemImage: "trash.fill")
+                            Label(isReplacing ? L("Убрать это упражнение из дня") : L("Удалить упражнение"), systemImage: "trash.fill")
                                 .font(.body.weight(.semibold))
                                 .foregroundStyle(.red)
                             Spacer()
@@ -413,7 +413,7 @@ private struct ExerciseFormView: View {
                 }
             }
         }
-        .navigationTitle(draft.name.isEmpty ? "Новое упражнение" : draft.name)
+        .navigationTitle(draft.name.isEmpty ? L("Новое упражнение") : draft.name)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

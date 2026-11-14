@@ -201,7 +201,7 @@ struct WorkoutShareCard: View {
             }
             if summary.lines.count > Self.maxLines {
                 let rest = summary.lines.count - Self.maxLines
-                Text("и ещё \(RuPlural.exercises(rest))")
+                Text(L("и ещё \(RuPlural.exercises(rest))"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.ink.opacity(0.5))
             }

@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -37,7 +38,6 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -329,7 +329,7 @@ internal fun ActivityRow(item: SocialActivityItem, onOpenActor: () -> Unit, onOp
                     buildAnnotatedString {
                         withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("@${item.actor.username}") }
                         append(" ")
-                        append(item.action)
+                        append(L(item.action))
                     },
                     color = Theme.ink,
                     fontSize = 15.sp,

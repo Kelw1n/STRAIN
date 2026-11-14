@@ -1,5 +1,7 @@
 package com.texasprogram.app.model
 
+import com.texasprogram.app.service.L10n
+import com.texasprogram.app.service.L
 import com.texasprogram.app.service.MuscleCategory
 import com.texasprogram.app.service.RuDate
 import com.texasprogram.app.service.RuPlural
@@ -240,10 +242,11 @@ data class SocialMessage(
     val instant: Instant get() = Instant.ofEpochMilli(createdAt.toLong())
     val isLocal: Boolean get() = id.startsWith("local-")
     /// Подпись в списке переписок: фото без текста — «Фото», голосовое — «Голосовое».
+    /// Свои подписи переведены, текст человека — как есть: показывать через `RawText`.
     val preview: String get() = when {
-        voice != null -> SocialVoice.PREVIEW
+        voice != null -> L(SocialVoice.PREVIEW)
         workout != null -> workout.previewText
-        text.isEmpty() && image != null -> "📷 Фото"
+        text.isEmpty() && image != null -> L("📷 Фото")
         else -> text
     }
 
@@ -381,7 +384,7 @@ data class SocialMessageQuote(
     val voice: Boolean = false,
     val fromMe: Boolean = false
 ) {
-    val preview: String get() = if (voice) SocialVoice.PREVIEW else text.ifEmpty { if (image != null) "📷 Фото" else "Сообщение удалено" }
+    val preview: String get() = if (voice) L(SocialVoice.PREVIEW) else text.ifEmpty { L(if (image != null) "📷 Фото" else "Сообщение удалено") }
 }
 
 /// Голосовое сообщение: звук на сервере, длительность и «волна» — громкость
@@ -642,8 +645,12 @@ enum class AchievementKind(
     val isRatio: Boolean get() = group == AchievementGroup.STRENGTH
 
     fun format(value: Double): String = when (this) {
-        IRON -> if (value < 1000) "${value.roundToLong()} кг" else formatWeight(Math.round(value / 100.0) / 10.0).replace('.', ',') + " т"
-        BENCH, SQUAT, DEADLIFT, TOTAL -> "×" + formatWeight(Math.round(value * 100.0) / 100.0).replace('.', ',')
+        IRON -> when {
+            value < 1000 -> "${value.roundToLong()}" + if (L10n.isEnglish) " kg" else " кг"
+            L10n.isEnglish -> formatWeight(Math.round(value / 100.0) / 10.0) + " t"
+            else -> formatWeight(Math.round(value / 100.0) / 10.0).replace('.', ',') + " т"
+        }
+        BENCH, SQUAT, DEADLIFT, TOTAL -> "×" + formatWeight(Math.round(value * 100.0) / 100.0).let { if (L10n.isEnglish) it else it.replace('.', ',') }
         else -> "${value.roundToLong()}"
     }
 

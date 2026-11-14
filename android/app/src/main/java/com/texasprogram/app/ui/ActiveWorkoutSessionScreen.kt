@@ -86,7 +86,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -222,7 +221,9 @@ fun MinimizedWorkoutBar(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            // Снизу зазор побольше: линза выбранной вкладки выпирает над панелью
+            // и иначе налезала на плашку — выглядело, будто кнопки слились.
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 14.dp)
             .pressable {
                 haptics.medium()
                 WorkoutSessionManager.expand()

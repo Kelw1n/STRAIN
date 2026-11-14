@@ -201,8 +201,8 @@ final class RestTimer {
         let state = RestActivityAttributes.ContentState(
             startedAt: start,
             endsAt: end,
-            exerciseName: exerciseName,
-            setDetails: setDetails,
+            exerciseName: L(exerciseName),
+            setDetails: L(setDetails),
             completedSets: completedSets,
             totalSets: totalSets,
             imageFile: imageFile
@@ -223,8 +223,8 @@ final class RestTimer {
         let state = RestActivityAttributes.ContentState(
             startedAt: activity.content.state.startedAt,
             endsAt: end,
-            exerciseName: exerciseName ?? activity.content.state.exerciseName,
-            setDetails: setDetails ?? activity.content.state.setDetails,
+            exerciseName: exerciseName.map(L) ?? activity.content.state.exerciseName,
+            setDetails: setDetails.map(L) ?? activity.content.state.setDetails,
             completedSets: completedSets,
             totalSets: totalSets,
             imageFile: activity.content.state.imageFile
@@ -315,8 +315,8 @@ final class RestTimer {
         persist()
 
         let content = UNMutableNotificationContent()
-        content.title = exerciseName.map { "Отдых закончен: \($0)" } ?? "Отдых закончен"
-        content.body = setDetails.map { "Пора к следующему подходу. Прошлый: \($0)." } ?? "Пора к следующему подходу."
+        content.title = L(exerciseName.map { "Отдых закончен: \($0)" } ?? "Отдых закончен")
+        content.body = L(setDetails.map { "Пора к следующему подходу. Прошлый: \($0)." } ?? "Пора к следующему подходу.")
         content.sound = .default
 
         let center = UNUserNotificationCenter.current()

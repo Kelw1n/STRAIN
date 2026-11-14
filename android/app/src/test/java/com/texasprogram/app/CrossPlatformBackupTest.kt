@@ -4,10 +4,14 @@ import com.texasprogram.app.data.BackupService
 import com.texasprogram.app.model.LiftOutcome
 import com.texasprogram.app.model.MainLift
 import com.texasprogram.app.model.PlanEditKind
+import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.Progression
 import com.texasprogram.app.model.SplitTemplate
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.service.EuthanasiaLevel
 import com.texasprogram.app.service.FullBodyLevel
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -71,6 +75,22 @@ class CrossPlatformBackupTest {
         assertEquals("1-1|test-max-PULL|0", BackupService.exerciseKey("1-1|test-max-PULL|0"))
         assertEquals("1-1|Приседания|0", BackupService.exerciseKey("1-1|Приседания|0"))
         assertEquals("main-Становая-0", BackupService.exerciseKey("main-Становая-0"))
+    }
+
+
+    @Test
+    fun savedHistoryAndXpRemainWhenProfileStoreIsDecoded() {
+        val profile = profiles(FROM_ANDROID).getValue("Техас")
+        val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        // AppStore хранит список профилей целиком в SharedPreferences.
+        val saved = json.encodeToString(listOf(profile))
+        val restored = json.decodeFromString<List<ProgramProfile>>(saved).single()
+
+        assertEquals(profile.id, restored.id)
+        assertEquals(profile.completionLog, restored.completionLog)
+        assertEquals(profile.setLog, restored.setLog)
+        assertTrue(Progression.xp(profile) > 0)
+        assertEquals(Progression.xp(profile), Progression.xp(restored))
     }
 
     @Test

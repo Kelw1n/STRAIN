@@ -87,6 +87,18 @@ class SnapshotTest {
         Theme.isLight = System.getProperty("snapshotTheme") == "light"
     }
 
+    // Язык прогона: gradle -PsnapshotLanguage=en снимает всё на английском.
+    // Включается на время каждого снимка: обычные тесты идут в той же JVM и ждут русский.
+    @org.junit.Before
+    fun language() {
+        val english = System.getProperty("snapshotLanguage") == "en"
+        if (english) com.texasprogram.app.service.L10n.install(java.io.File("src/main/assets/i18n-en.json").readText())
+        com.texasprogram.app.service.L10n.setEnglish(english)
+    }
+
+    @org.junit.After
+    fun russianAgain() = com.texasprogram.app.service.L10n.setEnglish(false)
+
     @get:Rule
     val paparazzi = Paparazzi(
         deviceConfig = DeviceConfig.PIXEL_5,
@@ -485,6 +497,40 @@ class SnapshotTest {
                         goalMonths = 3
                     )
                     com.texasprogram.app.ui.GoalSheet(goal, {}, {})
+                }
+            }
+        }
+        val cycleProgram = com.texasprogram.app.model.CustomProgram(
+            name = "Моя программа",
+            template = com.texasprogram.app.model.SplitTemplate.UPPER_LOWER,
+            weeks = 2,
+            days = listOf(
+                com.texasprogram.app.model.CustomDay(number = 1, title = "ВЕРХ", exercises = listOf(
+                    com.texasprogram.app.model.CustomExercise(name = "Жим лёжа", sets = 3, reps = "5", kilograms = 80.0, weeklyIncrement = 2.5),
+                    com.texasprogram.app.model.CustomExercise(name = "Тяга штанги в наклоне", sets = 3, reps = "8", kilograms = 60.0, weeklyIncrement = 2.5)
+                )),
+                com.texasprogram.app.model.CustomDay(number = 2, title = "НИЗ", exercises = listOf(
+                    com.texasprogram.app.model.CustomExercise(name = "Приседания", sets = 3, reps = "5", kilograms = 100.0, weeklyIncrement = 5.0),
+                    com.texasprogram.app.model.CustomExercise(name = "Подтягивания", sets = 3, reps = "8", loadText = "свой вес")
+                ))
+            )
+        )
+        var finished = ProgramProfile.custom(cycleProgram)
+        for (week in 1..2) for (day in 1..2) finished = finished.toggleCompleted(week, day, effort = "8/10")
+        paparazzi.snapshot("47-cycle-card") {
+            Screen { Column(Modifier.padding(16.dp)) { com.texasprogram.app.ui.ProgramFinishedCard(finished) {} } }
+        }
+        paparazzi.snapshot("48-cycle-finish") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    com.texasprogram.app.ui.CycleFinishSheet(finished, {}) {}
+                }
+            }
+        }
+        paparazzi.snapshot("49-cycle-finish-hard") {
+            Screen {
+                CompositionLocalProvider(LocalNutritionSheetInline provides true) {
+                    com.texasprogram.app.ui.CycleFinishSheet(finished, {}, com.texasprogram.app.model.CycleFeel.HARD) {}
                 }
             }
         }

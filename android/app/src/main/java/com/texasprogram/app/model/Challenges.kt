@@ -168,7 +168,7 @@ object ChallengeScoring {
 
         return when (kind) {
             ChallengeKind.WORKOUTS ->
-                Result(count.toDouble(), "$count ${RuPlural.word(count, "тренировка", "тренировки", "тренировок")}")
+                Result(count.toDouble(), "$count ${RuPlural.russian(count, "тренировка", "тренировки", "тренировок")}")
 
             ChallengeKind.VOLUME -> {
                 val volume = inWindow.keys.sorted().fold(0.0) { sum, key -> sum + tonnage(key) }

@@ -86,7 +86,9 @@ enum AchievementKind: String, CaseIterable, Identifiable, Sendable {
     func format(_ value: Double) -> String {
         switch self {
         case .iron:
-            return value < 1000 ? "\(Int(value.rounded())) кг" : WeightFormat.decimal((value / 100).rounded() / 10) + " т"
+            return value < 1000
+                ? "\(Int(value.rounded()))" + (L10n.isEnglish ? " kg" : " кг")
+                : WeightFormat.decimal((value / 100).rounded() / 10) + (L10n.isEnglish ? " t" : " т")
         case .bench, .squat, .deadlift, .total:
             return "×" + WeightFormat.decimal((value * 100).rounded() / 100)
         default:
@@ -571,7 +573,7 @@ enum Progression {
         let tier: MonthTier
 
         var id: String { "\(year)-\(month)" }
-        var title: String { "\(Progression.monthNames[month]) \(year)" }
+        var title: String { "\(L(Progression.monthNames[month])) \(year)" }
     }
 
     static let monthNames = ["", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",

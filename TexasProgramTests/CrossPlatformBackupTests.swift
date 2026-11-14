@@ -34,6 +34,35 @@ final class CrossPlatformBackupTests: XCTestCase {
         XCTAssertTrue(secondImport.contains { $0.name == "Обновлённый профиль" })
     }
 
+
+    @MainActor
+    func testSavedHistoryAndXPRemainAfterReopeningStore() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let configuration = ModelConfiguration(url: directory.appendingPathComponent("profile.store"))
+        let archive = try BackupService.archive(from: Data(CrossPlatformBackupTests.fromAndroid.utf8))
+        let expected = try XCTUnwrap(archive.profiles.first { $0.name == "Техас" })
+        let profileID = try XCTUnwrap(UUID(uuidString: expected.id))
+
+        let xp: Int = try {
+            let container = try ModelContainer(for: ProgramProfile.self, configurations: configuration)
+            let context = ModelContext(container)
+            BackupService.restore(archive, into: context, existing: [])
+            let profile = try XCTUnwrap(context.fetch(FetchDescriptor<ProgramProfile>()).first { $0.profileID == profileID })
+            XCTAssertGreaterThan(Progression.xp(for: profile), 0)
+            return Progression.xp(for: profile)
+        }()
+
+        let container = try ModelContainer(for: ProgramProfile.self, configurations: configuration)
+        let context = ModelContext(container)
+        let profile = try XCTUnwrap(context.fetch(FetchDescriptor<ProgramProfile>()).first { $0.profileID == profileID })
+        XCTAssertEqual(profile.completionLog.count, 1)
+        XCTAssertEqual(profile.completionLog.first?.effort, "8/10")
+        XCTAssertEqual(profile.setLog["1-1|Приседания|0"]?.reps, 5)
+        XCTAssertEqual(Progression.xp(for: profile), xp)
+    }
+
     func testBackupFromAndroidOpensOnIphone() throws {
         let restored = try restore(Self.fromAndroid)
         XCTAssertEqual(restored.count, 4)

@@ -17,7 +17,7 @@ enum CSVExport {
     private static let separator = ";"
 
     static func text(for profiles: [ProgramProfile]) -> String {
-        var rows = ["Профиль;Программа;Цикл;Неделя;День;Упражнение;Подход;Повторы;Вес;Тоннаж"]
+        var rows = [L("Профиль;Программа;Цикл;Неделя;День;Упражнение;Подход;Повторы;Вес;Тоннаж")]
 
         for profile in profiles {
             for week in profile.historyWeeks {

@@ -16,13 +16,13 @@ struct ProfileRecordsCard: View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text("РЕКОРДЫ")
+                    Text(L("РЕКОРДЫ"))
                         .font(.system(size: 13, weight: .bold))
                         .tracking(1.4)
                         .foregroundStyle(Color.ink.opacity(0.5))
                     Spacer()
                     if !records.isEmpty {
-                        Text("Все \(records.count)")
+                        Text(L("Все \(records.count)"))
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Color.ink.opacity(0.6))
                         Image(systemName: "chevron.right")
@@ -31,7 +31,7 @@ struct ProfileRecordsCard: View {
                     }
                 }
                 if records.isEmpty {
-                    Text(isMe ? "Рекорды появятся после первой тренировки с весами" : "Рекордов пока нет")
+                    Text(isMe ? L("Рекорды появятся после первой тренировки с весами") : L("Рекордов пока нет"))
                         .font(.system(size: 14))
                         .foregroundStyle(Color.ink.opacity(0.5))
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -73,12 +73,12 @@ private struct RecordTile: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if record != nil {
-                    Text("кг")
+                    Text(L("кг"))
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Color.ink.opacity(0.5))
                 }
             }
-            Text(record?.setText ?? "нет подходов")
+            Text(record?.setText ?? L("нет подходов"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(record == nil ? Color.ink.opacity(0.3) : Theme.accent)
                 .lineLimit(1)
@@ -101,11 +101,11 @@ private struct RecordTotalLine: View {
             Image(systemName: "sum")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Theme.accent)
-            Text("Сумма троеборья")
+            Text(L("Сумма троеборья"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.ink)
             Spacer(minLength: 6)
-            Text("≈ \(WeightFormat.plain(total)) кг")
+            Text(L("≈ \(WeightFormat.plain(total)) кг"))
                 .font(.system(size: 15, weight: .heavy, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(.ink)
@@ -128,12 +128,7 @@ struct RecordsSheet: View {
     /// Свой профиль: строка ведёт в историю движения.
     var profile: ProgramProfile?
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "d MMM yyyy"
-        return formatter
-    }()
+    private static let dateFormatter = LocalizedDateFormat(ru: "d MMM yyyy", en: "MMM d, yyyy")
 
     var body: some View {
         NavigationStack {
@@ -153,7 +148,7 @@ struct RecordsSheet: View {
                         }
                     }
                     .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    Text("Число справа — расчётный максимум на один раз по лучшему подходу (формула Эпли). Сумма троеборья — по приседу, жиму лёжа и становой.")
+                    Text(L("Число справа — расчётный максимум на один раз по лучшему подходу (формула Эпли). Сумма троеборья — по приседу, жиму лёжа и становой."))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.ink.opacity(0.4))
                         .fixedSize(horizontal: false, vertical: true)
@@ -164,11 +159,11 @@ struct RecordsSheet: View {
             }
             .scrollIndicators(.hidden)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle(profile == nil ? "Рекорды @\(username)" : "Рекорды")
+            .navigationTitle(profile == nil ? L("Рекорды @\(username)") : L("Рекорды"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { dismiss() }
+                    Button(L("Готово")) { dismiss() }
                         .font(.body.weight(.bold))
                         .foregroundStyle(Theme.accent)
                 }

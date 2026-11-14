@@ -8,6 +8,8 @@ struct TexasProgramApp: App {
     @Environment(\.scenePhase) private var scenePhase
     /// Анимация открытия — только при холодном запуске, не при возврате из фона.
     @State private var showsLaunchReveal = true
+    /// Язык интерфейса: смена пересобирает экраны, чтобы все подписи перевелись разом.
+    @AppStorage(AppLanguage.storageKey) private var language = AppLanguage.system.rawValue
 
     init() {
         // Крупные заголовки экранов плотные и тяжёлые, как у REBRN.
@@ -17,12 +19,20 @@ struct TexasProgramApp: App {
         // Фото ленты по одному адресу не меняются: пусть лежат в кэше,
         // а не качаются заново при каждой прокрутке.
         URLCache.shared = URLCache(memoryCapacity: 40 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
+        AppLanguage.keepRussianForExistingUsers()
+        AppLanguage.shareWithWidgets()
+        // Словарь читается в фоне: первый экран на английском не ждёт разбора 2,5 тыс. фраз.
+        if L10n.isEnglish {
+            DispatchQueue.global(qos: .userInitiated).async { _ = L10n.tr("Сегодня") }
+        }
     }
 
     var body: some Scene {
         WindowGroup {
             ZStack {
                 RootView()
+                    .id(language)
+                    .environment(\.locale, (AppLanguage(rawValue: language) ?? .system).locale)
                     .environment(restTimer)
                     .onOpenURL { url in
                         handleDeepLink(url)

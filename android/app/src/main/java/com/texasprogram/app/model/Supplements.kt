@@ -110,15 +110,26 @@ object SupplementTracker {
     /// не ждали (только «с тренировкой», а тренировки не было), серию не рвёт.
     fun streak(data: SupplementData, trainedDays: Set<LocalDate>, today: LocalDate = LocalDate.now(), zone: ZoneId = ZoneId.systemDefault()): Int {
         val first = data.items.minOfOrNull { dayOf(it.created, zone) } ?: return 0
+        // Отметки раскладываем по дням один раз: раньше каждый из 400 дней
+        // заново перебирал все отметки, и через год экран питания подтормаживал.
+        val takenByDay = HashMap<LocalDate, MutableSet<String>>()
+        for (intake in data.taken) takenByDay.getOrPut(dayOf(intake.date, zone)) { HashSet() }.add(intake.supplementId)
+        val items = data.items.map { it to dayOf(it.created, zone) }
+        fun dayState(day: LocalDate): Pair<Int, Boolean> {
+            val trained = day in trainedDays
+            val required = items.filter { (item, since) -> !since.isAfter(day) && (item.slot != SupplementSlot.WORKOUT || trained) }
+            val taken = takenByDay[day] ?: emptySet<String>()
+            return required.size to (required.isNotEmpty() && required.all { it.first.id in taken })
+        }
         var day = today
-        if (!state(day, data, trainedDays, zone).isComplete) day = day.minusDays(1)
+        if (!dayState(day).second) day = day.minusDays(1)
         var count = 0
         // Год назад и раньше не смотрим: проход по дням не должен расти без конца.
         repeat(400) {
             if (day.isBefore(first)) return count
-            val state = state(day, data, trainedDays, zone)
-            if (state.required > 0) {
-                if (!state.isComplete) return count
+            val (required, complete) = dayState(day)
+            if (required > 0) {
+                if (!complete) return count
                 count += 1
             }
             day = day.minusDays(1)

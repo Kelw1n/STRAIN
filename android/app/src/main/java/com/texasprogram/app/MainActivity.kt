@@ -55,7 +55,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.texasprogram.app.ui.Text
 import androidx.compose.foundation.border
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable

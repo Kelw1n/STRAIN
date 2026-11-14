@@ -58,7 +58,7 @@ struct NutritionView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Питание")
+            .navigationTitle(L("Питание"))
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -69,11 +69,11 @@ struct NutritionView: View {
                             .frame(width: 36, height: 36)
                             .background(Color.tone(0.14), in: Circle())
                     }
-                    .accessibilityLabel("Ключ Google для фото еды")
+                    .accessibilityLabel(L("Ключ Google для фото еды"))
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Готово") { typingWeight = false }
+                    Button(L("Готово")) { typingWeight = false }
                 }
             }
         }
@@ -138,10 +138,10 @@ struct NutritionView: View {
     private var introCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             NutritionCaption(text: "Метод Лимара", color: Theme.accent)
-            Text("Найди свою норму калорий")
+            Text(L("Найди свою норму калорий"))
                 .font(.system(size: 24, weight: .heavy, design: Theme.fontDesign))
                 .foregroundStyle(.ink)
-            Text("Без формул. Неделю ешь как обычно и записывай всё, что съел, и вес утром натощак. Средние калории при стоящем весе — твоя поддержка.")
+            Text(L("Без формул. Неделю ешь как обычно и записывай всё, что съел, и вес утром натощак. Средние калории при стоящем весе — твоя поддержка."))
                 .font(.system(size: 14))
                 .foregroundStyle(Color.ink.opacity(0.7))
                 .fixedSize(horizontal: false, vertical: true)
@@ -164,11 +164,11 @@ struct NutritionView: View {
                     restartMenu
                 }
                 weekDots(week.start)
-                Text("Ничего не меняй в питании — просто записывай еду и вес натощак каждое утро.")
+                Text(L("Ничего не меняй в питании — просто записывай еду и вес натощак каждое утро."))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Записано: еда — \(week.foodDays) дн., вес — \(week.weightDays) дн.")
+                Text(L("Записано: еда — \(week.foodDays) дн., вес — \(week.weightDays) дн."))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.45))
             }
@@ -176,7 +176,7 @@ struct NutritionView: View {
         case let .notEnough(week):
             VStack(alignment: .leading, spacing: 12) {
                 NutritionCaption(text: "Неделя прошла", color: Theme.warning)
-                Text("Записано мало: еда — \(week.foodDays) из 7 дней, вес — \(week.weightDays) из 7. Чтобы среднее не врало, нужно хотя бы \(LimarMethod.minimumDays) дней того и другого.")
+                Text(L("Записано мало: еда — \(week.foodDays) из 7 дней, вес — \(week.weightDays) из 7. Чтобы среднее не врало, нужно хотя бы \(LimarMethod.minimumDays) дней того и другого."))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
@@ -198,12 +198,12 @@ struct NutritionView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.ink.opacity(0.75))
             if let weight = week.weight {
-                Text("Средний вес \(WeightFormat.decimal((weight * 10).rounded() / 10)) кг · записано \(week.foodDays) дн.")
+                Text(L("Средний вес \(WeightFormat.decimal((weight * 10).rounded() / 10)) кг · записано \(week.foodDays) дн."))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.45))
             }
             if let shift {
-                Text("За неделю вес сдвинулся на \(NutritionFormat.change(shift)) — значит, это ещё не совсем поддержка. Можно понаблюдать ещё неделю или начать так: недельные проверки поправят норму.")
+                Text(L("За неделю вес сдвинулся на \(NutritionFormat.change(shift)) — значит, это ещё не совсем поддержка. Можно понаблюдать ещё неделю или начать так: недельные проверки поправят норму."))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
@@ -287,7 +287,7 @@ struct NutritionView: View {
                 .foregroundStyle(Color.ink.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
             if check.lowFat {
-                Text("Жиров станет \(NutritionFormat.grams(check.proposed.fat)) г — меньше \(WeightFormat.decimal(LimarMethod.fatFloorPerKg)) г на кило веса. Ниже лучше не опускаться.")
+                Text(L("Жиров станет \(NutritionFormat.grams(check.proposed.fat)) г — меньше \(WeightFormat.decimal(LimarMethod.fatFloorPerKg)) г на кило веса. Ниже лучше не опускаться."))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
@@ -347,12 +347,12 @@ struct NutritionView: View {
             Button {
                 store.startObservation()
             } label: {
-                Label("Начать неделю заново", systemImage: "arrow.clockwise")
+                Label(L("Начать неделю заново"), systemImage: "arrow.clockwise")
             }
             Button(role: .destructive) {
                 store.resetPlan()
             } label: {
-                Label("Выйти из метода", systemImage: "xmark")
+                Label(L("Выйти из метода"), systemImage: "xmark")
             }
         } label: {
             menuLabel
@@ -366,19 +366,19 @@ struct NutritionView: View {
                     Button {
                         store.choose(goal, maintenance: maintenance)
                     } label: {
-                        Label("Цель: \(goal.title.lowercased())", systemImage: "target")
+                        Label(L("Цель: \(goal.title.lowercased())"), systemImage: "target")
                     }
                 }
             }
             Button {
                 store.startObservation()
             } label: {
-                Label("Заново найти поддержку", systemImage: "arrow.clockwise")
+                Label(L("Заново найти поддержку"), systemImage: "arrow.clockwise")
             }
             Button(role: .destructive) {
                 store.resetPlan()
             } label: {
-                Label("Выйти из метода", systemImage: "xmark")
+                Label(L("Выйти из метода"), systemImage: "xmark")
             }
         } label: {
             menuLabel
@@ -400,7 +400,7 @@ struct NutritionView: View {
                 .monospacedDigit()
                 .foregroundStyle(.ink)
                 .contentTransition(.numericText())
-            Text("ккал")
+            Text(L("ккал"))
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Color.ink.opacity(0.5))
         }
@@ -449,7 +449,7 @@ struct NutritionView: View {
     private var dayPicker: some View {
         HStack {
             Button { shiftDay(-1) } label: { chevron("chevron.left") }
-                .accessibilityLabel("Предыдущий день")
+                .accessibilityLabel(L("Предыдущий день"))
             Spacer()
             Text(NutritionFormat.dayTitle(day))
                 .font(.system(size: 17, weight: .bold))
@@ -459,7 +459,7 @@ struct NutritionView: View {
             Button { shiftDay(1) } label: { chevron("chevron.right") }
                 .disabled(calendar.isDateInToday(day))
                 .opacity(calendar.isDateInToday(day) ? 0.3 : 1)
-                .accessibilityLabel("Следующий день")
+                .accessibilityLabel(L("Следующий день"))
         }
         .padding(.horizontal, 4)
     }
@@ -488,7 +488,7 @@ struct NutritionView: View {
                 Spacer()
                 if let target {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("из \(NutritionFormat.kcal(target.kcal))")
+                        Text(L("из \(NutritionFormat.kcal(target.kcal))"))
                             .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                             .foregroundStyle(Color.ink.opacity(0.75))
                         Text(leftLine(target))
@@ -521,14 +521,14 @@ struct NutritionView: View {
                 .foregroundStyle(Color.ink.opacity(0.5))
             // Норма — строкой ниже: на узком iPhone рядом с числом она не влезала,
             // и «100» переносилось на две строки.
-            Text(NutritionFormat.grams(value) + (goal == nil ? " г" : ""))
+            Text(NutritionFormat.grams(value) + (goal == nil ? L(" г") : ""))
                 .font(.system(size: 20, weight: .heavy, design: Theme.fontDesign))
                 .monospacedDigit()
                 .foregroundStyle(.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             if let goal {
-                Text("из \(NutritionFormat.grams(goal)) г")
+                Text(L("из \(NutritionFormat.grams(goal)) г"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.ink.opacity(0.4))
                     .lineLimit(1)
@@ -557,7 +557,7 @@ struct NutritionView: View {
                 }
             }
             HStack(spacing: 10) {
-                TextField(dayWeight == nil ? "Утром, кг" : "Поправить, кг", text: $weightInput)
+                TextField(dayWeight == nil ? L("Утром, кг") : L("Поправить, кг"), text: $weightInput)
                     .keyboardType(.decimalPad)
                     .focused($typingWeight)
                     .font(.system(size: 18, weight: .bold, design: Theme.fontDesign))
@@ -568,7 +568,7 @@ struct NutritionView: View {
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.accent.opacity(typingWeight ? 1 : 0), lineWidth: 1.5))
                     .animation(.easeOut(duration: 0.15), value: typingWeight)
                 Button(action: recordWeight) {
-                    Text("Записать")
+                    Text(L("Записать"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(parsedWeight == nil ? Color.ink.opacity(0.4) : .canvas)
                         .padding(.horizontal, 18)
@@ -578,7 +578,7 @@ struct NutritionView: View {
                 .buttonStyle(.pressable)
                 .disabled(parsedWeight == nil)
             }
-            Text("Попадает в «Замеры веса». Взвешивайся каждое утро натощак — так средний вес недели честный.")
+            Text(L("Попадает в «Замеры веса». Взвешивайся каждое утро натощак — так средний вес недели честный."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.ink.opacity(0.4))
                 .fixedSize(horizontal: false, vertical: true)
@@ -608,13 +608,13 @@ struct NutritionView: View {
         HStack(spacing: 10) {
             Menu {
                 if CameraPicker.isAvailable {
-                    Button { startPhoto(camera: true) } label: { Label("Снять", systemImage: "camera") }
+                    Button { startPhoto(camera: true) } label: { Label(L("Снять"), systemImage: "camera") }
                 }
-                Button { startPhoto(camera: false) } label: { Label("Из галереи", systemImage: "photo.on.rectangle") }
+                Button { startPhoto(camera: false) } label: { Label(L("Из галереи"), systemImage: "photo.on.rectangle") }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "camera.fill").font(.system(size: 15, weight: .bold))
-                    Text("Сфоткать еду").font(.system(size: 15, weight: .bold))
+                    Text(L("Сфоткать еду")).font(.system(size: 15, weight: .bold))
                 }
                 .foregroundStyle(.canvas)
                 .frame(maxWidth: .infinity)
@@ -626,7 +626,7 @@ struct NutritionView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "square.and.pencil").font(.system(size: 15, weight: .bold))
-                    Text("Вручную").font(.system(size: 15, weight: .bold))
+                    Text(L("Вручную")).font(.system(size: 15, weight: .bold))
                 }
                 .foregroundStyle(.ink)
                 .frame(maxWidth: .infinity)
@@ -678,7 +678,7 @@ struct NutritionView: View {
                         Button(role: .destructive) {
                             withAnimation(Motion.snappy) { store.remove(entry) }
                         } label: {
-                            Label("Удалить", systemImage: "trash")
+                            Label(L("Удалить"), systemImage: "trash")
                         }
                     }
                 if index < dayEntries.count - 1 {
@@ -703,7 +703,7 @@ struct NutritionView: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 3) {
-                Text("\(NutritionFormat.kcal(entry.nutrients.kcal)) ккал")
+                Text(L("\(NutritionFormat.kcal(entry.nutrients.kcal)) ккал"))
                     .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                     .monospacedDigit()
                     .foregroundStyle(.ink)
@@ -731,10 +731,10 @@ struct NutritionView: View {
                     .font(.system(size: 20))
                     .foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Как работает метод")
+                    Text(L("Как работает метод"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.ink)
-                    Text("Почему не формулы и как найти свою норму")
+                    Text(L("Почему не формулы и как найти свою норму"))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.ink.opacity(0.45))
                 }

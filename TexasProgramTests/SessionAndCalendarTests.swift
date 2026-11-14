@@ -97,6 +97,22 @@ final class SessionAndCalendarTests: XCTestCase {
 
     /// Сменили профиль посреди тренировки — в новый ничего не пишется,
     /// а вернулись — тренировка снова на месте.
+    /// Тренировку по расписанию на другой день начали сегодня — в заголовке сегодняшний
+    /// день недели («СРЕДА · ДЕНЬ 3»), а не плановый («ПЯТНИЦА · ДЕНЬ 3»).
+    func testEarlyWorkoutShowsTodaysWeekday() throws {
+        let profile = texas()
+        let manager = WorkoutSessionManager.shared
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let today = calendar.startOfDay(for: Date())
+        guard let future = profile.schedule.allPending.first(where: { $0.date > today }) else { return }
+        manager.startWorkout(workout: future, profile: profile)
+        defer { manager.discardWorkout(profile: profile) }
+        let active = try XCTUnwrap(manager.activeWorkout)
+        XCTAssertEqual(active.id, future.id)
+        XCTAssertEqual(active.weekday, calendar.component(.weekday, from: Date()))
+        XCTAssertTrue(active.fullTitle.hasPrefix(RuDate.full(weekday: active.weekday).uppercased()))
+    }
+
     func testSwitchingProfileDetachesSession() throws {
         let owner = texas()
         let other = texas()

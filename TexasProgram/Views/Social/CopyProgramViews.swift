@@ -27,14 +27,14 @@ struct CopyProgramSheet: View {
             onBack: { dismiss() },
             onSave: save
         )
-        .alert("Программа сохранена", isPresented: Binding(get: { saved != nil }, set: { if !$0 { saved = nil } })) {
-            Button("Перейти на неё") {
+        .alert(L("Программа сохранена"), isPresented: Binding(get: { saved != nil }, set: { if !$0 { saved = nil } })) {
+            Button(L("Перейти на неё")) {
                 if let saved { activeProfileID = saved.profileID.uuidString }
                 dismiss()
             }
-            Button("Остаться", role: .cancel) { dismiss() }
+            Button(L("Остаться"), role: .cancel) { dismiss() }
         } message: {
-            Text("Это новый профиль «\(saved?.name ?? "")». Переключаться между профилями можно в настройках.")
+            Text(L("Это новый профиль «\(saved?.name ?? "")». Переключаться между профилями можно в настройках."))
         }
     }
 
@@ -72,7 +72,7 @@ struct CopyProgramButton: View {
                     Image(systemName: "square.and.arrow.down.on.square")
                         .font(.system(size: 15, weight: .bold))
                 }
-                Text("Скопировать к себе")
+                Text(L("Скопировать к себе"))
                     .font(.system(size: 15, weight: .bold))
             }
             .foregroundStyle(.canvas)
@@ -82,9 +82,9 @@ struct CopyProgramButton: View {
         }
         .buttonStyle(.pressable)
         .disabled(loading)
-        .confirmationDialog("Что скопировать?", isPresented: $choosing, titleVisibility: .visible) {
+        .confirmationDialog(L("Что скопировать?"), isPresented: $choosing, titleVisibility: .visible) {
             if let workout {
-                Button("Эту тренировку с весами") {
+                Button(L("Эту тренировку с весами")) {
                     request = ProgramCopyRequest(
                         program: ProgramCopy.program(workout: workout.workout, title: workout.title, name: workout.title),
                         author: author
@@ -92,18 +92,18 @@ struct CopyProgramButton: View {
                 }
             }
             if allDays.count > 1 {
-                Button("Всю программу (\(allDays.count) \(RuPlural.word(allDays.count, "день", "дня", "дней")))") {
+                Button(L("Всю программу (\(allDays.count) \(RuPlural.word(allDays.count, "день", "дня", "дней")))")) {
                     request = ProgramCopyRequest(program: ProgramCopy.program(days: allDays, name: "Программа @\(author)"), author: author)
                 }
             }
             ForEach(Array(allDays.enumerated()), id: \.offset) { _, day in
-                Button("Только «\(day.title)»") {
+                Button(L("Только «\(day.title)»")) {
                     request = ProgramCopyRequest(program: ProgramCopy.program(days: [day], name: day.title), author: author)
                 }
             }
-            Button("Отмена", role: .cancel) {}
+            Button(L("Отмена"), role: .cancel) {}
         } message: {
-            Text("Копия станет «Своей программой» в новом профиле — веса и повторы можно поправить перед сохранением.")
+            Text(L("Копия станет «Своей программой» в новом профиле — веса и повторы можно поправить перед сохранением."))
         }
         .sheet(item: $request) { request in
             CopyProgramSheet(request: request)

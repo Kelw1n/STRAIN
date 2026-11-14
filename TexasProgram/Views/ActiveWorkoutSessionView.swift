@@ -75,16 +75,16 @@ struct ActiveWorkoutSessionView: View {
                     sessionManager.addExercises(items, profile: profile)
                 }, pickTitle: "Добавить")
             }
-            .confirmationDialog("Время отдыха", isPresented: Binding(
+            .confirmationDialog(L("Время отдыха"), isPresented: Binding(
                 get: { sessionManager.customRestTargetExerciseIndex != nil },
                 set: { if !$0 { sessionManager.customRestTargetExerciseIndex = nil } }
             )) {
-                Button("1 мин (01:00)") { sessionManager.setRestDuration(60) }
-                Button("1.5 мин (01:30)") { sessionManager.setRestDuration(90) }
-                Button("2 мин (02:00)") { sessionManager.setRestDuration(120) }
-                Button("2.5 мин (02:30)") { sessionManager.setRestDuration(150) }
-                Button("3 мин (03:00)") { sessionManager.setRestDuration(180) }
-                Button("4 мин (04:00)") { sessionManager.setRestDuration(240) }
+                Button(L("1 мин (01:00)")) { sessionManager.setRestDuration(60) }
+                Button(L("1.5 мин (01:30)")) { sessionManager.setRestDuration(90) }
+                Button(L("2 мин (02:00)")) { sessionManager.setRestDuration(120) }
+                Button(L("2.5 мин (02:30)")) { sessionManager.setRestDuration(150) }
+                Button(L("3 мин (03:00)")) { sessionManager.setRestDuration(180) }
+                Button(L("4 мин (04:00)")) { sessionManager.setRestDuration(240) }
             }
         }
     }
@@ -121,7 +121,7 @@ struct ActiveWorkoutSessionView: View {
         Button { addingExercises = true } label: {
             HStack(spacing: 8) {
                 Image(systemName: "plus").font(.system(size: 15, weight: .bold))
-                Text("Добавить упражнение").font(.system(size: 15, weight: .bold))
+                Text(L("Добавить упражнение")).font(.system(size: 15, weight: .bold))
             }
             .foregroundStyle(sessionManager.exercises.isEmpty ? Color.canvas : Color.ink)
             .frame(maxWidth: .infinity)
@@ -150,7 +150,7 @@ struct ActiveWorkoutSessionView: View {
                         .background(Color.ink.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.pressable)
-                .accessibilityLabel("Свернуть тренировку")
+                .accessibilityLabel(L("Свернуть тренировку"))
 
                 SessionClock(size: 26)
             }
@@ -158,7 +158,7 @@ struct ActiveWorkoutSessionView: View {
 
         ToolbarItemGroup(placement: .keyboard) {
             Spacer()
-            Button("Готово") {
+            Button(L("Готово")) {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
             .font(.body.weight(.bold))
@@ -170,13 +170,13 @@ struct ActiveWorkoutSessionView: View {
                     Button {
                         sessionManager.showingNoteSheet = true
                     } label: {
-                        Label("Заметка к тренировке", systemImage: "note.text")
+                        Label(L("Заметка к тренировке"), systemImage: "note.text")
                     }
 
                     Button(role: .destructive) {
                         sessionManager.showingZeroSetsAlert = true
                     } label: {
-                        Label("Отменить тренировку", systemImage: "trash")
+                        Label(L("Отменить тренировку"), systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -189,7 +189,7 @@ struct ActiveWorkoutSessionView: View {
                 Button {
                     handleFinishTapped()
                 } label: {
-                    Text("Завершить")
+                    Text(L("Завершить"))
                         .font(.system(size: 15, weight: .bold, design: Theme.fontDesign))
                         .foregroundStyle(.canvas)
                         .padding(.horizontal, 18)
@@ -213,7 +213,7 @@ struct ActiveWorkoutSessionView: View {
                     .frame(width: 30, height: 30)
                     .background(Theme.accent, in: Circle())
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Новый рекорд")
+                    Text(L("Новый рекорд"))
                         .font(.system(size: 14, weight: .heavy, design: Theme.fontDesign))
                         .foregroundStyle(.ink)
                     Text("\(record.exercise) · \(WeightFormat.kilogramsPrecise(record.weight))")
@@ -261,12 +261,12 @@ struct ActiveWorkoutSessionView: View {
                     .foregroundStyle(Color.red)
                     .padding(.top, 8)
 
-                Text(sessionManager.totalCompletedSets == 0 ? "Ни одного подхода не отмечено" : "Отменить тренировку?")
+                Text(sessionManager.totalCompletedSets == 0 ? L("Ни одного подхода не отмечено") : L("Отменить тренировку?"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.ink)
                     .multilineTextAlignment(.center)
 
-                Text("Тренировка удалится вместе с введёнными значениями и счётчиком времени.")
+                Text(L("Тренировка удалится вместе с введёнными значениями и счётчиком времени."))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink.opacity(0.65))
                     .multilineTextAlignment(.center)
@@ -283,7 +283,7 @@ struct ActiveWorkoutSessionView: View {
                 Button {
                     sessionManager.showingZeroSetsAlert = false
                 } label: {
-                    Text("Вернуться к тренировке")
+                    Text(L("Вернуться к тренировке"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.ink.opacity(0.85))
                         .padding(.vertical, 8)
@@ -315,11 +315,11 @@ struct ActiveWorkoutSessionView: View {
             }
             .padding()
             .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Заметка к тренировке")
+            .navigationTitle(L("Заметка к тренировке"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") {
+                    Button(L("Готово")) {
                         // Пустой текст — тоже ответ: заметку стёрли, её надо удалить.
                         profile.setNote(
                             sessionManager.noteText,
@@ -512,7 +512,7 @@ private struct ExerciseSessionCard: View {
                     }
                     if compact {
                         // После «из» — родительный падеж: «из 3 подходов», а не «из 3 подхода».
-                        Text("\(doneCount) из \(exercise.sets.count) \(RuPlural.word(exercise.sets.count, "подхода", "подходов", "подходов"))")
+                        Text(L("\(doneCount) из \(exercise.sets.count) \(RuPlural.word(exercise.sets.count, "подхода", "подходов", "подходов"))"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Color.ink.opacity(0.45))
                             .transition(.opacity)
@@ -529,13 +529,13 @@ private struct ExerciseSessionCard: View {
                 reorder.end()
             }
             .accessibilityElement(children: .combine)
-            .accessibilityHint("Удерживайте, чтобы переставить")
+            .accessibilityHint(L("Удерживайте, чтобы переставить"))
             .accessibilityActions {
                 if index > 0 {
-                    Button("Переместить выше") { withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index - 1) } }
+                    Button(L("Переместить выше")) { withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index - 1) } }
                 }
                 if index < count - 1 {
-                    Button("Переместить ниже") { withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index + 1) } }
+                    Button(L("Переместить ниже")) { withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index + 1) } }
                 }
             }
 
@@ -597,23 +597,23 @@ private struct ExerciseSessionCard: View {
             Button {
                 withAnimation(Motion.reorder) { manager.addSet(to: index, profile: profile) }
             } label: {
-                Label("Добавить подход", systemImage: "plus")
+                Label(L("Добавить подход"), systemImage: "plus")
             }
             // Тренажёр занят — похожее упражнение с весом по истории.
             Button {
                 manager.swapTarget = .init(id: exercise.id, index: index)
             } label: {
-                Label("Заменить упражнение", systemImage: "arrow.triangle.2.circlepath")
+                Label(L("Заменить упражнение"), systemImage: "arrow.triangle.2.circlepath")
             }
             Button {
                 manager.artTarget = ExerciseArtTarget(name: exercise.prescription.name)
             } label: {
-                Label("Картинка упражнения", systemImage: "photo")
+                Label(L("Картинка упражнения"), systemImage: "photo")
             }
             // Шаг прибавки этого движения: у кого есть блины 1,25 — 2,5 кг,
             // у кого нет — 5; на блоке бывает и 1 кг.
             Menu {
-                Picker("Шаг прибавки", selection: Binding(
+                Picker(L("Шаг прибавки"), selection: Binding(
                     get: { profile.weightStep(for: exercise.prescription.name) },
                     set: { step in
                         withAnimation(Motion.snappy) { manager.changeWeightStep(step, for: index, profile: profile) }
@@ -624,20 +624,20 @@ private struct ExerciseSessionCard: View {
                     }
                 }
             } label: {
-                Label("Шаг прибавки: \(WeightFormat.kilogramsPrecise(profile.weightStep(for: exercise.prescription.name)))", systemImage: "scalemass")
+                Label(L("Шаг прибавки: \(WeightFormat.kilogramsPrecise(profile.weightStep(for: exercise.prescription.name)))"), systemImage: "scalemass")
             }
             if index > 0 {
                 Button {
                     withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index - 1) }
                 } label: {
-                    Label("Переместить выше", systemImage: "arrow.up")
+                    Label(L("Переместить выше"), systemImage: "arrow.up")
                 }
             }
             if index < count - 1 {
                 Button {
                     withAnimation(Motion.reorder) { manager.moveExercise(from: index, to: index + 1) }
                 } label: {
-                    Label("Переместить ниже", systemImage: "arrow.down")
+                    Label(L("Переместить ниже"), systemImage: "arrow.down")
                 }
             }
         } label: {
@@ -692,7 +692,7 @@ private struct ExerciseSessionCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")
                         .font(.system(size: 13, weight: .bold))
-                    Text("Добавить подход")
+                    Text(L("Добавить подход"))
                         .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundStyle(Color.ink.opacity(0.85))
@@ -704,7 +704,7 @@ private struct ExerciseSessionCard: View {
             .padding(.top, 4)
 
             if showsDeleteHint {
-                Text("Лишний подход? Смахни его влево или нажми на номер")
+                Text(L("Лишний подход? Смахни его влево или нажми на номер"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.ink.opacity(0.55))
                     .multilineTextAlignment(.center)
@@ -790,7 +790,7 @@ private struct SetRowView: View {
             }
             .buttonStyle(.pressable)
             .disabled(set.previous == nil)
-            .accessibilityLabel(set.previous == nil ? "Прошлого раза нет" : "Подставить прошлый раз: \(set.previousText)")
+            .accessibilityLabel(set.previous == nil ? L("Прошлого раза нет") : L("Подставить прошлый раз: \(set.previousText)"))
 
             SetNumberField(
                 value: set.weight,
@@ -827,7 +827,7 @@ private struct SetRowView: View {
             HStack(spacing: 6) {
                 Image(systemName: "trash.fill")
                     .font(.system(size: 14, weight: .bold))
-                Text("Удалить")
+                Text(L("Удалить"))
                     .font(.system(size: 13, weight: .bold))
                     .lineLimit(1)
                     .fixedSize()
@@ -891,14 +891,14 @@ private struct SetRowView: View {
                 Button {
                     withAnimation(Motion.snappy) { manager.applyPrevious(exIdx: exerciseIndex, sIdx: position, profile: profile) }
                 } label: {
-                    Label("Как в прошлый раз", systemImage: "arrow.uturn.backward")
+                    Label(L("Как в прошлый раз"), systemImage: "arrow.uturn.backward")
                 }
             }
             if canDelete {
                 Button(role: .destructive) {
                     withAnimation(Motion.reorder) { manager.deleteSet(exIdx: exerciseIndex, sIdx: position, profile: profile) }
                 } label: {
-                    Label("Удалить подход", systemImage: "trash")
+                    Label(L("Удалить подход"), systemImage: "trash")
                 }
             }
         } label: {
@@ -947,7 +947,7 @@ private struct SetRowView: View {
         .animation(Motion.bouncy, value: set.isRecord)
         .animation(Motion.snappy, value: isCurrent)
         .animation(Motion.snappy, value: highlighted)
-        .accessibilityLabel("Подход \(position + 1)")
+        .accessibilityLabel(L("Подход \(position + 1)"))
     }
 
     private var numberFill: AnyShapeStyle {
@@ -982,7 +982,7 @@ private struct SetRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(set.isDone ? "Подход \(position + 1) выполнен" : "Отметить подход \(position + 1)")
+        .accessibilityLabel(set.isDone ? L("Подход \(position + 1) выполнен") : L("Отметить подход \(position + 1)"))
     }
 }
 
@@ -1003,7 +1003,7 @@ struct SessionClock: View {
                 .foregroundStyle(color)
                 .contentTransition(.numericText(countsDown: false))
                 .animation(.snappy(duration: 0.25), value: seconds)
-                .accessibilityLabel("Время тренировки \(Self.format(seconds))")
+                .accessibilityLabel(L("Время тренировки \(Self.format(seconds))"))
         }
     }
 
@@ -1048,7 +1048,7 @@ struct MinimizedWorkoutBar: View {
                             .foregroundStyle(.ink)
                             .lineLimit(1)
 
-                        Text("\(sessionManager.totalCompletedSets) из \(sessionManager.totalSetsCount) \(RuPlural.word(sessionManager.totalSetsCount, "подхода", "подходов", "подходов"))")
+                        Text(L("\(sessionManager.totalCompletedSets) из \(sessionManager.totalSetsCount) \(RuPlural.word(sessionManager.totalSetsCount, "подхода", "подходов", "подходов"))"))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.ink.opacity(0.55))
                             .contentTransition(.numericText())
@@ -1121,7 +1121,7 @@ private struct WarmUpRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("РАЗМИНКА")
+            Text(L("РАЗМИНКА"))
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Color.ink.opacity(0.45))
@@ -1160,7 +1160,7 @@ private struct WarmUpRow: View {
             .background(isDone ? Theme.accent : Color.ink.opacity(0.08), in: Capsule())
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel("Разминка \(WeightFormat.plain(step.weight)) килограммов на \(step.reps)")
+        .accessibilityLabel(L("Разминка \(WeightFormat.plain(step.weight)) килограммов на \(step.reps)"))
         .accessibilityAddTraits(isDone ? .isSelected : [])
     }
 }

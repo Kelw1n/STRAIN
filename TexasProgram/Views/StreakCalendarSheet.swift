@@ -63,7 +63,7 @@ struct StreakCalendarSheet: View {
 
             Spacer(minLength: 0)
 
-            Text("Неделя засчитана, если в ней была хотя бы одна тренировка. Начатая неделя серию не обрывает: у тебя есть время до воскресенья.")
+            Text(L("Неделя засчитана, если в ней была хотя бы одна тренировка. Начатая неделя серию не обрывает: у тебя есть время до воскресенья."))
                 .font(.system(size: 13))
                 .foregroundStyle(Color.ink.opacity(0.5))
                 .fixedSize(horizontal: false, vertical: true)
@@ -132,7 +132,7 @@ struct StreakCalendarSheet: View {
 
     static func monthTitle(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month], from: date)
-        return "\(monthNames[(parts.month ?? 1) - 1]) \(parts.year ?? 0)"
+        return "\(L(monthNames[(parts.month ?? 1) - 1])) \(parts.year ?? 0)"
     }
 }
 

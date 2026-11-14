@@ -65,18 +65,18 @@ struct SetEntrySheet: View {
             Form {
                 Section {
                     Text(target.exercise.name).font(.headline)
-                    LabeledContent("По плану") {
+                    LabeledContent(L("По плану")) {
                         Text(plannedText).foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text("Подход \(target.index + 1)")
+                    Text(L("Подход \(target.index + 1)"))
                 }
 
-                Section("Как получилось") {
-                    TextField("Повторов", text: $repsText)
+                Section(L("Как получилось")) {
+                    TextField(L("Повторов"), text: $repsText)
                         .keyboardType(.numberPad)
                         .focused($typing, equals: .reps)
-                    TextField("Вес, кг", text: $weightText)
+                    TextField(L("Вес, кг"), text: $weightText)
                         .keyboardType(.decimalPad)
                         .focused($typing, equals: .weight)
                 }
@@ -91,7 +91,7 @@ struct SetEntrySheet: View {
                         }
                         dismiss()
                     } label: {
-                        Label("Записать", systemImage: "checkmark.circle.fill")
+                        Label(L("Записать"), systemImage: "checkmark.circle.fill")
                     }
                     .disabled(reps == nil || weight == nil)
 
@@ -103,22 +103,22 @@ struct SetEntrySheet: View {
                             )
                             dismiss()
                         } label: {
-                            Label("Убрать запись", systemImage: "trash")
+                            Label(L("Убрать запись"), systemImage: "trash")
                         }
                     }
                 } footer: {
-                    Text("Записанные подходы попадают в историю упражнения и в график рабочих весов.")
+                    Text(L("Записанные подходы попадают в историю упражнения и в график рабочих весов."))
                 }
             }
-            .navigationTitle("Результат подхода")
+            .navigationTitle(L("Результат подхода"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
+                    Button(L("Отмена")) { dismiss() }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Готово") { typing = nil }
+                    Button(L("Готово")) { typing = nil }
                 }
             }
             .onAppear {

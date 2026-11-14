@@ -10,6 +10,14 @@ import java.time.temporal.ChronoUnit
 /// Склонение по числу: «1 подход», «2 подхода», «5 подходов».
 object RuPlural {
     fun word(count: Int, one: String, few: String, many: String): String {
+        // В английском две формы: «1 set», «2 sets».
+        if (L10n.isEnglish) return if (kotlin.math.abs(count) == 1) L10n.tr(one) else L10n.tr(many)
+        return russian(count, one, few, many)
+    }
+
+    /// Всегда по-русски, какой бы язык ни был выбран: для текста, который уходит
+    /// на сервер и который видят другие люди. Переводится уже при показе.
+    fun russian(count: Int, one: String, few: String, many: String): String {
         val value = kotlin.math.abs(count)
         if (value % 100 in 11..14) return many
         return when (value % 10) {
@@ -33,16 +41,30 @@ object RuDate {
     )
     val monthShort = listOf("", "янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек")
 
+    private val weekdayFullEn = listOf("", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    private val weekdayShortEn = listOf("", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    private val monthEn = listOf(
+        "", "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    )
+    private val monthShortEn = listOf("", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
     /// Номера дней недели в порядке «понедельник → воскресенье» (1 — воскресенье).
     val weekOrder = listOf(2, 3, 4, 5, 6, 7, 1)
 
-    fun full(weekday: Int): String = weekdayFull.getOrElse(weekday) { "" }
+    fun full(weekday: Int): String = (if (L10n.isEnglish) weekdayFullEn else weekdayFull).getOrElse(weekday) { "" }
 
-    fun short(weekday: Int): String = weekdayShort.getOrElse(weekday) { "" }
+    fun short(weekday: Int): String = (if (L10n.isEnglish) weekdayShortEn else weekdayShort).getOrElse(weekday) { "" }
 
-    fun dayMonth(date: LocalDate): String = "${date.dayOfMonth} ${monthGenitive.getOrElse(date.monthValue) { "" }}"
+    /// «12 марта» / «March 12».
+    fun dayMonth(date: LocalDate): String =
+        if (L10n.isEnglish) "${monthEn.getOrElse(date.monthValue) { "" }} ${date.dayOfMonth}"
+        else "${date.dayOfMonth} ${monthGenitive.getOrElse(date.monthValue) { "" }}"
 
-    fun shortDayMonth(date: LocalDate): String = "${date.dayOfMonth} ${monthShort.getOrElse(date.monthValue) { "" }}"
+    /// «12 мар» / «Mar 12».
+    fun shortDayMonth(date: LocalDate): String =
+        if (L10n.isEnglish) "${monthShortEn.getOrElse(date.monthValue) { "" }} ${date.dayOfMonth}"
+        else "${date.dayOfMonth} ${monthShort.getOrElse(date.monthValue) { "" }}"
 
     /// Нумерация как в Calendar на iOS: 1 — воскресенье, 2 — понедельник.
     fun weekdayOf(date: LocalDate): Int = (date.dayOfWeek.value % 7) + 1

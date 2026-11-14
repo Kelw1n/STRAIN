@@ -1,5 +1,6 @@
 package com.texasprogram.app.ui
 
+import com.texasprogram.app.service.L
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -31,7 +32,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -158,7 +158,7 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
         scope.launch {
             try {
                 val nutrition = withContext(Dispatchers.IO) { NutritionStore.read(NutritionStore.directory(context), profile.id) }
-                val system = Coach.system + "\n\nДАННЫЕ:\n" + Coach.context(current, nutrition)
+                val system = Coach.system + Coach.languageNote + "\n\nДАННЫЕ:\n" + Coach.context(current, nutrition)
                 // Последние реплики: первой должна идти реплика человека.
                 val turns = messages.takeLast(16).map { (if (it.isUser) "user" else "model") to it.text }.dropWhile { it.first == "model" }
                 val reply = Coach.parse(FoodRecognizer.converse(system, turns, key))
@@ -192,7 +192,7 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
 
     LaunchedEffect(Unit) {
         messages.addAll(withContext(Dispatchers.IO) { CoachHistory.read(directory, profile.id) })
-        if (startReview) ask(Coach.REVIEW_PROMPT, review = Coach.reviewWeek())
+        if (startReview) ask(L(Coach.REVIEW_PROMPT), review = Coach.reviewWeek())
     }
     LaunchedEffect(messages.size, thinking) {
         val count = listState.layoutInfo.totalItemsCount
@@ -282,7 +282,7 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
                     Box(
                         Modifier
                             .height(32.dp)
-                            .pressable(enabled = !thinking) { ask(question) }
+                            .pressable(enabled = !thinking) { ask(L(question)) }
                             .clip(CircleShape)
                             .background(Theme.tone(0xFF292929))
                             .padding(horizontal = 12.dp),
@@ -338,7 +338,7 @@ fun CoachSheet(profile: ProgramProfile, onUpdate: (ProgramProfile) -> Unit, star
             hasKey = GeminiKeyStore.load(context) != null
             // Ключ вставили ради разбора недели — сразу его и просим.
             val week = Coach.reviewWeek()
-            if (hasKey && startReview && messages.none { it.reviewWeek == week }) ask(Coach.REVIEW_PROMPT, review = week)
+            if (hasKey && startReview && messages.none { it.reviewWeek == week }) ask(L(Coach.REVIEW_PROMPT), review = week)
         }
     }
 }
@@ -379,7 +379,7 @@ private fun CoachIntro() {
 private fun CoachBubble(message: CoachMessage, profile: ProgramProfile, onApply: (Int) -> Unit) {
     if (message.isUser) {
         Row(Modifier.fillMaxWidth().padding(start = 48.dp), horizontalArrangement = Arrangement.End) {
-            Text(
+            RawText(
                 message.text,
                 color = Theme.canvas,
                 fontSize = 15.sp,
@@ -407,7 +407,7 @@ private fun CoachBubble(message: CoachMessage, profile: ProgramProfile, onApply:
                 Text("РАЗБОР НЕДЕЛИ", color = Theme.accent, fontSize = 12.sp, fontWeight = FontWeight.Black)
             }
         }
-        SelectionContainer { Text(plainMarkdown(message.text), color = Theme.ink, fontSize = 15.sp) }
+        SelectionContainer { RawText(plainMarkdown(message.text), color = Theme.ink, fontSize = 15.sp) }
         message.actions.forEachIndexed { index, action -> CoachActionRow(action, profile, index in message.applied) { onApply(index) } }
     }
 }

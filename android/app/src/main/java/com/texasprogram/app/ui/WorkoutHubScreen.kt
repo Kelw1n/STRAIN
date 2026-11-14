@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.isProgramFinished
 import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.ScheduledWorkout
 import com.texasprogram.app.service.WorkoutSessionManager
@@ -66,6 +66,7 @@ fun WorkoutHubScreen(
     var showingGoal by remember { mutableStateOf(false) }
     var showingTemplates by remember { mutableStateOf(false) }
     var showingLibrary by remember { mutableStateOf(false) }
+    var showingCycleFinish by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     remember { com.texasprogram.app.model.ExerciseLibrary.load(context) }
     val today = remember { LocalDate.now() }
@@ -156,6 +157,10 @@ fun WorkoutHubScreen(
                         workout = focus
                     )
                 }
+            } else if (profile.isProgramFinished) {
+                item(key = "finished") {
+                    ProgramFinishedCard(profile) { showingCycleFinish = true }
+                }
             } else {
                 item(key = "rest") {
                     RestDayCard()
@@ -167,8 +172,10 @@ fun WorkoutHubScreen(
             }
         }
 
-        // Большая плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ» / «ПРОДОЛЖИТЬ ТРЕНИРОВКУ»
-        if (focus != null) {
+        // Большая плавающая кнопка «НАЧАТЬ ТРЕНИРОВКУ». Пока тренировка идёт, её место
+        // занимает плашка свёрнутой тренировки над панелью вкладок: вдвоём они
+        // накладывались, и надпись кнопки просвечивала сквозь стекло плашки.
+        if (focus != null && !isRunning) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -180,11 +187,7 @@ fun WorkoutHubScreen(
                         .fillMaxWidth()
                         .pressable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (isRunning) {
-                                WorkoutSessionManager.expand()
-                            } else {
-                                onStartWorkout(focus)
-                            }
+                            onStartWorkout(focus)
                         }
                         .shadow(16.dp, CircleShape, ambientColor = Theme.ink.copy(alpha = 0.2f))
                         .clip(CircleShape)
@@ -192,34 +195,13 @@ fun WorkoutHubScreen(
                         .padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (isRunning) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF2ED573))
-                            )
-                            Text(
-                                text = "ПРОДОЛЖИТЬ ТРЕНИРОВКУ",
-                                color = Theme.canvas,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                        } else {
-                            Text(
-                                text = "НАЧАТЬ ТРЕНИРОВКУ",
-                                color = Theme.canvas,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                        }
-                    }
+                    Text(
+                        text = "НАЧАТЬ ТРЕНИРОВКУ",
+                        color = Theme.canvas,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
                 }
             }
         }
@@ -241,6 +223,9 @@ fun WorkoutHubScreen(
     }
     if (showingGoal) {
         GoalSheet(profile, onSave = onUpdateProfile) { showingGoal = false }
+    }
+    if (showingCycleFinish) {
+        CycleFinishSheet(profile, onUpdate = onUpdateProfile) { showingCycleFinish = false }
     }
 }
 

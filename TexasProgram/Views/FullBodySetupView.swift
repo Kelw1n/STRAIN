@@ -47,19 +47,19 @@ struct FullBodySetupView: View {
                         }
                     }
                 } header: {
-                    Text("Сколько ходишь в зал")
+                    Text(L("Сколько ходишь в зал"))
                 } footer: {
                     Text(level.explanation)
                 }
 
                 Section {
-                    TextField("Приседания", text: $squat).keyboardType(.decimalPad)
-                    TextField("Жим лёжа", text: $bench).keyboardType(.decimalPad)
-                    TextField("Становая тяга", text: $deadlift).keyboardType(.decimalPad)
+                    TextField(L("Приседания"), text: $squat).keyboardType(.decimalPad)
+                    TextField(L("Жим лёжа"), text: $bench).keyboardType(.decimalPad)
+                    TextField(L("Становая тяга"), text: $deadlift).keyboardType(.decimalPad)
                 } header: {
-                    Text("Пятиповторный максимум")
+                    Text(L("Пятиповторный максимум"))
                 } footer: {
-                    Text("Вес, который поднимаешь на пять повторений с запасом в один. Протестируй перед началом — от этих чисел считается вся программа.")
+                    Text(L("Вес, который поднимаешь на пять повторений с запасом в один. Протестируй перед началом — от этих чисел считается вся программа."))
                 }
 
                 Section {
@@ -69,9 +69,9 @@ struct FullBodySetupView: View {
                         ExercisePicker(category: category, value: binding(for: category))
                     }
                 } header: {
-                    Text("Подсобка")
+                    Text(L("Подсобка"))
                 } footer: {
-                    Text("Идёт в каждой тренировке. Не выберешь — подставятся стандартные. На другом стаже набор слотов другой.")
+                    Text(L("Идёт в каждой тренировке. Не выберешь — подставятся стандартные. На другом стаже набор слотов другой."))
                 }
 
                 Section {
@@ -94,15 +94,15 @@ struct FullBodySetupView: View {
                             level
                         )
                     } label: {
-                        Label("Начать программу", systemImage: "play.circle.fill")
+                        Label(L("Начать программу"), systemImage: "play.circle.fill")
                     }
                     .disabled(!isReady)
                 }
             }
-            .navigationTitle("Фулбади")
+            .navigationTitle(L("Фулбади"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Назад", action: onBack) }
+                ToolbarItem(placement: .topBarLeading) { Button(L("Назад"), action: onBack) }
             }
         }
     }

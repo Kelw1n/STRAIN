@@ -53,12 +53,12 @@ enum FoodRecognizer {
 
     static func recognize(_ image: UIImage, key: String, session: URLSession = .shared) async throws -> RecognizedMeal {
         guard let jpeg = uploadJPEG(image) else { throw Failure.unreadable }
-        return try parse(try await ask(photoPrompt, image: jpeg, key: key, session: session))
+        return try parse(try await ask(photoPrompt + languageNote, image: jpeg, key: key, session: session))
     }
 
     /// Пересчёт после поправки словами: «там 200 г, а не 150», «это без сахара».
     static func correct(_ meal: RecognizedMeal, note: String, key: String, session: URLSession = .shared) async throws -> RecognizedMeal {
-        try parse(try await ask(correctionPrompt(meal, note: note), image: nil, key: key, session: session))
+        try parse(try await ask(correctionPrompt(meal, note: note) + languageNote, image: nil, key: key, session: session))
     }
 
     /// Проверка ключа без фото — список моделей отвечает и на бесплатном ключе.
@@ -261,6 +261,11 @@ enum FoodRecognizer {
     // MARK: Промпты
 
     /// Промпт из Butterfly без изменений: этикетка важнее оценки на глаз.
+    /// В английском интерфейсе названия еды — по-английски.
+    static var languageNote: String {
+        L10n.isEnglish ? "\n- title и name пиши на английском (in English), а не на русском." : ""
+    }
+
     static let photoPrompt = """
     Проанализируй фото еды. Верни только валидный JSON. Не используй Markdown и не добавляй пояснения до или после JSON.
 
