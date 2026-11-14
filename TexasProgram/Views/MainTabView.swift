@@ -245,6 +245,7 @@ struct MainTabView: View {
             // вчера — сегодня повторяющееся напоминание снова на месте.
             NutritionStore.shared.open(profile.profileID)
             NutritionStore.shared.rescheduleReminders()
+            sessionManager.restTimer = restTimer
             // Тренировка другого профиля в этот не пишет.
             sessionManager.detachIfOtherProfile(profile)
             // Приложение выгружали посреди тренировки — поднимаем её свёрнутой.

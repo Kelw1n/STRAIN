@@ -8,6 +8,7 @@ struct FeedView: View {
     @State private var scope: SocialService.FeedScope = .all
     @State private var posts: [SocialPost] = []
     @State private var next: String?
+    @State private var revision = UUID()
     @State private var loading = false
     @State private var loadingMore = false
     @State private var error: String?
@@ -55,7 +56,10 @@ struct FeedView: View {
                             onChange: { replace(post.id, with: $0) }
                         )
                         Divider().overlay(Color.ink.opacity(0.07))
-                            .onAppear { if post.id == posts.last?.id { Task { await loadMore() } } }
+                    }
+                    if !loading, let next {
+                        Color.clear.frame(height: 1)
+                            .task(id: next) { await loadMore() }
                     }
                     if loadingMore || (loading && posts.isEmpty) {
                         ProgressView().tint(.ink).frame(maxWidth: .infinity).padding(24)
@@ -125,19 +129,12 @@ struct FeedView: View {
                 await social.refreshLive()
             }
         }
-        .onChange(of: scope) { _, value in
-            // Другая лента — сразу показываем её прошлую версию, если она была.
-            posts = social.feedCache[value]?.posts ?? []
-            next = social.feedCache[value]?.olderCursor
-        }
-        .onChange(of: posts) { _, value in
-            social.feedCache[scope] = SocialFeedPage(posts: value, next: nil, nextCursor: next)
-        }
+
     }
 
     private var scopeMenu: some View {
         Menu {
-            Picker(L("Лента"), selection: $scope) {
+            Picker(L("Лента"), selection: Binding(get: { scope }, set: selectScope)) {
                 ForEach(SocialService.FeedScope.allCases) { item in
                     Text(item == .all ? L("Все в STRAIN") : L("Мои подписки")).tag(item)
                 }
@@ -261,43 +258,69 @@ struct FeedView: View {
         .padding(24)
     }
 
+    private func selectScope(_ value: SocialService.FeedScope) {
+        guard scope != value else { return }
+        revision = UUID()
+        loading = false
+        loadingMore = false
+        error = nil
+        scope = value
+        posts = social.feedCache[value]?.posts ?? []
+        next = social.feedCache[value]?.olderCursor
+    }
+
+    private func cache() {
+        social.feedCache[scope] = SocialFeedPage(posts: posts, next: nil, nextCursor: next)
+    }
+
     private func replace(_ id: String, with value: SocialPost?) {
         guard let index = posts.firstIndex(where: { $0.id == id }) else { return }
         if let value { posts[index] = value } else { _ = withAnimation(Motion.snappy) { posts.remove(at: index) } }
+        cache()
     }
 
     private func reload() async {
         // Без профиля подписок нет: смена ленты сама перезапустит загрузку.
-        if !social.isSignedIn && scope == .following { scope = .all; return }
+        if !social.isSignedIn && scope == .following { selectScope(.all); return }
+        let requestScope = scope
+        let request = UUID()
+        revision = request
+        loadingMore = false
         if posts.isEmpty, let cached = social.feedCache[scope] {
             posts = cached.posts
             next = cached.olderCursor
         }
         loading = true
-        defer { loading = false }
+        defer { if revision == request { loading = false } }
         social.flushOutbox()
         Task {
             await social.refreshLive()
             await social.refreshTogether()
         }
         do {
-            let page = try await social.feed(scope)
+            let page = try await social.feed(requestScope)
+            guard revision == request, !Task.isCancelled else { return }
             next = page.olderCursor
             posts = page.posts
             error = nil
+            cache()
         } catch {
-            self.error = error.socialMessage
+            if revision == request, !Task.isCancelled { self.error = error.socialMessage }
         }
     }
 
     private func loadMore() async {
-        guard let next, !loadingMore else { return }
+        guard let next, !loading, !loadingMore else { return }
+        let request = revision
+        let requestScope = scope
         loadingMore = true
-        defer { loadingMore = false }
-        if let page = try? await social.feed(scope, before: next) {
+        defer { if revision == request { loadingMore = false } }
+        if let page = try? await social.feed(requestScope, before: next),
+           revision == request, !Task.isCancelled {
             let known = Set(posts.map(\.id))
             self.next = page.olderCursor
             posts.append(contentsOf: page.posts.filter { !known.contains($0.id) })
+            cache()
         }
     }
 }

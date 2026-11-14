@@ -108,6 +108,7 @@ fun FeedScreen(
     var feedScope by rememberSaveable { mutableStateOf(SocialService.FeedScope.ALL) }
     val posts = remember { mutableStateListOf<SocialPost>() }
     var next by remember { mutableStateOf<String?>(null) }
+    var revision by remember { mutableStateOf(0L) }
     var loading by remember { mutableStateOf(false) }
     var loadingMore by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -127,14 +128,30 @@ fun FeedScreen(
         cache()
     }
 
+    fun selectScope(value: SocialService.FeedScope) {
+        if (value == feedScope) return
+        revision++
+        loading = false
+        loadingMore = false
+        error = null
+        feedScope = value
+        val cached = SocialService.feedCache[value]
+        posts.clear()
+        posts.addAll(cached?.posts.orEmpty())
+        next = cached?.olderCursor
+    }
+
     suspend fun reload() {
         // Без профиля подписок нет: смена ленты сама перезапустит загрузку.
         if (!SocialService.isSignedIn && feedScope == SocialService.FeedScope.FOLLOWING) {
-            feedScope = SocialService.FeedScope.ALL
+            selectScope(SocialService.FeedScope.ALL)
             return
         }
+        val requestScope = feedScope
+        val request = ++revision
+        loadingMore = false
         // Прошлая версия ленты — сразу, свежая придёт следом без пустого экрана.
-        val cached = SocialService.feedCache[feedScope]
+        val cached = SocialService.feedCache[requestScope]
         if (cached != null && posts.isEmpty()) {
             posts.addAll(cached.posts)
             next = cached.olderCursor
@@ -142,16 +159,17 @@ fun FeedScreen(
         loading = true
         SocialService.flushOutbox()
         try {
-            val page = SocialService.feed(feedScope)
+            val page = SocialService.feed(requestScope)
+            if (request != revision) return
             posts.clear()
             posts.addAll(page.posts)
             next = page.olderCursor
             error = null
             cache()
         } catch (e: SocialException) {
-            error = e.message
+            if (request == revision) error = e.message
         } finally {
-            loading = false
+            if (request == revision) loading = false
         }
     }
 
@@ -195,17 +213,24 @@ fun FeedScreen(
             last >= listState.layoutInfo.totalItemsCount - 3
         }
     }
-    LaunchedEffect(nearEnd, next) {
+    LaunchedEffect(feedScope, revision, nearEnd, next, loading) {
         val cursor = next
         if (nearEnd && cursor != null && !loadingMore && !loading) {
+            val request = revision
+            val requestScope = feedScope
             loadingMore = true
-            runCatching { SocialService.feed(feedScope, cursor) }.onSuccess { page ->
+            try {
+                val page = SocialService.feed(requestScope, cursor)
+                if (request != revision) return@LaunchedEffect
                 val known = posts.map { it.id }.toSet()
                 posts.addAll(page.posts.filter { it.id !in known })
                 next = page.olderCursor
                 cache()
+            } catch (_: SocialException) {
+                // Оставляем курсор, чтобы повторить попытку при следующей прокрутке.
+            } finally {
+                if (request == revision) loadingMore = false
             }
-            loadingMore = false
         }
     }
 
@@ -242,12 +267,7 @@ fun FeedScreen(
                                     onClick = {
                                         scopeMenu = false
                                         if (item != feedScope) {
-                                            // Другая лента — сразу её прошлая версия, если была.
-                                            val cached = SocialService.feedCache[item]
-                                            posts.clear()
-                                            posts.addAll(cached?.posts.orEmpty())
-                                            next = cached?.olderCursor
-                                            feedScope = item
+                                            selectScope(item)
                                         }
                                     }
                                 )

@@ -155,7 +155,7 @@ class MainActivity : ComponentActivity() {
         // Библиотека упражнений — небольшой файл; нужна и вкладке, и сводке профиля для ленты.
         com.texasprogram.app.model.ExerciseLibrary.load(this)
         requestHighestRefreshRate()
-        WorkoutSessionManager.attach(filesDir)
+        WorkoutSessionManager.attach(filesDir, RestTimer.get(applicationContext))
         SocialService.init(applicationContext)
         handleDeepLink(intent)
         setContent {

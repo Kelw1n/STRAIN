@@ -297,6 +297,31 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertFalse(manager.isRunning)
     }
 
+
+    func testRestTimerStopsWhenLeavingWorkout() throws {
+        let profile = texas()
+        let second = texas()
+        let manager = WorkoutSessionManager.shared
+        let timer = RestTimer()
+        manager.restTimer = timer
+        defer {
+            timer.stop()
+            manager.restTimer = nil
+        }
+
+        manager.startWorkout(workout: try XCTUnwrap(profile.schedule.focus), profile: profile)
+        timer.start(180)
+        manager.minimize()
+        XCTAssertTrue(timer.isRunning)
+        manager.detachIfOtherProfile(second)
+        XCTAssertFalse(timer.isRunning)
+
+        manager.restoreIfNeeded(for: profile)
+        timer.start(180)
+        manager.discardWorkout(profile: profile)
+        XCTAssertFalse(timer.isRunning)
+    }
+
     func testEachProfileKeepsItsOwnActiveSession() throws {
         let first = texas()
         let second = texas()

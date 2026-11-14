@@ -160,6 +160,7 @@ object WorkoutSessionManager {
     private var snapshotLog: Map<String, SetEntry> = emptyMap()
     private var profileId: String? = null
 
+    private var restTimer: RestTimer? = null
     private var storeDirectory: File? = null
     private val storageLock = Any()
     private var writeGeneration = 0L
@@ -168,7 +169,8 @@ object WorkoutSessionManager {
     private var saveJob: Job? = null
 
     /// Где лежит сохранённая тренировка. Вызывается один раз при запуске.
-    fun attach(dir: File) {
+    fun attach(dir: File, timer: RestTimer? = null) {
+        restTimer = timer
         cancelSave()
         storeDirectory = dir
     }
@@ -457,6 +459,7 @@ object WorkoutSessionManager {
         val owner = profileId ?: return
         if (activeWorkout == null || owner == profile.id) return
         writeNow()
+        restTimer?.takeIf { it.isRunning }?.stop()
         saveJob?.cancel()
         activeWorkout = null
         isPresented = false
@@ -519,6 +522,7 @@ object WorkoutSessionManager {
     }
 
     private fun reset() {
+        restTimer?.takeIf { it.isRunning }?.stop()
         cancelSave()
         profileId?.let(::clearSavedFor)
         activeWorkout = null

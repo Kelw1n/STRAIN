@@ -364,6 +364,7 @@ final class WorkoutSessionManager {
     func detachIfOtherProfile(_ profile: ProgramProfile) {
         guard activeWorkout != nil, let owner = profileID, owner != profile.profileID else { return }
         writeNow()
+        if restTimer?.isRunning == true { restTimer?.stop() }
         forgetForTesting()
         showingSummary = false
         showingZeroSetsAlert = false
@@ -437,7 +438,10 @@ final class WorkoutSessionManager {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
+    @ObservationIgnored weak var restTimer: RestTimer?
+
     private func reset() {
+        if restTimer?.isRunning == true { restTimer?.stop() }
         if let profileID { clearSaved(for: profileID) }
         startSnapshot = nil
         profileID = nil
