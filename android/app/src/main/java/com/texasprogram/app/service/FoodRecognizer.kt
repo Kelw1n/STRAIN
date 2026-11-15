@@ -92,14 +92,17 @@ object FoodRecognizer {
         verify(status, text)
     }
 
-    private suspend fun ask(prompt: String, image: ByteArray?, key: String): String {
+    private suspend fun ask(prompt: String, image: ByteArray?, key: String): String =
+        ask(prompt, listOfNotNull(image), key)
+
+    internal suspend fun ask(prompt: String, images: List<ByteArray>, key: String): String {
         val body = buildJsonObject {
             putJsonArray("contents") {
                 addJsonObject {
                     put("role", "user")
                     putJsonArray("parts") {
                         addJsonObject { put("text", prompt) }
-                        if (image != null) {
+                        for (image in images) {
                             addJsonObject {
                                 putJsonObject("inline_data") {
                                     put("mime_type", "image/jpeg")
@@ -322,7 +325,7 @@ object FoodRecognizer {
         keys.firstNotNullOfOrNull { key -> obj[key]?.takeIf { it !is JsonNull } }
 
     /// JSON из ответа: как есть, без ```, по первым фигурным скобкам и с прямыми кавычками.
-    private fun jsonElement(raw: String): JsonElement? {
+    internal fun jsonElement(raw: String): JsonElement? {
         val clean = raw.replace(Regex("[​-‍﻿]"), "").trim()
         val unfenced = clean
             .replace(Regex("^```(?:json)?\\s*", RegexOption.IGNORE_CASE), "")

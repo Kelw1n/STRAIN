@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
@@ -105,6 +106,7 @@ fun ExerciseLibrarySheet(
     val picked = remember { mutableStateListOf<LibraryExercise>() }
     var detail by remember { mutableStateOf<LibraryExercise?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var scanning by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf(profile) }
     LaunchedEffect(profile) { current = profile }
     val items = remember(current.customExercises, query, group, equipment) {
@@ -128,6 +130,11 @@ fun ExerciseLibrarySheet(
             ) {
                 item(key = "search") {
                     SearchField(query, "Поиск упражнения") { query = it }
+                }
+                item(key = "scan-equipment") {
+                    NutritionButton("Что за тренажёр?", Modifier.padding(top = 10.dp), Icons.Filled.PhotoCamera, primary = false) {
+                        scanning = true
+                    }
                 }
                 item(key = "filters") {
                     Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -206,6 +213,7 @@ fun ExerciseLibrarySheet(
         }
     }
 
+    if (scanning) EquipmentScannerSheet { scanning = false }
     detail?.let { ExerciseDetailSheet(current, it) { detail = null } }
     if (creating) {
         CustomExerciseSheet(initialName = query, onDismiss = { creating = false }) { exercise ->

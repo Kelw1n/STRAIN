@@ -72,8 +72,12 @@ enum FoodRecognizer {
     }
 
     private static func ask(_ prompt: String, image: Data?, key: String, session: URLSession) async throws -> String {
+        try await ask(prompt, images: image.map { [$0] } ?? [], key: key, session: session)
+    }
+
+    static func ask(_ prompt: String, images: [Data], key: String, session: URLSession = .shared) async throws -> String {
         var parts: [[String: Any]] = [["text": prompt]]
-        if let image {
+        for image in images {
             parts.append(["inline_data": ["mime_type": "image/jpeg", "data": image.base64EncodedString()]])
         }
         let body: [String: Any] = [
@@ -207,7 +211,7 @@ enum FoodRecognizer {
     }
 
     /// JSON из ответа: как есть, без ```, по первым фигурным скобкам и с прямыми кавычками.
-    private static func jsonObject(_ raw: String) -> Any? {
+    static func jsonObject(_ raw: String) -> Any? {
         let clean = raw.replacingOccurrences(of: "[\u{200B}-\u{200D}\u{FEFF}]", with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let unfenced = clean

@@ -224,7 +224,7 @@ struct GeminiKeySheet: View {
             saved = true
             success = true
             key = ""
-            message = "Ключ работает и сохранён. Можно фотографировать еду."
+            message = "Ключ работает и сохранён."
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {
             success = false

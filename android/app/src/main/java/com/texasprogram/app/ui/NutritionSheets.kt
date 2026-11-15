@@ -572,7 +572,7 @@ fun GeminiKeySheet(
                 saved = true
                 success = true
                 key = ""
-                message = "Ключ работает и сохранён. Можно фотографировать еду."
+                message = "Ключ работает и сохранён."
                 haptics.success()
             } catch (e: CancellationException) {
                 throw e

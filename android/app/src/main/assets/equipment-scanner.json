@@ -1,0 +1,340 @@
+[
+  {
+    "id": "incline_press",
+    "cue": "Press handles start near upper chest and move forward and upward from a reclined backrest.",
+    "ru": {
+      "name": "Наклонный жим в тренажёре",
+      "primary": [
+        "Верх груди"
+      ],
+      "secondary": [
+        "Передние дельты",
+        "Трицепсы"
+      ]
+    },
+    "en": {
+      "name": "Incline chest press",
+      "primary": [
+        "Upper chest"
+      ],
+      "secondary": [
+        "Front deltoids",
+        "Triceps"
+      ]
+    }
+  },
+  {
+    "id": "chest_press",
+    "cue": "Handles move forward from chest height, roughly perpendicular to the torso.",
+    "ru": {
+      "name": "Жим от груди в тренажёре",
+      "primary": [
+        "Грудные мышцы"
+      ],
+      "secondary": [
+        "Передние дельты",
+        "Трицепсы"
+      ]
+    },
+    "en": {
+      "name": "Chest press",
+      "primary": [
+        "Chest"
+      ],
+      "secondary": [
+        "Front deltoids",
+        "Triceps"
+      ]
+    }
+  },
+  {
+    "id": "shoulder_press",
+    "cue": "Seated overhead press: handles start beside the shoulders and move up above the head.",
+    "ru": {
+      "name": "Жим на плечи в тренажёре",
+      "primary": [
+        "Передние и средние дельты"
+      ],
+      "secondary": [
+        "Трицепсы"
+      ]
+    },
+    "en": {
+      "name": "Shoulder press",
+      "primary": [
+        "Front and lateral deltoids"
+      ],
+      "secondary": [
+        "Triceps"
+      ]
+    }
+  },
+  {
+    "id": "pec_deck",
+    "cue": "Paired handles or elbow pads move inward in an arc in front of the chest.",
+    "ru": {
+      "name": "Сведение рук в тренажёре",
+      "primary": [
+        "Грудные мышцы"
+      ],
+      "secondary": [
+        "Передние дельты"
+      ]
+    },
+    "en": {
+      "name": "Pec deck fly",
+      "primary": [
+        "Chest"
+      ],
+      "secondary": [
+        "Front deltoids"
+      ]
+    }
+  },
+  {
+    "id": "reverse_fly",
+    "cue": "Face a chest pad and swing the arms outward and back. Some pec decks are reversible.",
+    "ru": {
+      "name": "Обратное разведение в тренажёре",
+      "primary": [
+        "Задние дельты"
+      ],
+      "secondary": [
+        "Ромбовидные мышцы",
+        "Средняя часть трапеций"
+      ]
+    },
+    "en": {
+      "name": "Reverse pec deck fly",
+      "primary": [
+        "Rear deltoids"
+      ],
+      "secondary": [
+        "Rhomboids",
+        "Mid trapezius"
+      ]
+    }
+  },
+  {
+    "id": "chest_supported_row",
+    "cue": "Chest pad faces handles attached to levers or a cable; pull handles toward the torso.",
+    "ru": {
+      "name": "Тяга с упором для груди",
+      "primary": [
+        "Широчайшие",
+        "Мышцы между лопатками"
+      ],
+      "secondary": [
+        "Бицепсы",
+        "Задние дельты"
+      ]
+    },
+    "en": {
+      "name": "Chest-supported row",
+      "primary": [
+        "Lats",
+        "Mid-back"
+      ],
+      "secondary": [
+        "Biceps",
+        "Rear deltoids"
+      ]
+    }
+  },
+  {
+    "id": "seated_row",
+    "cue": "Seat and foot bracing face a low cable that pulls horizontally toward the abdomen.",
+    "ru": {
+      "name": "Горизонтальная тяга сидя",
+      "primary": [
+        "Широчайшие",
+        "Мышцы между лопатками"
+      ],
+      "secondary": [
+        "Бицепсы",
+        "Задние дельты"
+      ]
+    },
+    "en": {
+      "name": "Seated cable row",
+      "primary": [
+        "Lats",
+        "Mid-back"
+      ],
+      "secondary": [
+        "Biceps",
+        "Rear deltoids"
+      ]
+    }
+  },
+  {
+    "id": "lat_pulldown",
+    "cue": "Seat with thigh pads under a high pulley or overhead lever handles pulled down toward the chest.",
+    "ru": {
+      "name": "Тяга верхнего блока",
+      "primary": [
+        "Широчайшие"
+      ],
+      "secondary": [
+        "Бицепсы",
+        "Мышцы верхней части спины"
+      ]
+    },
+    "en": {
+      "name": "Lat pulldown",
+      "primary": [
+        "Lats"
+      ],
+      "secondary": [
+        "Biceps",
+        "Upper back"
+      ]
+    }
+  },
+  {
+    "id": "leg_press",
+    "cue": "Supported back and a broad foot platform; the seat or platform moves, with no shoulder load pads.",
+    "ru": {
+      "name": "Жим ногами в тренажёре",
+      "primary": [
+        "Квадрицепсы",
+        "Ягодичные мышцы"
+      ],
+      "secondary": [
+        "Бицепсы бедра"
+      ]
+    },
+    "en": {
+      "name": "Leg press",
+      "primary": [
+        "Quadriceps",
+        "Glutes"
+      ],
+      "secondary": [
+        "Hamstrings"
+      ]
+    }
+  },
+  {
+    "id": "hack_squat",
+    "cue": "Shoulder pads and a back sled move along rails above a fixed foot platform.",
+    "ru": {
+      "name": "Гакк-присед в тренажёре",
+      "primary": [
+        "Квадрицепсы",
+        "Ягодичные мышцы"
+      ],
+      "secondary": [
+        "Приводящие мышцы бедра"
+      ]
+    },
+    "en": {
+      "name": "Hack squat",
+      "primary": [
+        "Quadriceps",
+        "Glutes"
+      ],
+      "secondary": [
+        "Hip adductors"
+      ]
+    }
+  },
+  {
+    "id": "leg_extension",
+    "cue": "Seated with a roller in front of the lower shin that lifts as the knee extends.",
+    "ru": {
+      "name": "Разгибание ног в тренажёре",
+      "primary": [
+        "Квадрицепсы"
+      ],
+      "secondary": []
+    },
+    "en": {
+      "name": "Leg extension",
+      "primary": [
+        "Quadriceps"
+      ],
+      "secondary": []
+    }
+  },
+  {
+    "id": "seated_leg_curl",
+    "cue": "Seated with a thigh restraint plus a roller behind the lower leg. Knee bends against the roller.",
+    "ru": {
+      "name": "Сгибание ног сидя",
+      "primary": [
+        "Бицепсы бедра",
+        "Другие мышцы задней поверхности бедра"
+      ],
+      "secondary": [
+        "Икроножные мышцы"
+      ]
+    },
+    "en": {
+      "name": "Seated leg curl",
+      "primary": [
+        "Hamstrings"
+      ],
+      "secondary": [
+        "Calves"
+      ]
+    }
+  },
+  {
+    "id": "lying_leg_curl",
+    "cue": "Prone bench and a roller behind the ankles. Knees bend against the pad.",
+    "ru": {
+      "name": "Сгибание ног лёжа",
+      "primary": [
+        "Бицепсы бедра",
+        "Другие мышцы задней поверхности бедра"
+      ],
+      "secondary": [
+        "Икроножные мышцы"
+      ]
+    },
+    "en": {
+      "name": "Lying leg curl",
+      "primary": [
+        "Hamstrings"
+      ],
+      "secondary": [
+        "Calves"
+      ]
+    }
+  },
+  {
+    "id": "calf_raise",
+    "cue": "Toes on a small step; resistance pad loads shoulders or knees while the heel rises.",
+    "ru": {
+      "name": "Подъём на носки в тренажёре",
+      "primary": [
+        "Икроножные мышцы",
+        "Камбаловидные мышцы"
+      ],
+      "secondary": []
+    },
+    "en": {
+      "name": "Calf raise machine",
+      "primary": [
+        "Gastrocnemius",
+        "Soleus"
+      ],
+      "secondary": []
+    }
+  },
+  {
+    "id": "cable_station",
+    "cue": "Adjustable pulleys with interchangeable handles. Muscle groups depend on the chosen exercise.",
+    "ru": {
+      "name": "Блочная станция",
+      "primary": [],
+      "secondary": []
+    },
+    "en": {
+      "name": "Cable station",
+      "primary": [],
+      "secondary": []
+    }
+  }
+]

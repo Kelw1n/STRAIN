@@ -19,6 +19,7 @@ struct ExerciseLibraryView: View {
     @State private var picked: [LibraryExercise] = []
     @State private var detail: LibraryExercise?
     @State private var creating = false
+    @State private var scanning = false
     @FocusState private var searching: Bool
 
     private var isPicking: Bool { onPick != nil }
@@ -32,6 +33,16 @@ struct ExerciseLibraryView: View {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                         searchField
                             .padding(.bottom, 10)
+                        Button { scanning = true } label: {
+                            Label(L("Что за тренажёр?"), systemImage: "camera.viewfinder")
+                                .font(.system(size: 15, weight: .bold))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(14)
+                                .background(Color.tone(0.11), in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .buttonStyle(.pressable)
+                        .foregroundStyle(Color.ink)
+                        .padding(.bottom, 10)
                         filters
                             .padding(.bottom, 14)
                         if sections.isEmpty {
@@ -100,6 +111,7 @@ struct ExerciseLibraryView: View {
         .sheet(item: $detail) { item in
             ExerciseDetailView(profile: profile, exercise: item)
         }
+        .sheet(isPresented: $scanning) { EquipmentScannerSheet() }
         .sheet(isPresented: $creating) {
             CustomExerciseSheet { exercise in
                 profile.saveCustomExercise(exercise)
