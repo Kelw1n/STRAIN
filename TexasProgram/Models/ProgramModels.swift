@@ -94,7 +94,7 @@ enum AdditionalExerciseCategory: String, CaseIterable, Identifiable, Hashable {
 /// поменять в настройках, и тогда история задним числом стала бы неверной.
 struct CompletionRecord: Codable, Equatable, Hashable, Sendable, Identifiable {
     let key: String
-    let date: Date
+    var date: Date
     let week: Int
     let day: Int
     /// Рабочие веса приседа, жима и тяги в этот день; нет упражнения — нет и веса.
@@ -663,13 +663,17 @@ final class ProgramProfile {
         return CalendarStreak(weeks: weeks, workouts: workouts)
     }
 
-    /// Цель недели: сколько тренировок сделано на этой календарной неделе
-    /// и сколько задумано — по числу дней в расписании. С понедельника снова с нуля.
+    /// Цель недели: сколько разных дней тренировались с понедельника по сегодня
+    /// и сколько дней запланировано в расписании.
     func weekGoal(now: Date = Date(), calendar base: Calendar = .current) -> (done: Int, target: Int) {
         let calendar = WorkoutScheduler.trainingCalendar(base)
         let target = max(weekdays.count, 1)
         guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else { return (0, target) }
-        return (completionLog.filter { week.contains($0.date) }.count, target)
+        let today = calendar.startOfDay(for: now)
+        let days = Set(completionLog.lazy.map { calendar.startOfDay(for: $0.date) }.filter {
+            $0 >= week.start && $0 <= today
+        })
+        return (days.count, target)
     }
 
     // MARK: - Авторегуляция
@@ -1273,6 +1277,20 @@ final class ProgramProfile {
             restored += 1
         }
         return restored
+    }
+
+    /// Исправляет дату записи, сохраняя её привязку к дню плана и подходам.
+    func correctWorkoutDate(_ record: CompletionRecord, to date: Date, now: Date = Date(), calendar: Calendar = .current) {
+        let corrected = calendar.startOfDay(for: date)
+        guard record.week != Self.freeWeek, corrected <= calendar.startOfDay(for: now),
+              !calendar.isDate(record.date, inSameDayAs: corrected),
+              let index = completionLog.firstIndex(where: { $0.key == record.key && $0.date == record.date }) else { return }
+        completionLog[index].date = corrected
+        if lastCompletionDate == record.date {
+            lastCompletionDate = completionLog.lazy.map(\.date).max()
+        } else if let latest = lastCompletionDate, corrected > latest {
+            lastCompletionDate = corrected
+        }
     }
 
     // MARK: - История по старым отметкам

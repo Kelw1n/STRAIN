@@ -5,23 +5,44 @@ struct RestoreWorkoutDatesSheet: View {
     let onRestore: ([String: Date]) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var latest = Date()
+    @State private var latest: Date
+    @State private var reviewing = false
     @State private var dates: [String: Date] = [:]
     @State private var excluded: Set<String> = []
+
+    init(workouts: [ProgramProfile.UndatedWorkout], onRestore: @escaping ([String: Date]) -> Void) {
+        self.workouts = workouts
+        self.onRestore = onRestore
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let today = calendar.startOfDay(for: Date())
+        let todayOffset = (calendar.component(.weekday, from: today) + 5) % 7
+        let daysBack = workouts.last.map { (todayOffset - $0.scheduleOffset % 7 + 6) % 7 + 1 } ?? 1
+        _latest = State(initialValue: calendar.date(byAdding: .day, value: -daysBack, to: today) ?? today)
+    }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Text(L("Выбери дату последней тренировки из списка. Остальные даты STRAIN предложит по расписанию. Проверь их и убери дни, когда не тренировался."))
-                    DatePicker(L("Последняя тренировка"), selection: $latest, in: ...Date(), displayedComponents: .date)
+                    Text(L("Укажи, когда ты действительно сделал последнюю тренировку из списка. STRAIN предложит даты остальных по расписанию."))
+                    if let last = workouts.last {
+                        DatePicker(L("Неделя \(last.week) · День \(last.day)"), selection: $latest, in: ...Date(), displayedComponents: .date)
+                    }
+                    if !reviewing {
+                        Button(L("Показать даты")) {
+                            suggestDates()
+                            reviewing = true
+                        }
+                    }
                 }
-                Section(L("Проверь даты тренировок")) {
-                    ForEach(workouts) { workout in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle(L("Неделя \(workout.week) · День \(workout.day)"), isOn: included(workout.id))
-                            if !excluded.contains(workout.id) {
-                                DatePicker(L("Дата"), selection: date(workout.id), in: ...Date(), displayedComponents: .date)
+                if reviewing {
+                    Section(L("Проверь даты тренировок")) {
+                        ForEach(workouts) { workout in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Toggle(L("Неделя \(workout.week) · День \(workout.day)"), isOn: included(workout.id))
+                                if !excluded.contains(workout.id) {
+                                    DatePicker(L("Дата"), selection: date(workout.id), in: ...Date(), displayedComponents: .date)
+                                }
                             }
                         }
                     }
@@ -36,12 +57,11 @@ struct RestoreWorkoutDatesSheet: View {
                         onRestore(dates.filter { !excluded.contains($0.key) })
                         dismiss()
                     }
-                    .disabled(dates.isEmpty || workouts.allSatisfy { excluded.contains($0.id) })
+                    .disabled(!reviewing || dates.isEmpty || workouts.allSatisfy { excluded.contains($0.id) })
                 }
             }
         }
-        .onAppear { if dates.isEmpty { suggestDates() } }
-        .onChange(of: latest) { _, _ in suggestDates() }
+        .onChange(of: latest) { _, _ in if reviewing { suggestDates() } }
     }
 
     private func suggestDates() {

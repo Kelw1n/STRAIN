@@ -764,6 +764,22 @@ data class ProgramProfile(
         return restored
     }
 
+    /// Исправляет дату записи, сохраняя её привязку к дню плана и подходам.
+    fun correctWorkoutDate(record: CompletionRecord, date: LocalDate, today: LocalDate = LocalDate.now()): ProgramProfile {
+        val corrected = date.toEpochDay()
+        if (record.week == FREE_WEEK || date.isAfter(today) || corrected == record.epochDay) return this
+        val index = completionLog.indexOfFirst { it.key == record.key && it.epochDay == record.epochDay }
+        if (index < 0) return this
+        val log = completionLog.toMutableList()
+        log[index] = log[index].copy(epochDay = corrected)
+        val last = when {
+            lastCompletionEpochDay == record.epochDay -> log.maxOfOrNull { it.epochDay }
+            lastCompletionEpochDay != null -> maxOf(lastCompletionEpochDay, corrected)
+            else -> null
+        }
+        return copy(completionLog = log, lastCompletionEpochDay = last)
+    }
+
     // MARK: - История по старым отметкам
 
     /// Уже отмеченные тренировки, которые можно достроить до записей.
@@ -862,15 +878,15 @@ data class ProgramProfile(
         return CalendarStreak(weeks, workouts)
     }
 
-    /// Цель недели: сколько тренировок сделано на этой календарной неделе
-    /// и сколько задумано — по числу дней в расписании. С понедельника снова с нуля.
+    /// Цель недели: сколько разных дней тренировались с понедельника по сегодня
+    /// и сколько дней запланировано в расписании.
     fun weekGoal(today: LocalDate = LocalDate.now()): Pair<Int, Int> {
-        val monday = RuDate.mondayOf(today)
-        val next = monday.plusWeeks(1)
-        val done = completionLog.count {
-            val date = LocalDate.ofEpochDay(it.epochDay)
-            !date.isBefore(monday) && date.isBefore(next)
-        }
+        val weekToDate = RuDate.mondayOf(today).toEpochDay()..today.toEpochDay()
+        val done = completionLog.asSequence()
+            .map { it.epochDay }
+            .filter { it in weekToDate }
+            .distinct()
+            .count()
         return done to maxOf(weekdays.size, 1)
     }
 

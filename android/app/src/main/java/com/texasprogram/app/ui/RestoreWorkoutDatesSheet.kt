@@ -9,6 +9,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,7 +25,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RestoreWorkoutDatesSheet(
     workouts: List<ProgramProfile.UndatedWorkout>,
@@ -32,8 +32,8 @@ fun RestoreWorkoutDatesSheet(
     onDismiss: () -> Unit
 ) {
     val today = LocalDate.now()
-    var latest by remember { mutableStateOf(today) }
-    var dates by remember(workouts) { mutableStateOf(suggestWorkoutDates(workouts, latest)) }
+    var latest by remember { mutableStateOf<LocalDate?>(null) }
+    var dates by remember(workouts) { mutableStateOf(emptyMap<String, LocalDate>()) }
     var excluded by remember { mutableStateOf(emptySet<String>()) }
     var pickAnchor by remember { mutableStateOf(false) }
     var pickDay by remember { mutableStateOf<String?>(null) }
@@ -50,13 +50,17 @@ fun RestoreWorkoutDatesSheet(
         }
     ) {
         Text(
-            "Выбери дату последней тренировки из списка. Остальные даты STRAIN предложит по расписанию. Проверь их и убери дни, когда не тренировался.",
+            "Укажи, когда ты действительно сделал последнюю тренировку из списка. STRAIN предложит даты остальных по расписанию.",
             color = Theme.textSecondary
         )
-        Text("Последняя тренировка", color = Theme.ink, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
-        NutritionButton(latest.format(formatter), primary = false) { pickAnchor = true }
-        Text("Проверь даты тренировок", color = Theme.ink, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
-        for (workout in workouts) {
+        workouts.lastOrNull()?.let { last ->
+            Text("Неделя ${last.week} · День ${last.day}", color = Theme.ink, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+            NutritionButton(latest?.format(formatter) ?: "Выбрать дату", primary = false) { pickAnchor = true }
+        }
+        if (dates.isNotEmpty()) {
+            Text("Проверь даты тренировок", color = Theme.ink, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+        }
+        for (workout in workouts.filter { it.id in dates }) {
             val included = workout.id !in excluded
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Неделя ${workout.week} · День ${workout.day}", color = Theme.ink)
@@ -75,35 +79,51 @@ fun RestoreWorkoutDatesSheet(
 
     val selectedDay = pickDay
     if (pickAnchor || selectedDay != null) {
-        val initial = selectedDay?.let { dates[it] } ?: latest
-        val state = rememberDatePickerState(
-            initialSelectedDateMillis = initial.toEpochDay() * MILLIS_PER_DAY,
-            selectableDates = object : SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
-                    utcTimeMillis / MILLIS_PER_DAY <= today.toEpochDay()
-            }
-        )
-        val close = { pickAnchor = false; pickDay = null }
-        DatePickerDialog(
-            onDismissRequest = close,
-            confirmButton = {
-                Text("Готово", color = Theme.accent, modifier = Modifier.padding(12.dp).pressable {
-                    state.selectedDateMillis?.let { millis ->
-                        val date = LocalDate.ofEpochDay(millis / MILLIS_PER_DAY)
-                        if (selectedDay != null) dates = dates + (selectedDay to date)
-                        else {
-                            latest = date
-                            dates = suggestWorkoutDates(workouts, latest)
-                        }
-                    }
-                    close()
-                })
+        WorkoutDatePickerDialog(
+            initial = selectedDay?.let { dates[it] } ?: latest,
+            today = today,
+            onSelect = { date ->
+                if (selectedDay != null) dates = dates + (selectedDay to date)
+                else {
+                    latest = date
+                    dates = suggestWorkoutDates(workouts, date)
+                }
             },
-            dismissButton = {
-                Text("Отмена", color = Theme.textSecondary, modifier = Modifier.padding(12.dp).pressable { close() })
-            }
-        ) { DatePicker(state = state) }
+            onDismiss = { pickAnchor = false; pickDay = null }
+        )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun WorkoutDatePickerDialog(
+    initial: LocalDate?,
+    today: LocalDate = LocalDate.now(),
+    onSelect: (LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = initial?.coerceAtMost(today)?.toEpochDay()?.times(MILLIS_PER_DAY),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                utcTimeMillis / MILLIS_PER_DAY <= today.toEpochDay()
+        }
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                enabled = state.selectedDateMillis != null,
+                onClick = {
+                    state.selectedDateMillis?.let { onSelect(LocalDate.ofEpochDay(it / MILLIS_PER_DAY)) }
+                    onDismiss()
+                }
+            ) { Text("Готово", color = Theme.accent) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена", color = Theme.textSecondary) }
+        }
+    ) { DatePicker(state = state) }
 }
 
 private const val MILLIS_PER_DAY = 86_400_000L

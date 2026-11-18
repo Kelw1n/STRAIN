@@ -2,6 +2,7 @@ package com.texasprogram.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -22,10 +26,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.CompletionRecord
+import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.service.RuDate
 import java.time.LocalDate
 
@@ -136,7 +142,12 @@ fun ProgressChartView(records: List<CompletionRecord>, modifier: Modifier = Modi
 
 /// Список последних тренировок с датами.
 @Composable
-fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier, freeTitles: Map<Int, String> = emptyMap()) {
+fun HistoryCard(
+    records: List<CompletionRecord>,
+    modifier: Modifier = Modifier,
+    freeTitles: Map<Int, String> = emptyMap(),
+    onEditDate: (CompletionRecord) -> Unit
+) {
     val recent = remember(records) { records.sortedByDescending { it.epochDay }.take(8) }
     if (recent.isEmpty()) return
 
@@ -144,11 +155,16 @@ fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier, 
         Text("Последние тренировки", color = Theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         recent.forEach { record ->
             val date = LocalDate.ofEpochDay(record.epochDay)
+            val editable = record.week != ProgramProfile.FREE_WEEK
+            val edit = if (editable) Modifier.clickable(onClickLabel = "Изменить дату тренировки", role = Role.Button) {
+                onEditDate(record)
+            } else Modifier
             Row(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .background(Theme.surfaceSoft)
+                    .then(edit)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -160,13 +176,17 @@ fun HistoryCard(records: List<CompletionRecord>, modifier: Modifier = Modifier, 
                     modifier = Modifier.width(24.dp)
                 )
                 Text(
-                    if (record.week == com.texasprogram.app.model.ProgramProfile.FREE_WEEK) freeTitles[record.day] ?: "Своя тренировка"
+                    if (!editable) freeTitles[record.day] ?: "Своя тренировка"
                     else "Неделя ${record.week} · день ${record.day}",
                     color = Theme.textPrimary,
                     fontSize = 12.sp
                 )
                 Spacer(Modifier.weight(1f))
                 Text(RuDate.shortDayMonth(date), color = Theme.textSecondary, fontSize = 10.sp)
+                if (editable) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.Edit, contentDescription = null, tint = Theme.textSecondary, modifier = Modifier.size(14.dp))
+                }
             }
         }
     }
