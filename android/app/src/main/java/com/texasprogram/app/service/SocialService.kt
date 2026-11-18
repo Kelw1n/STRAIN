@@ -369,13 +369,14 @@ object SocialService {
         syncJob = scope.launch {
             delay(3_000)
             val patch = withContext(Dispatchers.Default) {
+                val completeHistory = profile.completionLog.isNotEmpty() || !profile.hasUndatedWorkoutMarks
                 ProfilePatch(
                     weightKg = profile.latestBodyWeight,
                     programs = SocialProgramBuilder.days(profile),
-                    achievements = AchievementCalculator.badges(AchievementCalculator.progress(profile)),
-                    records = PersonalRecords.records(profile),
-                    heatmap = TrainingHeatmap.build(profile),
-                    stats = WeeklyStatsBuilder.stats(profile)
+                    achievements = if (completeHistory) AchievementCalculator.badges(AchievementCalculator.progress(profile)) else null,
+                    records = if (completeHistory) PersonalRecords.records(profile) else null,
+                    heatmap = if (completeHistory) TrainingHeatmap.build(profile) else null,
+                    stats = if (completeHistory) WeeklyStatsBuilder.stats(profile) else null
                 )
             }
             val fingerprint = patch.toJson()

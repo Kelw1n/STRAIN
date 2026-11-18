@@ -64,6 +64,13 @@ fun ProgressScreen(
     val total = profile.totalDays
     val ratio = if (total > 0) done.toFloat() / total else 0f
     var showMuscleDialog by remember { mutableStateOf(false) }
+    var restoringHistory by remember { mutableStateOf(false) }
+    val undated = remember(profile) { profile.undatedWorkouts }
+    if (restoringHistory && undated.isNotEmpty()) {
+        RestoreWorkoutDatesSheet(undated, onRestore = {
+            onUpdate(profile.restoreWorkoutDates(it))
+        }, onDismiss = { restoringHistory = false })
+    }
     val listState = rememberLazyListState()
     OnTabReselect(MainTabItem.PROGRESS) { listState.scrollToTop() }
 
@@ -75,6 +82,11 @@ fun ProgressScreen(
     ) {
         item(key = "title") { ScreenTitle("Прогресс") }
         item(key = "level") { LevelCard(profile) }
+        if (undated.isNotEmpty()) {
+            item(key = "restore-workout-dates") {
+                NutritionButton("Восстановить историю", primary = false) { restoringHistory = true }
+            }
+        }
         item(key = "coach") { CoachEntryCard(profile, onUpdate) }
 
         item(key = "hero") {

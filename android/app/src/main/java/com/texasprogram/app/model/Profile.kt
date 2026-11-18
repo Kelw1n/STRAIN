@@ -257,7 +257,10 @@ data class ProgramProfile(
     /// завершения; без этого он терялся, и в истории не было ни времени, ни усилия.
     fun withWorkoutSummary(week: Int, day: Int, durationSeconds: Int?, effort: String?): ProgramProfile {
         val key = dayKey(week, day)
-        if (completionLog.none { it.key == key }) return this
+        if (completionLog.none { it.key == key }) {
+            val today = LocalDate.now()
+            return copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today, durationSeconds, effort)
+        }
         return copy(completionLog = completionLog.map {
             if (it.key == key) it.copy(durationSeconds = durationSeconds ?: it.durationSeconds, effort = effort ?: it.effort) else it
         })
@@ -265,13 +268,17 @@ data class ProgramProfile(
 
     /// Обновляет запись истории, если день уже отмечен: факт мог появиться позже.
     /// Дату оставляем исходную — тренировка была тогда, а не в момент правки.
-    private fun refreshCompletion(week: Int, day: Int, today: LocalDate): ProgramProfile {
-        if (!isCompleted(week, day)) return this
+    private fun refreshCompletion(week: Int, day: Int): ProgramProfile {
+        if (week == FREE_WEEK || !isCompleted(week, day)) return this
         val key = dayKey(week, day)
-        val previous = completionLog.firstOrNull { it.key == key }
-        val original = previous?.epochDay ?: today.toEpochDay()
-        // Время и усилие тоже исходные: правка подхода после тренировки их не стирает.
-        return recordCompletion(week, day, LocalDate.ofEpochDay(original), previous?.durationSeconds, previous?.effort)
+        if (completionLog.none { it.key == key }) return this
+        val actualSquat = actualWeight(week, day, listOf("Приседания", "Приседания со штангой"))
+        val actualBench = actualWeight(week, day, listOf("Жим лёжа"))
+        val actualDeadlift = actualWeight(week, day, listOf("Становая тяга"))
+        return copy(completionLog = completionLog.map { record ->
+            if (record.key == key) record.copy(actualSquat = actualSquat, actualBench = actualBench, actualDeadlift = actualDeadlift)
+            else record
+        })
     }
 
     // MARK: - Пространство имён отметок
@@ -489,11 +496,11 @@ data class ProgramProfile(
         return copy(
             setLog = setLog + (logKey(week, day, exercise, index) to SetEntry(reps, weight)),
             setProgress = progress
-        ).refreshCompletion(week, day, today)
+        ).refreshCompletion(week, day)
     }
 
     fun clearSetEntry(week: Int, day: Int, exercise: ExercisePrescription, index: Int, today: LocalDate = LocalDate.now()): ProgramProfile =
-        copy(setLog = setLog - logKey(week, day, exercise, index)).refreshCompletion(week, day, today)
+        copy(setLog = setLog - logKey(week, day, exercise, index)).refreshCompletion(week, day)
 
     /// Номера подходов, у которых факт записан.
     fun loggedSets(week: Int, day: Int, exercise: ExercisePrescription): Set<Int> =
@@ -719,6 +726,42 @@ data class ProgramProfile(
         }
         if (!next.isCompleted(week, day)) next = next.toggleCompleted(week, day, today)
         return next
+    }
+
+    // MARK: - Восстановление дат тренировок
+
+    data class UndatedWorkout(val id: String, val week: Int, val day: Int, val scheduleOffset: Long)
+
+    val hasUndatedWorkoutMarks: Boolean
+        get() {
+            val datedKeys = completionLog.mapTo(hashSetOf()) { it.key }
+            return completedDayKeys.any { isOwnKey(it) && it !in datedKeys }
+        }
+
+    val undatedWorkouts: List<UndatedWorkout>
+        get() {
+            if (!hasUndatedWorkoutMarks) return emptyList()
+            val datedKeys = completionLog.mapTo(hashSetOf()) { it.key }
+            val marked = completedDayKeys.toHashSet()
+            return workoutPlan.weeks.flatMap { week ->
+                week.days.mapNotNull { day ->
+                    val key = dayKey(week.number, day.number)
+                    if (key !in marked || key in datedKeys) return@mapNotNull null
+                    val offset = 7L * (week.number - 1) + (weekday(day.number) + 5) % 7
+                    UndatedWorkout(key, week.number, day.number, offset)
+                }
+            }.sortedWith(compareBy({ it.scheduleOffset }, { it.day }))
+        }
+
+    fun restoreWorkoutDates(dates: Map<String, LocalDate>, today: LocalDate = LocalDate.now()): ProgramProfile {
+        var restored = this
+        for (workout in undatedWorkouts) {
+            val date = dates[workout.id]?.takeUnless { it.isAfter(today) } ?: continue
+            restored = restored.recordCompletion(workout.week, workout.day, date, usePlanWeights = false)
+            val last = maxOf(date.toEpochDay(), restored.lastCompletionEpochDay ?: Long.MIN_VALUE)
+            restored = restored.copy(lastCompletionEpochDay = last)
+        }
+        return restored
     }
 
     // MARK: - История по старым отметкам
@@ -1088,7 +1131,8 @@ data class ProgramProfile(
         day: Int,
         today: LocalDate,
         durationSeconds: Int? = null,
-        effort: String? = null
+        effort: String? = null,
+        usePlanWeights: Boolean = true
     ): ProgramProfile {
         val key = dayKey(week, day)
         if (week == FREE_WEEK) {
@@ -1103,7 +1147,7 @@ data class ProgramProfile(
         val exercises = workoutPlan.weeks.firstOrNull { it.number == week }
             ?.days?.firstOrNull { it.number == day }?.exercises.orEmpty()
 
-        fun weight(vararg names: String): Double? = names.firstNotNullOfOrNull { name ->
+        fun weight(vararg names: String): Double? = if (!usePlanWeights) null else names.firstNotNullOfOrNull { name ->
             (exercises.firstOrNull { it.name == name }?.load as? LoadPrescription.Kilograms)?.value
         }
 
@@ -1171,7 +1215,7 @@ data class ProgramProfile(
                 snapshot.setProgress.filter { it.key.startsWith(prefix) },
             setLog = setLog.filterNot { it.key.startsWith(prefix) } +
                 snapshot.setLog.filter { it.key.startsWith(prefix) }
-        ).refreshCompletion(week, day, today)
+        ).refreshCompletion(week, day)
     }
 
     /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
@@ -1369,7 +1413,7 @@ data class ProgramProfile(
             for (planDay in planWeek.days) {
                 val isBefore = planWeek.number < week || (planWeek.number == week && planDay.number < day)
                 if (!isBefore) continue
-                keys.add("${planWeek.number}-${planDay.number}")
+                keys.add(dayKey(planWeek.number, planDay.number))
                 if (carriesBenchWave(planDay.number)) benchDone++
             }
         }
@@ -1378,13 +1422,11 @@ data class ProgramProfile(
         } else {
             emptyList()
         }
-        // Отметки проставлены задним числом — сегодняшней тренировки среди них нет.
         // Привязка к календарной неделе не нужна: оба режима считают даты
         // от сегодняшнего дня и от того, что осталось невыполненным.
         return copy(
-            completedDayKeys = keys,
+            completedDayKeys = completedDayKeys.filterNot(::isOwnKey) + keys,
             completedBenchSessions = benches,
-            lastCompletionEpochDay = null,
             scheduleAnchorWeek = 0,
             scheduleAnchorEpochDay = null
         )

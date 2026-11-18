@@ -679,9 +679,19 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const body = req.body || {};
         const sets = [];
         const params = [];
-        const set = (column, value) => {
+        const stats = body.stats !== undefined ? statsOf(jsonLimited(body.stats, 4_000, {})) : undefined;
+        const blankProgress = stats?.xp === 0 && (stats.level ?? 1) <= 1 && (stats.workouts ?? 0) === 0;
+        const set = (column, value, protectProgress = false) => {
             params.push(value);
-            sets.push(`${column} = $${params.length}`);
+            const incoming = `$${params.length}`;
+            // Старый клиент может прислать пустую сводку после потери журнала.
+            // Проверяем накопленный опыт в той же строке, которую обновляем.
+            if (blankProgress && protectProgress) {
+                sets.push(`${column} = CASE WHEN (CASE WHEN jsonb_typeof(stats->'xp') = 'number'
+                    THEN (stats->>'xp')::numeric ELSE 0 END) > 0 THEN ${column} ELSE ${incoming} END`);
+            } else {
+                sets.push(`${column} = ${incoming}`);
+            }
         };
         if (body.username !== undefined) {
             const username = text(body.username, 24).toLowerCase();
@@ -702,16 +712,15 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         if (body.avatar !== undefined) set('avatar_id', await ownImage(body.avatar));
         if (body.cover !== undefined) set('cover_id', await ownImage(body.cover));
         if (body.programs !== undefined) set('programs', JSON.stringify(programsOf(jsonLimited(body.programs, 64_000, []))));
-        if (body.achievements !== undefined) set('achievements', JSON.stringify(badgesOf(jsonLimited(body.achievements, 16_000, []))));
-        if (body.heatmap !== undefined) set('heatmap', JSON.stringify(heatmapOf(body.heatmap)));
-        if (body.records !== undefined) set('records', JSON.stringify(recordsOf(jsonLimited(body.records, 16_000, []))));
-        const stats = body.stats !== undefined ? statsOf(jsonLimited(body.stats, 4_000, {})) : undefined;
-        if (stats !== undefined) set('stats', JSON.stringify(stats));
-        await rememberWeek(me, stats);
+        if (body.achievements !== undefined) set('achievements', JSON.stringify(badgesOf(jsonLimited(body.achievements, 16_000, []))), true);
+        if (body.heatmap !== undefined) set('heatmap', JSON.stringify(heatmapOf(body.heatmap)), true);
+        if (body.records !== undefined) set('records', JSON.stringify(recordsOf(jsonLimited(body.records, 16_000, []))), true);
+        if (stats !== undefined) set('stats', JSON.stringify(stats), true);
         if (sets.length === 0) return res.json(await userView(me, me));
         params.push(me.id);
-        const rows = await q(`UPDATE users SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params);
-        res.json(await userView(rows[0], rows[0]));
+        const [updated] = await q(`UPDATE users SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params);
+        if (stats !== undefined) await rememberWeek(updated, updated.stats);
+        res.json(await userView(updated, updated));
     }));
 
     // Удаление профиля целиком: посты, фото, лайки и комментарии уходят каскадом.

@@ -224,6 +224,45 @@ final class HistoryAndExtrasTests: XCTestCase {
         XCTAssertEqual(entry.weight, 20 + AccessoryHint.step)
     }
 
+
+    func testMovingStartKeepsDatedWorkoutsAndXP() throws {
+        let profile = texas()
+        let date = Date(timeIntervalSince1970: 1_760_000_000)
+        profile.recordSet(week: 1, day: 1, exercise: try squat(profile), index: 0, reps: 3, weight: 82)
+        profile.toggleCompleted(week: 1, day: 1, now: date, durationSeconds: 2_400, effort: "7")
+        let log = profile.completionLog
+        let xp = Progression.xp(for: profile)
+
+        profile.setCurrentWorkout(week: 2, day: 1)
+
+        XCTAssertEqual(profile.completionLog, log)
+        XCTAssertEqual(profile.lastCompletionDate, date)
+        XCTAssertEqual(Progression.xp(for: profile), xp)
+    }
+
+    func testRestoringMissingDatesPreservesActualSetsAndExistingRecords() throws {
+        let profile = texas()
+        let day = Date(timeIntervalSince1970: 1_760_000_000)
+        profile.toggleCompleted(week: 1, day: 1, now: day)
+        let known = try XCTUnwrap(profile.completionLog.first)
+        profile.setCurrentWorkout(week: 2, day: 1)
+        let missing = try XCTUnwrap(profile.undatedWorkouts.first)
+        let exercise = try XCTUnwrap(profile.plannedExercises(week: missing.week, day: missing.day).first)
+        profile.recordSet(week: missing.week, day: missing.day, exercise: exercise, index: 0, reps: 4, weight: 87)
+        let sets = profile.setLog
+        XCTAssertEqual(profile.completionLog, [known], "Редактирование подхода не должно подставлять сегодняшнюю дату")
+
+        let recoveredDate = day.addingTimeInterval(86_400)
+        let dates = [known.key: recoveredDate, missing.id: recoveredDate]
+        XCTAssertEqual(profile.restoreWorkoutDates(dates, now: recoveredDate), 1)
+        XCTAssertEqual(profile.restoreWorkoutDates(dates, now: recoveredDate), 0)
+        XCTAssertEqual(profile.completionLog.first, known)
+        XCTAssertEqual(profile.completionLog.last?.date, recoveredDate)
+        XCTAssertNil(profile.completionLog.last?.squat)
+        XCTAssertEqual(profile.setLog, sets)
+        XCTAssertGreaterThan(Progression.xp(for: profile), 0)
+    }
+
     // MARK: - История по старым отметкам
 
     func testBackfillFillsCompletedDaysWithPlannedWeights() throws {

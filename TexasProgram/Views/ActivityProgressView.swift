@@ -10,6 +10,7 @@ struct ActivityProgressView: View {
     @State private var selectedPeriod = "3 месяца"
     @State private var showingWeightSheet = false
     @State private var showingMuscleSheet = false
+    @State private var restoringHistory = false
     /// Путь разделов: повторное нажатие на вкладку возвращает к началу.
     @State private var path = NavigationPath()
 
@@ -23,6 +24,10 @@ struct ActivityProgressView: View {
                 VStack(spacing: 16) {
                     // Уровень и награда месяца
                     LevelCard(profile: profile)
+                    if !profile.undatedWorkouts.isEmpty {
+                        Button(L("Восстановить историю")) { restoringHistory = true }
+                            .buttonStyle(.borderedProminent)
+                    }
                     CoachEntryCard(profile: profile)
 
                     // Итоги месяца и года историями
@@ -75,6 +80,9 @@ struct ActivityProgressView: View {
                         .background(Color.tone(0.14), in: Capsule())
                     }
                 }
+            }
+            .sheet(isPresented: $restoringHistory) {
+                RestoreWorkoutDatesSheet(workouts: profile.undatedWorkouts) { profile.restoreWorkoutDates($0) }
             }
             .sheet(isPresented: $showingWeightSheet) {
                 BodyWeightScreen(profile: profile)

@@ -226,6 +226,38 @@ class HistoryAndExtrasTest {
         assertNull(make("до отказа").plannedReps)
     }
 
+
+    @Test
+    fun movingStartPreservesOtherCyclesAndUsesCurrentCycleKeys() {
+        val date = java.time.LocalDate.of(2026, 11, 2)
+        val first = texas().toggleCompleted(1, 1, date)
+        val profile = first.copy(cycleNumber = 2)
+        val changed = profile.setCurrentWorkout(2, 1, date)
+        assertTrue(changed.completedDayKeys.contains("1-1"))
+        assertTrue(changed.completedDayKeys.contains("c2-1-1"))
+        assertEquals(first.completionLog, changed.completionLog)
+        assertEquals(date.toEpochDay(), changed.lastCompletionEpochDay)
+    }
+
+    @Test
+    fun restoringMissingDatesDoesNotChangeRecordedSetsOrExistingLog() {
+        val date = java.time.LocalDate.of(2026, 11, 2)
+        var profile = texas().toggleCompleted(1, 1, date).setCurrentWorkout(2, 1, date)
+        val known = profile.completionLog.single()
+        val missing = profile.undatedWorkouts.first()
+        val exercise = profile.plannedExercises(missing.week, missing.day).first()
+        profile = profile.recordSet(missing.week, missing.day, exercise, 0, 4, 87.0)
+        assertEquals(listOf(known), profile.completionLog)
+        val dateToRestore = date.plusDays(2)
+        val dates = mapOf(known.key to dateToRestore, missing.id to dateToRestore)
+        val restored = profile.restoreWorkoutDates(dates, dateToRestore)
+        assertEquals(2, restored.completionLog.size)
+        assertEquals(known, restored.completionLog.first())
+        assertEquals(dateToRestore.toEpochDay(), restored.completionLog.last().epochDay)
+        assertEquals(profile.setLog, restored.setLog)
+        assertEquals(restored, restored.restoreWorkoutDates(dates, dateToRestore))
+    }
+
     // MARK: - История по старым отметкам
 
     @Test

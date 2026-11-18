@@ -879,12 +879,12 @@ final class ProgramProfile {
         setLog[logKey(week: week, day: day, exercise: exercise, index: index)] = SetEntry(reps: reps, weight: weight)
         let key = setKey(week: week, day: day, exercise: exercise)
         if (setProgress[key] ?? 0) < index + 1 { setProgress[key] = index + 1 }
-        refreshCompletion(week: week, day: day, now: now)
+        refreshCompletion(week: week, day: day)
     }
 
     func clearSetEntry(week: Int, day: Int, exercise: ExercisePrescription, index: Int, now: Date = Date()) {
         setLog[logKey(week: week, day: day, exercise: exercise, index: index)] = nil
-        refreshCompletion(week: week, day: day, now: now)
+        refreshCompletion(week: week, day: day)
     }
 
     /// Сколько подходов сверх плана ищем в записях. В тренировке можно
@@ -1234,6 +1234,47 @@ final class ProgramProfile {
         stallDismissed[Self.weightStepKey(name)] = weight
     }
 
+    // MARK: - Восстановление дат тренировок
+
+    struct UndatedWorkout: Identifiable {
+        let id: String
+        let week: Int
+        let day: Int
+        let scheduleOffset: Int
+    }
+
+    var hasUndatedWorkoutMarks: Bool {
+        let datedKeys = Set(completionLog.map(\.key))
+        return completedDayKeys.contains { isOwnKey($0) && !datedKeys.contains($0) }
+    }
+
+    var undatedWorkouts: [UndatedWorkout] {
+        guard hasUndatedWorkoutMarks else { return [] }
+        let datedKeys = Set(completionLog.map(\.key))
+        let marked = Set(completedDayKeys)
+        return workoutPlan.weeks.flatMap { week in
+            week.days.compactMap { day -> UndatedWorkout? in
+                let key = dayKey(week: week.number, day: day.number)
+                guard marked.contains(key), !datedKeys.contains(key) else { return nil }
+                let offset = 7 * (week.number - 1) + (weekday(forDay: day.number) + 5) % 7
+                return UndatedWorkout(id: key, week: week.number, day: day.number, scheduleOffset: offset)
+            }
+        }.sorted { ($0.scheduleOffset, $0.day) < ($1.scheduleOffset, $1.day) }
+    }
+
+    @discardableResult
+    func restoreWorkoutDates(_ dates: [String: Date], now: Date = Date(), calendar: Calendar = .current) -> Int {
+        var restored = 0
+        for workout in undatedWorkouts {
+            guard let date = dates[workout.id],
+                  calendar.startOfDay(for: date) <= calendar.startOfDay(for: now) else { continue }
+            recordCompletion(week: workout.week, day: workout.day, now: date, usePlanWeights: false)
+            if lastCompletionDate.map({ date > $0 }) ?? true { lastCompletionDate = date }
+            restored += 1
+        }
+        return restored
+    }
+
     // MARK: - История по старым отметкам
 
     /// Сколько уже отмеченных тренировок можно достроить до записей.
@@ -1506,7 +1547,7 @@ final class ProgramProfile {
     }
 
     /// Кладёт в историю дату и рабочие веса основных движений этого дня.
-    private func recordCompletion(week: Int, day: Int, now: Date, durationSeconds: Int? = nil, effort: String? = nil) {
+    private func recordCompletion(week: Int, day: Int, now: Date, durationSeconds: Int? = nil, effort: String? = nil, usePlanWeights: Bool = true) {
         let key = dayKey(week: week, day: day)
         let previous = completionLog.first { $0.key == key }
         completionLog.removeAll { $0.key == key }
@@ -1526,7 +1567,7 @@ final class ProgramProfile {
             .days.first { $0.number == day }?.exercises ?? []
 
         func weight(_ name: String) -> Double? {
-            guard let load = exercises.first(where: { $0.name == name })?.load,
+            guard usePlanWeights, let load = exercises.first(where: { $0.name == name })?.load,
                   case .kilograms(let value) = load else { return nil }
             return value
         }
@@ -1554,18 +1595,25 @@ final class ProgramProfile {
     /// завершения; без этого он терялся, и в истории не было ни времени, ни усилия.
     func setWorkoutSummary(week: Int, day: Int, durationSeconds: Int?, effort: String?) {
         let key = dayKey(week: week, day: day)
-        guard let index = completionLog.firstIndex(where: { $0.key == key }) else { return }
+        guard let index = completionLog.firstIndex(where: { $0.key == key }) else {
+            let now = Date()
+            recordCompletion(week: week, day: day, now: now, durationSeconds: durationSeconds, effort: effort)
+            lastCompletionDate = now
+            return
+        }
         if let durationSeconds { completionLog[index].durationSeconds = durationSeconds }
         if let effort { completionLog[index].effort = effort }
     }
 
-    private func refreshCompletion(week: Int, day: Int, now: Date) {
-        guard isCompleted(week: week, day: day) else { return }
+    private func refreshCompletion(week: Int, day: Int) {
+        guard week != Self.freeWeek, isCompleted(week: week, day: day) else { return }
         let key = dayKey(week: week, day: day)
-        let original = completionLog.first { $0.key == key }?.date ?? now
-        let prevDur = completionLog.first { $0.key == key }?.durationSeconds
-        let prevEffort = completionLog.first { $0.key == key }?.effort
-        recordCompletion(week: week, day: day, now: original, durationSeconds: prevDur, effort: prevEffort)
+        guard let index = completionLog.firstIndex(where: { $0.key == key }) else { return }
+        var record = completionLog[index]
+        record.actualSquat = actualWeight(week: week, day: day, exerciseNames: ["Приседания", "Приседания со штангой"])
+        record.actualBench = actualWeight(week: week, day: day, exerciseNames: ["Жим лёжа"])
+        record.actualDeadlift = actualWeight(week: week, day: day, exerciseNames: ["Становая тяга"])
+        completionLog[index] = record
     }
 
     // MARK: - Отметка по подходам
@@ -1642,7 +1690,7 @@ final class ProgramProfile {
             .merging(snapshot.progress) { _, restored in restored }
         setLog = setLog.filter { !$0.key.hasPrefix(prefix) }
             .merging(snapshot.log) { _, restored in restored }
-        refreshCompletion(week: week, day: day, now: now)
+        refreshCompletion(week: week, day: day)
     }
 
     /// Полный сброс подходов и записей дня (при отмене/удалении тренировки).
@@ -1779,8 +1827,6 @@ final class ProgramProfile {
         // Чужое пространство имён не трогаем: сброс внутри пикирования
         // не должен стирать историю основного цикла и наоборот.
         completedDayKeys = completedDayKeys.filter { !isOwnKey($0) }
-        // История отмеченного задним числом недостоверна — у тех дней нет реальных дат.
-        completionLog.removeAll { isOwnKey($0.key) }
         completedBenchSessions = []
         // Волна остаётся непрерывной: сколько верхних дней закрыли, столько жимов и сделано.
         var benchDone = 0
@@ -1791,8 +1837,6 @@ final class ProgramProfile {
             }
         }
         if benchDone > 0 { completedBenchSessions = Array(1...min(benchDone, UpperLowerCalculator.benchSessionCount)) }
-        // Отметки проставлены задним числом — сегодняшней тренировки среди них нет.
-        lastCompletionDate = nil
         // Привязка к календарной неделе больше не используется: оба режима считают
         // даты от сегодняшнего дня и от того, что осталось невыполненным.
         scheduleAnchorWeek = 0

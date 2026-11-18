@@ -757,6 +757,35 @@ test('лента, профили, подписки, фото и коммента
         assert.equal([...received].filter(id => id.startsWith('cursor-change-')).length, 51);
     });
 
+    await t.test('пустая синхронизация не затирает накопленный прогресс', async () => {
+        const week = isoWeek(new Date());
+        const saved = { week, workouts: 3, volumeKg: 1000, level: 7, xp: 2200 };
+        const heatmap = { end: new Date().toISOString().slice(0, 10), days: '0012034' };
+        const initial = await call('PATCH', '/me', { token: me.token, body: { stats: saved, heatmap } });
+        assert.equal(initial.status, 200);
+        assert.equal(initial.data.level, 7);
+        const blank = await call('PATCH', '/me', {
+            token: me.token,
+            body: { bio: 'updated', stats: { week, workouts: 0, level: 1, xp: 0 }, heatmap: null, records: [], achievements: [] }
+        });
+        assert.equal(blank.status, 200);
+        assert.equal(blank.data.bio, 'updated');
+        assert.equal(blank.data.xp, 2200);
+        assert.equal(blank.data.level, 7);
+        assert.deepEqual(blank.data.heatmap, heatmap);
+        const [storedWeek] = (await social.pool().query(
+            'SELECT workouts FROM weekly_stats WHERE user_id = $1 AND week = $2', [me.user.id, week]
+        )).rows;
+        assert.equal(storedWeek.workouts, 3);
+
+        const recovered = await call('PATCH', '/me', {
+            token: me.token,
+            body: { stats: { week, workouts: 4, level: 8, xp: 2700 } }
+        });
+        assert.equal(recovered.data.level, 8);
+        assert.equal(recovered.data.xp, 2700);
+    });
+
     await t.test('удаление профиля', async () => {
         assert.equal((await call('DELETE', '/me', { token: friend.token })).status, 200);
         assert.equal((await call('GET', '/users/semobsessed')).status, 404);
