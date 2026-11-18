@@ -69,6 +69,21 @@ class StreakAndGoalTest {
         assertEquals(profile.weekdays.size, target)
     }
 
+    @Test
+    fun weekGoalCountsRestoredAndNewWorkoutOnTheSameDayOnce() {
+        val profile = texas().setCurrentWorkout(2, 1, day(0))
+            .toggleCompleted(2, 1, day(0))
+            .toggleCompleted(2, 2, day(2))
+        val restored = profile.restoreWorkoutDates(mapOf(profile.dayKey(1, 3) to day(2)), day(2))
+
+        assertEquals(3, restored.completionLog.size)
+        assertEquals(2 to 3, restored.weekGoal(day(2)))
+
+        val friday = restored.toggleCompleted(2, 3, day(4))
+        assertEquals(2 to 3, friday.weekGoal(day(2)))
+        assertEquals(3 to 3, friday.weekGoal(day(4)))
+    }
+
     /// С понедельника цель снова с нуля.
     @Test
     fun weekGoalResetsOnMonday() {

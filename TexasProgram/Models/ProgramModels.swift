@@ -663,13 +663,17 @@ final class ProgramProfile {
         return CalendarStreak(weeks: weeks, workouts: workouts)
     }
 
-    /// Цель недели: сколько тренировок сделано на этой календарной неделе
-    /// и сколько задумано — по числу дней в расписании. С понедельника снова с нуля.
+    /// Цель недели: сколько разных дней тренировались с понедельника по сегодня
+    /// и сколько дней запланировано в расписании.
     func weekGoal(now: Date = Date(), calendar base: Calendar = .current) -> (done: Int, target: Int) {
         let calendar = WorkoutScheduler.trainingCalendar(base)
         let target = max(weekdays.count, 1)
         guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else { return (0, target) }
-        return (completionLog.filter { week.contains($0.date) }.count, target)
+        let today = calendar.startOfDay(for: now)
+        let days = Set(completionLog.lazy.map { calendar.startOfDay(for: $0.date) }.filter {
+            $0 >= week.start && $0 <= today
+        })
+        return (days.count, target)
     }
 
     // MARK: - Авторегуляция

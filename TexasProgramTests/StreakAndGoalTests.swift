@@ -63,6 +63,25 @@ final class StreakAndGoalTests: XCTestCase {
         XCTAssertEqual(goal.target, profile.weekdays.count)
     }
 
+    func testWeekGoalCountsRestoredAndNewWorkoutOnTheSameDayOnce() {
+        let profile = texas()
+        profile.setCurrentWorkout(week: 2, day: 1)
+        profile.toggleCompleted(week: 2, day: 1, now: day(0))
+        profile.toggleCompleted(week: 2, day: 2, now: day(2))
+
+        // У восстановленной и записанной тренировок разные ключи и время.
+        let restored = profile.dayKey(week: 1, day: 3)
+        let dates = [restored: calendar.startOfDay(for: day(2))]
+        XCTAssertEqual(profile.restoreWorkoutDates(dates, now: day(2)), 1)
+        XCTAssertEqual(profile.completionLog.count, 3)
+        XCTAssertEqual(profile.weekGoal(now: day(2)).done, 2)
+        XCTAssertEqual(profile.weekGoal(now: day(2)).target, 3)
+
+        profile.toggleCompleted(week: 2, day: 3, now: day(4))
+        XCTAssertEqual(profile.weekGoal(now: day(2)).done, 2)
+        XCTAssertEqual(profile.weekGoal(now: day(4)).done, 3)
+    }
+
     /// С понедельника цель снова с нуля.
     func testWeekGoalResetsOnMonday() {
         let profile = texas()
