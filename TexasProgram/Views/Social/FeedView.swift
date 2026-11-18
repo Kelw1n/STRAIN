@@ -42,6 +42,11 @@ struct FeedView: View {
                             .padding(.bottom, 6)
                     }
                     outbox
+                    if social.outbox.isEmpty, let message = social.outboxError {
+                        Text(L(message))
+                            .foregroundStyle(Theme.warning)
+                            .padding(.vertical, 8)
+                    }
                     if let error, posts.isEmpty {
                         SocialErrorCard(message: error) { Task { await reload() } }
                             .padding(.top, 20)
@@ -181,7 +186,7 @@ struct FeedView: View {
                 Spacer()
                 if !social.isFlushing {
                     VStack(alignment: .trailing, spacing: 8) {
-                        Button(L("Отправить")) { social.flushOutbox() }
+                        Button(L("Отправить")) { social.flushOutbox(confirmLegacy: true) }
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Theme.accent)
                         // Сервер отказал — пост не застрянет в очереди навсегда.

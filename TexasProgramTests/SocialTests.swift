@@ -5,6 +5,18 @@ import XCTest
 /// Лента: достижения, программа в профиле, разбор ответов сервера и подписи.
 final class SocialTests: XCTestCase {
 
+    func testDraftsSavedBeforeAccountBindingStillDecode() throws {
+        let raw = Data(
+            #"{"clientId":"legacy","createdAt":0,"title":"Тренировка","description":"","durationSeconds":0,"volumeKg":0,"sets":0,"workout":{"exercises":[]},"photoCount":0,"uploadedPhotos":[]}"#.utf8
+        )
+        let decoder = JSONDecoder()
+        var draft = try decoder.decode(SocialPostDraft.self, from: raw)
+        XCTAssertNil(draft.ownerKey)
+        draft.ownerKey = "owner-fingerprint"
+        let saved = try JSONEncoder().encode(draft)
+        XCTAssertEqual(try decoder.decode(SocialPostDraft.self, from: saved), draft)
+    }
+
     private func texas() -> ProgramProfile { ProgramProfile(input: .demo) }
 
     private var calendar: Calendar { WorkoutScheduler.trainingCalendar() }

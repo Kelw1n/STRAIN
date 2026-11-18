@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Network
 import Observation
@@ -136,7 +137,7 @@ final class SocialService {
         configuration.waitsForConnectivity = false
         session = URLSession(configuration: configuration)
         token = SocialKeychain.load()
-        outbox = SocialOutboxStore.loadAll()
+        reloadPostQueue()
         pendingMessages = ChatOutboxStore.loadAll()
         pathMonitor.pathUpdateHandler = { [weak self] path in
             guard path.status == .satisfied else { return }
@@ -268,6 +269,8 @@ final class SocialService {
     private func setToken(_ value: String?) {
         token = value
         SocialKeychain.save(value)
+        outboxError = nil
+        reloadPostQueue()
         // Другой профиль — программу и медали в него надо отправить заново.
         UserDefaults.standard.removeObject(forKey: "social_sync_fingerprint")
         feedCache = [:]
@@ -830,31 +833,61 @@ final class SocialService {
     /// Фото сжимаются в фоне: пять снимков на главном потоке замораживали
     /// экран как раз в момент «Готово» в конце тренировки.
     func enqueue(_ draft: SocialPostDraft, photos: [UIImage]) {
+        guard let owner = postQueueOwner else { return }
         let images = Array(photos.prefix(5))
         guard !images.isEmpty else {
-            store(draft, files: [])
+            store(draft, files: [], owner: owner)
             return
         }
         Task { [weak self] in
             let files = await Task.detached(priority: .userInitiated) {
                 images.compactMap { SocialService.jpeg($0) }
             }.value
-            self?.store(draft, files: files)
+            guard files.count == images.count else {
+                if self?.postQueueOwner == owner { self?.outboxError = "Не удалось открыть фото" }
+                return
+            }
+            self?.store(draft, files: files, owner: owner)
         }
     }
 
-    private func store(_ draft: SocialPostDraft, files: [Data]) {
+    private func store(_ draft: SocialPostDraft, files: [Data], owner: String) {
         var saved = draft
+        saved.ownerKey = owner
         saved.photoCount = files.count
         saved.uploadedPhotos = Array(repeating: nil, count: files.count)
-        SocialOutboxStore.save(saved, photos: files)
-        outbox = SocialOutboxStore.loadAll()
-        flushOutbox()
+        do {
+            try SocialOutboxStore.save(saved, photos: files)
+            reloadPostQueue()
+            flushOutbox()
+        } catch {
+            if postQueueOwner == owner {
+                outboxError = "Не удалось сохранить тренировку для ленты — проверь свободное место на телефоне"
+            }
+        }
     }
 
     func discard(_ draft: SocialPostDraft) {
         SocialOutboxStore.remove(draft.clientId)
-        outbox = SocialOutboxStore.loadAll()
+        reloadPostQueue()
+    }
+
+    private var postQueueOwner: String? {
+        token.map { value in
+            Data(SHA256.hash(data: Data((serverURL + "\n" + value).utf8))).base64EncodedString()
+        }
+    }
+
+    private static let oldDraftMessage = "Подтверди отправку публикаций, сохранённых старой версией."
+
+    private func reloadPostQueue() {
+        guard let owner = postQueueOwner else { outbox = []; return }
+        outbox = SocialOutboxStore.loadAll().filter { $0.ownerKey == owner || $0.ownerKey == nil }
+        if outbox.contains(where: { $0.ownerKey == nil }) {
+            if outboxError == nil { outboxError = Self.oldDraftMessage }
+        } else if outboxError == Self.oldDraftMessage {
+            outboxError = nil
+        }
     }
 
     private struct PostBody: Encodable {
@@ -870,24 +903,38 @@ final class SocialService {
         let together: String?
     }
 
-    func flushOutbox() {
+    func flushOutbox(confirmLegacy: Bool = false) {
         flushMessages()
-        guard token != nil, !isFlushing, !outbox.isEmpty else { return }
+        guard let token, let owner = postQueueOwner, !isFlushing else { return }
+        let batch = outbox.filter { $0.ownerKey == owner || (confirmLegacy && $0.ownerKey == nil) }
+        guard !batch.isEmpty else { return }
         isFlushing = true
         outboxError = nil
-        let batch = outbox
         Task {
             var stopped = false
             for var draft in batch {
+                guard postQueueOwner == owner else { break }
                 do {
+                    if draft.ownerKey == nil {
+                        draft.ownerKey = owner
+                        draft.uploadedPhotos = Array(repeating: nil, count: draft.photoCount)
+                        try SocialOutboxStore.update(draft)
+                    }
                     if draft.uploadedPhotos.count != draft.photoCount {
                         draft.uploadedPhotos = Array(repeating: nil, count: draft.photoCount)
                     }
                     for index in 0..<draft.photoCount where draft.uploadedPhotos[index] == nil {
-                        guard let data = SocialOutboxStore.photo(draft.clientId, index) else { continue }
-                        draft.uploadedPhotos[index] = try await uploadImage(data)
-                        SocialOutboxStore.update(draft)
+                        guard postQueueOwner == owner else { break }
+                        guard let data = SocialOutboxStore.photo(draft.clientId, index) else {
+                            throw SocialError(message: "Фото публикации потерялось")
+                        }
+                        let image: ImageResponse = try await request("POST", "/images", data: data,
+                            contentType: "image/jpeg", requiresAuth: true, token: token)
+                        guard postQueueOwner == owner else { break }
+                        draft.uploadedPhotos[index] = image.id
+                        try SocialOutboxStore.update(draft)
                     }
+                    guard postQueueOwner == owner else { break }
                     let body = PostBody(
                         clientId: draft.clientId,
                         title: draft.title,
@@ -900,12 +947,12 @@ final class SocialService {
                         workout: draft.workout,
                         together: draft.together
                     )
-                    let _: SocialPost = try await request("POST", "/posts", json: body, requiresAuth: true)
+                    let _: SocialPost = try await request("POST", "/posts", json: body, requiresAuth: true, token: token)
                     SocialOutboxStore.remove(draft.clientId)
-                    outbox = SocialOutboxStore.loadAll()
+                    reloadPostQueue()
                     feedVersion += 1
                 } catch {
-                    outboxError = error.socialMessage
+                    if postQueueOwner == owner { outboxError = error.socialMessage }
                     stopped = true
                     break
                 }
@@ -916,7 +963,11 @@ final class SocialService {
             // открытия приложения. Шлём его сразу — только новые, чтобы пост,
             // который не удалось убрать с диска, не уходил по кругу.
             let attempted = Set(batch.map(\.clientId))
-            if !stopped, outbox.contains(where: { !attempted.contains($0.clientId) }) { flushOutbox() }
+            reloadPostQueue()
+            if !stopped || postQueueOwner != owner,
+               outbox.contains(where: { $0.ownerKey != nil && !attempted.contains($0.clientId) }) {
+                flushOutbox()
+            }
             await refreshMe()
             // Пост совместной тренировки отмечает её законченной.
             if together.active != nil { await refreshTogether() }
@@ -942,21 +993,23 @@ enum SocialOutboxStore {
 
     private static func folder(_ id: String) -> URL { root.appendingPathComponent(id, isDirectory: true) }
 
-    static func save(_ draft: SocialPostDraft, photos: [Data]) {
+    static func save(_ draft: SocialPostDraft, photos: [Data]) throws {
         let dir = folder(draft.clientId)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        for (index, data) in photos.enumerated() {
-            try? data.write(to: dir.appendingPathComponent("photo-\(index).jpg"), options: .atomic)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            for (index, data) in photos.enumerated() {
+                try data.write(to: dir.appendingPathComponent("photo-\(index).jpg"), options: .atomic)
+            }
+            try update(draft)
+        } catch {
+            remove(draft.clientId)
+            throw error
         }
-        update(draft)
     }
 
-    static func update(_ draft: SocialPostDraft) {
-        let dir = folder(draft.clientId)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        if let data = try? JSONEncoder().encode(draft) {
-            try? data.write(to: dir.appendingPathComponent("draft.json"), options: .atomic)
-        }
+    static func update(_ draft: SocialPostDraft) throws {
+        let file = folder(draft.clientId).appendingPathComponent("draft.json")
+        try JSONEncoder().encode(draft).write(to: file, options: .atomic)
     }
 
     static func photo(_ id: String, _ index: Int) -> Data? {

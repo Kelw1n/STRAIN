@@ -24,6 +24,9 @@ class AppStore private constructor(val context: Context) {
         encodeDefaults = true
     }
 
+    // После загрузки этот снимок меняет только последовательный поток записи.
+    private var lastSavedProfiles: String? = null
+
     var profiles by mutableStateOf(loadProfiles())
         private set
 
@@ -38,17 +41,20 @@ class AppStore private constructor(val context: Context) {
             ?: prefs.getString(KEY_PROFILES_BACKUP, null)
             ?: return emptyList()
         return try {
-            json.decodeFromString<List<ProgramProfile>>(raw)
+            decodeProfiles(raw)
         } catch (_: Exception) {
             // Если основной повреждён, пробуем резервную копию
             val backup = prefs.getString(KEY_PROFILES_BACKUP, null)
             try {
-                backup?.let { json.decodeFromString<List<ProgramProfile>>(it) } ?: keepUnreadable(raw)
+                backup?.let(::decodeProfiles) ?: keepUnreadable(raw)
             } catch (_: Exception) {
                 keepUnreadable(raw)
             }
         }
     }
+
+    private fun decodeProfiles(raw: String): List<ProgramProfile> =
+        json.decodeFromString<List<ProgramProfile>>(raw).also { lastSavedProfiles = raw }
 
     /// Не прочиталось ни основное, ни запасное. Пустой список откроет создание
     /// профиля, и первое же сохранение затёрло бы данные навсегда — поэтому
@@ -70,11 +76,13 @@ class AppStore private constructor(val context: Context) {
         writer.execute {
             runCatching {
                 val serialized = json.encodeToString<List<ProgramProfile>>(snapshot)
-                prefs.edit()
+                val previous = lastSavedProfiles
+                val editor = prefs.edit()
                     .putString(KEY_PROFILES, serialized)
-                    .putString(KEY_PROFILES_BACKUP, serialized)
                     .putString(KEY_ACTIVE, active)
-                    .commit()
+                // Выбор активного профиля не должен затирать предыдущий снимок.
+                if (previous != serialized) editor.putString(KEY_PROFILES_BACKUP, previous ?: serialized)
+                if (editor.commit()) lastSavedProfiles = serialized
             }
         }
     }

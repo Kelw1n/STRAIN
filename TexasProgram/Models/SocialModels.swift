@@ -860,6 +860,7 @@ struct SocialPostDraft: Codable, Hashable, Identifiable, Sendable {
     var uploadedPhotos: [String?]
     /// Совместная тренировка — пост выйдет «вместе с» напарником.
     var together: String?
+    var ownerKey: String?
 }
 
 /// Сообщение, которое ещё не ушло: лежит на телефоне вместе с фото или звуком

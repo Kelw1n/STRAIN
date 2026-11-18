@@ -71,6 +71,9 @@ import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -162,7 +165,7 @@ object SocialService {
         appContext = context.applicationContext
         token = prefs().getString("token", null)
         sharesLive = prefs().getBoolean("share_live", true)
-        outbox = OutboxStore.loadAll()
+        reloadPostQueue()
         pendingMessages = ChatOutboxStore.loadAll()
         // Связь вернулась — неотправленное уходит само.
         runCatching {
@@ -298,6 +301,8 @@ object SocialService {
 
     private fun storeToken(value: String?) {
         token = value
+        outboxError = null
+        reloadPostQueue()
         prefs().edit().apply { if (value == null) remove("token") else putString("token", value) }.apply()
         prefs().edit().remove("sync_fingerprint").apply()
         feedCache.clear()
@@ -865,23 +870,51 @@ object SocialService {
     /// Кладёт пост в очередь на телефоне и сразу пробует отправить.
     /// Нет связи — пост дождётся следующего открытия приложения.
     fun enqueue(context: Context, draft: SocialPostDraft, photos: List<Uri>) {
+        val owner = postQueueOwner ?: return
         scope.launch {
-            val files = withContext(Dispatchers.IO) { photos.take(5).mapNotNull { jpeg(context, it) } }
-            val saved = draft.copy(photoCount = files.size, uploadedPhotos = List(files.size) { null })
+            val selected = photos.take(5)
+            val files = withContext(Dispatchers.IO) { selected.mapNotNull { jpeg(context, it) } }
+            if (files.size != selected.size) {
+                if (postQueueOwner == owner) outboxError = "Не удалось открыть фото"
+                return@launch
+            }
+            val saved = draft.copy(photoCount = files.size, uploadedPhotos = List(files.size) { null }, ownerKey = owner)
             // Нет места на диске — пост не сохранится, но и приложение не упадёт.
             val stored = withContext(Dispatchers.IO) { runCatching { OutboxStore.save(saved, files) }.isSuccess }
             if (!stored) {
-                outboxError = "Не удалось сохранить тренировку для ленты — мало места на телефоне"
+                if (postQueueOwner == owner) outboxError = "Не удалось сохранить тренировку для ленты — мало места на телефоне"
                 return@launch
             }
-            outbox = OutboxStore.loadAll()
+            reloadPostQueue()
             flushOutbox()
         }
     }
 
     fun discard(draft: SocialPostDraft) {
         OutboxStore.remove(draft.clientId)
-        outbox = OutboxStore.loadAll()
+        reloadPostQueue()
+    }
+
+    private val postQueueOwner: String?
+        get() = token?.let { value ->
+            val data = MessageDigest.getInstance("SHA-256").digest("$serverUrl\n$value".toByteArray(Charsets.UTF_8))
+            java.util.Base64.getEncoder().encodeToString(data)
+        }
+
+    private const val OLD_DRAFT_MESSAGE = "Подтверди отправку публикаций, сохранённых старой версией."
+
+    private fun reloadPostQueue() {
+        val owner = postQueueOwner
+        if (owner == null) {
+            outbox = emptyList()
+            return
+        }
+        outbox = OutboxStore.loadAll().filter { it.ownerKey == owner || it.ownerKey == null }
+        if (outbox.any { it.ownerKey == null }) {
+            if (outboxError == null) outboxError = OLD_DRAFT_MESSAGE
+        } else if (outboxError == OLD_DRAFT_MESSAGE) {
+            outboxError = null
+        }
     }
 
     @Serializable
@@ -898,26 +931,43 @@ object SocialService {
         val together: String? = null
     )
 
-    fun flushOutbox() {
+    fun flushOutbox(confirmLegacy: Boolean = false) {
         flushMessages()
-        if (!::appContext.isInitialized || token == null || isFlushing || outbox.isEmpty()) return
+        val accountToken = token ?: return
+        val owner = postQueueOwner ?: return
+        if (!::appContext.isInitialized || isFlushing) return
+        val batch = outbox.filter { it.ownerKey == owner || (confirmLegacy && it.ownerKey == null) }
+        if (batch.isEmpty()) return
         isFlushing = true
         outboxError = null
+        val attempted = batch.mapTo(hashSetOf()) { it.clientId }
         scope.launch {
+            var stopped = false
             try {
-                for (pending in outbox) {
+                for (pending in batch) {
+                    if (postQueueOwner != owner) break
                     var draft = pending
                     if (draft.uploadedPhotos.size != draft.photoCount) {
                         draft = draft.copy(uploadedPhotos = List(draft.photoCount) { null })
                     }
                     try {
+                        if (draft.ownerKey == null) {
+                            draft = draft.copy(ownerKey = owner, uploadedPhotos = List(draft.photoCount) { null })
+                            withContext(Dispatchers.IO) { OutboxStore.update(draft) }
+                        }
                         for (index in 0 until draft.photoCount) {
+                            if (postQueueOwner != owner) break
                             if (draft.uploadedPhotos.getOrNull(index) != null) continue
-                            val data = withContext(Dispatchers.IO) { OutboxStore.photo(draft.clientId, index) } ?: continue
-                            val id = uploadImage(data)
+                            val data = withContext(Dispatchers.IO) { OutboxStore.photo(draft.clientId, index) }
+                                ?: throw SocialException("Фото публикации потерялось")
+                            if (postQueueOwner != owner) break
+                            val id = decode<ImageResponse>(call("POST", "/images", bytes = data,
+                                contentType = "image/jpeg", requiresAuth = true, useToken = accountToken)).id
+                            if (postQueueOwner != owner) break
                             draft = draft.copy(uploadedPhotos = draft.uploadedPhotos.toMutableList().also { it[index] = id })
                             withContext(Dispatchers.IO) { OutboxStore.update(draft) }
                         }
+                        if (postQueueOwner != owner) break
                         val body = PostBody(
                             clientId = draft.clientId,
                             title = draft.title,
@@ -930,16 +980,17 @@ object SocialService {
                             workout = draft.workout,
                             together = draft.together
                         )
-                        call("POST", "/posts", body = json.encodeToString(body), requiresAuth = true)
+                        call("POST", "/posts", body = json.encodeToString(body), requiresAuth = true, useToken = accountToken)
                         withContext(Dispatchers.IO) { OutboxStore.remove(draft.clientId) }
-                        outbox = OutboxStore.loadAll()
+                        reloadPostQueue()
                         feedVersion++
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         // Любая ошибка — пост остаётся в очереди. Раньше всё, кроме
                         // ошибки сервера, роняло приложение.
-                        outboxError = (e as? SocialException)?.message ?: "Не удалось отправить тренировку"
+                        if (postQueueOwner == owner) outboxError = (e as? SocialException)?.message ?: "Не удалось отправить тренировку"
+                        stopped = true
                         break
                     }
                 }
@@ -948,6 +999,10 @@ object SocialService {
                 if (together.active != null) refreshTogether()
             } finally {
                 isFlushing = false
+            }
+            reloadPostQueue()
+            if ((!stopped || postQueueOwner != owner) && outbox.any { it.ownerKey != null && it.clientId !in attempted }) {
+                flushOutbox()
             }
         }
     }
@@ -963,15 +1018,25 @@ object SocialService {
 
         fun save(draft: SocialPostDraft, photos: List<ByteArray>) {
             val dir = folder(draft.clientId).apply { mkdirs() }
-            photos.forEachIndexed { index, data -> File(dir, "photo-$index.jpg").writeBytes(data) }
-            update(draft)
+            try {
+                photos.forEachIndexed { index, data -> File(dir, "photo-$index.jpg").writeBytes(data) }
+                update(draft)
+            } catch (e: IOException) {
+                dir.deleteRecursively()
+                throw e
+            }
         }
 
         fun update(draft: SocialPostDraft) {
-            val dir = folder(draft.clientId).apply { mkdirs() }
+            val dir = folder(draft.clientId)
             val temp = File(dir, "draft.json.tmp")
-            temp.writeText(json.encodeToString(draft))
-            temp.renameTo(File(dir, "draft.json"))
+            try {
+                temp.writeText(json.encodeToString(draft))
+                Files.move(temp.toPath(), File(dir, "draft.json").toPath(),
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } finally {
+                temp.delete()
+            }
         }
 
         fun photo(id: String, index: Int): ByteArray? = File(folder(id), "photo-$index.jpg").takeIf { it.exists() }?.readBytes()

@@ -26,6 +26,15 @@ import java.time.ZoneOffset
 
 /// Лента: достижения, программа в профиле, разбор ответов сервера и подписи.
 class SocialTest {
+    @Test
+    fun draftsSavedBeforeAccountBindingStillDecode() {
+        val raw = """{"clientId":"legacy","createdAtMillis":0,"title":"Тренировка","description":"","durationSeconds":0,"volumeKg":0,"sets":0,"workout":{"exercises":[]}}"""
+        val draft = Json.decodeFromString<com.texasprogram.app.model.SocialPostDraft>(raw)
+        assertNull(draft.ownerKey)
+        val owned = draft.copy(ownerKey = "owner-fingerprint")
+        assertEquals(owned, Json.decodeFromString<com.texasprogram.app.model.SocialPostDraft>(Json.encodeToString(owned)))
+    }
+
 
     private fun texas() = ProgramProfile.texas(ProgramInput.demo)
     private fun day(offset: Long): LocalDate = LocalDate.of(2026, 10, 12).plusDays(offset)

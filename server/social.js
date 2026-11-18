@@ -433,6 +433,24 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
 
     const q = async (sql, params) => (await pool.query(sql, params)).rows;
 
+    // Все изменения совместных сессий для общих участников идут по очереди.
+    async function withTogetherUsers(users, change) {
+        const client = await pool.connect();
+        const query = async (sql, params) => (await client.query(sql, params)).rows;
+        try {
+            await client.query('BEGIN');
+            await query('SELECT id FROM users WHERE id = ANY($1) ORDER BY id FOR NO KEY UPDATE', [users]);
+            const result = await change(query);
+            await client.query('COMMIT');
+            return result;
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
     const registerLimit = limiter(10, 60 * 60 * 1000);
     const postLimit = limiter(40, 60 * 60 * 1000);
     const commentLimit = limiter(150, 60 * 60 * 1000);
@@ -1501,20 +1519,23 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const other = await userByName(req.params.username, SHORT);
         if (other.id === me.id) throw new HttpError(400, 'Нельзя позвать самого себя');
         // Уже звали друг друга и ответа ещё нет — второе приглашение не нужно.
-        const existing = (await q(
-            `SELECT * FROM together WHERE status = 'pending' AND created_at > $3
-             AND ((inviter = $1 AND invitee = $2) OR (inviter = $2 AND invitee = $1))
-             ORDER BY created_at DESC LIMIT 1`,
-            [me.id, other.id, new Date(Date.now() - INVITE_TTL_MS)]
-        ))[0];
-        if (existing) return res.json(togetherView(existing, me, other));
-        const id = newId();
-        const [row] = await q('INSERT INTO together (id, inviter, invitee) VALUES ($1, $2, $3) RETURNING *', [id, me.id, other.id]);
-        await q(
-            'INSERT INTO messages (id, sender, recipient, text, together) VALUES ($1, $2, $3, $4, $5)',
-            [newId(), me.id, other.id, 'Го тренироваться вместе 💪', id]
-        );
-        res.status(201).json(togetherView(row, me, other));
+        const { row, created } = await withTogetherUsers([me.id, other.id], async (query) => {
+            const [existing] = await query(
+                `SELECT * FROM together WHERE status = 'pending' AND created_at > $3
+                 AND ((inviter = $1 AND invitee = $2) OR (inviter = $2 AND invitee = $1))
+                 ORDER BY created_at DESC LIMIT 1`,
+                [me.id, other.id, new Date(Date.now() - INVITE_TTL_MS)]
+            );
+            if (existing) return { row: existing, created: false };
+            const id = newId();
+            const [row] = await query('INSERT INTO together (id, inviter, invitee) VALUES ($1, $2, $3) RETURNING *', [id, me.id, other.id]);
+            await query(
+                'INSERT INTO messages (id, sender, recipient, text, together) VALUES ($1, $2, $3, $4, $5)',
+                [newId(), me.id, other.id, 'Го тренироваться вместе 💪', id]
+            );
+            return { row, created: true };
+        });
+        res.status(created ? 201 : 200).json(togetherView(row, me, other));
     }));
 
     // Входящие приглашения, свои ждущие ответа и идущая совместная тренировка
@@ -1551,15 +1572,23 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const me = await requireViewer(req);
         const row = await sessionFor(req, me);
         if (row.invitee !== me.id) throw new HttpError(403, 'Принять может только приглашённый');
-        if (togetherStatus(row) !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
-        // Одна совместная тренировка за раз: прошлые у обоих заканчиваются.
-        await q(
-            `UPDATE together SET status = 'ended' WHERE status = 'accepted' AND id <> $2
-             AND (inviter = ANY($1) OR invitee = ANY($1))`,
-            [[row.inviter, row.invitee], row.id]
-        );
-        const [updated] = await q("UPDATE together SET status = 'accepted', responded_at = now() WHERE id = $1 RETURNING *", [row.id]);
-        await touchInvite(row.id);
+        const users = [row.inviter, row.invitee];
+        const updated = await withTogetherUsers(users, async (query) => {
+            const [accepted] = await query(
+                `UPDATE together SET status = 'accepted', responded_at = now()
+                 WHERE id = $1 AND status = 'pending' AND created_at > $2 RETURNING *`,
+                [row.id, new Date(Date.now() - INVITE_TTL_MS)]
+            );
+            if (!accepted) throw new HttpError(409, 'Приглашение уже неактуально');
+            // Одна совместная тренировка за раз: прошлые у обоих заканчиваются.
+            const ended = await query(
+                `UPDATE together SET status = 'ended' WHERE status = 'accepted' AND id <> $2
+                 AND (inviter = ANY($1) OR invitee = ANY($1)) RETURNING id`,
+                [users, row.id]
+            );
+            await query('UPDATE messages SET updated_at = now() WHERE together = ANY($1)', [[row.id, ...ended.map(({id}) => id)]]);
+            return accepted;
+        });
         const inviter = (await q(`SELECT ${SHORT} FROM users WHERE id = $1`, [row.inviter]))[0];
         res.json(togetherView(updated, me, inviter));
     }));
@@ -1570,12 +1599,16 @@ function createSocial({ databaseUrl, pool: injectedPool } = {}) {
         const row = await sessionFor(req, me);
         const status = togetherStatus(row);
         const action = req.params.action;
-        if (action === 'decline') {
-            if (row.invitee !== me.id || status !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
-            await q("UPDATE together SET status = 'declined', responded_at = now() WHERE id = $1", [row.id]);
-        } else if (action === 'cancel') {
-            if (row.inviter !== me.id || status !== 'pending') throw new HttpError(409, 'Приглашение уже неактуально');
-            await q("UPDATE together SET status = 'cancelled', responded_at = now() WHERE id = $1", [row.id]);
+        if (action === 'decline' || action === 'cancel') {
+            const actor = action === 'decline' ? row.invitee : row.inviter;
+            if (actor !== me.id) throw new HttpError(409, 'Приглашение уже неактуально');
+            const result = action === 'decline' ? 'declined' : 'cancelled';
+            const [updated] = await q(
+                `UPDATE together SET status = $2, responded_at = now()
+                 WHERE id = $1 AND status = 'pending' AND created_at > $3 RETURNING id`,
+                [row.id, result, new Date(Date.now() - INVITE_TTL_MS)]
+            );
+            if (!updated) throw new HttpError(409, 'Приглашение уже неактуально');
         } else if (action === 'leave') {
             if (status === 'accepted') await q("UPDATE together SET status = 'ended' WHERE id = $1", [row.id]);
         } else if (status === 'accepted') {

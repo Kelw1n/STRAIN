@@ -564,7 +564,8 @@ data class SocialPostDraft(
     /// Уже загруженные фото: после обрыва связи их не грузим второй раз.
     val uploadedPhotos: List<String?> = emptyList(),
     /// Совместная тренировка — пост выйдет «вместе с» напарником.
-    val together: String? = null
+    val together: String? = null,
+    val ownerKey: String? = null
 )
 
 // MARK: - Подписи

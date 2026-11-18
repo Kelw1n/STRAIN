@@ -659,6 +659,40 @@ test('лента, профили, подписки, фото и коммента
         await call('DELETE', '/me/live', { token: me.token });
     });
 
+    await t.test('одновременные приглашения создают одну карточку', async () => {
+        const requests = await Promise.all(Array.from({ length: 8 }, (_, index) => index % 2
+            ? call('POST', '/users/semobsessed/together', { token: me.token })
+            : call('POST', '/users/tim/together', { token: friend.token })));
+        assert.equal(requests.filter(request => request.status === 201).length, 1);
+        assert.ok(requests.every(request => [200, 201].includes(request.status)));
+        assert.equal(new Set(requests.map(request => request.data.id)).size, 1);
+        const { id } = requests[0].data;
+        const count = await social.pool().query('SELECT count(*)::int FROM messages WHERE together = $1', [id]);
+        assert.equal(count.rows[0].count, 1);
+        const inviter = requests[0].data.fromMe ? friend : me;
+        const invitee = requests[0].data.fromMe ? me : friend;
+        const results = await Promise.all([
+            call('POST', `/together/${id}/accept`, { token: invitee.token }),
+            call('POST', `/together/${id}/cancel`, { token: inviter.token })
+        ]);
+        assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
+        if (results[0].status === 200) await call('POST', `/together/${id}/leave`, { token: invitee.token });
+    });
+
+    await t.test('новая совместная сессия обновляет старую карточку в чате', async () => {
+        const first = (await call('POST', '/users/semobsessed/together', { token: me.token })).data;
+        assert.equal((await call('POST', `/together/${first.id}/accept`, { token: friend.token })).status, 200);
+        await social.pool().query("UPDATE messages SET updated_at = now() - interval '1 day' WHERE together = $1", [first.id]);
+
+        const second = (await call('POST', '/users/semobsessed/together', { token: me.token })).data;
+        const since = Date.now() - 1_000;
+        assert.equal((await call('POST', `/together/${second.id}/accept`, { token: friend.token })).status, 200);
+        const changes = (await call('GET', `/chats/tim/messages?since=${since}`, { token: friend.token })).data;
+        assert.equal(changes.messages.find(message => message.invite?.id === first.id)?.invite.status, 'ended');
+        assert.equal(changes.messages.find(message => message.invite?.id === second.id)?.invite.status, 'accepted');
+        await call('POST', `/together/${second.id}/leave`, { token: friend.token });
+    });
+
     await t.test('удаление поста убирает и его фото', async () => {
         assert.equal((await call('DELETE', `/posts/${postId}`, { token: friend.token })).status, 404, 'чужой пост не удалить');
         assert.equal((await call('DELETE', `/posts/${postId}`, { token: me.token })).status, 200);

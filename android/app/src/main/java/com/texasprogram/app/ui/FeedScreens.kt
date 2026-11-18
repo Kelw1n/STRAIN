@@ -305,6 +305,9 @@ fun FeedScreen(
             if (SocialService.outbox.isNotEmpty()) item(key = "outbox") {
                 Box(Modifier.animateItem(fadeInSpec = tween(240), placementSpec = Motion.snappy(), fadeOutSpec = tween(160))) { OutboxCard() }
             }
+            if (SocialService.outbox.isEmpty()) SocialService.outboxError?.let { message ->
+                item(key = "outbox-save-error") { Text(message, color = Theme.warning, modifier = Modifier.padding(vertical = 8.dp)) }
+            }
             val currentError = error
             if (currentError != null && posts.isEmpty()) {
                 item(key = "error") {
@@ -399,7 +402,7 @@ private fun OutboxCard() {
                     color = Theme.accent,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.pressable { SocialService.flushOutbox() }
+                    modifier = Modifier.pressable { SocialService.flushOutbox(confirmLegacy = true) }
                 )
                 // Сервер отказал — пост не застрянет в очереди навсегда.
                 if (SocialService.outboxError != null) {
