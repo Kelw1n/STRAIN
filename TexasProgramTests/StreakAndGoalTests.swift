@@ -82,6 +82,38 @@ final class StreakAndGoalTests: XCTestCase {
         XCTAssertEqual(profile.weekGoal(now: day(4)).done, 3)
     }
 
+    func testCorrectingRestoredDateReopensTodaysSlotAndPreservesWorkout() throws {
+        let profile = texas()
+        let today = day(2)
+        profile.setCurrentWorkout(week: 7, day: 1)
+        profile.toggleCompleted(week: 7, day: 1, now: day(0))
+        let exercise = try XCTUnwrap(profile.plannedExercises(week: 6, day: 3).first)
+        profile.recordSet(week: 6, day: 3, exercise: exercise, index: 0, reps: 4, weight: 87)
+        let sets = profile.setLog
+        let key = profile.dayKey(week: 6, day: 3)
+        XCTAssertEqual(profile.restoreWorkoutDates([key: today], now: today), 1)
+        let restored = try XCTUnwrap(profile.completionLog.first { $0.key == key })
+        XCTAssertEqual(profile.weekGoal(now: today).done, 2)
+        XCTAssertTrue(WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: today).todayAlreadyDone)
+
+        profile.correctWorkoutDate(restored, to: day(4), now: today)
+        XCTAssertEqual(profile.completionLog.last, restored)
+        profile.correctWorkoutDate(restored, to: day(-3), now: today)
+        XCTAssertEqual(profile.weekGoal(now: today).done, 1)
+        XCTAssertEqual(profile.lastCompletionDate, day(0))
+        XCTAssertEqual(profile.setLog, sets)
+        XCTAssertTrue(profile.isCompleted(week: 6, day: 3))
+        var corrected = restored
+        corrected.date = calendar.startOfDay(for: day(-3))
+        XCTAssertEqual(profile.completionLog.last, corrected)
+        let slot = WorkoutScheduler.build(profile: profile, plan: profile.workoutPlan, now: today).today
+        XCTAssertEqual(slot?.week, 7)
+        XCTAssertEqual(slot?.day.number, 2)
+
+        profile.toggleCompleted(week: 7, day: 2, now: today)
+        XCTAssertEqual(profile.weekGoal(now: today).done, 2)
+    }
+
     /// С понедельника цель снова с нуля.
     func testWeekGoalResetsOnMonday() {
         let profile = texas()

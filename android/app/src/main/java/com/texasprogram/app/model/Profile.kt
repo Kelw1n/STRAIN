@@ -764,6 +764,22 @@ data class ProgramProfile(
         return restored
     }
 
+    /// Исправляет дату записи, сохраняя её привязку к дню плана и подходам.
+    fun correctWorkoutDate(record: CompletionRecord, date: LocalDate, today: LocalDate = LocalDate.now()): ProgramProfile {
+        val corrected = date.toEpochDay()
+        if (record.week == FREE_WEEK || date.isAfter(today) || corrected == record.epochDay) return this
+        val index = completionLog.indexOfFirst { it.key == record.key && it.epochDay == record.epochDay }
+        if (index < 0) return this
+        val log = completionLog.toMutableList()
+        log[index] = log[index].copy(epochDay = corrected)
+        val last = when {
+            lastCompletionEpochDay == record.epochDay -> log.maxOfOrNull { it.epochDay }
+            lastCompletionEpochDay != null -> maxOf(lastCompletionEpochDay, corrected)
+            else -> null
+        }
+        return copy(completionLog = log, lastCompletionEpochDay = last)
+    }
+
     // MARK: - История по старым отметкам
 
     /// Уже отмеченные тренировки, которые можно достроить до записей.

@@ -84,6 +84,32 @@ class StreakAndGoalTest {
         assertEquals(3 to 3, friday.weekGoal(day(4)))
     }
 
+    @Test
+    fun correctingRestoredDateReopensTodaysSlotAndPreservesWorkout() {
+        val today = day(2)
+        val profile = texas().setCurrentWorkout(7, 1, today).toggleCompleted(7, 1, day(0))
+        val exercise = profile.plannedExercises(6, 3).first()
+        val withSets = profile.recordSet(6, 3, exercise, 0, reps = 4, weight = 87.0)
+        val key = profile.dayKey(6, 3)
+        val restored = withSets.restoreWorkoutDates(mapOf(key to today), today)
+        val record = restored.completionLog.first { it.key == key }
+        assertEquals(2 to 3, restored.weekGoal(today))
+        assertTrue(restored.schedule(today).todayAlreadyDone)
+
+        assertEquals(restored, restored.correctWorkoutDate(record, day(4), today))
+        val corrected = restored.correctWorkoutDate(record, day(-3), today)
+        assertEquals(1 to 3, corrected.weekGoal(today))
+        assertEquals(day(0), corrected.lastCompletionDate())
+        assertEquals(withSets.setLog, corrected.setLog)
+        assertTrue(corrected.isCompleted(6, 3))
+        assertEquals(record.copy(epochDay = day(-3).toEpochDay()), corrected.completionLog.last())
+        val slot = corrected.schedule(today).today
+        assertEquals(7, slot?.week)
+        assertEquals(2, slot?.day?.number)
+
+        assertEquals(2 to 3, corrected.toggleCompleted(7, 2, today).weekGoal(today))
+    }
+
     /// С понедельника цель снова с нуля.
     @Test
     fun weekGoalResetsOnMonday() {

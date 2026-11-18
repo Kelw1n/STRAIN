@@ -11,6 +11,7 @@ struct ActivityProgressView: View {
     @State private var showingWeightSheet = false
     @State private var showingMuscleSheet = false
     @State private var restoringHistory = false
+    @State private var editingWorkoutDate: CompletionRecord?
     /// Путь разделов: повторное нажатие на вкладку возвращает к началу.
     @State private var path = NavigationPath()
 
@@ -48,7 +49,11 @@ struct ActivityProgressView: View {
                     // История упражнений, заметки и «Жим 14»
                     linksCard
 
-                    HistoryCard(records: profile.completionLog, freeTitles: Dictionary(profile.freeWorkouts.map { ($0.number, $0.title) }, uniquingKeysWith: { first, _ in first }))
+                    HistoryCard(
+                        records: profile.completionLog,
+                        freeTitles: Dictionary(profile.freeWorkouts.map { ($0.number, $0.title) }, uniquingKeysWith: { first, _ in first }),
+                        onEditDate: { editingWorkoutDate = $0 }
+                    )
 
                     Spacer(minLength: 90)
                 }
@@ -83,6 +88,9 @@ struct ActivityProgressView: View {
             }
             .sheet(isPresented: $restoringHistory) {
                 RestoreWorkoutDatesSheet(workouts: profile.undatedWorkouts) { profile.restoreWorkoutDates($0) }
+            }
+            .sheet(item: $editingWorkoutDate) { workout in
+                WorkoutDateEditSheet(record: workout) { profile.correctWorkoutDate(workout, to: $0) }
             }
             .sheet(isPresented: $showingWeightSheet) {
                 BodyWeightScreen(profile: profile)

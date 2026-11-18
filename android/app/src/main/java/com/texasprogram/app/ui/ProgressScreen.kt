@@ -44,11 +44,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.texasprogram.app.model.CompletionRecord
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.TrainingProgramKind
 import com.texasprogram.app.model.formatWeight
 import com.texasprogram.app.service.MuscleGroupAnalytics
 import com.texasprogram.app.service.UpperLowerCalculator
+import java.time.LocalDate
 
 @Composable
 fun ProgressScreen(
@@ -65,11 +67,19 @@ fun ProgressScreen(
     val ratio = if (total > 0) done.toFloat() / total else 0f
     var showMuscleDialog by remember { mutableStateOf(false) }
     var restoringHistory by remember { mutableStateOf(false) }
+    var editingWorkoutDate by remember { mutableStateOf<CompletionRecord?>(null) }
     val undated = remember(profile) { profile.undatedWorkouts }
     if (restoringHistory && undated.isNotEmpty()) {
         RestoreWorkoutDatesSheet(undated, onRestore = {
             onUpdate(profile.restoreWorkoutDates(it))
         }, onDismiss = { restoringHistory = false })
+    }
+    editingWorkoutDate?.let { record ->
+        WorkoutDatePickerDialog(
+            initial = LocalDate.ofEpochDay(record.epochDay),
+            onSelect = { onUpdate(profile.correctWorkoutDate(record, it)) },
+            onDismiss = { editingWorkoutDate = null }
+        )
     }
     val listState = rememberLazyListState()
     OnTabReselect(MainTabItem.PROGRESS) { listState.scrollToTop() }
@@ -202,7 +212,12 @@ fun ProgressScreen(
         }
 
         item(key = "history") {
-            HistoryCard(profile.completionLog, Modifier.appearIn(3), freeTitles = remember(profile.freeWorkouts) { profile.freeWorkouts.associate { it.number to it.title } })
+            HistoryCard(
+                profile.completionLog,
+                Modifier.appearIn(3),
+                freeTitles = remember(profile.freeWorkouts) { profile.freeWorkouts.associate { it.number to it.title } },
+                onEditDate = { editingWorkoutDate = it }
+            )
         }
 
         item(key = "weeks") {

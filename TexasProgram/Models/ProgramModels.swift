@@ -94,7 +94,7 @@ enum AdditionalExerciseCategory: String, CaseIterable, Identifiable, Hashable {
 /// поменять в настройках, и тогда история задним числом стала бы неверной.
 struct CompletionRecord: Codable, Equatable, Hashable, Sendable, Identifiable {
     let key: String
-    let date: Date
+    var date: Date
     let week: Int
     let day: Int
     /// Рабочие веса приседа, жима и тяги в этот день; нет упражнения — нет и веса.
@@ -1277,6 +1277,20 @@ final class ProgramProfile {
             restored += 1
         }
         return restored
+    }
+
+    /// Исправляет дату записи, сохраняя её привязку к дню плана и подходам.
+    func correctWorkoutDate(_ record: CompletionRecord, to date: Date, now: Date = Date(), calendar: Calendar = .current) {
+        let corrected = calendar.startOfDay(for: date)
+        guard record.week != Self.freeWeek, corrected <= calendar.startOfDay(for: now),
+              !calendar.isDate(record.date, inSameDayAs: corrected),
+              let index = completionLog.firstIndex(where: { $0.key == record.key && $0.date == record.date }) else { return }
+        completionLog[index].date = corrected
+        if lastCompletionDate == record.date {
+            lastCompletionDate = completionLog.lazy.map(\.date).max()
+        } else if let latest = lastCompletionDate, corrected > latest {
+            lastCompletionDate = corrected
+        }
     }
 
     // MARK: - История по старым отметкам
