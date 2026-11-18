@@ -277,10 +277,6 @@ object SocialService {
     }
 
     fun signOut() {
-        // Неотправленные сообщения не должны уйти от имени следующего профиля.
-        pendingMessages.forEach { ChatOutboxStore.remove(it.clientId) }
-        pendingMessages = emptyList()
-        pendingFailures = emptyMap()
         storeToken(null)
         me = null
         unreadMessages = 0
@@ -300,6 +296,11 @@ object SocialService {
     }
 
     private fun storeToken(value: String?) {
+        if (token != value) {
+            pendingMessages.forEach { ChatOutboxStore.remove(it.clientId) }
+            pendingMessages = emptyList()
+            pendingFailures = emptyMap()
+        }
         token = value
         outboxError = null
         reloadPostQueue()
@@ -546,6 +547,7 @@ object SocialService {
 
     /// Сообщение — сначала на диск, потом в путь. Нет связи — дождётся её.
     fun queue(item: ChatPending, photo: ByteArray? = null, voice: ByteArray? = null) {
+        if (token == null) return
         runCatching { ChatOutboxStore.save(item, photo, voice) }
         pendingMessages = pendingMessages + item
         flushMessages()
@@ -553,14 +555,20 @@ object SocialService {
 
     /// Фото с телефона сжимается в фоне, потом сообщение встаёт в очередь.
     fun queue(context: Context, item: ChatPending, photo: Uri) {
+        val accountToken = token ?: return
         scope.launch {
             val data = withContext(Dispatchers.IO) { jpeg(context, photo, maxSide = 1600) }
+            if (token != accountToken) return@launch
             if (data == null) {
                 pendingMessages = pendingMessages + item
                 pendingFailures = pendingFailures + (item.clientId to "Не удалось открыть фото")
                 return@launch
             }
             withContext(Dispatchers.IO) { runCatching { ChatOutboxStore.save(item, data, null) } }
+            if (token != accountToken) {
+                withContext(Dispatchers.IO) { ChatOutboxStore.remove(item.clientId) }
+                return@launch
+            }
             pendingMessages = pendingMessages + item
             flushMessages()
         }
@@ -587,7 +595,8 @@ object SocialService {
     /// Отправляет очередь по порядку. Нет связи — останавливается до следующего
     /// раза; сервер отказал — сообщение помечается и не мешает остальным.
     fun flushMessages() {
-        if (!::appContext.isInitialized || token == null) return
+        if (!::appContext.isInitialized) return
+        val accountToken = token ?: return
         if (flushingMessages) {
             flushRequested = true
             return
@@ -603,7 +612,11 @@ object SocialService {
                     if (pendingMessages.none { it.clientId == item.clientId }) continue
                     sendingClientId = item.clientId
                     try {
-                        val sent = deliver(item)
+                        val sent = deliver(item, accountToken)
+                        if (sent == null || token != accountToken) {
+                            discardedWhileSending.remove(item.clientId)
+                            continue
+                        }
                         chatOffline = false
                         // Пока сообщение летело, его отменили — убираем и с сервера.
                         if (discardedWhileSending.remove(item.clientId)) {
@@ -616,6 +629,7 @@ object SocialService {
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: SocialException) {
+                        if (token != accountToken) continue
                         if (e.isRetryable) {
                             chatOffline = true
                             stalled = true
@@ -625,7 +639,7 @@ object SocialService {
                             pendingFailures = pendingFailures + (item.clientId to (e.message ?: "Не отправлено"))
                         }
                     } catch (e: Exception) {
-                        if (!discardedWhileSending.remove(item.clientId)) {
+                        if (!discardedWhileSending.remove(item.clientId) && token == accountToken) {
                             pendingFailures = pendingFailures + (item.clientId to "Не отправлено")
                         }
                     } finally {
@@ -648,19 +662,25 @@ object SocialService {
 
     /// Фото и звук грузятся один раз, потом уходит само сообщение. Повтор с тем же
     /// clientId сервер не дублирует, поэтому оборванную отправку можно повторять.
-    private suspend fun deliver(pending: ChatPending): SocialMessage {
+    private suspend fun deliver(pending: ChatPending, accountToken: String): SocialMessage? {
+        fun shouldSend() = token == accountToken && pendingMessages.any { it.clientId == pending.clientId }
+        if (!shouldSend()) return null
         var item = pending
         if (item.hasPhotoFile && item.uploadedImage == null) {
             val data = withContext(Dispatchers.IO) { ChatOutboxStore.photo(item.clientId) }
                 ?: throw SocialException("Фото потерялось — отправь его заново", 400)
+            if (!shouldSend()) return null
             item = item.copy(uploadedImage = uploadImage(data))
+            if (!shouldSend()) return null
             savePending(item)
         }
         val voice = item.voice
         if (item.hasVoiceFile && item.uploadedVoice == null && voice != null) {
             val data = withContext(Dispatchers.IO) { ChatOutboxStore.voice(item.clientId) }
                 ?: throw SocialException("Запись потерялась — запиши заново", 400)
+            if (!shouldSend()) return null
             item = item.copy(uploadedVoice = uploadVoice(data, voice.durationMs, voice.waveform).id)
+            if (!shouldSend()) return null
             savePending(item)
         }
         val ready = item
@@ -678,13 +698,14 @@ object SocialService {
             }
         }.toString()
         return try {
-            decode(call("POST", "/chats/${q(ready.username)}/messages", body = body, requiresAuth = true))
+            decode(call("POST", "/chats/${q(ready.username)}/messages", body = body, requiresAuth = true, useToken = accountToken))
         } catch (e: SocialException) {
             // Сообщение, на которое отвечали, удалили, пока ждали связи, — уходим без цитаты.
             if (e.status == 404 && ready.replyTo != null && e.message == "Сообщение удалено") {
+                if (!shouldSend()) return null
                 val plain = ready.copy(replyTo = null)
                 savePending(plain)
-                deliver(plain)
+                deliver(plain, accountToken)
             } else throw e
         }
     }

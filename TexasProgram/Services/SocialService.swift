@@ -243,10 +243,6 @@ final class SocialService {
     }
 
     func signOut() {
-        // Неотправленные сообщения не должны уйти от имени следующего профиля.
-        for item in pendingMessages { ChatOutboxStore.remove(item.clientId) }
-        pendingMessages = []
-        pendingFailures = [:]
         setToken(nil)
         me = nil
         unreadMessages = 0
@@ -267,6 +263,11 @@ final class SocialService {
     }
 
     private func setToken(_ value: String?) {
+        if token != value {
+            for item in pendingMessages { ChatOutboxStore.remove(item.clientId) }
+            pendingMessages = []
+            pendingFailures = [:]
+        }
         token = value
         SocialKeychain.save(value)
         outboxError = nil
@@ -558,6 +559,7 @@ final class SocialService {
 
     /// Сообщение — сначала на диск, потом в путь. Нет связи — дождётся её.
     func queue(_ item: ChatPending, photo: Data? = nil, voice: Data? = nil) {
+        guard token != nil else { return }
         ChatOutboxStore.save(item, photo: photo, voice: voice)
         pendingMessages.append(item)
         flushMessages()
@@ -578,7 +580,7 @@ final class SocialService {
     /// Отправляет очередь по порядку. Нет связи — останавливается до следующего
     /// раза; сервер отказал — сообщение помечается и не мешает остальным.
     func flushMessages() {
-        guard token != nil else { return }
+        guard let accountToken = token else { return }
         if flushingMessages {
             flushRequested = true
             return
@@ -593,7 +595,10 @@ final class SocialService {
                 sendingClientId = item.clientId
                 defer { sendingClientId = nil }
                 do {
-                    let sent = try await deliver(item)
+                    guard let sent = try await deliver(item, accountToken: accountToken), token == accountToken else {
+                        discardedWhileSending.remove(item.clientId)
+                        continue
+                    }
                     chatOffline = false
                     // Пока сообщение летело, его отменили — убираем и с сервера.
                     if discardedWhileSending.remove(item.clientId) != nil {
@@ -604,6 +609,7 @@ final class SocialService {
                     pendingMessages.removeAll { $0.clientId == item.clientId }
                     sentHandlers[item.username]?(item.clientId, sent)
                 } catch let error as SocialError where error.isRetryable {
+                    guard token == accountToken else { continue }
                     chatOffline = true
                     stalled = true
                     break delivery
@@ -611,7 +617,7 @@ final class SocialService {
                     stalled = true
                     break delivery
                 } catch {
-                    if discardedWhileSending.remove(item.clientId) == nil {
+                    if discardedWhileSending.remove(item.clientId) == nil, token == accountToken {
                         pendingFailures[item.clientId] = error.socialMessage ?? "Не отправлено"
                     }
                 }
@@ -630,16 +636,22 @@ final class SocialService {
 
     /// Фото и звук грузятся один раз, потом уходит само сообщение. Повтор с тем же
     /// clientId сервер не дублирует, поэтому оборванную отправку можно повторять.
-    private func deliver(_ pending: ChatPending) async throws -> SocialMessage {
+    private func deliver(_ pending: ChatPending, accountToken: String) async throws -> SocialMessage? {
+        func shouldSend() -> Bool {
+            token == accountToken && pendingMessages.contains { $0.clientId == pending.clientId }
+        }
+        guard shouldSend() else { return nil }
         var item = pending
         if item.hasPhotoFile && item.uploadedImage == nil {
             guard let data = ChatOutboxStore.photo(item.clientId) else { throw SocialError(message: "Фото потерялось — отправь его заново") }
             item.uploadedImage = try await uploadImage(data)
+            guard shouldSend() else { return nil }
             savePending(item)
         }
         if item.hasVoiceFile, item.uploadedVoice == nil, let voice = item.voice {
             guard let data = ChatOutboxStore.voice(item.clientId) else { throw SocialError(message: "Запись потерялась — запиши заново") }
             item.uploadedVoice = try await uploadVoice(data, durationMs: voice.durationMs, waveform: voice.waveform).id
+            guard shouldSend() else { return nil }
             savePending(item)
         }
         var body = MessageBody(text: item.text, replyTo: item.replyTo?.id, clientId: item.clientId, workout: item.workout, forward: item.forward)
@@ -648,12 +660,13 @@ final class SocialService {
             body.voice = item.hasVoiceFile ? item.uploadedVoice : nil
         }
         do {
-            return try await request("POST", "/chats/\(item.username)/messages", json: body, requiresAuth: true)
+            return try await request("POST", "/chats/\(item.username)/messages", json: body, requiresAuth: true, token: accountToken)
         } catch let error as SocialError where error.status == 404 && item.replyTo != nil && error.message == "Сообщение удалено" {
             // Сообщение, на которое отвечали, удалили, пока ждали связи, — уходим без цитаты.
+            guard shouldSend() else { return nil }
             item.replyTo = nil
             savePending(item)
-            return try await deliver(item)
+            return try await deliver(item, accountToken: accountToken)
         }
     }
 
