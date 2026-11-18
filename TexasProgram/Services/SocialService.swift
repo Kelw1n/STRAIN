@@ -340,13 +340,14 @@ final class SocialService {
             guard let self, !Task.isCancelled, self.token != nil else { return }
             // Профиль за эти секунды могли удалить: к удалённой модели обращаться нельзя.
             guard !profile.isDeleted, !attached || profile.modelContext != nil else { return }
+            let incomplete = profile.completionLog.isEmpty && profile.hasUndatedWorkoutMarks
             let patch = ProfilePatch(
                 weightKg: profile.latestBodyWeight,
                 programs: SocialProgramBuilder.days(for: profile),
-                achievements: AchievementCalculator.badges(from: AchievementCalculator.progress(for: profile)),
-                records: PersonalRecords.records(for: profile),
-                heatmap: TrainingHeatmap.build(for: profile),
-                stats: WeeklyStatsBuilder.stats(for: profile)
+                achievements: incomplete ? nil : AchievementCalculator.badges(from: AchievementCalculator.progress(for: profile)),
+                records: incomplete ? nil : PersonalRecords.records(for: profile),
+                heatmap: incomplete ? nil : TrainingHeatmap.build(for: profile),
+                stats: incomplete ? nil : WeeklyStatsBuilder.stats(for: profile)
             )
             guard let data = try? JSONEncoder().encode(patch) else { return }
             let fingerprint = data.base64EncodedString()
