@@ -394,6 +394,19 @@ data class ProgramProfile(
 
     // MARK: - Заметки
 
+    fun noteSlot(key: String): Pair<Int, Int>? {
+        if (key.startsWith("free-")) {
+            val day = key.removePrefix("free-").toIntOrNull() ?: return null
+            return (FREE_WEEK to day).takeIf { key == freeKey(day) }
+        }
+        if (!isOwnKey(key)) return null
+        val parts = key.removePrefix(keyPrefix).split("-")
+        if (parts.size != 2) return null
+        val week = parts[0].toIntOrNull() ?: return null
+        val day = parts[1].toIntOrNull() ?: return null
+        return (week to day).takeIf { key == dayKey(week, day) }
+    }
+
     fun note(week: Int, day: Int): String = workoutNotes[dayKey(week, day)] ?: ""
 
     fun setNote(text: String, week: Int, day: Int): ProgramProfile {

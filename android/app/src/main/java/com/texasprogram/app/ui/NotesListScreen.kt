@@ -32,20 +32,10 @@ fun NotesListScreen(
     contentPadding: PaddingValues
 ) {
     // От свежих к старым: перечитывают обычно последнее.
-    val notes = remember(profile.workoutNotes, profile.id) {
-        val prefix = profile.keyPrefix
-        val freePrefix = ProgramProfile.freeKey(0).dropLast(1)
+    val notes = remember(profile.workoutNotes, profile.keyPrefix) {
         profile.workoutNotes
             .mapNotNull { (key, text) ->
-                // Заметки свободных тренировок — вне циклов, у них свой ключ.
-                if (key.startsWith(freePrefix)) {
-                    val number = key.removePrefix(freePrefix).toIntOrNull() ?: return@mapNotNull null
-                    return@mapNotNull Triple(ProgramProfile.FREE_WEEK, number, text)
-                }
-                if (!profile.isOwnKey(key)) return@mapNotNull null
-                val parts = key.removePrefix(prefix).split("-")
-                val week = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
-                val day = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+                val (week, day) = profile.noteSlot(key) ?: return@mapNotNull null
                 Triple(week, day, text)
             }
             .sortedWith(compareByDescending<Triple<Int, Int, String>> { it.first }.thenByDescending { it.second })

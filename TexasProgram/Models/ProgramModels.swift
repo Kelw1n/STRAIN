@@ -787,6 +787,17 @@ final class ProgramProfile {
 
     // MARK: - Заметки
 
+    func noteSlot(for key: String) -> (week: Int, day: Int)? {
+        if key.hasPrefix("free-"), let day = Int(key.dropFirst(5)), key == Self.freeKey(day) {
+            return (Self.freeWeek, day)
+        }
+        guard isOwnKey(key) else { return nil }
+        let parts = key.dropFirst(keyPrefix.count).split(separator: "-")
+        guard parts.count == 2, let week = Int(parts[0]), let day = Int(parts[1]),
+              key == dayKey(week: week, day: day) else { return nil }
+        return (week, day)
+    }
+
     func note(week: Int, day: Int) -> String {
         workoutNotes[dayKey(week: week, day: day)] ?? ""
     }

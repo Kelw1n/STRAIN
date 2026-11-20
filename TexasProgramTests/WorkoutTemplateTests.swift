@@ -128,6 +128,7 @@ final class WorkoutTemplateTests: XCTestCase {
         XCTAssertEqual(next.day.number, 2)
         profile.setNote("Первая", week: 0, day: 1)
         profile.setNote("Вторая", week: 0, day: 2)
+        XCTAssertEqual(profile.workoutNotes.keys.filter { profile.noteSlot(for: $0) != nil }.count, 2)
         profile.discardFreeWorkout(2)
         XCTAssertEqual(profile.note(week: 0, day: 2), "")
         XCTAssertEqual(profile.note(week: 0, day: 1), "Первая")
