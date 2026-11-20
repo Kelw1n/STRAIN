@@ -55,6 +55,19 @@ final class StreakAndGoalTests: XCTestCase {
         XCTAssertEqual(profile.calendarStreak(now: day(2)).weeks, 1)
     }
 
+    func testUndoReopensScheduleAndBenchWaveUsesHistory() {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        profile.toggleCompleted(week: 1, day: 1, now: day(0))
+        profile.toggleBenchCompleted(2, now: day(3))
+        XCTAssertEqual(profile.weekGoal(now: day(3)).done, 2)
+        profile.toggleBenchCompleted(2, now: day(3))
+        XCTAssertEqual(profile.lastCompletionDate, day(0))
+        XCTAssertEqual(profile.weekGoal(now: day(3)).done, 1)
+        profile.toggleCompleted(week: 1, day: 1, now: day(0))
+        XCTAssertNil(profile.lastCompletionDate)
+        XCTAssertTrue(profile.completionLog.isEmpty)
+    }
+
     func testWeekGoalCountsOnlyThisWeek() {
         let profile = texas()
         complete(profile, on: [day(-3), day(0), day(2)])

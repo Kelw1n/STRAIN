@@ -1287,7 +1287,7 @@ final class ProgramProfile {
               let index = completionLog.firstIndex(where: { $0.key == record.key && $0.date == record.date }) else { return }
         completionLog[index].date = corrected
         if lastCompletionDate == record.date {
-            lastCompletionDate = completionLog.lazy.map(\.date).max()
+            lastCompletionDate = latestProgramCompletion
         } else if let latest = lastCompletionDate, corrected > latest {
             lastCompletionDate = corrected
         }
@@ -1527,6 +1527,16 @@ final class ProgramProfile {
         return completedDayKeys.contains(dayKey(week: week, day: day))
     }
 
+    private var latestProgramCompletion: Date? {
+        completionLog.lazy.filter { self.isOwnKey($0.key) }.map(\.date).max()
+    }
+
+    private func removeProgramCompletion(_ key: String) {
+        let removedLatest = completionLog.contains { $0.key == key && $0.date == lastCompletionDate }
+        completionLog.removeAll { $0.key == key }
+        if removedLatest { lastCompletionDate = latestProgramCompletion }
+    }
+
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
     func toggleCompleted(week: Int, day: Int, now: Date = Date(), durationSeconds: Int? = nil, effort: String? = nil) {
@@ -1560,7 +1570,7 @@ final class ProgramProfile {
             }
         } else {
             let key = dayKey(week: week, day: day)
-            completionLog.removeAll { $0.key == key }
+            removeProgramCompletion(key)
         }
     }
 
@@ -1723,7 +1733,7 @@ final class ProgramProfile {
             setLog[k] = nil
         }
         let dKey = dayKey(week: week, day: day)
-        completionLog.removeAll { $0.key == dKey }
+        removeProgramCompletion(dKey)
         setDayCompleted(week: week, day: day, false)
     }
 
@@ -1898,7 +1908,13 @@ final class ProgramProfile {
         setBenchCompleted(session, done)
         let target = day(forBenchSession: session)
         setDayCompleted(week: target.week, day: target.day, done)
-        if done { lastCompletionDate = now }
+        let key = dayKey(week: target.week, day: target.day)
+        if !done {
+            removeProgramCompletion(key)
+        } else if !completionLog.contains(where: { $0.key == key }) {
+            recordCompletion(week: target.week, day: target.day, now: now)
+            lastCompletionDate = now
+        }
     }
 
     private func setBenchCompleted(_ session: Int, _ done: Bool) {
