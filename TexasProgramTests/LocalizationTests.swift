@@ -21,6 +21,8 @@ final class LocalizationTests: XCTestCase {
             ("Неделя 3 из 12", "Week 3 of 12"),
             ("ДЕНЬ 1", "DAY 1"),
             ("4 тренировки", "4 workouts"),
+            ("Выбрать фото сбоку", "Choose a side-view photo"),
+            ("Восстановить историю", "Restore workout history"),
             ("был(а) вчера", "last seen yesterday"),
             ("Ноябрь 2026", "November 2026"),
             ("жим лёжа", "bench press"),

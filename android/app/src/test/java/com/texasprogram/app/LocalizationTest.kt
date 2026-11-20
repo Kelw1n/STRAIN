@@ -25,6 +25,8 @@ class LocalizationTest {
             "Неделя 3 из 12" to "Week 3 of 12",
             "ДЕНЬ 1" to "DAY 1",
             "4 тренировки" to "4 workouts",
+            "Выбрать фото сбоку" to "Choose a side-view photo",
+            "Восстановить историю" to "Restore workout history",
             "был(а) вчера" to "last seen yesterday",
             "Ноябрь 2026" to "November 2026",
             "жим лёжа" to "bench press",
