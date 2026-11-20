@@ -29,10 +29,13 @@ class CrossPlatformBackupTest {
 
     @Test
     fun backupPreservesPartialWorkoutAndMatchesProfileId() {
-        val profile = profiles(FROM_ANDROID).getValue("Техас").copy(id = "a1bc", setProgress = mapOf("1-2|test" to 2))
+        val profile = profiles(FROM_ANDROID).getValue("Техас").copy(id = "a1bc", defaultRestSeconds = 75, reminderHour = 9, setProgress = mapOf("1-2|test" to 2))
         val archive = BackupService.parse(BackupService.export(listOf(profile)))
         val snapshot = archive.profiles.single()
-        assertEquals(profile.setProgress, BackupService.profile(snapshot).setProgress)
+        val copy = BackupService.profile(snapshot)
+        assertEquals(75, copy.defaultRestSeconds)
+        assertEquals(9, copy.reminderHour)
+        assertEquals(profile.setProgress, copy.setProgress)
         val older = archive.copy(profiles = listOf(snapshot.copy(id = profile.id.uppercase(), setProgress = null)))
         val matched = BackupService.matchExistingProfiles(older, listOf(profile)).profiles.single()
         assertEquals(profile.id, matched.id)

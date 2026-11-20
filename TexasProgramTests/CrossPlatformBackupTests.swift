@@ -21,9 +21,15 @@ final class CrossPlatformBackupTests: XCTestCase {
 
     func testBackupPreservesPartialWorkout() throws {
         let profile = ProgramProfile(input: .demo)
+        profile.defaultRestSeconds = 75
+        profile.accessoryProgressionEnabled = false
+        profile.reminderHour = 9
         profile.setProgress = ["1-2|test": 2]
         let data = try BackupService.export([profile], socialToken: nil)
         let restored = try restore(String(decoding: data, as: UTF8.self))
+        XCTAssertEqual(restored[profile.name]?.defaultRestSeconds, 75)
+        XCTAssertEqual(restored[profile.name]?.accessoryProgressionEnabled, false)
+        XCTAssertEqual(restored[profile.name]?.reminderHour, 9)
         XCTAssertEqual(restored[profile.name]?.setProgress, profile.setProgress)
     }
 

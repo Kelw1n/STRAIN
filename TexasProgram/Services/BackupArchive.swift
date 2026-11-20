@@ -64,6 +64,12 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var workoutTemplates: [WorkoutTemplate]?
     var freeWorkouts: [FreeWorkoutDay]?
     /// Цель: своё время у дней и срок. Необязательные: в старых копиях их нет.
+    var defaultRestSeconds: Int?
+    var accessoryProgressionEnabled: Bool?
+    var reminderHour: Int?
+    var reminderMinute: Int?
+    var reminderOffsets: [Int]?
+    var reminderEnabled: Bool?
     var trainingTimes: [String: Int]?
     var goalStartEpochDay: Int?
     var goalMonths: Int?
@@ -281,6 +287,12 @@ enum BackupService {
             customExercises: profile.customExercises.isEmpty ? nil : profile.customExercises,
             workoutTemplates: profile.workoutTemplates.isEmpty ? nil : profile.workoutTemplates,
             freeWorkouts: profile.freeWorkouts.isEmpty ? nil : profile.freeWorkouts,
+            defaultRestSeconds: profile.defaultRestSeconds,
+            accessoryProgressionEnabled: profile.accessoryProgressionEnabled,
+            reminderHour: profile.reminderHour,
+            reminderMinute: profile.reminderMinute,
+            reminderOffsets: profile.reminderOffsets,
+            reminderEnabled: profile.reminderEnabled,
             trainingTimes: profile.trainingTimes.isEmpty ? nil : profile.trainingTimes,
             goalStartEpochDay: profile.goalStart.map(epochDay),
             goalMonths: profile.goalMonths == 0 ? nil : profile.goalMonths
@@ -400,6 +412,12 @@ enum BackupService {
         result.customExercises = snapshot.customExercises ?? []
         result.workoutTemplates = snapshot.workoutTemplates ?? []
         result.freeWorkouts = snapshot.freeWorkouts ?? []
+        if let value = snapshot.defaultRestSeconds { result.defaultRestSeconds = value }
+        if let value = snapshot.accessoryProgressionEnabled { result.accessoryProgressionEnabled = value }
+        if let value = snapshot.reminderHour { result.reminderHour = value }
+        if let value = snapshot.reminderMinute { result.reminderMinute = value }
+        if let value = snapshot.reminderOffsets { result.reminderOffsets = value }
+        if let value = snapshot.reminderEnabled { result.reminderEnabled = value }
         result.trainingTimes = snapshot.trainingTimes ?? [:]
         result.goalStart = snapshot.goalStartEpochDay.map { BackupService.date($0) }
         result.goalMonths = snapshot.goalMonths ?? 0

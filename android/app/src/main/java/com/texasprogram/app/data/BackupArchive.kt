@@ -83,6 +83,12 @@ data class ProfileSnapshot(
     val workoutTemplates: List<com.texasprogram.app.model.WorkoutTemplate> = emptyList(),
     val freeWorkouts: List<com.texasprogram.app.model.FreeWorkoutDay> = emptyList(),
     /// Цель: своё время у дней и срок. Значения по умолчанию — для старых копий.
+    val defaultRestSeconds: Int? = null,
+    val accessoryProgressionEnabled: Boolean? = null,
+    val reminderHour: Int? = null,
+    val reminderMinute: Int? = null,
+    val reminderOffsets: List<Int>? = null,
+    val reminderEnabled: Boolean? = null,
     val trainingTimes: Map<String, Int> = emptyMap(),
     val goalStartEpochDay: Long? = null,
     val goalMonths: Int = 0
@@ -178,7 +184,16 @@ object BackupService {
         return archive.copy(profiles = archive.profiles.map { snapshot ->
             val match = byId[snapshot.id.lowercase()]
             if (match == null) snapshot
-            else snapshot.copy(id = match.id, setProgress = snapshot.setProgress ?: match.setProgress)
+            else snapshot.copy(
+                id = match.id,
+                setProgress = snapshot.setProgress ?: match.setProgress,
+                defaultRestSeconds = snapshot.defaultRestSeconds ?: match.defaultRestSeconds,
+                accessoryProgressionEnabled = snapshot.accessoryProgressionEnabled ?: match.accessoryProgressionEnabled,
+                reminderHour = snapshot.reminderHour ?: match.reminderHour,
+                reminderMinute = snapshot.reminderMinute ?: match.reminderMinute,
+                reminderOffsets = snapshot.reminderOffsets ?: match.reminderOffsets,
+                reminderEnabled = snapshot.reminderEnabled ?: match.reminderEnabled
+            )
         })
     }
 
@@ -244,6 +259,12 @@ object BackupService {
         customExercises = profile.customExercises,
         workoutTemplates = profile.workoutTemplates,
         freeWorkouts = profile.freeWorkouts,
+        defaultRestSeconds = profile.defaultRestSeconds,
+        accessoryProgressionEnabled = profile.accessoryProgressionEnabled,
+        reminderHour = profile.reminderHour,
+        reminderMinute = profile.reminderMinute,
+        reminderOffsets = profile.reminderOffsets,
+        reminderEnabled = profile.reminderEnabled,
         trainingTimes = profile.trainingTimes,
         goalStartEpochDay = profile.goalStartEpochDay,
         goalMonths = profile.goalMonths
@@ -307,6 +328,12 @@ object BackupService {
         customExercises = snapshot.customExercises,
         workoutTemplates = snapshot.workoutTemplates,
         freeWorkouts = snapshot.freeWorkouts,
+        defaultRestSeconds = snapshot.defaultRestSeconds ?: 180,
+        accessoryProgressionEnabled = snapshot.accessoryProgressionEnabled ?: true,
+        reminderHour = snapshot.reminderHour ?: 18,
+        reminderMinute = snapshot.reminderMinute ?: 0,
+        reminderOffsets = snapshot.reminderOffsets ?: listOf(0),
+        reminderEnabled = snapshot.reminderEnabled ?: false,
         trainingTimes = snapshot.trainingTimes,
         goalStartEpochDay = snapshot.goalStartEpochDay,
         goalMonths = snapshot.goalMonths,
