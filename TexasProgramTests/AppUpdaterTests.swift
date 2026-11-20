@@ -42,6 +42,12 @@ final class AppUpdaterTests: XCTestCase {
         XCTAssertEqual(updater.available?.versionCode, 1240)
         XCTAssertEqual(updater.pending.map(\.versionCode), [1240, 1235])
         XCTAssertTrue(updater.whatsNew.isEmpty)
+        updater.dismiss()
+        updater.apply(release, installed: 1230, defaults: defaults)
+        XCTAssertTrue(updater.dismissed)
+        let newer = try self.release(#"{"versionCode":1241,"versionName":"3.1.241","notes":"Обновление"}"#)
+        updater.apply(newer, installed: 1230, defaults: defaults)
+        XCTAssertFalse(updater.dismissed)
         // Поставили новую: плашки нет, один раз — что нового.
         updater.apply(release, installed: 1240, defaults: defaults)
         XCTAssertNil(updater.available)

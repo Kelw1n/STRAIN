@@ -236,13 +236,13 @@ final class NutritionTests: XCTestCase {
 
         NutritionStore.delete(id)
         let container = try ModelContainer(for: ProgramProfile.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        BackupService.restore(archive, into: ModelContext(container), existing: [])
+        try BackupService.restore(archive, into: ModelContext(container), existing: [])
         XCTAssertEqual(NutritionStore.read(id)?.entries.count, 2)
         XCTAssertEqual(NutritionStore.read(id)?.plan?.observationStart, start)
 
         var withoutNutrition = archive
         withoutNutrition.profiles[0].nutrition = nil
-        BackupService.restore(withoutNutrition, into: ModelContext(container), existing: [])
+        try BackupService.restore(withoutNutrition, into: ModelContext(container), existing: [])
         XCTAssertEqual(NutritionStore.read(id)?.entries.count, 2)
     }
 }

@@ -62,6 +62,19 @@ class StreakAndGoalTest {
     }
 
     @Test
+    fun undoReopensScheduleAndBenchWaveUsesHistory() {
+        val profile = ProgramProfile.upperLower(com.texasprogram.app.model.UpperLowerInput.demo)
+            .toggleCompleted(1, 1, day(0)).toggleBenchCompleted(2, day(3))
+        assertEquals(2, profile.weekGoal(day(3)).first)
+        val undone = profile.toggleBenchCompleted(2, day(3))
+        assertEquals(day(0), undone.lastCompletionDate())
+        assertEquals(1, undone.weekGoal(day(3)).first)
+        val empty = undone.toggleCompleted(1, 1, day(0))
+        assertNull(empty.lastCompletionEpochDay)
+        assertTrue(empty.completionLog.isEmpty())
+    }
+
+    @Test
     fun weekGoalCountsOnlyThisWeek() {
         val profile = complete(texas(), listOf(day(-3), day(0), day(2)))
         val (done, target) = profile.weekGoal(day(4))

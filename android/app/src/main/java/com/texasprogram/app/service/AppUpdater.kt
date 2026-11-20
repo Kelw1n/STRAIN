@@ -118,13 +118,16 @@ object AppUpdater {
         checking = true
         try {
             val text = withContext(Dispatchers.IO) { fetchText(VERSION_URL) }
-            lastCheck = now
             val release = json.decodeFromString<Release>(text)
+            lastCheck = now
             val app = context.applicationContext
             val installed = installedVersionCode(app)
             rememberSeen(app, installed, release)
             return if (release.versionCode > installed) {
-                if (state.release?.versionCode != release.versionCode) state = State.Available(release)
+                if (state.release?.versionCode != release.versionCode) {
+                    dismissed = false
+                    state = State.Available(release)
+                }
                 pending = release.changes(since = installed)
                 true
             } else {

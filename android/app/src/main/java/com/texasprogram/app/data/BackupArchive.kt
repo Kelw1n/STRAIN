@@ -55,6 +55,7 @@ data class ProfileSnapshot(
     val planEdits: List<PlanEdit> = emptyList(),
     /// Факт подходов, откаты, цикл и своя программа. Значения по умолчанию нужны
     /// для копий, снятых до появления этих полей, и для файлов со старых версий.
+    val setProgress: Map<String, Int>? = null,
     val setLog: Map<String, SetEntry> = emptyMap(),
     val skipped: List<SkippedSnapshot> = emptyList(),
     val keepScreenOn: Boolean = true,
@@ -82,6 +83,12 @@ data class ProfileSnapshot(
     val workoutTemplates: List<com.texasprogram.app.model.WorkoutTemplate> = emptyList(),
     val freeWorkouts: List<com.texasprogram.app.model.FreeWorkoutDay> = emptyList(),
     /// Цель: своё время у дней и срок. Значения по умолчанию — для старых копий.
+    val defaultRestSeconds: Int? = null,
+    val accessoryProgressionEnabled: Boolean? = null,
+    val reminderHour: Int? = null,
+    val reminderMinute: Int? = null,
+    val reminderOffsets: List<Int>? = null,
+    val reminderEnabled: Boolean? = null,
     val trainingTimes: Map<String, Int> = emptyMap(),
     val goalStartEpochDay: Long? = null,
     val goalMonths: Int = 0
@@ -171,6 +178,25 @@ object BackupService {
 
     fun parse(text: String): BackupArchive = json.decodeFromString(text)
 
+    /// iPhone пишет UUID прописными буквами, Android обычно использует строчные.
+    fun matchExistingProfiles(archive: BackupArchive, existing: List<ProgramProfile>): BackupArchive {
+        val byId = existing.associateBy { it.id.lowercase() }
+        return archive.copy(profiles = archive.profiles.map { snapshot ->
+            val match = byId[snapshot.id.lowercase()]
+            if (match == null) snapshot
+            else snapshot.copy(
+                id = match.id,
+                setProgress = snapshot.setProgress ?: match.setProgress,
+                defaultRestSeconds = snapshot.defaultRestSeconds ?: match.defaultRestSeconds,
+                accessoryProgressionEnabled = snapshot.accessoryProgressionEnabled ?: match.accessoryProgressionEnabled,
+                reminderHour = snapshot.reminderHour ?: match.reminderHour,
+                reminderMinute = snapshot.reminderMinute ?: match.reminderMinute,
+                reminderOffsets = snapshot.reminderOffsets ?: match.reminderOffsets,
+                reminderEnabled = snapshot.reminderEnabled ?: match.reminderEnabled
+            )
+        })
+    }
+
     /// Питание из копии — в файлы профилей. В старой копии его нет — прежнее остаётся.
     fun restoreNutrition(archive: BackupArchive, directory: java.io.File) {
         archive.profiles.forEach { snapshot ->
@@ -209,6 +235,7 @@ object BackupService {
             )
         },
         planEdits = profile.planEdits,
+        setProgress = profile.setProgress,
         setLog = profile.setLog,
         skipped = profile.skipped.map {
             SkippedSnapshot(it.id, it.week, it.day, it.isPeaking, it.epochDay, isoDate(it.epochDay), it.holdsProgression)
@@ -232,6 +259,12 @@ object BackupService {
         customExercises = profile.customExercises,
         workoutTemplates = profile.workoutTemplates,
         freeWorkouts = profile.freeWorkouts,
+        defaultRestSeconds = profile.defaultRestSeconds,
+        accessoryProgressionEnabled = profile.accessoryProgressionEnabled,
+        reminderHour = profile.reminderHour,
+        reminderMinute = profile.reminderMinute,
+        reminderOffsets = profile.reminderOffsets,
+        reminderEnabled = profile.reminderEnabled,
         trainingTimes = profile.trainingTimes,
         goalStartEpochDay = profile.goalStartEpochDay,
         goalMonths = profile.goalMonths
@@ -265,6 +298,7 @@ object BackupService {
         planEdits = snapshot.planEdits.map { edit ->
             edit.copy(targetKey = edit.targetKey?.let(::exerciseKey), order = edit.order?.map(::exerciseKey))
         },
+        setProgress = snapshot.setProgress.orEmpty().mapKeys { exerciseKey(it.key) },
         setLog = snapshot.setLog.mapKeys { exerciseKey(it.key) },
         skipped = snapshot.skipped.mapNotNull { entry ->
             val day = entry.epochDay ?: entry.date?.let(::epochDayOf) ?: return@mapNotNull null
@@ -294,6 +328,12 @@ object BackupService {
         customExercises = snapshot.customExercises,
         workoutTemplates = snapshot.workoutTemplates,
         freeWorkouts = snapshot.freeWorkouts,
+        defaultRestSeconds = snapshot.defaultRestSeconds ?: 180,
+        accessoryProgressionEnabled = snapshot.accessoryProgressionEnabled ?: true,
+        reminderHour = snapshot.reminderHour ?: 18,
+        reminderMinute = snapshot.reminderMinute ?: 0,
+        reminderOffsets = snapshot.reminderOffsets ?: listOf(0),
+        reminderEnabled = snapshot.reminderEnabled ?: false,
         trainingTimes = snapshot.trainingTimes,
         goalStartEpochDay = snapshot.goalStartEpochDay,
         goalMonths = snapshot.goalMonths,

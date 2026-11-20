@@ -50,6 +50,7 @@ import com.texasprogram.app.model.isProgramFinished
 import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.ScheduledWorkout
 import com.texasprogram.app.service.WorkoutSessionManager
+import androidx.lifecycle.repeatOnLifecycle
 import java.time.LocalDate
 
 @Composable
@@ -69,7 +70,17 @@ fun WorkoutHubScreen(
     var showingCycleFinish by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     remember { com.texasprogram.app.model.ExerciseLibrary.load(context) }
-    val today = remember { LocalDate.now() }
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    val today by androidx.compose.runtime.produceState(LocalDate.now(), lifecycle) {
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                val now = java.time.ZonedDateTime.now()
+                value = now.toLocalDate()
+                val midnight = value.plusDays(1).atStartOfDay(now.zone)
+                kotlinx.coroutines.delay(java.time.Duration.between(now, midnight).toMillis().coerceIn(1, 60_000))
+            }
+        }
+    }
     val schedule = remember(profile, today) { profile.schedule(today) }
     val focus = schedule.focus
     val isRunning = WorkoutSessionManager.isRunning
@@ -100,7 +111,7 @@ fun WorkoutHubScreen(
             }
 
             item(key = "streak") {
-                ActivityStreakCard(profile, onClick = { showingStreak = true })
+                ActivityStreakCard(profile, today, onClick = { showingStreak = true })
             }
 
             item(key = "cards") {
@@ -111,6 +122,7 @@ fun WorkoutHubScreen(
                     // Карточка «Цель»
                     GoalCard(
                         profile = profile,
+                        today = today,
                         modifier = Modifier
                             .weight(1f)
                             .pressable { showingGoal = true }
@@ -208,7 +220,7 @@ fun WorkoutHubScreen(
     }
 
     if (showingStreak) {
-        StreakCalendarSheet(profile) { showingStreak = false }
+        StreakCalendarSheet(profile, today) { showingStreak = false }
     }
     if (showingTemplates) {
         TemplatesSheet(
@@ -232,13 +244,12 @@ fun WorkoutHubScreen(
 // MARK: - Карточка «Серия активностей»
 
 @Composable
-private fun ActivityStreakCard(profile: ProgramProfile, onClick: () -> Unit) {
+private fun ActivityStreakCard(profile: ProgramProfile, today: LocalDate, onClick: () -> Unit) {
     // Серия по календарю, как в листе: неделя с хотя бы одной тренировкой засчитана.
-    val weeks = remember(profile.completionLog) { profile.calendarStreak().weeks }
+    val weeks = remember(profile.completionLog, today) { profile.calendarStreak(today).weeks }
     val completionDates = remember(profile.completionLog) {
         profile.completionLog.map { LocalDate.ofEpochDay(it.epochDay) }.toSet()
     }
-    val today = remember { LocalDate.now() }
 
     Column(
         modifier = Modifier
@@ -397,11 +408,12 @@ private fun streakWord(count: Int): String {
 @Composable
 private fun GoalCard(
     profile: ProgramProfile,
+    today: LocalDate,
     modifier: Modifier = Modifier
 ) {
     // Как у REBRN: кольцо из стольких частей, сколько тренировок в неделе;
     // каждая сделанная закрашивает одну. С понедельника — снова с нуля.
-    val (done, target) = remember(profile.completionLog, profile.weekdays) { profile.weekGoal() }
+    val (done, target) = remember(profile.completionLog, profile.weekdays, today) { profile.weekGoal(today) }
     val reached = done >= target
     Column(
         modifier = modifier

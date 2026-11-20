@@ -36,6 +36,7 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var planEdits: [PlanEdit]?
     /// Фактически выполненные подходы и откаты. Тоже необязательные: в копиях,
     /// снятых раньше, этих полей нет.
+    var setProgress: [String: Int]?
     var setLog: [String: SetEntry]?
     var skipped: [SkippedSnapshot]?
     var keepScreenOn: Bool?
@@ -63,6 +64,12 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var workoutTemplates: [WorkoutTemplate]?
     var freeWorkouts: [FreeWorkoutDay]?
     /// Цель: своё время у дней и срок. Необязательные: в старых копиях их нет.
+    var defaultRestSeconds: Int?
+    var accessoryProgressionEnabled: Bool?
+    var reminderHour: Int?
+    var reminderMinute: Int?
+    var reminderOffsets: [Int]?
+    var reminderEnabled: Bool?
     var trainingTimes: [String: Int]?
     var goalStartEpochDay: Int?
     var goalMonths: Int?
@@ -255,6 +262,7 @@ enum BackupService {
                 )
             },
             planEdits: profile.planEdits,
+            setProgress: profile.setProgress,
             setLog: profile.setLog,
             skipped: profile.skipped.map {
                 SkippedSnapshot(id: $0.id, week: $0.week, day: $0.day, isPeaking: $0.isPeaking,
@@ -279,6 +287,12 @@ enum BackupService {
             customExercises: profile.customExercises.isEmpty ? nil : profile.customExercises,
             workoutTemplates: profile.workoutTemplates.isEmpty ? nil : profile.workoutTemplates,
             freeWorkouts: profile.freeWorkouts.isEmpty ? nil : profile.freeWorkouts,
+            defaultRestSeconds: profile.defaultRestSeconds,
+            accessoryProgressionEnabled: profile.accessoryProgressionEnabled,
+            reminderHour: profile.reminderHour,
+            reminderMinute: profile.reminderMinute,
+            reminderOffsets: profile.reminderOffsets,
+            reminderEnabled: profile.reminderEnabled,
             trainingTimes: profile.trainingTimes.isEmpty ? nil : profile.trainingTimes,
             goalStartEpochDay: profile.goalStart.map(epochDay),
             goalMonths: profile.goalMonths == 0 ? nil : profile.goalMonths
@@ -297,20 +311,30 @@ enum BackupService {
     /// его в этот момент показывают открытые экраны, и обращение к удалённой
     /// модели SwiftData роняет приложение.
     @discardableResult
-    static func restore(_ archive: BackupArchive, into context: ModelContext, existing: [ProgramProfile]) -> Int {
+    static func restore(_ archive: BackupArchive, into context: ModelContext, existing: [ProgramProfile]) throws -> Int {
+        if context.hasChanges { try context.save() }
+        var nutritionUpdates: [(UUID, NutritionData)] = []
         var profiles = existing
         for snapshot in archive.profiles {
             let id = UUID(uuidString: snapshot.id)
+            let result: ProgramProfile
             if let match = profiles.first(where: { $0.profileID == id }) {
-                fill(match, from: snapshot)
+                result = match
             } else {
-                let result = ProgramProfile(input: .demo, name: snapshot.name)
-                fill(result, from: snapshot)
+                result = ProgramProfile(input: .demo, name: snapshot.name)
                 context.insert(result)
                 profiles.append(result)
             }
+            fill(result, from: snapshot)
+            if let data = snapshot.nutrition { nutritionUpdates.append((result.profileID, data)) }
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+        for (id, data) in nutritionUpdates { NutritionStore.write(data, for: id) }
         return archive.profiles.count
     }
 
@@ -360,6 +384,9 @@ enum BackupService {
             edit.order = edit.order?.map(BackupEnum.exerciseKey)
             return edit
         }
+        if let progress = snapshot.setProgress {
+            result.setProgress = Dictionary(progress.map { (BackupEnum.exerciseKey($0.key), $0.value) }, uniquingKeysWith: max)
+        }
         result.setLog = Dictionary((snapshot.setLog ?? [:]).map { (BackupEnum.exerciseKey($0.key), $0.value) }, uniquingKeysWith: { $1 })
         result.skipped = (snapshot.skipped ?? []).map {
             SkippedWorkout(id: $0.id ?? UUID().uuidString, week: $0.week, day: $0.day, isPeaking: $0.isPeaking ?? false,
@@ -385,12 +412,15 @@ enum BackupService {
         result.customExercises = snapshot.customExercises ?? []
         result.workoutTemplates = snapshot.workoutTemplates ?? []
         result.freeWorkouts = snapshot.freeWorkouts ?? []
+        if let value = snapshot.defaultRestSeconds { result.defaultRestSeconds = value }
+        if let value = snapshot.accessoryProgressionEnabled { result.accessoryProgressionEnabled = value }
+        if let value = snapshot.reminderHour { result.reminderHour = value }
+        if let value = snapshot.reminderMinute { result.reminderMinute = value }
+        if let value = snapshot.reminderOffsets { result.reminderOffsets = value }
+        if let value = snapshot.reminderEnabled { result.reminderEnabled = value }
         result.trainingTimes = snapshot.trainingTimes ?? [:]
         result.goalStart = snapshot.goalStartEpochDay.map { BackupService.date($0) }
         result.goalMonths = snapshot.goalMonths ?? 0
-        if let nutrition = snapshot.nutrition {
-            NutritionStore.write(nutrition, for: result.profileID)
-        }
     }
 
     // MARK: - Даты

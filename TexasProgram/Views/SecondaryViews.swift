@@ -610,7 +610,7 @@ struct SettingsView: View {
                 backupMessage = "В файле нет профилей"
                 return
             }
-            let count = BackupService.restore(archive, into: modelContext, existing: profiles)
+            let count = try BackupService.restore(archive, into: modelContext, existing: profiles)
             NutritionStore.shared.reload()
             SocialService.shared.adoptBackupToken(archive.socialToken)
             // Сразу открываем восстановленный профиль: иначе после переустановки
@@ -620,7 +620,7 @@ struct SettingsView: View {
                 closeThen { activeProfileID = id.uuidString }
             }
         } catch {
-            backupMessage = "Файл не читается как копия STRAIN"
+            backupMessage = "Не удалось восстановить копию STRAIN"
         }
     }
 

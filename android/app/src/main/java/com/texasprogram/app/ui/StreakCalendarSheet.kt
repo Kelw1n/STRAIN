@@ -87,12 +87,11 @@ fun calendarWeeks(month: LocalDate): List<List<LocalDate>> {
 /// тренировки в ней и все дни месяца. Открывается по нажатию на «Серию активностей».
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StreakCalendarSheet(profile: ProgramProfile, onDismiss: () -> Unit) {
+fun StreakCalendarSheet(profile: ProgramProfile, today: LocalDate, onDismiss: () -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = rememberHapticEngine()
-    val today = remember { LocalDate.now() }
     var month by remember { mutableStateOf(today.withDayOfMonth(1)) }
-    val streak = remember(profile.completionLog) { profile.calendarStreak(today) }
+    val streak = remember(profile.completionLog, today) { profile.calendarStreak(today) }
     val done = remember(profile.completionLog) { profile.completionLog.map { LocalDate.ofEpochDay(it.epochDay) }.toSet() }
     val trainingWeekdays = remember(profile.weekdays) { profile.weekdays.toSet() }
     val isCurrentMonth = month.year == today.year && month.monthValue == today.monthValue

@@ -123,6 +123,7 @@ final class AppUpdater {
     func apply(_ release: Release, installed: Int, defaults: UserDefaults = .standard) {
         rememberSeen(release, installed: installed, defaults: defaults)
         if release.versionCode > installed {
+            if available?.versionCode != release.versionCode { dismissed = false }
             available = release
             pending = release.changes(since: installed)
         } else {

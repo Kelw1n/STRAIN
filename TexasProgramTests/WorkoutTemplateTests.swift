@@ -204,7 +204,7 @@ final class WorkoutTemplateTests: XCTestCase {
         let container = try ModelContainer(for: ProgramProfile.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         self.container = container
         let context = ModelContext(container)
-        BackupService.restore(archive, into: context, existing: [])
+        try BackupService.restore(archive, into: context, existing: [])
         let restored = try XCTUnwrap(try context.fetch(FetchDescriptor<ProgramProfile>()).first)
 
         XCTAssertEqual(restored.customExercises.map(\.name), ["Жим Ларсена"])

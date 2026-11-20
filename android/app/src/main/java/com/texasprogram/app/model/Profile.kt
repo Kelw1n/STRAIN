@@ -773,7 +773,7 @@ data class ProgramProfile(
         val log = completionLog.toMutableList()
         log[index] = log[index].copy(epochDay = corrected)
         val last = when {
-            lastCompletionEpochDay == record.epochDay -> log.maxOfOrNull { it.epochDay }
+            lastCompletionEpochDay == record.epochDay -> latestProgramCompletion(log)
             lastCompletionEpochDay != null -> maxOf(lastCompletionEpochDay, corrected)
             else -> null
         }
@@ -1102,6 +1102,18 @@ data class ProgramProfile(
     val completedDayCount: Int
         get() = completedDayKeys.filter { isOwnKey(it) }.toSet().size
 
+    private fun latestProgramCompletion(log: List<CompletionRecord>): Long? =
+        log.asSequence().filter { isOwnKey(it.key) }.maxOfOrNull { it.epochDay }
+
+    private fun removeProgramCompletion(key: String): ProgramProfile {
+        val removedLatest = completionLog.any { it.key == key && it.epochDay == lastCompletionEpochDay }
+        val remaining = completionLog.filterNot { it.key == key }
+        return copy(
+            completionLog = remaining,
+            lastCompletionEpochDay = if (removedLatest) latestProgramCompletion(remaining) else lastCompletionEpochDay
+        )
+    }
+
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
     fun toggleCompleted(
@@ -1135,7 +1147,7 @@ data class ProgramProfile(
             next.copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today, durationSeconds, effort)
         } else {
             val key = dayKey(week, day)
-            next.copy(completionLog = next.completionLog.filterNot { it.key == key })
+            next.removeProgramCompletion(key)
         }
         return next
     }
@@ -1240,11 +1252,9 @@ data class ProgramProfile(
         val updatedProgress = setProgress.filterNot { it.key.startsWith(prefix) }
         val updatedLog = setLog.filterNot { it.key.startsWith(prefix) }
         val dKey = dayKey(week, day)
-        val updatedCompletionLog = completionLog.filterNot { it.key == dKey }
-        return setDayCompleted(week, day, false).copy(
+        return setDayCompleted(week, day, false).removeProgramCompletion(dKey).copy(
             setProgress = updatedProgress,
-            setLog = updatedLog,
-            completionLog = updatedCompletionLog
+            setLog = updatedLog
         )
     }
 
@@ -1336,7 +1346,10 @@ data class ProgramProfile(
         val done = !isBenchCompleted(session)
         val (week, day) = dayForBenchSession(session)
         val next = setBenchCompleted(session, done).setDayCompleted(week, day, done)
-        return if (done) next.copy(lastCompletionEpochDay = today.toEpochDay()) else next
+        val key = dayKey(week, day)
+        if (!done) return next.removeProgramCompletion(key)
+        if (next.completionLog.any { it.key == key }) return next
+        return next.copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today)
     }
 
     private fun setBenchCompleted(session: Int, done: Boolean): ProgramProfile {

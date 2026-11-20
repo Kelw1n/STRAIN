@@ -14,9 +14,23 @@ final class CrossPlatformBackupTests: XCTestCase {
         let container = try ModelContainer(for: ProgramProfile.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         self.container = container
         let context = ModelContext(container)
-        BackupService.restore(archive, into: context, existing: [])
+        try BackupService.restore(archive, into: context, existing: [])
         let profiles = try context.fetch(FetchDescriptor<ProgramProfile>())
         return Dictionary(uniqueKeysWithValues: profiles.map { ($0.name, $0) })
+    }
+
+    func testBackupPreservesPartialWorkout() throws {
+        let profile = ProgramProfile(input: .demo)
+        profile.defaultRestSeconds = 75
+        profile.accessoryProgressionEnabled = false
+        profile.reminderHour = 9
+        profile.setProgress = ["1-2|test": 2]
+        let data = try BackupService.export([profile], socialToken: nil)
+        let restored = try restore(String(decoding: data, as: UTF8.self))
+        XCTAssertEqual(restored[profile.name]?.defaultRestSeconds, 75)
+        XCTAssertEqual(restored[profile.name]?.accessoryProgressionEnabled, false)
+        XCTAssertEqual(restored[profile.name]?.reminderHour, 9)
+        XCTAssertEqual(restored[profile.name]?.setProgress, profile.setProgress)
     }
 
     func testReimportOfAndroidBackupUpdatesTheSameProfiles() throws {
@@ -25,10 +39,10 @@ final class CrossPlatformBackupTests: XCTestCase {
 
         let container = try ModelContainer(for: ProgramProfile.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = ModelContext(container)
-        BackupService.restore(archive, into: context, existing: [])
+        try BackupService.restore(archive, into: context, existing: [])
         let firstImport = try context.fetch(FetchDescriptor<ProgramProfile>())
         archive.profiles[0].name = "Обновлённый профиль"
-        BackupService.restore(archive, into: context, existing: firstImport)
+        try BackupService.restore(archive, into: context, existing: firstImport)
         let secondImport = try context.fetch(FetchDescriptor<ProgramProfile>())
         XCTAssertEqual(secondImport.count, archive.profiles.count)
         XCTAssertTrue(secondImport.contains { $0.name == "Обновлённый профиль" })
@@ -48,7 +62,7 @@ final class CrossPlatformBackupTests: XCTestCase {
         let xp: Int = try {
             let container = try ModelContainer(for: ProgramProfile.self, configurations: configuration)
             let context = ModelContext(container)
-            BackupService.restore(archive, into: context, existing: [])
+            try BackupService.restore(archive, into: context, existing: [])
             let profile = try XCTUnwrap(context.fetch(FetchDescriptor<ProgramProfile>()).first { $0.profileID == profileID })
             XCTAssertGreaterThan(Progression.xp(for: profile), 0)
             return Progression.xp(for: profile)
