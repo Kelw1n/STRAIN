@@ -27,6 +27,7 @@ struct SkippedWorkout: Codable, Equatable, Hashable, Identifiable, Sendable {
     /// Держит ли пропуск прогрессию: неделя повторяет веса предыдущей,
     /// пока пропущенное не закрыто.
     var holdsProgression: Bool
+    var cycleNumber: Int?
 
     var title: String { "Неделя \(week), день \(day)" }
 }

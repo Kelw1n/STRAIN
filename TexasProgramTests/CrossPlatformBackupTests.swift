@@ -19,6 +19,14 @@ final class CrossPlatformBackupTests: XCTestCase {
         return Dictionary(uniqueKeysWithValues: profiles.map { ($0.name, $0) })
     }
 
+    func testBackupOpensTheActiveProfileFirst() throws {
+        let first = ProgramProfile(input: .demo)
+        let active = ProgramProfile(input: .demo)
+        let data = try BackupService.export([first, active], activeProfileID: active.profileID, socialToken: nil)
+        let archive = try BackupService.archive(from: data)
+        XCTAssertEqual(archive.profiles.map(\.id), [active.profileID.uuidString, first.profileID.uuidString])
+    }
+
     func testBackupPreservesPartialWorkout() throws {
         let profile = ProgramProfile(input: .demo)
         profile.defaultRestSeconds = 75

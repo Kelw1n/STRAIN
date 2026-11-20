@@ -337,7 +337,7 @@ fun ProgramProfile.startFreeWorkout(
         weekday = RuDate.weekdayOf(date),
         isCompleted = false
     )
-    return copy(freeWorkouts = freeWorkouts + day) to workout
+    return copy(freeWorkouts = freeWorkouts + day, workoutNotes = workoutNotes - ProgramProfile.freeKey(number)) to workout
 }
 
 fun ProgramProfile.startWorkout(template: WorkoutTemplate, now: Instant = Instant.now()): Pair<ProgramProfile, ScheduledWorkout> =
@@ -347,12 +347,7 @@ fun ProgramProfile.startWorkout(template: WorkoutTemplate, now: Instant = Instan
 fun ProgramProfile.discardFreeWorkout(number: Int): ProgramProfile {
     val day = freeDay(number) ?: return this
     if (day.completed) return this
-    val prefix = ProgramProfile.freeKey(number) + "|"
-    return copy(
-        setLog = setLog.filterKeys { !it.startsWith(prefix) },
-        setProgress = setProgress.filterKeys { !it.startsWith(prefix) },
-        freeWorkouts = freeWorkouts.filterNot { it.number == number }
-    )
+    return deleteFreeWorkout(number)
 }
 
 /// Удаляет закрытую свободную тренировку из истории целиком.
@@ -362,6 +357,7 @@ fun ProgramProfile.deleteFreeWorkout(number: Int): ProgramProfile {
         setLog = setLog.filterKeys { !it.startsWith("$key|") },
         setProgress = setProgress.filterKeys { !it.startsWith("$key|") },
         completionLog = completionLog.filterNot { it.key == key },
+        workoutNotes = workoutNotes - key,
         freeWorkouts = freeWorkouts.filterNot { it.number == number }
     )
 }

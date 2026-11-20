@@ -126,13 +126,18 @@ final class WorkoutTemplateTests: XCTestCase {
         // Вторая свободная тренировка — следующий номер.
         let next = profile.startWorkout(from: template)
         XCTAssertEqual(next.day.number, 2)
+        profile.setNote("Первая", week: 0, day: 1)
+        profile.setNote("Вторая", week: 0, day: 2)
         profile.discardFreeWorkout(2)
+        XCTAssertEqual(profile.note(week: 0, day: 2), "")
+        XCTAssertEqual(profile.note(week: 0, day: 1), "Первая")
         XCTAssertNil(profile.freeDay(2))
         // Законченную отмена не трогает.
         profile.discardFreeWorkout(1)
         XCTAssertNotNil(profile.freeDay(1))
 
         profile.deleteFreeWorkout(1)
+        XCTAssertEqual(profile.note(week: 0, day: 1), "")
         XCTAssertTrue(profile.freeWorkouts.isEmpty)
         XCTAssertFalse(profile.completionLog.contains { $0.key == "free-1" })
         XCTAssertNil(profile.setLog["free-1|\(exercise.id)|0"])

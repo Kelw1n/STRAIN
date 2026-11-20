@@ -95,6 +95,21 @@ class TrainingLogTest {
     // MARK: - Пропуск тренировки
 
     @Test
+    fun startingAnotherCycleReleasesOldSkipAndKeepsItInBackup() {
+        val base = ProgramProfile.texas(ProgramInput.demo).markSkipped(1, 1, true)
+        val legacy = base.copy(skipped = base.skipped.map { it.copy(cycleNumber = null) })
+        val next = legacy.startNewCycle(100.0, 100.0, 100.0)
+        assertFalse(next.isSkipped(1, 1))
+        assertEquals(2, next.effectiveWeek(2))
+        val skippedAgain = next.markSkipped(1, 1, true)
+        assertEquals(1, skippedAgain.effectiveWeek(2))
+        val done = skippedAgain.toggleCompleted(1, 1)
+        val restored = BackupService.profile(BackupService.parse(BackupService.export(listOf(done))).profiles.single())
+        assertEquals(1, restored.skipped.single().cycleNumber)
+        assertFalse(restored.isSkipped(1, 1))
+    }
+
+    @Test
     fun skipDoesNotCompleteTheDay() {
         val profile = ProgramProfile.texas(ProgramInput.demo).markSkipped(1, 1, true)
         assertTrue(profile.isSkipped(1, 1))

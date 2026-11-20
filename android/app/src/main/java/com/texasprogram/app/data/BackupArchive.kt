@@ -115,7 +115,8 @@ data class SkippedSnapshot(
     val isPeaking: Boolean = false,
     val epochDay: Long? = null,
     val date: String? = null,
-    val holdsProgression: Boolean
+    val holdsProgression: Boolean,
+    val cycleNumber: Int? = null
 )
 
 @Serializable
@@ -166,12 +167,13 @@ object BackupService {
     fun export(
         profiles: List<ProgramProfile>,
         socialToken: String? = null,
+        activeProfileId: String? = null,
         nutrition: (String) -> NutritionData? = { null }
     ): String =
         json.encodeToString(
             BackupArchive(
                 exportedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString(),
-                profiles = profiles.map { snapshot(it, nutrition(it.id)) },
+                profiles = profiles.sortedByDescending { it.id == activeProfileId }.map { snapshot(it, nutrition(it.id)) },
                 socialToken = socialToken
             )
         )
@@ -238,7 +240,7 @@ object BackupService {
         setProgress = profile.setProgress,
         setLog = profile.setLog,
         skipped = profile.skipped.map {
-            SkippedSnapshot(it.id, it.week, it.day, it.isPeaking, it.epochDay, isoDate(it.epochDay), it.holdsProgression)
+            SkippedSnapshot(it.id, it.week, it.day, it.isPeaking, it.epochDay, isoDate(it.epochDay), it.holdsProgression, it.cycleNumber)
         },
         keepScreenOn = profile.keepScreenOn,
         cycleNumber = profile.cycleNumber,
@@ -302,7 +304,7 @@ object BackupService {
         setLog = snapshot.setLog.mapKeys { exerciseKey(it.key) },
         skipped = snapshot.skipped.mapNotNull { entry ->
             val day = entry.epochDay ?: entry.date?.let(::epochDayOf) ?: return@mapNotNull null
-            SkippedWorkout(entry.id ?: java.util.UUID.randomUUID().toString(), entry.week, entry.day, entry.isPeaking, day, entry.holdsProgression)
+            SkippedWorkout(entry.id ?: java.util.UUID.randomUUID().toString(), entry.week, entry.day, entry.isPeaking, day, entry.holdsProgression, entry.cycleNumber)
         },
         keepScreenOn = snapshot.keepScreenOn,
         cycleNumber = snapshot.cycleNumber,

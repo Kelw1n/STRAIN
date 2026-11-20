@@ -32,7 +32,8 @@ data class SkippedWorkout(
     val epochDay: Long,
     /// Держит ли пропуск прогрессию: неделя повторяет веса предыдущей,
     /// пока пропущенное не закрыто.
-    val holdsProgression: Boolean
+    val holdsProgression: Boolean,
+    val cycleNumber: Int? = null
 ) {
     val title: String get() = "Неделя $week, день $day"
 }

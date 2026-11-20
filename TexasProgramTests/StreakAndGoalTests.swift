@@ -68,6 +68,17 @@ final class StreakAndGoalTests: XCTestCase {
         XCTAssertTrue(profile.completionLog.isEmpty)
     }
 
+    func testEditingAnOlderCycleDoesNotCloseTodayInTheNewCycle() throws {
+        let profile = texas()
+        profile.toggleCompleted(week: 1, day: 1, now: day(-7))
+        let old = try XCTUnwrap(profile.completionLog.first)
+        profile.startNewCycle(squat: 100, bench: 100, deadlift: 100, now: day(0))
+        profile.toggleCompleted(week: 1, day: 1, now: day(0))
+        profile.correctWorkoutDate(old, to: day(2), now: day(2))
+        XCTAssertEqual(profile.lastCompletionDate, day(0))
+        XCTAssertEqual(profile.weekGoal(now: day(2)).done, 2)
+    }
+
     func testWeekGoalCountsOnlyThisWeek() {
         let profile = texas()
         complete(profile, on: [day(-3), day(0), day(2)])

@@ -95,6 +95,7 @@ struct SkippedSnapshot: Codable, Equatable, Sendable {
     var date: Date?
     var epochDay: Int?
     var holdsProgression: Bool
+    var cycleNumber: Int?
 }
 
 /// Значения перечислений в копии: iOS пишет русскую подпись («Средний»),
@@ -209,14 +210,19 @@ enum BackupService {
 
     // MARK: - Выгрузка
 
-    static func export(_ profiles: [ProgramProfile], socialToken: String? = SocialKeychain.load()) throws -> Data {
-        try encoder.encode(BackupArchive(profiles: profiles.map(snapshot), socialToken: socialToken))
+    static func export(_ profiles: [ProgramProfile], activeProfileID: UUID? = nil, socialToken: String? = SocialKeychain.load()) throws -> Data {
+        var ordered = profiles
+        if let activeProfileID, let index = ordered.firstIndex(where: { $0.profileID == activeProfileID }) {
+            let active = ordered.remove(at: index)
+            ordered.insert(active, at: 0)
+        }
+        return try encoder.encode(BackupArchive(profiles: ordered.map(snapshot), socialToken: socialToken))
     }
 
     /// Пишет копию во временный файл — его отдаёт системный лист «Поделиться».
-    static func writeTemporaryFile(_ profiles: [ProgramProfile]) throws -> URL {
+    static func writeTemporaryFile(_ profiles: [ProgramProfile], activeProfileID: UUID) throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        try export(profiles).write(to: url, options: .atomic)
+        try export(profiles, activeProfileID: activeProfileID).write(to: url, options: .atomic)
         return url
     }
 
@@ -266,7 +272,7 @@ enum BackupService {
             setLog: profile.setLog,
             skipped: profile.skipped.map {
                 SkippedSnapshot(id: $0.id, week: $0.week, day: $0.day, isPeaking: $0.isPeaking,
-                                date: $0.date, epochDay: epochDay($0.date), holdsProgression: $0.holdsProgression)
+                                date: $0.date, epochDay: epochDay($0.date), holdsProgression: $0.holdsProgression, cycleNumber: $0.cycleNumber)
             },
             keepScreenOn: profile.keepScreenOn,
             cycleNumber: profile.cycleNumber,
@@ -390,7 +396,7 @@ enum BackupService {
         result.setLog = Dictionary((snapshot.setLog ?? [:]).map { (BackupEnum.exerciseKey($0.key), $0.value) }, uniquingKeysWith: { $1 })
         result.skipped = (snapshot.skipped ?? []).map {
             SkippedWorkout(id: $0.id ?? UUID().uuidString, week: $0.week, day: $0.day, isPeaking: $0.isPeaking ?? false,
-                           date: $0.date ?? $0.epochDay.map(date) ?? .now, holdsProgression: $0.holdsProgression)
+                           date: $0.date ?? $0.epochDay.map(date) ?? .now, holdsProgression: $0.holdsProgression, cycleNumber: $0.cycleNumber)
         }
         result.keepScreenOn = snapshot.keepScreenOn ?? true
         result.cycleNumber = snapshot.cycleNumber ?? 1

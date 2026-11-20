@@ -338,9 +338,9 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         backupMessage = try {
-            context.contentResolver.openOutputStream(uri)?.use {
+            requireNotNull(context.contentResolver.openOutputStream(uri)).use {
                 val nutrition = NutritionStore.directory(context)
-                it.write(BackupService.export(store.profiles, SocialService.token) { id -> NutritionStore.read(nutrition, id) }.toByteArray())
+                it.write(BackupService.export(store.profiles, SocialService.token, store.active?.id) { id -> NutritionStore.read(nutrition, id) }.toByteArray())
             }
             "Копия сохранена"
         } catch (e: Exception) {
@@ -353,7 +353,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         backupMessage = try {
-            context.contentResolver.openOutputStream(uri)?.use { it.write(CSVExport.bytes(store.profiles)) }
+            requireNotNull(context.contentResolver.openOutputStream(uri)).use { it.write(CSVExport.bytes(store.profiles)) }
             "Таблица сохранена"
         } catch (e: Exception) {
             "Не удалось собрать таблицу"

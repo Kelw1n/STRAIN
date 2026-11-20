@@ -482,6 +482,7 @@ final class ProgramProfile {
             reports: liftReports,
             autoregulation: autoregulationEnabled,
             cycle: cycleNumber,
+            cycleStart: cycleStartedAt,
             steps: weightSteps,
             defaultStep: defaultWeightStep
         )
@@ -573,6 +574,9 @@ final class ProgramProfile {
     /// Максимумы приходят снаружи: основная программа считается от свежего
     /// пятиповторного теста, а не от пересчёта прошлого результата.
     func startNewCycle(squat: Double, bench: Double, deadlift: Double, now: Date = Date()) {
+        for index in skipped.indices where skipped[index].cycleNumber == nil && belongsToCurrentCycle(skipped[index]) {
+            skipped[index].cycleNumber = cycleNumber
+        }
         cycleNumber += 1
         peakingActive = false
         peakSquat5RM = nil
@@ -815,8 +819,17 @@ final class ProgramProfile {
 
     // MARK: - Пропущенные тренировки
 
+    private func isCurrentSkip(_ skip: SkippedWorkout) -> Bool {
+        skip.isPeaking == isPeaking && belongsToCurrentCycle(skip)
+    }
+
+    private func belongsToCurrentCycle(_ skip: SkippedWorkout) -> Bool {
+        if let cycle = skip.cycleNumber { return cycle == cycleNumber }
+        return cycleNumber == 1 || Calendar.current.compare(skip.date, to: cycleStartedAt, toGranularity: .day) != .orderedAscending
+    }
+
     func isSkipped(week: Int, day: Int) -> Bool {
-        skipped.contains { $0.week == week && $0.day == day && $0.isPeaking == isPeaking }
+        skipped.contains { $0.week == week && $0.day == day && isCurrentSkip($0) }
     }
 
     /// Сколько недель прогрессия стоит на месте к началу указанной недели.
@@ -824,7 +837,7 @@ final class ProgramProfile {
     /// Считаем пропуски строго раньше этой недели: неделя, которую пропустили,
     /// должна остаться со своими весами, а замереть должна следующая.
     func holdCount(before week: Int) -> Int {
-        Set(skipped.filter { $0.isPeaking == isPeaking && $0.holdsProgression && $0.week < week }
+        Set(skipped.filter { isCurrentSkip($0) && $0.holdsProgression && $0.week < week }
             .map(\.week)).count
     }
 
@@ -838,7 +851,7 @@ final class ProgramProfile {
     /// Веса не пересчитываем формулой — подставляем упражнения нужной недели
     /// целиком. Так арифметика остаётся в одном месте, в самом калькуляторе.
     private func applyHolds(to plan: WorkoutPlan) -> WorkoutPlan {
-        guard skipped.contains(where: { $0.isPeaking == isPeaking && $0.holdsProgression }) else { return plan }
+        guard skipped.contains(where: { isCurrentSkip($0) && $0.holdsProgression }) else { return plan }
         let byNumber = Dictionary(uniqueKeysWithValues: plan.weeks.map { ($0.number, $0) })
         return WorkoutPlan(weeks: plan.weeks.map { week in
             let source = effectiveWeek(for: week.number)
@@ -855,7 +868,7 @@ final class ProgramProfile {
     func markSkipped(week: Int, day: Int, holdsProgression: Bool, now: Date = Date()) {
         guard !isSkipped(week: week, day: day) else { return }
         skipped.append(SkippedWorkout(
-            week: week, day: day, isPeaking: isPeaking, date: now, holdsProgression: holdsProgression
+            week: week, day: day, isPeaking: isPeaking, date: now, holdsProgression: holdsProgression, cycleNumber: cycleNumber
         ))
     }
 
@@ -865,7 +878,7 @@ final class ProgramProfile {
 
     /// Пропуски текущего пространства имён — их показывают настройки.
     var activeSkips: [SkippedWorkout] {
-        skipped.filter { $0.isPeaking == isPeaking }.sorted { ($0.week, $0.day) < ($1.week, $1.day) }
+        skipped.filter { isCurrentSkip($0) }.sorted { ($0.week, $0.day) < ($1.week, $1.day) }
     }
 
     // MARK: - Фактически выполненные подходы
@@ -1286,7 +1299,8 @@ final class ProgramProfile {
               !calendar.isDate(record.date, inSameDayAs: corrected),
               let index = completionLog.firstIndex(where: { $0.key == record.key && $0.date == record.date }) else { return }
         completionLog[index].date = corrected
-        if lastCompletionDate == record.date {
+        guard isOwnKey(record.key) else { return }
+        if lastCompletionDate == nil || lastCompletionDate == record.date {
             lastCompletionDate = latestProgramCompletion
         } else if let latest = lastCompletionDate, corrected > latest {
             lastCompletionDate = corrected
@@ -1556,7 +1570,7 @@ final class ProgramProfile {
         }
         syncSets(week: week, day: day, filled: done)
         // Возместил пропущенное — задержка снимается сама.
-        if done { skipped.removeAll { $0.week == week && $0.day == day && $0.isPeaking == isPeaking } }
+        if done { skipped.removeAll { $0.week == week && $0.day == day && isCurrentSkip($0) } }
         if done {
             lastCompletionDate = now
             recordCompletion(week: week, day: day, now: now, durationSeconds: durationSeconds, effort: effort)
@@ -1963,6 +1977,7 @@ fileprivate struct PlanInputs: Equatable {
     let reports: [LiftReport]
     let autoregulation: Bool
     let cycle: Int
+    let cycleStart: Date
     let steps: [String: Double]
     let defaultStep: Double
 }
