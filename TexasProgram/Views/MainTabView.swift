@@ -286,6 +286,7 @@ struct MainTabView: View {
             // Сегодняшняя тренировка сделана — вечернее напоминание уже ни к чему.
             ReminderScheduler.reschedule(for: profile)
         }
+        .onChange(of: SocialService.shared.token) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         .onChange(of: profile.bodyWeightLog) { _, _ in SocialService.shared.scheduleSync(from: profile) }
         // Своя тренировка показана в профиле — её видят в «Сообществе».
         .onChange(of: profile.workoutTemplates) { _, _ in SocialService.shared.scheduleSync(from: profile) }

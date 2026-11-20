@@ -387,7 +387,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     LaunchedEffect(Unit) {
         snapshotFlow { WorkoutSessionManager.liveStatus }.collect { SocialService.reportLive(it) }
     }
-    LaunchedEffect(profile.completionLog, profile.bodyWeightLog, profile.challengeAwards, profile.workoutTemplates, SocialService.isSignedIn) {
+    LaunchedEffect(profile.id, profile.completionLog, profile.bodyWeightLog, profile.challengeAwards, profile.workoutTemplates, SocialService.token) {
         SocialService.scheduleSync(profile)
     }
     // Счёт в челленджах — после каждой тренировки и при запуске; опыт за места
