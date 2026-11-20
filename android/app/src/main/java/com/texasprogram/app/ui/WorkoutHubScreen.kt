@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,14 +70,15 @@ fun WorkoutHubScreen(
     var showingLibrary by remember { mutableStateOf(false) }
     var showingCycleFinish by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    remember { com.texasprogram.app.model.ExerciseLibrary.load(context) }
+    com.texasprogram.app.model.ExerciseLibrary.load(context)
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
-    val today by androidx.compose.runtime.produceState(LocalDate.now(), lifecycle) {
+    var today by remember(lifecycle) { mutableStateOf(LocalDate.now()) }
+    LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
             while (true) {
                 val now = java.time.ZonedDateTime.now()
-                value = now.toLocalDate()
-                val midnight = value.plusDays(1).atStartOfDay(now.zone)
+                today = now.toLocalDate()
+                val midnight = today.plusDays(1).atStartOfDay(now.zone)
                 kotlinx.coroutines.delay(java.time.Duration.between(now, midnight).toMillis().coerceIn(1, 60_000))
             }
         }

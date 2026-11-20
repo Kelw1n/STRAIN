@@ -11,7 +11,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import com.texasprogram.app.MainActivity
 import com.texasprogram.app.R
 import com.texasprogram.app.model.ProgramProfile
@@ -183,6 +182,6 @@ class ReminderReceiver : BroadcastReceiver() {
             )
             .build()
 
-        runCatching { NotificationManagerCompat.from(context).notify(3000 + day * 10 + ReminderScheduler.offsetOf(intent) / 15, notification) }
+        context.postNotification(3000 + day * 10 + ReminderScheduler.offsetOf(intent) / 15, notification)
     }
 }

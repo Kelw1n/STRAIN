@@ -281,7 +281,7 @@ class RestTimer private constructor(context: Context) {
             val notification: Notification = builder.build()
             // Уведомления запрещены — часть прошивок бросает исключение; отдых
             // при этом идёт дальше на экране, приложение не падает.
-            runCatching { NotificationManagerCompat.from(context).notify(LIVE_ID, notification) }
+            context.postNotification(LIVE_ID, notification)
         }
     }
 
@@ -418,9 +418,6 @@ class RestFinishedReceiver : BroadcastReceiver() {
                 )
             )
             .build()
-        try {
-            NotificationManagerCompat.from(context).notify(RestTimer.DONE_ID, notification)
-        } catch (_: SecurityException) {
-        }
+        context.postNotification(RestTimer.DONE_ID, notification)
     }
 }

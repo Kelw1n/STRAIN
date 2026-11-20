@@ -91,9 +91,8 @@ fun NutritionScreen(
     onUpdate: (ProgramProfile) -> Unit
 ) {
     val context = LocalContext.current
-    val store = remember { NutritionStore.get(context) }
-    // Файл профиля читаем до первого кадра: иначе мелькнул бы чужой или пустой дневник.
-    remember(profile.id) { store.open(profile.id) }
+    // Открываем дневник профиля до первого кадра.
+    val store = remember(context, profile.id) { NutritionStore.get(context).also { it.open(profile.id) } }
     NutritionContent(
         profile = profile,
         data = store.data,

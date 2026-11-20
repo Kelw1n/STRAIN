@@ -8,7 +8,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import com.texasprogram.app.MainActivity
 import com.texasprogram.app.R
 import com.texasprogram.app.data.AppStore
@@ -125,6 +124,6 @@ class SupplementReminderReceiver : BroadcastReceiver() {
                 )
             )
             .build()
-        runCatching { NotificationManagerCompat.from(context).notify(4000 + minutes, notification) }
+        context.postNotification(4000 + minutes, notification)
     }
 }

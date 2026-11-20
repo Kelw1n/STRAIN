@@ -59,7 +59,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -417,8 +416,9 @@ internal fun RecapSlideContent(slide: RecapSlide, recap: TrainingRecap, restart:
 private fun RecapSummary(recap: TrainingRecap, restart: () -> Unit) {
     val context = LocalContext.current
     val haptics = rememberHapticEngine()
-    val card by produceState<Bitmap?>(null, recap) {
-        value = withContext(Dispatchers.Default) { TrainingRecapCard.render(context, recap) }
+    var card by remember(recap) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(recap) {
+        card = withContext(Dispatchers.Default) { TrainingRecapCard.render(context, recap) }
     }
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically)) {
         Box(

@@ -40,8 +40,11 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -327,10 +330,11 @@ object WorkoutShareCard {
 fun ShareCardSection(title: String, durationSeconds: Int, photo: Uri?) {
     val context = LocalContext.current
     val haptics = rememberHapticEngine()
-    val card by produceState<Pair<Bitmap, ImageBitmap>?>(null, title, durationSeconds, photo) {
+    var card by remember(title, durationSeconds, photo) { mutableStateOf<Pair<Bitmap, ImageBitmap>?>(null) }
+    LaunchedEffect(title, durationSeconds, photo) {
         // Название печатают по букве — перерисовываем, когда человек остановился.
         delay(300)
-        value = withContext(Dispatchers.IO) {
+        card = withContext(Dispatchers.IO) {
             runCatching {
                 val bitmap = WorkoutShareCard.render(context, WorkoutShareSummary.current(title, durationSeconds), photo)
                 bitmap to bitmap.asImageBitmap()
