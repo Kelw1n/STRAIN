@@ -36,6 +36,7 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var planEdits: [PlanEdit]?
     /// Фактически выполненные подходы и откаты. Тоже необязательные: в копиях,
     /// снятых раньше, этих полей нет.
+    var setProgress: [String: Int]?
     var setLog: [String: SetEntry]?
     var skipped: [SkippedSnapshot]?
     var keepScreenOn: Bool?
@@ -255,6 +256,7 @@ enum BackupService {
                 )
             },
             planEdits: profile.planEdits,
+            setProgress: profile.setProgress,
             setLog: profile.setLog,
             skipped: profile.skipped.map {
                 SkippedSnapshot(id: $0.id, week: $0.week, day: $0.day, isPeaking: $0.isPeaking,
@@ -297,20 +299,30 @@ enum BackupService {
     /// его в этот момент показывают открытые экраны, и обращение к удалённой
     /// модели SwiftData роняет приложение.
     @discardableResult
-    static func restore(_ archive: BackupArchive, into context: ModelContext, existing: [ProgramProfile]) -> Int {
+    static func restore(_ archive: BackupArchive, into context: ModelContext, existing: [ProgramProfile]) throws -> Int {
+        if context.hasChanges { try context.save() }
+        var nutritionUpdates: [(UUID, NutritionData)] = []
         var profiles = existing
         for snapshot in archive.profiles {
             let id = UUID(uuidString: snapshot.id)
+            let result: ProgramProfile
             if let match = profiles.first(where: { $0.profileID == id }) {
-                fill(match, from: snapshot)
+                result = match
             } else {
-                let result = ProgramProfile(input: .demo, name: snapshot.name)
-                fill(result, from: snapshot)
+                result = ProgramProfile(input: .demo, name: snapshot.name)
                 context.insert(result)
                 profiles.append(result)
             }
+            fill(result, from: snapshot)
+            if let data = snapshot.nutrition { nutritionUpdates.append((result.profileID, data)) }
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+        for (id, data) in nutritionUpdates { NutritionStore.write(data, for: id) }
         return archive.profiles.count
     }
 
@@ -360,6 +372,9 @@ enum BackupService {
             edit.order = edit.order?.map(BackupEnum.exerciseKey)
             return edit
         }
+        if let progress = snapshot.setProgress {
+            result.setProgress = Dictionary(progress.map { (BackupEnum.exerciseKey($0.key), $0.value) }, uniquingKeysWith: max)
+        }
         result.setLog = Dictionary((snapshot.setLog ?? [:]).map { (BackupEnum.exerciseKey($0.key), $0.value) }, uniquingKeysWith: { $1 })
         result.skipped = (snapshot.skipped ?? []).map {
             SkippedWorkout(id: $0.id ?? UUID().uuidString, week: $0.week, day: $0.day, isPeaking: $0.isPeaking ?? false,
@@ -388,9 +403,6 @@ enum BackupService {
         result.trainingTimes = snapshot.trainingTimes ?? [:]
         result.goalStart = snapshot.goalStartEpochDay.map { BackupService.date($0) }
         result.goalMonths = snapshot.goalMonths ?? 0
-        if let nutrition = snapshot.nutrition {
-            NutritionStore.write(nutrition, for: result.profileID)
-        }
     }
 
     // MARK: - Даты

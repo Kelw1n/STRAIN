@@ -55,6 +55,7 @@ data class ProfileSnapshot(
     val planEdits: List<PlanEdit> = emptyList(),
     /// Факт подходов, откаты, цикл и своя программа. Значения по умолчанию нужны
     /// для копий, снятых до появления этих полей, и для файлов со старых версий.
+    val setProgress: Map<String, Int>? = null,
     val setLog: Map<String, SetEntry> = emptyMap(),
     val skipped: List<SkippedSnapshot> = emptyList(),
     val keepScreenOn: Boolean = true,
@@ -171,6 +172,16 @@ object BackupService {
 
     fun parse(text: String): BackupArchive = json.decodeFromString(text)
 
+    /// iPhone пишет UUID прописными буквами, Android обычно использует строчные.
+    fun matchExistingProfiles(archive: BackupArchive, existing: List<ProgramProfile>): BackupArchive {
+        val byId = existing.associateBy { it.id.lowercase() }
+        return archive.copy(profiles = archive.profiles.map { snapshot ->
+            val match = byId[snapshot.id.lowercase()]
+            if (match == null) snapshot
+            else snapshot.copy(id = match.id, setProgress = snapshot.setProgress ?: match.setProgress)
+        })
+    }
+
     /// Питание из копии — в файлы профилей. В старой копии его нет — прежнее остаётся.
     fun restoreNutrition(archive: BackupArchive, directory: java.io.File) {
         archive.profiles.forEach { snapshot ->
@@ -209,6 +220,7 @@ object BackupService {
             )
         },
         planEdits = profile.planEdits,
+        setProgress = profile.setProgress,
         setLog = profile.setLog,
         skipped = profile.skipped.map {
             SkippedSnapshot(it.id, it.week, it.day, it.isPeaking, it.epochDay, isoDate(it.epochDay), it.holdsProgression)
@@ -265,6 +277,7 @@ object BackupService {
         planEdits = snapshot.planEdits.map { edit ->
             edit.copy(targetKey = edit.targetKey?.let(::exerciseKey), order = edit.order?.map(::exerciseKey))
         },
+        setProgress = snapshot.setProgress.orEmpty().mapKeys { exerciseKey(it.key) },
         setLog = snapshot.setLog.mapKeys { exerciseKey(it.key) },
         skipped = snapshot.skipped.mapNotNull { entry ->
             val day = entry.epochDay ?: entry.date?.let(::epochDayOf) ?: return@mapNotNull null

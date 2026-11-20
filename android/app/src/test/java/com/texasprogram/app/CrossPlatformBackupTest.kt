@@ -28,6 +28,18 @@ class CrossPlatformBackupTest {
         BackupService.parse(json).profiles.map(BackupService::profile).associateBy { it.name }
 
     @Test
+    fun backupPreservesPartialWorkoutAndMatchesProfileId() {
+        val profile = profiles(FROM_ANDROID).getValue("Техас").copy(id = "a1bc", setProgress = mapOf("1-2|test" to 2))
+        val archive = BackupService.parse(BackupService.export(listOf(profile)))
+        val snapshot = archive.profiles.single()
+        assertEquals(profile.setProgress, BackupService.profile(snapshot).setProgress)
+        val older = archive.copy(profiles = listOf(snapshot.copy(id = profile.id.uppercase(), setProgress = null)))
+        val matched = BackupService.matchExistingProfiles(older, listOf(profile)).profiles.single()
+        assertEquals(profile.id, matched.id)
+        assertEquals(profile.setProgress, matched.setProgress)
+    }
+
+    @Test
     fun backupFromIphoneOpensOnAndroid() {
         val restored = profiles(FROM_IOS)
         assertEquals(4, restored.size)

@@ -48,8 +48,8 @@ struct RootView: View {
 
     /// Восстановление с первого экрана: после переустановки профилей нет,
     /// и до настроек без новой программы не добраться.
-    private func restore(_ archive: BackupArchive) {
-        BackupService.restore(archive, into: modelContext, existing: profiles)
+    private func restore(_ archive: BackupArchive) throws {
+        try BackupService.restore(archive, into: modelContext, existing: profiles)
         NutritionStore.shared.reload()
         SocialService.shared.adoptBackupToken(archive.socialToken)
         if let first = archive.profiles.first, let id = UUID(uuidString: first.id) {
@@ -84,7 +84,7 @@ struct RootView: View {
 struct ProgramOnboardingView: View {
     var canCancel: Bool = false
     var onCancel: () -> Void = {}
-    var onRestore: ((BackupArchive) -> Void)? = nil
+    var onRestore: ((BackupArchive) throws -> Void)? = nil
     let onSave: (ProgramProfile) -> Void
     @State private var selectedProgram: TrainingProgramKind?
 
@@ -137,7 +137,7 @@ struct ProgramSelectionView: View {
     @Binding var selection: TrainingProgramKind?
     var canCancel: Bool = false
     var onCancel: () -> Void = {}
-    var onRestore: ((BackupArchive) -> Void)? = nil
+    var onRestore: ((BackupArchive) throws -> Void)? = nil
     @State private var breathe = false
     @State private var showImporter = false
     @State private var restoreError: String?
@@ -249,10 +249,10 @@ struct ProgramSelectionView: View {
                 restoreError = "В файле нет профилей"
                 return
             }
+            try onRestore(archive)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            onRestore(archive)
         } catch {
-            restoreError = "Файл не читается как копия STRAIN"
+            restoreError = "Не удалось восстановить копию STRAIN"
         }
     }
 }

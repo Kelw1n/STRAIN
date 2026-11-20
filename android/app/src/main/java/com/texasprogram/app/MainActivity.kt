@@ -245,8 +245,7 @@ private fun rememberBackupImport(store: AppStore, onResult: (String) -> Unit) =
         onResult(
             try {
                 val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                val archive = BackupService.parse(text.orEmpty())
-                SocialService.adoptBackupToken(archive.socialToken)
+                val archive = BackupService.matchExistingProfiles(BackupService.parse(text.orEmpty()), store.profiles)
                 val restored = archive.profiles.map { BackupService.profile(it) }
                 if (restored.isEmpty()) {
                     "В файле нет профилей"
@@ -254,6 +253,7 @@ private fun rememberBackupImport(store: AppStore, onResult: (String) -> Unit) =
                     store.restoreAll(restored)
                     BackupService.restoreNutrition(archive, NutritionStore.directory(context))
                     NutritionStore.get(context).reload()
+                    SocialService.adoptBackupToken(archive.socialToken)
                     "Восстановлено профилей: ${restored.size}. Открыт «${restored.first().name}»."
                 }
             } catch (e: Exception) {
