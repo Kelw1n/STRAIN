@@ -1,6 +1,9 @@
 package com.texasprogram.app
 
 import com.texasprogram.app.service.L10n
+import com.texasprogram.app.model.Progression
+import com.texasprogram.app.ui.ProgressionText
+import java.time.LocalDate
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -38,6 +41,13 @@ class LocalizationTest {
             "Верх по средам и фулбади" to "Верх по средам и фулбади",
         )
         for ((russian, english) in cases) assertEquals(russian, english, L10n.tr(russian))
+    }
+
+    @Test
+    fun englishMonthlyProgress() {
+        val day = LocalDate.of(2026, 11, 10)
+        assertEquals("November: 1 workout · 7 to bronze", ProgressionText.month(1, Progression.MonthTier.BRONZE, day))
+        assertEquals("November: 20 workouts · gold earned", ProgressionText.month(20, null, day))
     }
 
     @Test

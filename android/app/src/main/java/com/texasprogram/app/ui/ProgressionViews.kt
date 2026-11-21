@@ -99,20 +99,26 @@ private val Progression.MonthTier.genitive: String
         Progression.MonthTier.GOLD -> "золота"
     }
 
-private object ProgressionText {
+internal object ProgressionText {
     fun experience(value: Int): String {
         val number = String.format(L10n.locale, "%,d", value)
         return if (L10n.isEnglish) "$number XP" else "$number опыта"
     }
 
     fun toNext(level: Progression.Level): String {
-        val left = level.toNext ?: return "Все уровни взяты"
+        val left = level.toNext ?: return L("Все уровни взяты")
+        if (L10n.isEnglish) return "${experience(left)} to level ${level.level + 1}"
         return "до ${level.level + 1}-го уровня — ${experience(left)}"
     }
 
     /// «Октябрь: 5 тренировок · до бронзы 3».
     fun month(count: Int, next: Progression.MonthTier?, today: LocalDate = LocalDate.now()): String {
-        val done = "${Progression.monthNames[today.monthValue]}: $count ${RuPlural.word(count, "тренировка", "тренировки", "тренировок")}"
+        val month = Progression.monthNames[today.monthValue]
+        if (L10n.isEnglish) {
+            val done = "${L(month)}: $count ${if (count == 1) "workout" else "workouts"}"
+            return if (next == null) "$done · gold earned" else "$done · ${next.workouts - count} to ${L(next.genitive)}"
+        }
+        val done = "$month: $count ${RuPlural.word(count, "тренировка", "тренировки", "тренировок")}"
         if (next == null) return "$done · золото месяца"
         return "$done · до ${next.genitive} ${next.workouts - count}"
     }

@@ -38,6 +38,12 @@ final class LocalizationTests: XCTestCase {
         }
     }
 
+    func testEnglishMonthlyProgress() throws {
+        let date = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 10)))
+        XCTAssertEqual(ProgressionText.month(1, next: .bronze, now: date), "November: 1 workout · 7 to bronze")
+        XCTAssertEqual(ProgressionText.month(20, next: nil, now: date), "November: 20 workouts · gold earned")
+    }
+
     func testRussianModeLeavesTextAlone() {
         UserDefaults.standard.set(AppLanguage.ru.rawValue, forKey: AppLanguage.storageKey)
         L10n.reload()
