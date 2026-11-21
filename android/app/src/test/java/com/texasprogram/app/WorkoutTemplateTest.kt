@@ -145,11 +145,16 @@ class WorkoutTemplateTest {
 
         val (withSecond, second) = profile.startWorkout(template)
         assertEquals(2, second.day.number)
-        val discarded = withSecond.discardFreeWorkout(2)
+        val noted = withSecond.setNote("Первая", 0, 1).setNote("Вторая", 0, 2)
+        assertEquals(2, noted.workoutNotes.keys.count { noted.noteSlot(it) != null })
+        val discarded = noted.discardFreeWorkout(2)
+        assertEquals("", discarded.note(0, 2))
+        assertEquals("Первая", discarded.note(0, 1))
         assertNull(discarded.freeDay(2))
         assertNotNull(discarded.discardFreeWorkout(1).freeDay(1))
 
         val deleted = discarded.deleteFreeWorkout(1)
+        assertEquals("", deleted.note(0, 1))
         assertTrue(deleted.freeWorkouts.isEmpty())
         assertFalse(deleted.completionLog.any { it.key == "free-1" })
         assertNull(deleted.setLog["free-1|${exercise.key}|0"])

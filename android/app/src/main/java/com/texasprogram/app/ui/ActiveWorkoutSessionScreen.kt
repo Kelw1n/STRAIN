@@ -95,7 +95,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -172,10 +171,11 @@ fun SessionClock(
     rolling: Boolean = false
 ) {
     val start = WorkoutSessionManager.startMillis
-    val seconds by produceState(WorkoutSessionManager.elapsedSeconds(), start) {
+    var seconds by remember(start) { mutableIntStateOf(WorkoutSessionManager.elapsedSeconds()) }
+    LaunchedEffect(start) {
         while (true) {
             val now = System.currentTimeMillis()
-            value = WorkoutSessionManager.elapsedSeconds(now)
+            seconds = WorkoutSessionManager.elapsedSeconds(now)
             // До следующей целой секунды от старта — цифры не «плывут» относительно часов.
             val phase = Math.floorMod(now - start, 1000L)
             delay((1000L - phase).coerceAtLeast(16L))

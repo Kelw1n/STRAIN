@@ -20,9 +20,9 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -30,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -51,11 +50,9 @@ import kotlinx.coroutines.withContext
 fun ExerciseThumb(name: String, size: Dp = 48.dp, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val revision = ExerciseArt.revision
-    val image by produceState<ImageBitmap?>(
-        initialValue = ExerciseArt.cached(name)?.asImageBitmap(),
-        name, revision
-    ) {
-        value = withContext(Dispatchers.IO) { ExerciseArt.load(context, name)?.asImageBitmap() }
+    var image by remember(name, revision) { mutableStateOf(ExerciseArt.cached(name)?.asImageBitmap()) }
+    LaunchedEffect(name, revision) {
+        image = withContext(Dispatchers.IO) { ExerciseArt.load(context, name)?.asImageBitmap() }
     }
     val shape = RoundedCornerShape(size * 0.25f)
     Box(

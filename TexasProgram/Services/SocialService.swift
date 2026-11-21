@@ -174,7 +174,8 @@ final class SocialService {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
-        if let token = tokenOverride ?? token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let requestToken = tokenOverride ?? token
+        if let token = requestToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         else if requiresAuth { throw SocialError.signedOut }
         if let json {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -191,12 +192,13 @@ final class SocialService {
             if error is CancellationError || (error as? URLError)?.code == .cancelled { throw CancellationError() }
             throw SocialError.offline
         }
+        if path == "/me", tokenOverride == nil, requestToken != token { throw CancellationError() }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let message = (try? JSONDecoder().decode(ErrorBody.self, from: body).error)
                 ?? (status == 503 ? "Сервер ленты ещё не настроен или перезапускается." : "Ошибка сервера (\(status))")
             // Профиль удалён на сервере — выходим. Но не при проверке чужого кода входа.
-            if status == 401 && tokenOverride == nil && token != nil && path == "/me" { signOut() }
+            if status == 401 && requestToken != nil && requestToken == token && (tokenOverride == nil || method == "PATCH") && path == "/me" { signOut() }
             throw SocialError(message: message, status: status)
         }
         if T.self == Empty.self { return Empty() as! T }
@@ -255,15 +257,19 @@ final class SocialService {
     }
 
     func deleteAccount() async throws {
-        let _: Empty = try await request("DELETE", "/me", requiresAuth: true)
+        guard let account = token else { throw SocialError.signedOut }
+        let drafts = outbox
+        let _: Empty = try await request("DELETE", "/me", requiresAuth: true, token: account)
         // Неотправленные посты удалённого профиля не должны уйти от имени следующего.
-        for draft in outbox { SocialOutboxStore.remove(draft.clientId) }
+        for draft in drafts { SocialOutboxStore.remove(draft.clientId) }
+        guard token == account else { return }
         outbox = []
         signOut()
     }
 
     private func setToken(_ value: String?) {
         if token != value {
+            syncTask?.cancel()
             for item in pendingMessages { ChatOutboxStore.remove(item.clientId) }
             pendingMessages = []
             pendingFailures = [:]
@@ -279,8 +285,8 @@ final class SocialService {
     }
 
     func refreshMe() async {
-        guard token != nil else { return }
-        if let user: SocialUser = try? await request("GET", "/me") { me = user }
+        guard let account = token else { return }
+        if let user: SocialUser = try? await request("GET", "/me"), token == account { me = user }
     }
 
     struct ProfilePatch: Encodable {
@@ -320,8 +326,11 @@ final class SocialService {
     }
 
     @discardableResult
-    func update(_ patch: ProfilePatch) async throws -> SocialUser {
-        let user: SocialUser = try await request("PATCH", "/me", json: patch, requiresAuth: true)
+    func update(_ patch: ProfilePatch, for expectedAccount: String? = nil) async throws -> SocialUser {
+        guard let account = token else { throw SocialError.signedOut }
+        if let expectedAccount, account != expectedAccount { throw CancellationError() }
+        let user: SocialUser = try await request("PATCH", "/me", json: patch, requiresAuth: true, token: account)
+        guard token == account else { throw CancellationError() }
         me = user
         return user
     }
@@ -336,12 +345,12 @@ final class SocialService {
     /// вызовов подряд дают один расчёт — и уходит самое свежее, а не то,
     /// что было при первом вызове.
     func scheduleSync(from profile: ProgramProfile) {
-        guard token != nil else { return }
+        guard let account = token else { return }
         syncTask?.cancel()
         let attached = profile.modelContext != nil
         syncTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard let self, !Task.isCancelled, self.token != nil else { return }
+            guard let self, !Task.isCancelled, self.token == account else { return }
             // Профиль за эти секунды могли удалить: к удалённой модели обращаться нельзя.
             guard !profile.isDeleted, !attached || profile.modelContext != nil else { return }
             let incomplete = profile.completionLog.isEmpty && profile.hasUndatedWorkoutMarks
@@ -353,10 +362,12 @@ final class SocialService {
                 heatmap: incomplete ? nil : TrainingHeatmap.build(for: profile),
                 stats: incomplete ? nil : WeeklyStatsBuilder.stats(for: profile)
             )
-            guard let data = try? JSONEncoder().encode(patch) else { return }
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            guard let data = try? encoder.encode(patch) else { return }
             let fingerprint = data.base64EncodedString()
             guard fingerprint != UserDefaults.standard.string(forKey: "social_sync_fingerprint") else { return }
-            if (try? await self.update(patch)) != nil {
+            if (try? await self.update(patch, for: account)) != nil, self.token == account, !Task.isCancelled {
                 UserDefaults.standard.set(fingerprint, forKey: "social_sync_fingerprint")
             }
         }

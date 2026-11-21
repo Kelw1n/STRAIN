@@ -565,7 +565,7 @@ struct SettingsView: View {
 
     private func exportBackup() {
         do {
-            shareItem = ShareItem(url: try BackupService.writeTemporaryFile(profiles))
+            shareItem = ShareItem(url: try BackupService.writeTemporaryFile(profiles, activeProfileID: profile.profileID))
         } catch {
             backupMessage = "Не удалось собрать копию"
         }

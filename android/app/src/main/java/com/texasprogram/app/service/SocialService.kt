@@ -288,15 +288,19 @@ object SocialService {
     }
 
     suspend fun deleteAccount() {
-        call("DELETE", "/me", requiresAuth = true)
+        val account = token
+        val drafts = outbox
+        call("DELETE", "/me", requiresAuth = true, useToken = account)
         // Неотправленные посты удалённого профиля не должны уйти от имени следующего.
-        withContext(Dispatchers.IO) { outbox.forEach { OutboxStore.remove(it.clientId) } }
+        withContext(Dispatchers.IO) { drafts.forEach { OutboxStore.remove(it.clientId) } }
+        if (token != account) return
         outbox = emptyList()
         signOut()
     }
 
     private fun storeToken(value: String?) {
         if (token != value) {
+            syncJob?.cancel()
             pendingMessages.forEach { ChatOutboxStore.remove(it.clientId) }
             pendingMessages = emptyList()
             pendingFailures = emptyMap()
@@ -313,11 +317,12 @@ object SocialService {
     }
 
     suspend fun refreshMe() {
-        if (token == null) return
+        val account = token ?: return
         try {
-            me = decode<SocialUser>(call("GET", "/me"))
+            val user = decode<SocialUser>(call("GET", "/me", useToken = account))
+            if (token == account) me = user
         } catch (e: SocialException) {
-            if (e.status == 401) signOut()
+            if (e.status == 401 && token == account) signOut()
         }
     }
 
@@ -357,14 +362,17 @@ object SocialService {
     }
 
     suspend fun update(patch: ProfilePatch): SocialUser {
-        val user = decode<SocialUser>(call("PATCH", "/me", body = patch.toJson(), requiresAuth = true))
+        val account = token
+        val user = decode<SocialUser>(call("PATCH", "/me", body = patch.toJson(), requiresAuth = true, useToken = account))
+        if (token != account) throw CancellationException("Account changed")
         me = user
         return user
     }
 
     /// Программа, медали, вес и сводка недели — в профиль. Шлём, только если что-то поменялось.
     fun scheduleSync(profile: ProgramProfile) {
-        if (token == null || !::appContext.isInitialized) return
+        val account = token ?: return
+        if (!::appContext.isInitialized) return
         syncJob?.cancel()
         syncJob = scope.launch {
             delay(3_000)
@@ -380,9 +388,9 @@ object SocialService {
                 )
             }
             val fingerprint = patch.toJson()
-            if (fingerprint == prefs().getString("sync_fingerprint", null)) return@launch
+            if (token != account || fingerprint == prefs().getString("sync_fingerprint", null)) return@launch
             runCatching { update(patch) }.onSuccess {
-                prefs().edit().putString("sync_fingerprint", fingerprint).apply()
+                if (token == account) prefs().edit().putString("sync_fingerprint", fingerprint).apply()
             }
         }
     }

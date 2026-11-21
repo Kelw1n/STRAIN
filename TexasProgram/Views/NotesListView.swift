@@ -11,16 +11,8 @@ struct NotesListView: View {
     private var notes: [(week: Int, day: Int, text: String)] {
         profile.workoutNotes
             .compactMap { entry -> (week: Int, day: Int, text: String)? in
-                let key = entry.key, text = entry.value
-                // Заметки свободных тренировок — вне циклов, у них свой ключ.
-                if key.hasPrefix("free-") {
-                    guard let number = Int(key.dropFirst("free-".count)) else { return nil }
-                    return (ProgramProfile.freeWeek, number, text)
-                }
-                guard profile.isOwnKey(key) else { return nil }
-                let parts = key.dropFirst(profile.keyPrefix.count).split(separator: "-")
-                guard parts.count == 2, let week = Int(parts[0]), let day = Int(parts[1]) else { return nil }
-                return (week, day, text)
+                guard let slot = profile.noteSlot(for: entry.key) else { return nil }
+                return (slot.week, slot.day, entry.value)
             }
             .sorted { ($0.week, $0.day) > ($1.week, $1.day) }
     }

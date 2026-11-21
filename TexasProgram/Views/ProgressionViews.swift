@@ -94,20 +94,26 @@ private extension Progression.MonthTier {
     }
 }
 
-private enum ProgressionText {
+enum ProgressionText {
     static func experience(_ value: Int) -> String {
         let number = value.formatted(.number.grouping(.automatic).locale(L10n.locale))
         return L10n.isEnglish ? "\(number) XP" : "\(number) опыта"
     }
 
     static func toNext(_ level: Progression.Level) -> String {
-        guard let left = level.toNext else { return "Все уровни взяты" }
+        guard let left = level.toNext else { return L("Все уровни взяты") }
+        if L10n.isEnglish { return "\(experience(left)) to level \(level.level + 1)" }
         return "до \(level.level + 1)-го уровня — \(experience(left))"
     }
 
     /// «Октябрь: 5 тренировок · до бронзы 3».
     static func month(_ count: Int, next: Progression.MonthTier?, now: Date = Date()) -> String {
         let month = Progression.monthNames[Calendar.current.component(.month, from: now)]
+        if L10n.isEnglish {
+            let done = "\(L(month)): \(count) \(count == 1 ? "workout" : "workouts")"
+            guard let next else { return done + " · gold earned" }
+            return done + " · \(next.workouts - count) to \(L(next.genitive))"
+        }
         let done = "\(month): \(count) \(RuPlural.word(count, "тренировка", "тренировки", "тренировок"))"
         guard let next else { return done + " · золото месяца" }
         return done + " · до \(next.genitive) \(next.workouts - count)"

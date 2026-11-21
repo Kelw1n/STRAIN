@@ -32,6 +32,14 @@ class StreakAndGoalTest {
     }
 
     @Test
+    fun backupOpensTheActiveProfileFirst() {
+        val first = texas()
+        val active = texas()
+        val archive = BackupService.parse(BackupService.export(listOf(first, active), activeProfileId = active.id))
+        assertEquals(listOf(active.id, first.id), archive.profiles.map { it.id })
+    }
+
+    @Test
     fun noWorkoutsNoStreak() {
         val streak = texas().calendarStreak(day(2))
         assertEquals(0, streak.weeks)
@@ -72,6 +80,15 @@ class StreakAndGoalTest {
         val empty = undone.toggleCompleted(1, 1, day(0))
         assertNull(empty.lastCompletionEpochDay)
         assertTrue(empty.completionLog.isEmpty())
+    }
+
+    @Test
+    fun editingAnOlderCycleDoesNotCloseTodayInTheNewCycle() {
+        val base = texas().toggleCompleted(1, 1, day(-7))
+        val next = base.startNewCycle(100.0, 100.0, 100.0, day(0)).toggleCompleted(1, 1, day(0))
+        val edited = next.correctWorkoutDate(base.completionLog.single(), day(2), day(2))
+        assertEquals(day(0), edited.lastCompletionDate())
+        assertEquals(2, edited.weekGoal(day(2)).first)
     }
 
     @Test

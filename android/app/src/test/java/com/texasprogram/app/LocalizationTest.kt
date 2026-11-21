@@ -1,6 +1,9 @@
 package com.texasprogram.app
 
 import com.texasprogram.app.service.L10n
+import com.texasprogram.app.model.Progression
+import com.texasprogram.app.ui.ProgressionText
+import java.time.LocalDate
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -25,6 +28,8 @@ class LocalizationTest {
             "Неделя 3 из 12" to "Week 3 of 12",
             "ДЕНЬ 1" to "DAY 1",
             "4 тренировки" to "4 workouts",
+            "Выбрать фото сбоку" to "Choose a side-view photo",
+            "Восстановить историю" to "Restore workout history",
             "был(а) вчера" to "last seen yesterday",
             "Ноябрь 2026" to "November 2026",
             "жим лёжа" to "bench press",
@@ -36,6 +41,13 @@ class LocalizationTest {
             "Верх по средам и фулбади" to "Верх по средам и фулбади",
         )
         for ((russian, english) in cases) assertEquals(russian, english, L10n.tr(russian))
+    }
+
+    @Test
+    fun englishMonthlyProgress() {
+        val day = LocalDate.of(2026, 11, 10)
+        assertEquals("November: 1 workout · 7 to bronze", ProgressionText.month(1, Progression.MonthTier.BRONZE, day))
+        assertEquals("November: 20 workouts · gold earned", ProgressionText.month(20, null, day))
     }
 
     @Test

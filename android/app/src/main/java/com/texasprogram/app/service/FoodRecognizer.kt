@@ -326,7 +326,7 @@ object FoodRecognizer {
 
     /// JSON из ответа: как есть, без ```, по первым фигурным скобкам и с прямыми кавычками.
     internal fun jsonElement(raw: String): JsonElement? {
-        val clean = raw.replace(Regex("[​-‍﻿]"), "").trim()
+        val clean = raw.replace(Regex("[\u200B-\u200D\uFEFF]"), "").trim()
         val unfenced = clean
             .replace(Regex("^```(?:json)?\\s*", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\s*```$"), "")

@@ -98,7 +98,7 @@ fun ExerciseLibrarySheet(
     onPick: ((List<LibraryExercise>) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    remember { ExerciseLibrary.load(context) }
+    ExerciseLibrary.load(context)
     val haptics = rememberHapticEngine()
     var query by remember { mutableStateOf("") }
     var group by remember { mutableStateOf<String?>(null) }
@@ -525,7 +525,7 @@ fun TemplatesSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    remember { ExerciseLibrary.load(context) }
+    ExerciseLibrary.load(context)
     var current by remember { mutableStateOf(profile) }
     LaunchedEffect(profile) { current = profile }
     fun update(next: ProgramProfile) {

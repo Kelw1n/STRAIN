@@ -148,7 +148,7 @@ data class ProgramProfile(
     /// Общий кэш остаётся — новый экземпляр с теми же входными данными
     /// (поменяли, например, время отдыха) берёт готовый план.
     val workoutPlan: WorkoutPlan by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val key = listOf(programKind, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports, weightSteps, defaultWeightStep)
+        val key = listOf(programKind, cycleNumber, cycleStartedEpochDay, squat5RM, bench5RM, deadlift5RM, level, pull, arms, core, back, press, isPeaking, peakSquat5RM, peakBench5RM, peakDeadlift5RM, planEdits, skipped, customProgram, fullBodyLevel, euthanasiaInput, autoregulationEnabled, liftReports, weightSteps, defaultWeightStep)
         // Порядок обязателен: сначала задержка подменяет неделю расчёта, потом
         // правки подставляют свои упражнения. Наоборот задержка стёрла бы
         // то, что пользователь вписал руками.
@@ -394,6 +394,19 @@ data class ProgramProfile(
 
     // MARK: - Заметки
 
+    fun noteSlot(key: String): Pair<Int, Int>? {
+        if (key.startsWith("free-")) {
+            val day = key.removePrefix("free-").toIntOrNull() ?: return null
+            return (FREE_WEEK to day).takeIf { key == freeKey(day) }
+        }
+        if (!isOwnKey(key)) return null
+        val parts = key.removePrefix(keyPrefix).split("-")
+        if (parts.size != 2) return null
+        val week = parts[0].toIntOrNull() ?: return null
+        val day = parts[1].toIntOrNull() ?: return null
+        return (week to day).takeIf { key == dayKey(week, day) }
+    }
+
     fun note(week: Int, day: Int): String = workoutNotes[dayKey(week, day)] ?: ""
 
     fun setNote(text: String, week: Int, day: Int): ProgramProfile {
@@ -423,15 +436,21 @@ data class ProgramProfile(
 
     // MARK: - Пропущенные тренировки
 
+    private fun isCurrentSkip(skip: SkippedWorkout): Boolean =
+        skip.isPeaking == isPeaking && belongsToCurrentCycle(skip)
+
+    private fun belongsToCurrentCycle(skip: SkippedWorkout): Boolean =
+        skip.cycleNumber?.let { it == cycleNumber } ?: (cycleNumber == 1 || skip.epochDay >= cycleStartedEpochDay)
+
     fun isSkipped(week: Int, day: Int): Boolean =
-        skipped.any { it.week == week && it.day == day && it.isPeaking == isPeaking }
+        skipped.any { it.week == week && it.day == day && isCurrentSkip(it) }
 
     /// Сколько недель прогрессия стоит на месте к началу указанной недели.
     ///
     /// Считаем пропуски строго раньше этой недели: неделя, которую пропустили,
     /// должна остаться со своими весами, а замереть должна следующая.
     fun holdCount(before: Int): Int =
-        skipped.filter { it.isPeaking == isPeaking && it.holdsProgression && it.week < before }
+        skipped.filter { isCurrentSkip(it) && it.holdsProgression && it.week < before }
             .map { it.week }.toSet().size
 
     /// Какая неделя расчёта достаётся календарной неделе.
@@ -442,7 +461,7 @@ data class ProgramProfile(
     /// Веса не пересчитываем формулой — подставляем упражнения нужной недели
     /// целиком. Так арифметика остаётся в одном месте, в самом калькуляторе.
     private fun applyHolds(plan: WorkoutPlan): WorkoutPlan {
-        if (skipped.none { it.isPeaking == isPeaking && it.holdsProgression }) return plan
+        if (skipped.none { isCurrentSkip(it) && it.holdsProgression }) return plan
         val byNumber = plan.weeks.associateBy { it.number }
         return plan.copy(weeks = plan.weeks.map { week ->
             val source = effectiveWeek(week.number)
@@ -461,7 +480,7 @@ data class ProgramProfile(
         if (isSkipped(week, day)) return this
         return copy(skipped = skipped + SkippedWorkout(
             week = week, day = day, isPeaking = isPeaking,
-            epochDay = today.toEpochDay(), holdsProgression = holdsProgression
+            epochDay = today.toEpochDay(), holdsProgression = holdsProgression, cycleNumber = cycleNumber
         ))
     }
 
@@ -470,7 +489,7 @@ data class ProgramProfile(
 
     /// Пропуски текущего пространства имён — их показывают настройки.
     val activeSkips: List<SkippedWorkout>
-        get() = skipped.filter { it.isPeaking == isPeaking }.sortedWith(compareBy({ it.week }, { it.day }))
+        get() = skipped.filter { isCurrentSkip(it) }.sortedWith(compareBy({ it.week }, { it.day }))
 
     // MARK: - Фактически выполненные подходы
 
@@ -773,9 +792,9 @@ data class ProgramProfile(
         val log = completionLog.toMutableList()
         log[index] = log[index].copy(epochDay = corrected)
         val last = when {
-            lastCompletionEpochDay == record.epochDay -> latestProgramCompletion(log)
-            lastCompletionEpochDay != null -> maxOf(lastCompletionEpochDay, corrected)
-            else -> null
+            !isOwnKey(record.key) -> lastCompletionEpochDay
+            lastCompletionEpochDay == null || lastCompletionEpochDay == record.epochDay -> latestProgramCompletion(log)
+            else -> maxOf(lastCompletionEpochDay, corrected)
         }
         return copy(completionLog = log, lastCompletionEpochDay = last)
     }
@@ -931,6 +950,7 @@ data class ProgramProfile(
     /// перестают быть видимыми. История и графики от этого сквозные.
     fun startNewCycle(squat: Double, bench: Double, deadlift: Double, today: LocalDate = LocalDate.now()): ProgramProfile =
         copy(
+            skipped = skipped.map { if (it.cycleNumber == null && belongsToCurrentCycle(it)) it.copy(cycleNumber = cycleNumber) else it },
             cycleNumber = cycleNumber + 1,
             peakingActive = false,
             peakSquat5RM = null,
@@ -1133,7 +1153,7 @@ data class ProgramProfile(
         var next = setDayCompleted(week, day, done)
         // Возместил пропущенное — задержка снимается сама.
         if (done) next = next.copy(skipped = next.skipped.filterNot {
-            it.week == week && it.day == day && it.isPeaking == isPeaking
+            it.week == week && it.day == day && isCurrentSkip(it)
         })
         if (carriesBenchWave(day)) {
             next = if (done) {

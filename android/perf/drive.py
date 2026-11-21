@@ -16,6 +16,7 @@
 import base64
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -26,6 +27,8 @@ import xml.etree.ElementTree as ET
 PKG = "com.texasprogram.app"
 APK, OUT = sys.argv[1], sys.argv[2]
 os.makedirs(OUT, exist_ok=True)
+translations_file = Path(__file__).resolve().parents[2] / "tools/i18n/en.json"
+translations = json.loads(translations_file.read_text(encoding="utf-8"))
 
 
 def adb(*args, check=True, text=True):
@@ -91,10 +94,13 @@ def find(label, contains=False):
     found = nodes()
     if dismiss_system_dialogs(found):
         found = nodes()
-    for node in found:
-        for value in (node["text"], node["desc"]):
-            if value == label or (contains and label in value):
-                return node
+    labels = {label.casefold(), translations.get(label, label).casefold()}
+    # Prefer accessibility labels on tabs over identical headings inside the screen.
+    for field in ("desc", "text"):
+        for node in found:
+            for value in node[field].casefold().splitlines():
+                if value.strip() in labels or (contains and any(name in value for name in labels)):
+                    return node
     return None
 
 
@@ -113,11 +119,12 @@ def tap(x, y, pause=0.6):
     time.sleep(pause)
 
 
-def tap_label(label, timeout=15, contains=False, pause=0.8):
+def tap_label(label, timeout=15, contains=False, pause=0.8, optional=False):
     node = wait_for(label, timeout, contains)
     if not node:
-        print(f"  ! не нашёл «{label}»")
-        return False
+        if optional:
+            return False
+        raise RuntimeError(f"Не нашёл «{label}»")
     tap(node["x"], node["y"], pause)
     return True
 
@@ -231,6 +238,7 @@ def pct(values, p):
 
 
 results = []
+failures = []
 
 
 def scenario(name, action):
@@ -241,7 +249,8 @@ def scenario(name, action):
         try:
             action()
         except Exception as error:  # сценарий не должен ронять весь замер
-            print(f"  ! {name}: {error}")
+            failures.append(f"{name}: {error}")
+            print(f"  ! {name}: {error}", flush=True)
     elapsed = time.time() - started
     data = list(collector.frames.values())
     stats = summary(sh(f"dumpsys gfxinfo {PKG}"))
@@ -296,6 +305,9 @@ if wait_for("Техасский метод", 25):
             break
         swipe_up(1)
     tap_label("Построить программу", pause=3)
+if not wait_for("Тренировка", 25):
+    labels = [n["text"] or n["desc"] for n in nodes() if n["text"] or n["desc"]]
+    raise RuntimeError(f"Не появился главный экран после создания профиля: {labels[:20]}")
 screenshot("00-after-onboarding")
 
 
@@ -343,16 +355,23 @@ def plan():
 def workout():
     tap_label("Тренировка", pause=1.0)
     tap_label("НАЧАТЬ ТРЕНИРОВКУ", pause=2.0)
+    checked_sets = 0
     for _ in range(8):
         node = wait_for("Отметить подход", 4)
         if not node:
             swipe_up(1)
             continue
         tap(node["x"], node["y"], pause=0.7)
+        if checked_sets == 0 and not wait_for("Подход сделан", 5):
+            raise RuntimeError("Первая отметка подхода не появилась на экране")
+        checked_sets += 1
+    if not checked_sets:
+        raise RuntimeError("Не удалось отметить ни одного подхода")
+    print(f"Отмечено подходов: {checked_sets}", flush=True)
     swipe_up(5)
     swipe_down(5)
     # Тренировку сворачиваем — дальше нужна панель вкладок.
-    if not tap_label("Свернуть тренировку", timeout=4, pause=1.2):
+    if not tap_label("Свернуть тренировку", timeout=4, pause=1.2, optional=True):
         sh("input keyevent KEYCODE_BACK")
         time.sleep(1.2)
 
@@ -368,8 +387,7 @@ def tab_drag():
     node = wait_for("Главное", 10)
     last = wait_for("Профиль", 10)
     if not node or not last:
-        print("  ! панель вкладок не нашлась")
-        return
+        raise RuntimeError("Панель вкладок не нашлась")
     y = node["y"]
     for _ in range(3):
         sh(f"input swipe {node['x']} {y} {last['x']} {y} 1400")
@@ -432,3 +450,6 @@ for name in sorted(os.listdir(OUT)):
     chunks = [data[i:i + 4000] for i in range(0, len(data), 4000)]
     for index, chunk in enumerate(chunks):
         print(f"SNAP {os.path.basename(OUT)}/{name} {index + 1}/{len(chunks)} {chunk}")
+
+if failures:
+    raise SystemExit("\n".join(failures))

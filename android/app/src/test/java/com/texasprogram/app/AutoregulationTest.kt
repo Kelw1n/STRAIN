@@ -52,6 +52,14 @@ class AutoregulationTest {
     }
 
     @Test
+    fun newCycleWithTheSameMaxesDropsPreviousCycleReportFromCachedPlan() {
+        val old = texas().setReport(MainLift.SQUAT, 1, LiftOutcome.GRIND)
+        assertEquals(90.0, kg(old, 2, MainLift.SQUAT)!!, 0.001)
+        val next = old.startNewCycle(old.squat5RM, old.bench5RM, old.deadlift5RM)
+        assertEquals(92.5, kg(next, 2, MainLift.SQUAT)!!, 0.001)
+    }
+
+    @Test
     fun grindHoldsTheWeight() {
         val profile = texas().setReport(MainLift.SQUAT, 1, LiftOutcome.GRIND)
         assertEquals(90.0, kg(profile, 2, MainLift.SQUAT)!!, 0.001)

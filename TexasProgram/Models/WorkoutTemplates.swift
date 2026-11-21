@@ -356,6 +356,7 @@ extension ProgramProfile {
                           now: Date = Date(), calendar: Calendar = .current) -> ScheduledWorkout {
         let number = (freeWorkouts.map(\.number).max() ?? 0) + 1
         let day = FreeWorkoutDay(number: number, title: title, templateID: templateID, date: now, exercises: exercises.map(FreeExercise.init))
+        workoutNotes[Self.freeKey(number)] = nil
         freeWorkouts.append(day)
         return ScheduledWorkout(
             week: Self.freeWeek,
@@ -370,10 +371,7 @@ extension ProgramProfile {
     /// Отменили свободную тренировку, которую ещё не закончили, — её как не было.
     func discardFreeWorkout(_ number: Int) {
         guard let day = freeDay(number), !day.completed else { return }
-        let prefix = Self.freeKey(number) + "|"
-        setLog = setLog.filter { !$0.key.hasPrefix(prefix) }
-        setProgress = setProgress.filter { !$0.key.hasPrefix(prefix) }
-        freeWorkouts.removeAll { $0.number == number }
+        deleteFreeWorkout(number)
     }
 
     /// Удаляет закрытую свободную тренировку из истории целиком.
@@ -381,6 +379,7 @@ extension ProgramProfile {
         let key = Self.freeKey(number)
         setLog = setLog.filter { !$0.key.hasPrefix(key + "|") }
         setProgress = setProgress.filter { !$0.key.hasPrefix(key + "|") }
+        workoutNotes[key] = nil
         completionLog.removeAll { $0.key == key }
         freeWorkouts.removeAll { $0.number == number }
     }

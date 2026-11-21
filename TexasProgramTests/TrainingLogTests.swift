@@ -82,6 +82,21 @@ final class TrainingLogTests: XCTestCase {
 
     // MARK: - Пропуск тренировки
 
+    func testStartingAnotherCycleReleasesOldSkipAndKeepsItInBackup() throws {
+        let profile = ProgramProfile(input: .demo)
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
+        profile.skipped[0].cycleNumber = nil  // профиль из предыдущей версии
+        profile.startNewCycle(squat: 100, bench: 100, deadlift: 100)
+        XCTAssertFalse(profile.isSkipped(week: 1, day: 1))
+        XCTAssertEqual(profile.effectiveWeek(for: 2), 2)
+        profile.markSkipped(week: 1, day: 1, holdsProgression: true)
+        XCTAssertEqual(profile.effectiveWeek(for: 2), 1)
+        profile.toggleCompleted(week: 1, day: 1)
+        XCTAssertEqual(profile.skipped.count, 1)
+        let archive = try BackupService.archive(from: BackupService.export([profile], socialToken: nil))
+        XCTAssertEqual(archive.profiles.first?.skipped?.first?.cycleNumber, 1)
+    }
+
     func testSkipDoesNotCompleteTheDay() {
         let profile = ProgramProfile(input: .demo)
         profile.markSkipped(week: 1, day: 1, holdsProgression: true)

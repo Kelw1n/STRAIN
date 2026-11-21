@@ -21,6 +21,8 @@ final class LocalizationTests: XCTestCase {
             ("Неделя 3 из 12", "Week 3 of 12"),
             ("ДЕНЬ 1", "DAY 1"),
             ("4 тренировки", "4 workouts"),
+            ("Выбрать фото сбоку", "Choose a side-view photo"),
+            ("Восстановить историю", "Restore workout history"),
             ("был(а) вчера", "last seen yesterday"),
             ("Ноябрь 2026", "November 2026"),
             ("жим лёжа", "bench press"),
@@ -34,6 +36,12 @@ final class LocalizationTests: XCTestCase {
         for (russian, english) in cases {
             XCTAssertEqual(L10n.tr(russian), english, russian)
         }
+    }
+
+    func testEnglishMonthlyProgress() throws {
+        let date = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 10)))
+        XCTAssertEqual(ProgressionText.month(1, next: .bronze, now: date), "November: 1 workout · 7 to bronze")
+        XCTAssertEqual(ProgressionText.month(20, next: nil, now: date), "November: 20 workouts · gold earned")
     }
 
     func testRussianModeLeavesTextAlone() {

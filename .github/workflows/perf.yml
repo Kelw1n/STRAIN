@@ -69,7 +69,7 @@ jobs:
           script: |
             python3 android/perf/drive.py baseline.apk perf-base || true
             adb uninstall com.texasprogram.app || true
-            python3 android/perf/drive.py current.apk perf-current || true
+            python3 android/perf/drive.py current.apk perf-current
 
       - name: Summary
         if: always()
