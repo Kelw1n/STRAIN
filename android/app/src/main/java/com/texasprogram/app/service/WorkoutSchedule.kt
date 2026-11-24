@@ -247,6 +247,7 @@ object WorkoutScheduler {
         val total = UpperLowerCalculator.benchSessionCount
         for (index in entries.indices) {
             if (!profile.carriesBenchWave(entries[index].day.number)) continue
+            while (next <= total && profile.isBenchCompleted(next)) next++
             if (next > total) return
             entries[index] = entries[index].copy(benchSession = next)
             next++

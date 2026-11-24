@@ -93,7 +93,7 @@ data class WorkoutShareSummary(
             val manager = WorkoutSessionManager
             val lines = manager.exercises.mapNotNull { exercise ->
                 val done = exercise.sets.filter { it.isDone }
-                val top = done.maxWithOrNull(compareBy({ it.weight }, { it.reps })) ?: return@mapNotNull null
+                val top = done.filterNot { it.countOnly }.maxWithOrNull(compareBy({ it.weight }, { it.reps })) ?: return@mapNotNull null
                 Line(
                     name = exercise.prescription.name,
                     doneSets = done.size,

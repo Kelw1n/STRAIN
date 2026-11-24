@@ -569,8 +569,8 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                     TodayScreen(
                         profile = profile,
                         timer = timer,
-                        onToggleDay = { week, day ->
-                            store.updateActive { it.toggleCompleted(week, day) }
+                        onToggleDay = { workout ->
+                            store.updateActive { it.toggleCompleted(workout.week, workout.day.number, scheduledBench = workout.benchSession) }
                             syncProfileInBackground()
                         },
                         onToggleSet = { workout, exercise, dot ->
@@ -580,7 +580,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                                 val updated = store.active
                                 if (updated != null && updated.allSetsDone(workout)) {
                                     timer.stop()
-                                    store.updateActive { it.toggleCompleted(workout.week, workout.day.number) }
+                                    store.updateActive { it.toggleCompleted(workout.week, workout.day.number, scheduledBench = workout.benchSession) }
                                     syncProfileInBackground()
                                 } else {
                                     val completedCount = updated?.completedSets(workout.week, workout.day.number, exercise) ?: 0
@@ -706,7 +706,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                             day = day,
                             scheduled = scheduled,
                             onToggleDay = { w, d ->
-                                store.updateActive { it.toggleCompleted(w, d) }
+                                store.updateActive { it.toggleCompleted(w, d, scheduledBench = scheduled?.benchSession) }
                                 syncProfileInBackground()
                             },
                             onToggleSet = { exercise, dot ->

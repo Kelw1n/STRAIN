@@ -162,6 +162,7 @@ struct CompletionSnapshot: Codable, Equatable, Sendable {
     var actualDeadlift: Double? = nil
     var durationSeconds: Int? = nil
     var effort: String? = nil
+    var benchSession: Int? = nil
 }
 
 /// Корень файла резервной копии.
@@ -264,7 +265,8 @@ enum BackupService {
                     actualBench: $0.actualBench,
                     actualDeadlift: $0.actualDeadlift,
                     durationSeconds: $0.durationSeconds,
-                    effort: $0.effort
+                    effort: $0.effort,
+                    benchSession: $0.benchSession
                 )
             },
             planEdits: profile.planEdits,
@@ -381,7 +383,8 @@ enum BackupService {
                 actualBench: $0.actualBench,
                 actualDeadlift: $0.actualDeadlift,
                 durationSeconds: $0.durationSeconds,
-                effort: $0.effort
+                effort: $0.effort,
+                benchSession: $0.benchSession
             )
         }
         result.planEdits = (snapshot.planEdits ?? []).map { edit in

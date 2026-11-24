@@ -441,6 +441,7 @@ private struct ExerciseSessionCard: View {
     @GestureState private var holding = false
     /// Только что добавленный подход: его номер пару секунд пульсирует, а под
     /// кнопкой — подсказка, как убрать лишний (первые три раза).
+    @State private var warmUpSaveFailed = false
     @State private var justAdded: UUID?
     @State private var showsDeleteHint = false
     @AppStorage("hint.deleteSet") private var deleteHintsShown = 0
@@ -456,8 +457,9 @@ private struct ExerciseSessionCard: View {
             // Разминка — пока не сделан первый рабочий подход.
             if !compact, warmUpEnabled, doneCount == 0, !warmUp.isEmpty {
                 WarmUpRow(steps: warmUp, done: exercise.completedWarmUp ?? []) { step in
-                    manager.toggleWarmUp(step, exerciseID: exercise.id)
+                    warmUpSaveFailed = !manager.toggleWarmUp(step, exerciseID: exercise.id)
                 }
+                .alert(L("Не удалось сохранить файл"), isPresented: $warmUpSaveFailed) { Button(L("OK")) {} }
                 .transition(.opacity)
             }
             if !compact {

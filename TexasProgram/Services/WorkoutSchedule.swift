@@ -276,6 +276,7 @@ enum WorkoutScheduler {
         guard profile.programKind.hasBenchWave, var next = profile.nextBenchSession else { return }
         let total = UpperLowerCalculator.benchSessionCount
         for index in entries.indices where profile.carriesBenchWave(day: entries[index].day.number) {
+            while next <= total && profile.isBenchCompleted(next) { next += 1 }
             guard next <= total else { return }
             entries[index].benchSession = next
             next += 1

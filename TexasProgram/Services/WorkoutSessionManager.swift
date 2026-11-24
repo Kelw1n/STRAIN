@@ -12,6 +12,7 @@ struct ActiveSetState: Identifiable, Equatable, Codable {
     var weight: Double
     var reps: Int
     var isDone: Bool
+    var countOnly: Bool? = nil
     /// Подход побил лучший вес упражнения до этой тренировки.
     var isRecord: Bool = false
 
@@ -151,7 +152,7 @@ final class WorkoutSessionManager {
 
     var totalTonnage: Double {
         exercises.flatMap(\.sets)
-            .filter(\.isDone)
+            .filter { $0.isDone && $0.countOnly != true }
             .reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
     }
 
@@ -316,9 +317,11 @@ final class WorkoutSessionManager {
             profile.entries(week: workout.week, day: workout.day.number, exercise: presc).map { ($0.index, $0.entry) },
             uniquingKeysWith: { first, _ in first }
         )
-        let count = max(overrideCount ?? presc.sets, 1, (logged.keys.max() ?? -1) + 1)
-        // Сколько подходов в плане, столько и строк: два — значит два.
-        let sets = (0..<count).map { index in
+        let plannedIndices = 0..<max(overrideCount ?? presc.sets, 1)
+        let indices = Set(plannedIndices).union(logged.keys).sorted()
+        let progress = profile.completedSets(week: workout.week, day: workout.day.number, exercise: presc)
+        let dots = Set(plannedIndices.filter { logged[$0] == nil }.prefix(max(0, progress - logged.count)))
+        let sets = indices.map { index in
             let waveSet = waveSets.indices.contains(index) ? waveSets[index] : nil
             // В тесте на максимум число повторов заранее неизвестно.
             let waveReps = waveSet.map { Int($0.reps) ?? 0 }
@@ -329,7 +332,8 @@ final class WorkoutSessionManager {
                 previous: index < last.count ? last[index] : last.first,
                 weight: logged[index]?.weight ?? weight,
                 reps: logged[index]?.reps ?? reps,
-                isDone: logged[index] != nil
+                isDone: logged[index] != nil || dots.contains(index),
+                countOnly: dots.contains(index)
             )
         }
         return ActiveExerciseState(
@@ -406,14 +410,15 @@ final class WorkoutSessionManager {
         profile.setNote(noteText, week: workout.week, day: workout.day.number)
 
         for ex in exercises {
-            for set in ex.sets where set.isDone {
+            for set in ex.sets where set.isDone && set.countOnly != true {
                 profile.recordSet(
                     week: workout.week,
                     day: workout.day.number,
                     exercise: ex.prescription,
                     index: set.index,
                     reps: set.reps,
-                    weight: set.weight
+                    weight: set.weight,
+                    completedCount: ex.sets.filter(\.isDone).count
                 )
             }
         }
@@ -426,7 +431,8 @@ final class WorkoutSessionManager {
                 now: Date(),
                 durationSeconds: finalDuration,
                 effort: effort,
-                trainingDate: workout.date
+                trainingDate: workout.date,
+                scheduledBench: workout.benchSession
             )
         } else {
             profile.setWorkoutSummary(
@@ -475,18 +481,23 @@ final class WorkoutSessionManager {
 
     // MARK: - Подходы
 
-    func toggleWarmUp(_ step: WarmUp.Step, exerciseID: String) {
+    @discardableResult
+    func toggleWarmUp(_ step: WarmUp.Step, exerciseID: String) -> Bool {
         guard activeWorkout != nil, let index = exercises.firstIndex(where: { $0.id == exerciseID }),
-              exercises[index].warmUpSteps.contains(step) else { return }
+              exercises[index].warmUpSteps.contains(step) else { return false }
+        let previous = exercises[index].completedWarmUp
         var completed = exercises[index].completedWarmUp ?? []
         if !completed.insert(step).inserted { completed.remove(step) }
         exercises[index].completedWarmUp = completed
-        writeNow()
+        if writeNow() { return true }
+        exercises[index].completedWarmUp = previous
+        return false
     }
 
     func toggleSetDone(exIdx: Int, sIdx: Int, profile: ProgramProfile, restTimer: RestTimer) {
         guard exercises.indices.contains(exIdx), exercises[exIdx].sets.indices.contains(sIdx),
               let workout = activeWorkout else { return }
+        exercises[exIdx].sets[sIdx].countOnly = false
         exercises[exIdx].sets[sIdx].isDone.toggle()
         let set = exercises[exIdx].sets[sIdx]
         let ex = exercises[exIdx]
@@ -542,7 +553,8 @@ final class WorkoutSessionManager {
         let existing = exercises[exIdx].sets
         // Следующий номер — после самого большого: после удаления подхода
         // «количество» совпало бы с номером ещё живого подхода.
-        let index = (existing.map(\.index).max() ?? -1) + 1
+        let highest = existing.map(\.index).max() ?? -1
+        let index = highest < Int.max ? highest + 1 : (0...existing.count).first { candidate in !existing.contains { $0.index == candidate } }!
         exercises[exIdx].sets.append(ActiveSetState(
             index: index,
             previous: existing.last?.previous,
@@ -606,6 +618,7 @@ final class WorkoutSessionManager {
         let set = exercises[exIdx].sets[sIdx]
         guard set.isDone else { return }
         let ex = exercises[exIdx]
+        exercises[exIdx].sets[sIdx].countOnly = false
         exercises[exIdx].sets[sIdx].isRecord = ex.beatsRecord(set)
         profile.recordSet(
             week: workout.week,
@@ -709,8 +722,9 @@ final class WorkoutSessionManager {
     }
 
     /// Немедленная запись — при уходе приложения в фон.
-    func writeNow() {
-        guard let workout = activeWorkout, let profileID else { return }
+    @discardableResult
+    func writeNow() -> Bool {
+        guard let workout = activeWorkout, let profileID else { return false }
         let session = SavedSession(
             profileID: profileID,
             workout: workout,
@@ -720,10 +734,13 @@ final class WorkoutSessionManager {
             snapshot: startSnapshot,
             swapUndo: swapUndo
         )
-        guard let data = try? JSONEncoder().encode(session) else { return }
+        guard let data = try? JSONEncoder().encode(session) else { return false }
         let url = Self.saveURL(for: profileID)
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
+            return true
+        } catch { return false }
     }
 
     private func clearSaved(for id: UUID) {

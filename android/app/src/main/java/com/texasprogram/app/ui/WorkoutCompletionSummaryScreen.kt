@@ -118,9 +118,9 @@ fun WorkoutCompletionSummaryScreen(
         photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
     /// Публиковать ли тренировку в ленту — по умолчанию да, если есть профиль.
-    var publishToFeed by remember { mutableStateOf(true) }
+    val publishToFeed = WorkoutSessionManager.publishToFeed
     /// Кому из друзей отправить тренировку карточкой в переписку.
-    var recipients by remember { mutableStateOf(setOf<String>()) }
+    val recipients = WorkoutSessionManager.recipients
 
     Box(
         modifier = Modifier
@@ -428,11 +428,13 @@ fun WorkoutCompletionSummaryScreen(
             }
 
             // ЛЕНТА STRAIN
-            PublishSection(publishToFeed) { publishToFeed = it }
+            PublishSection(publishToFeed) { WorkoutSessionManager.updateSharing(it, recipients) }
 
             // ДРУЗЬЯМ В ПЕРЕПИСКУ
             if (SocialService.isSignedIn) {
-                FriendsSection(recipients) { name -> recipients = if (name in recipients) recipients - name else recipients + name }
+                FriendsSection(recipients) { name ->
+                    WorkoutSessionManager.updateSharing(publishToFeed, if (name in recipients) recipients - name else recipients + name)
+                }
             }
 
             // КАРТОЧКА ДЛЯ СТОРИС
@@ -675,7 +677,7 @@ private fun FriendsSection(selected: Set<String>, onToggle: (String) -> Unit) {
 /// Пост собирается до finishWorkout: после него менеджер сбрасывает подходы.
 private fun feedDraft(title: String, description: String, durationSeconds: Int, effort: Int?, program: String): SocialPostDraft {
     val exercises = WorkoutSessionManager.exercises.mapNotNull { exercise ->
-        val done = exercise.sets.filter { it.isDone }
+        val done = exercise.sets.filter { it.isDone && !it.countOnly }
         if (done.isEmpty()) null
         else SocialWorkout.Exercise(exercise.prescription.name, done.map { SocialWorkout.SetLine(it.reps, it.weight, it.isRecord) })
     }

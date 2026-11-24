@@ -127,7 +127,7 @@ struct WorkoutCompletionSummaryView: View {
             workoutTitle = L(workout.fullTitle)
             durationSeconds = max(sessionManager.elapsedSeconds, 60)
             pickerHours = durationSeconds / 3600
-            pickerMinutes = max(1, (durationSeconds % 3600) / 60)
+            pickerMinutes = (durationSeconds % 3600) / 60
         }
     }
 
@@ -331,7 +331,7 @@ struct WorkoutCompletionSummaryView: View {
     /// Пост собирается до `finishWorkout`: после него менеджер сбрасывает подходы.
     private func feedDraft() -> SocialPostDraft {
         let exercises: [SocialWorkout.Exercise] = sessionManager.exercises.compactMap { exercise in
-            let done = exercise.sets.filter(\.isDone)
+            let done = exercise.sets.filter { $0.isDone && $0.countOnly != true }
             guard !done.isEmpty else { return nil }
             return SocialWorkout.Exercise(
                 name: exercise.prescription.name,
@@ -558,7 +558,7 @@ struct WorkoutCompletionSummaryView: View {
 
                 HStack(spacing: 0) {
                     Picker(L("Часы"), selection: $pickerHours) {
-                        ForEach(0..<6) { h in
+                        ForEach(0...max(5, durationSeconds / 3600), id: \.self) { h in
                             Text(L("\(h) ч")).tag(h)
                         }
                     }
@@ -566,7 +566,7 @@ struct WorkoutCompletionSummaryView: View {
                     .frame(maxWidth: .infinity)
 
                     Picker(L("Минуты"), selection: $pickerMinutes) {
-                        ForEach(1..<60) { m in
+                        ForEach(0..<60) { m in
                             Text(L("\(m) мин")).tag(m)
                         }
                     }
@@ -591,6 +591,7 @@ struct WorkoutCompletionSummaryView: View {
                 .buttonStyle(.pressable)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
+                .disabled(pickerHours == 0 && pickerMinutes == 0)
             }
             .background(Color.tone(0.08).ignoresSafeArea())
             .navigationTitle(L("Время тренировки"))

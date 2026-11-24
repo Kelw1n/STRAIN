@@ -526,14 +526,24 @@ data class ProgramProfile(
     fun loggedSets(week: Int, day: Int, exercise: ExercisePrescription): Set<Int> =
         (0 until maxOf(exercise.sets, 0)).filter { setEntry(week, day, exercise, it) != null }.toSet()
 
-    /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана:
-    /// без запаса подход, добавленный в тренировке кнопкой, в историю и графики не попадал.
-    /// Самый частый вызов: им читают историю, медали, рекорды и подсказки весов.
-    /// Ключ дня и упражнения собираем один раз, а не на каждый из двадцати номеров.
-    fun entries(week: Int, day: Int, exercise: ExercisePrescription): List<SetEntry> {
-        val base = setKey(week, day, exercise) + "|"
-        return (0 until maxOf(exercise.sets, 0) + EXTRA_SET_ALLOWANCE).mapNotNull { setLog[base + it] }
+    private val setsByExercise by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val groups = mutableMapOf<String, MutableMap<Int, SetEntry>>()
+        for ((key, entry) in setLog) {
+            val split = key.lastIndexOf('|')
+            if (split < 0) continue
+            val suffix = key.substring(split + 1)
+            val index = suffix.toIntOrNull() ?: continue
+            if (index < 0 || index.toString() != suffix) continue
+            groups.getOrPut(key.substring(0, split)) { sortedMapOf() }[index] = entry
+        }
+        groups
     }
+
+    fun indexedEntries(week: Int, day: Int, exercise: ExercisePrescription): Map<Int, SetEntry> =
+        setsByExercise[setKey(week, day, exercise)].orEmpty()
+
+    fun entries(week: Int, day: Int, exercise: ExercisePrescription): List<SetEntry> =
+        indexedEntries(week, day, exercise).values.toList()
 
     // MARK: - История упражнения
 
@@ -1142,7 +1152,8 @@ data class ProgramProfile(
         day: Int,
         today: LocalDate = LocalDate.now(),
         durationSeconds: Int? = null,
-        effort: String? = null
+        effort: String? = null,
+        scheduledBench: Int? = null
     ): ProgramProfile {
         // Свободная тренировка программу не двигает: только история.
         if (week == FREE_WEEK) {
@@ -1156,18 +1167,17 @@ data class ProgramProfile(
         if (done) next = next.copy(skipped = next.skipped.filterNot {
             it.week == week && it.day == day && isCurrentSkip(it)
         })
-        if (carriesBenchWave(day)) {
-            next = if (done) {
-                nextBenchSession?.let { next.setBenchCompleted(it, true) } ?: next
-            } else {
-                completedBenchSessions.maxOrNull()?.let { next.setBenchCompleted(it, false) } ?: next
-            }
+        val wave = if (!carriesBenchWave(day)) null else if (done) {
+            scheduledBench ?: nextBenchSession
+        } else {
+            completionLog.firstOrNull { it.key == dayKey(week, day) }?.benchSession ?: benchSession(week, day)
         }
+        if (wave != null) next = next.setBenchCompleted(wave, done)
         next = next.syncSets(week, day, done)
         next = if (done) {
             val epochDay = today.toEpochDay()
             next.copy(lastCompletionEpochDay = maxOf(lastCompletionEpochDay ?: epochDay, epochDay))
-                .recordCompletion(week, day, today, durationSeconds, effort)
+                .recordCompletion(week, day, today, durationSeconds, effort, wave = wave)
         } else {
             val key = dayKey(week, day)
             next.removeProgramCompletion(key)
@@ -1183,7 +1193,8 @@ data class ProgramProfile(
         today: LocalDate,
         durationSeconds: Int? = null,
         effort: String? = null,
-        usePlanWeights: Boolean = true
+        usePlanWeights: Boolean = true,
+        wave: Int? = null
     ): ProgramProfile {
         val key = dayKey(week, day)
         if (week == FREE_WEEK) {
@@ -1214,7 +1225,8 @@ data class ProgramProfile(
             actualBench = actualWeight(week, day, listOf("Жим лёжа")),
             actualDeadlift = actualWeight(week, day, listOf("Становая тяга")),
             durationSeconds = durationSeconds,
-            effort = effort
+            effort = effort,
+            benchSession = wave ?: completionLog.firstOrNull { it.key == key }?.benchSession
         )
         return copy(completionLog = completionLog.filterNot { it.key == key } + record)
     }
@@ -1367,12 +1379,13 @@ data class ProgramProfile(
     /// Отметка жима синхронно двигает день программы.
     fun toggleBenchCompleted(session: Int, today: LocalDate = LocalDate.now()): ProgramProfile {
         val done = !isBenchCompleted(session)
-        val (week, day) = dayForBenchSession(session)
+        val owner = completionLog.firstOrNull { isOwnKey(it.key) && it.benchSession == session }
+        val (week, day) = owner?.let { it.week to it.day } ?: dayForBenchSession(session)
         val next = setBenchCompleted(session, done).setDayCompleted(week, day, done)
         val key = dayKey(week, day)
         if (!done) return next.removeProgramCompletion(key)
         if (next.completionLog.any { it.key == key }) return next
-        return next.copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today)
+        return next.copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today, wave = session)
     }
 
     private fun setBenchCompleted(session: Int, done: Boolean): ProgramProfile {
@@ -1497,7 +1510,6 @@ data class ProgramProfile(
         fun freeKey(number: Int): String = "free-$number"
 
         /// Сколько подходов сверх плана ищем в записях.
-        const val EXTRA_SET_ALLOWANCE = 12
 
         /// Сколько тренировок подряд на одном весе без роста считаем застоем.
         const val STALL_SESSIONS = 3

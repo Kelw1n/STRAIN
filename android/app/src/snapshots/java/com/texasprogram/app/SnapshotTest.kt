@@ -704,7 +704,7 @@ class SnapshotTest {
             Screen {
                 val timer = com.texasprogram.app.service.RestTimer.get(androidx.compose.ui.platform.LocalContext.current)
                 com.texasprogram.app.ui.TodayScreen(
-                    profile, timer, onToggleDay = { _, _ -> }, onToggleSet = { _, _, _ -> }, onSelectRest = {}, onOpenBench = null,
+                    profile, timer, onToggleDay = {}, onToggleSet = { _, _, _ -> }, onSelectRest = {}, onOpenBench = null,
                     onOpenDay = { _, _ -> }, onCustomize = { _, _ -> }, onHoldSet = { _, _, _ -> }, onUpdateProfile = {},
                     onOpenHistory = {}, onSettings = {}, contentPadding = padding
                 )

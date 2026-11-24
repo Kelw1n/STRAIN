@@ -53,7 +53,7 @@ import java.time.LocalDate
 fun TodayScreen(
     profile: ProgramProfile,
     timer: com.texasprogram.app.service.RestTimer,
-    onToggleDay: (Int, Int) -> Unit,
+    onToggleDay: (ScheduledWorkout) -> Unit,
     onToggleSet: (ScheduledWorkout, com.texasprogram.app.model.ExercisePrescription, Int) -> Unit,
     onSelectRest: (Int) -> Unit,
     onOpenBench: ((Int) -> Unit)?,
@@ -235,7 +235,7 @@ fun TodayScreen(
 
         item(key = "complete") {
             CompleteButton(focus.isCompleted, Modifier.padding(top = 4.dp)) {
-                onToggleDay(focus.week, focus.day.number)
+                onToggleDay(focus)
             }
         }
     }

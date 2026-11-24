@@ -12,6 +12,8 @@ import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
@@ -97,7 +99,7 @@ object AppUpdater {
 
     private val scope = MainScope()
     private val json = Json { ignoreUnknownKeys = true }
-    private var checking = false
+    private var checking: Deferred<Boolean?>? = null
     private var lastCheck = 0L
     private var download: Job? = null
 
@@ -112,10 +114,20 @@ object AppUpdater {
     /// Есть ли версия новее установленной; `null` — проверить не удалось (нет сети).
     /// Ошибки молча пропускаем: проверка — не повод мешать человеку тренироваться.
     suspend fun check(context: Context, force: Boolean = false): Boolean? {
+        return withContext(Dispatchers.Main.immediate) {
+            val active = checking?.takeUnless { it.isCompleted } ?: scope.async { checkVersion(context.applicationContext, force) }.also { checking = it }
+            try {
+                active.await()
+            } finally {
+                if (active.isCompleted && checking === active) checking = null
+            }
+        }
+    }
+
+    private suspend fun checkVersion(context: Context, force: Boolean): Boolean? {
         val now = SystemClock.elapsedRealtime()
-        if (checking || download?.isActive == true) return state.release != null
+        if (download?.isActive == true) return state.release != null
         if (!force && lastCheck != 0L && now - lastCheck < RECHECK_MS) return state.release != null
-        checking = true
         try {
             val text = withContext(Dispatchers.IO) { fetchText(VERSION_URL) }
             val release = json.decodeFromString<Release>(text)
@@ -140,8 +152,6 @@ object AppUpdater {
             throw e
         } catch (e: Exception) {
             return if (state.release != null) true else null
-        } finally {
-            checking = false
         }
     }
 

@@ -91,7 +91,8 @@ final class AppUpdater {
     private(set) var hasChecked = false
 
     @ObservationIgnored private var lastCheck: Date?
-    @ObservationIgnored private var checking = false
+    private(set) var lastCheckFailed = false
+    @ObservationIgnored private var checking: Task<Void, Never>?
 
     /// Номер установленной сборки. У сборок из Xcode на компьютере он 1 —
     /// у них плашка тоже будет, её можно закрыть.
@@ -105,15 +106,24 @@ final class AppUpdater {
 
     /// Ошибки молча пропускаем: проверка — не повод мешать тренироваться.
     func check(force: Bool = false) async {
-        if checking { return }
+        if let checking { await checking.value; return }
         if !force, let lastCheck, Date().timeIntervalSince(lastCheck) < Self.recheck { return }
-        checking = true
-        defer { checking = false }
+        let task = Task { await self.fetchVersion() }
+        checking = task
+        await task.value
+        checking = nil
+    }
+
+    private func fetchVersion() async {
         var request = URLRequest(url: Self.versionURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
-              let release = try? JSONDecoder().decode(Release.self, from: data) else { return }
+              let release = try? JSONDecoder().decode(Release.self, from: data) else {
+            lastCheckFailed = true
+            return
+        }
+        lastCheckFailed = false
         lastCheck = Date()
         hasChecked = true
         apply(release, installed: Self.installedCode)

@@ -319,6 +319,39 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertNil(manager.exercises.first { $0.id == exercise.id }?.completedWarmUp)
     }
 
+    func testSparseEntryAndQuickMarkSurviveWithoutInventingWeights() throws {
+        let profile = texas()
+        let workout = try workoutWithSeveralSets(profile)
+        let exercise = try XCTUnwrap(profile.exercises(for: workout).first)
+        profile.recordSet(week: workout.week, day: workout.day.number, exercise: exercise,
+                          index: 1_000_000, reps: 7, weight: 87.5, completedCount: 2)
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: workout, profile: profile)
+        let rows = manager.exercises[0].sets
+        XCTAssertEqual(rows.count, exercise.sets + 1)
+        XCTAssertEqual(rows.first?.countOnly, true)
+        XCTAssertEqual(rows.last?.index, 1_000_000)
+        XCTAssertEqual(manager.totalTonnage, 87.5 * 7)
+        manager.finishWorkout(profile: profile)
+        XCTAssertNil(profile.setEntry(week: workout.week, day: workout.day.number, exercise: exercise, index: 0))
+        XCTAssertEqual(profile.entries(week: workout.week, day: workout.day.number, exercise: exercise).map(\.entry.weight), [87.5])
+    }
+
+    func testFinishingFutureBenchDayUsesAndUndoesItsAssignedWave() throws {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        let workouts = profile.schedule.allPending.filter { $0.benchSession != nil }
+        let first = try XCTUnwrap(workouts.first)
+        let later = try XCTUnwrap(workouts.dropFirst().first)
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: later, profile: profile)
+        manager.finishWorkout(profile: profile)
+        XCTAssertEqual(profile.completedBenchSessions, [2])
+        XCTAssertEqual(Array(profile.schedule.allPending.compactMap(\.benchSession).prefix(2)), [1, 3])
+        profile.toggleCompleted(week: first.week, day: first.day.number, scheduledBench: 1)
+        profile.toggleCompleted(week: first.week, day: first.day.number)
+        XCTAssertEqual(profile.completedBenchSessions, [2])
+    }
+
     func testBenchWaveUsesPlannedWeightAndRepsForEachSet() throws {
         let profile = ProgramProfile(upperLowerInput: .demo)
         let workout = try XCTUnwrap(profile.schedule.allPending.first { $0.benchSession == 1 })

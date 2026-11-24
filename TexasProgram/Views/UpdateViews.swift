@@ -220,7 +220,8 @@ struct AppVersionRow: View {
     }
 
     private var status: String {
-        if let release = updater.available { return "Вышла \(release.versionName)" }
-        return updater.hasChecked ? "Это последняя версия" : "Обновления проверяются сами"
+        if let release = updater.available { return L("Вышла \(release.versionName)") }
+        if updater.lastCheckFailed { return L("Не удалось проверить — нет связи") }
+        return L(updater.hasChecked ? "Это последняя версия" : "Обновления проверяются сами")
     }
 }
