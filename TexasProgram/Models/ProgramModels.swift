@@ -108,6 +108,7 @@ struct CompletionRecord: Codable, Equatable, Hashable, Sendable, Identifiable {
     var actualDeadlift: Double? = nil
     var durationSeconds: Int? = nil
     var effort: String? = nil
+    var benchSession: Int? = nil
 
     var id: String { key + "-" + String(Int(date.timeIntervalSince1970)) }
 }
@@ -917,22 +918,19 @@ final class ProgramProfile {
         refreshCompletion(week: week, day: day)
     }
 
-    /// Сколько подходов сверх плана ищем в записях. В тренировке можно
-    /// добавить подход кнопкой — без этого запаса он записывался, но в историю,
-    /// графики и выгрузку не попадал.
-    static let extraSetAllowance = 12
-
-    /// Записанные подходы упражнения по порядку номеров, включая добавленные сверх плана.
-    ///
-    /// Самый частый вызов в приложении: им читают историю, медали, рекорды и
-    /// подсказки весов. Поэтому ключ дня и упражнения собираем один раз, а не на
-    /// каждый из двадцати номеров, и записи модели читаем тоже один раз.
-    func entries(week: Int, day: Int, exercise: ExercisePrescription) -> [(index: Int, entry: SetEntry)] {
-        let base = setKey(week: week, day: day, exercise: exercise) + "|"
-        let log = setLog
-        return (0..<(max(exercise.sets, 0) + Self.extraSetAllowance)).compactMap { index in
-            log[base + String(index)].map { (index, $0) }
+    private func groupedEntries() -> [String: [(index: Int, entry: SetEntry)]] {
+        var groups: [String: [(index: Int, entry: SetEntry)]] = [:]
+        for (key, entry) in setLog {
+            guard let split = key.lastIndex(of: "|") else { continue }
+            let suffix = key[key.index(after: split)...]
+            guard let index = Int(suffix), index >= 0, String(index) == suffix else { continue }
+            groups[String(key[..<split]), default: []].append((index, entry))
         }
+        return groups.mapValues { $0.sorted { $0.index < $1.index } }
+    }
+
+    func entries(week: Int, day: Int, exercise: ExercisePrescription) -> [(index: Int, entry: SetEntry)] {
+        groupedEntries()[setKey(week: week, day: day, exercise: exercise)] ?? []
     }
 
     /// Наибольший записанный вес движения за день — им факт попадает в график.
@@ -988,6 +986,7 @@ final class ProgramProfile {
     /// ними по дате: у дня программы дата — когда его закрыли, а не закрытый
     /// день стоит сразу за предыдущим.
     func historyByName(only name: String? = nil) -> (names: [String], points: [String: [ExerciseHistoryPoint]]) {
+        let groups = groupedEntries()
         var collected: [(name: String, point: ExerciseHistoryPoint, date: Date)] = []
         let dates = Dictionary(completionLog.map { ($0.key, $0.date) }, uniquingKeysWith: { first, _ in first })
         var carried = Date.distantPast
@@ -995,7 +994,7 @@ final class ProgramProfile {
             for day in week.days {
                 if let date = dates[dayKey(week: week.number, day: day.number)] { carried = max(carried, date) }
                 for exercise in day.exercises where name == nil || exercise.name == name {
-                    let logged = entries(week: week.number, day: day.number, exercise: exercise).map(\.entry)
+                    let logged = (groups[setKey(week: week.number, day: day.number, exercise: exercise)] ?? []).map(\.entry)
                     guard !logged.isEmpty else { continue }
                     var planned: Double?
                     if case .kilograms(let value) = exercise.load { planned = value }
@@ -1007,7 +1006,7 @@ final class ProgramProfile {
             for free in freeWorkouts.sorted(by: { $0.date < $1.date }) {
                 let date = dates[Self.freeKey(free.number)] ?? free.date
                 for exercise in free.exercises.map(\.prescription) where name == nil || exercise.name == name {
-                    let logged = entries(week: Self.freeWeek, day: free.number, exercise: exercise).map(\.entry)
+                    let logged = (groups[setKey(week: Self.freeWeek, day: free.number, exercise: exercise)] ?? []).map(\.entry)
                     guard !logged.isEmpty else { continue }
                     collected.append((exercise.name, ExerciseHistoryPoint(week: Self.freeWeek, day: free.number, planned: nil, entries: logged), date))
                 }
@@ -1567,7 +1566,7 @@ final class ProgramProfile {
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
     func toggleCompleted(week: Int, day: Int, now: Date = Date(), durationSeconds: Int? = nil,
-                         effort: String? = nil, trainingDate: Date? = nil) {
+                         effort: String? = nil, trainingDate: Date? = nil, scheduledBench: Int? = nil) {
         let date = trainingDate ?? now
         // Свободная тренировка программу не двигает: только история.
         if week == Self.freeWeek {
@@ -1576,19 +1575,19 @@ final class ProgramProfile {
         }
         let done = !isCompleted(week: week, day: day)
         setDayCompleted(week: week, day: day, done)
+        var wave: Int?
         if carriesBenchWave(day: day) {
-            if done {
-                if let next = nextBenchSession { setBenchCompleted(next, true) }
-            } else if let last = completedBenchSessions.max() {
-                setBenchCompleted(last, false)
-            }
+            let key = dayKey(week: week, day: day)
+            wave = done ? (scheduledBench ?? nextBenchSession)
+                : (completionLog.first { $0.key == key }?.benchSession ?? benchSession(week: week, day: day))
+            if let wave { setBenchCompleted(wave, done) }
         }
         syncSets(week: week, day: day, filled: done)
         // Возместил пропущенное — задержка снимается сама.
         if done { skipped.removeAll { $0.week == week && $0.day == day && isCurrentSkip($0) } }
         if done {
             lastCompletionDate = max(lastCompletionDate ?? date, date)
-            recordCompletion(week: week, day: day, now: date, durationSeconds: durationSeconds, effort: effort)
+            recordCompletion(week: week, day: day, now: date, durationSeconds: durationSeconds, effort: effort, wave: wave)
             let dur = Double(durationSeconds ?? 3600)
             Task {
                 await HealthKitService.shared.saveWorkout(
@@ -1604,7 +1603,7 @@ final class ProgramProfile {
     }
 
     /// Кладёт в историю дату и рабочие веса основных движений этого дня.
-    private func recordCompletion(week: Int, day: Int, now: Date, durationSeconds: Int? = nil, effort: String? = nil, usePlanWeights: Bool = true) {
+    private func recordCompletion(week: Int, day: Int, now: Date, durationSeconds: Int? = nil, effort: String? = nil, usePlanWeights: Bool = true, wave: Int? = nil) {
         let key = dayKey(week: week, day: day)
         let previous = completionLog.first { $0.key == key }
         completionLog.removeAll { $0.key == key }
@@ -1641,7 +1640,8 @@ final class ProgramProfile {
             actualBench: actualWeight(week: week, day: day, exerciseNames: ["Жим лёжа"]),
             actualDeadlift: actualWeight(week: week, day: day, exerciseNames: ["Становая тяга"]),
             durationSeconds: durationSeconds,
-            effort: effort
+            effort: effort,
+            benchSession: wave ?? previous?.benchSession
         ))
     }
 
@@ -1935,13 +1935,14 @@ final class ProgramProfile {
     func toggleBenchCompleted(_ session: Int, now: Date = Date()) {
         let done = !isBenchCompleted(session)
         setBenchCompleted(session, done)
-        let target = day(forBenchSession: session)
+        let owner = completionLog.first { isOwnKey($0.key) && $0.benchSession == session }
+        let target = owner.map { (week: $0.week, day: $0.day) } ?? day(forBenchSession: session)
         setDayCompleted(week: target.week, day: target.day, done)
         let key = dayKey(week: target.week, day: target.day)
         if !done {
             removeProgramCompletion(key)
         } else if !completionLog.contains(where: { $0.key == key }) {
-            recordCompletion(week: target.week, day: target.day, now: now)
+            recordCompletion(week: target.week, day: target.day, now: now, wave: session)
             lastCompletionDate = now
         }
     }

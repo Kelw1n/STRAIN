@@ -62,7 +62,8 @@ data class ActiveSetState(
     val reps: Int,
     val isDone: Boolean,
     /// Подход побил лучший вес упражнения до этой тренировки.
-    val isRecord: Boolean = false
+    val isRecord: Boolean = false,
+    val countOnly: Boolean = false
 ) {
     val previousText: String
         get() = previous?.let { "${formatWeight(it.weight)}×${it.reps}" } ?: "—"
@@ -102,7 +103,8 @@ private data class SavedSet(
     val weight: Double,
     val reps: Int,
     val isDone: Boolean,
-    val isRecord: Boolean = false
+    val isRecord: Boolean = false,
+    val countOnly: Boolean = false
 )
 
 @Serializable
@@ -124,6 +126,8 @@ private data class SavedSession(
     val startMillis: Long,
     val note: String,
     val exercises: List<SavedExercise>,
+    val publishToFeed: Boolean = true,
+    val recipients: Set<String> = emptySet(),
     val snapshotProgress: Map<String, Int> = emptyMap(),
     val snapshotLog: Map<String, SetEntry> = emptyMap(),
     /// Замены упражнений в этой тренировке: отмена тренировки их откатывает.
@@ -146,6 +150,17 @@ object WorkoutSessionManager {
     var startMillis by mutableLongStateOf(0L)
         private set
     val exercises = mutableStateListOf<ActiveExerciseState>()
+
+    var publishToFeed by mutableStateOf(true)
+        private set
+    var recipients by mutableStateOf(emptySet<String>())
+        private set
+
+    fun updateSharing(publish: Boolean, selected: Set<String>) {
+        publishToFeed = publish
+        recipients = selected
+        writeNow()
+    }
 
     var noteText by mutableStateOf("")
     var showingZeroSetsAlert by mutableStateOf(false)
@@ -213,7 +228,7 @@ object WorkoutSessionManager {
             )
         }
     val totalTonnage: Double
-        get() = exercises.sumOf { ex -> ex.sets.filter { it.isDone }.sumOf { it.weight * it.reps } }
+        get() = exercises.sumOf { ex -> ex.sets.filter { it.isDone && !it.countOnly }.sumOf { it.weight * it.reps } }
     val density: Double
         get() = totalTonnage / maxOf(1.0, elapsedSeconds / 60.0)
 
@@ -296,6 +311,8 @@ object WorkoutSessionManager {
         activeWorkout = workout.copy(date = today, weekday = RuDate.weekdayOf(today))
         profileId = profile.id
         startMillis = now
+        publishToFeed = true
+        recipients = emptySet()
         noteText = profile.note(workout.week, workout.day.number)
         showingZeroSetsAlert = false
         showingSummary = false
@@ -342,12 +359,12 @@ object WorkoutSessionManager {
         // Подходы этого дня, уже записанные до старта (точками на «Главном»
         // или в прошлой сессии), приходят отмеченными. Раньше они показывались
         // пустыми, и казалось, что сделанное пропало.
-        val logged = (0 until maxOf(presc.sets, 0) + ProgramProfile.EXTRA_SET_ALLOWANCE)
-            .mapNotNull { index -> profile.setEntry(workout.week, workout.day.number, presc, index)?.let { index to it } }
-            .toMap()
-        val count = maxOf(countOverride ?: presc.sets, 1, (logged.keys.maxOrNull() ?: -1) + 1)
-        // Сколько подходов в плане, столько и строк: два — значит два.
-        val sets = (0 until count).map { index ->
+        val logged = profile.indexedEntries(workout.week, workout.day.number, presc)
+        val plannedIndices = 0 until maxOf(countOverride ?: presc.sets, 1)
+        val indices = (plannedIndices.toSet() + logged.keys).sorted()
+        val progress = profile.completedSets(workout.week, workout.day.number, presc)
+        val dots = plannedIndices.filterNot { it in logged }.take((progress - logged.size).coerceAtLeast(0)).toSet()
+        val sets = indices.map { index ->
             val entry = logged[index]
             val waveSet = waveSets.getOrNull(index)
             // В тесте на максимум число повторов заранее неизвестно.
@@ -357,7 +374,8 @@ object WorkoutSessionManager {
                 previous = last.getOrNull(index) ?: last.firstOrNull(),
                 weight = entry?.weight ?: weight ?: waveSet?.weight ?: planned,
                 reps = entry?.reps ?: repsOverride ?: waveReps ?: reps,
-                isDone = entry != null
+                isDone = entry != null || index in dots,
+                countOnly = index in dots
             )
         }
         return ActiveExerciseState(
@@ -503,8 +521,8 @@ object WorkoutSessionManager {
         var next = profile.setNote(noteText, workout.week, workout.day.number)
         for (ex in exercises) {
             for (set in ex.sets) {
-                if (set.isDone) {
-                    next = next.recordSet(workout.week, workout.day.number, ex.prescription, set.index, set.reps, set.weight)
+                if (set.isDone && !set.countOnly) {
+                    next = next.recordSet(workout.week, workout.day.number, ex.prescription, set.index, set.reps, set.weight, completedCount = ex.doneCount)
                 }
             }
         }
@@ -518,6 +536,7 @@ object WorkoutSessionManager {
                 week = workout.week,
                 day = workout.day.number,
                 today = workout.date,
+                scheduledBench = workout.benchSession,
                 durationSeconds = duration,
                 effort = effort
             )
@@ -561,14 +580,17 @@ object WorkoutSessionManager {
 
     // MARK: Подходы
 
-    fun toggleWarmUp(step: WarmUp.Step, exerciseId: Long) {
-        if (activeWorkout == null) return
+    fun toggleWarmUp(step: WarmUp.Step, exerciseId: Long): Boolean {
+        if (activeWorkout == null) return false
         val index = exercises.indexOfFirst { it.id == exerciseId }
-        val exercise = exercises.getOrNull(index) ?: return
-        if (step !in exercise.warmUpSteps) return
+        val exercise = exercises.getOrNull(index) ?: return false
+        if (step !in exercise.warmUpSteps) return false
         val done = exercise.completedWarmUp
         exercises[index] = exercise.copy(completedWarmUp = if (step in done) done - step else done + step)
-        writeNow()
+        if (writeNow()) return true
+        exercises[index] = exercise
+        save()
+        return false
     }
 
     private inline fun updateSet(exIdx: Int, sIdx: Int, change: (ActiveSetState) -> ActiveSetState): ActiveSetState? {
@@ -594,7 +616,7 @@ object WorkoutSessionManager {
             // Рекорд — только против прошлых тренировок: первый раз в жизни
             // сделанное упражнение рекордом не считается.
             val isRecord = ex.beatsRecord(set)
-            val done = updateSet(exIdx, sIdx) { it.copy(isDone = true, isRecord = isRecord) } ?: return
+            val done = updateSet(exIdx, sIdx) { it.copy(isDone = true, countOnly = false, isRecord = isRecord) } ?: return
             val updatedEx = exercises[exIdx]
             // Отмеченный подход сохраняем сразу: закрытое приложение не теряет тренировку.
             onUpdateProfile(profile.recordSet(
@@ -622,7 +644,8 @@ object WorkoutSessionManager {
         val ex = exercises.getOrNull(exIdx) ?: return
         // Следующий номер — после самого большого: после удаления подхода
         // «количество» совпало бы с номером ещё живого подхода.
-        val index = (ex.sets.maxOfOrNull { it.index } ?: -1) + 1
+        val highest = ex.sets.maxOfOrNull { it.index } ?: -1
+        val index = if (highest < Int.MAX_VALUE) highest + 1 else (0..ex.sets.size).first { candidate -> ex.sets.none { it.index == candidate } }
         val last = ex.sets.lastOrNull()
         exercises[exIdx] = ex.copy(sets = ex.sets + ActiveSetState(
             index = index,
@@ -675,7 +698,7 @@ object WorkoutSessionManager {
         val workout = activeWorkout ?: return
         if (!set.isDone) return
         val ex = exercises[exIdx]
-        updateSet(exIdx, sIdx) { it.copy(isRecord = ex.beatsRecord(it)) }
+        updateSet(exIdx, sIdx) { it.copy(countOnly = false, isRecord = ex.beatsRecord(it)) }
         onUpdateProfile(profile.recordSet(
             workout.week, workout.day.number, ex.prescription, set.index, set.reps, set.weight,
             completedCount = ex.doneCount
@@ -717,10 +740,10 @@ object WorkoutSessionManager {
     }
 
     /// Немедленная запись — при уходе приложения в фон.
-    fun writeNow() {
-        val session = currentSession() ?: return
-        val file = sessionFile(session.profileId) ?: return
-        write(file, session, cancelSave())
+    fun writeNow(): Boolean {
+        val session = currentSession() ?: return false
+        val file = sessionFile(session.profileId) ?: return false
+        return write(file, session, cancelSave())
     }
 
     private fun cancelSave(): Long {
@@ -742,17 +765,19 @@ object WorkoutSessionManager {
         runCatching { json.decodeFromString(SavedSession.serializer(), it.readText()) }.getOrNull()
     }
 
-    private fun write(file: File, session: SavedSession, generation: Long) {
-        val data = runCatching { json.encodeToString(SavedSession.serializer(), session) }.getOrNull() ?: return
-        synchronized(storageLock) {
-            if (generation != writeGeneration) return
+    private fun write(file: File, session: SavedSession, generation: Long): Boolean {
+        val data = runCatching { json.encodeToString(SavedSession.serializer(), session) }.getOrNull() ?: return false
+        return synchronized(storageLock) {
+            if (generation != writeGeneration) return false
             val tmp = File(file.parentFile, file.name + ".tmp")
             try {
                 file.parentFile?.mkdirs()
                 tmp.writeText(data)
                 Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                true
             } catch (_: java.io.IOException) {
                 tmp.delete()
+                false
             }
         }
     }
@@ -767,12 +792,14 @@ object WorkoutSessionManager {
             benchSession = workout.benchSession,
             startMillis = startMillis,
             note = noteText,
+            publishToFeed = publishToFeed,
+            recipients = recipients,
             exercises = exercises.map { ex ->
                 SavedExercise(
                     key = ex.key,
                     restSeconds = ex.restSeconds,
                     bestBefore = ex.bestBefore,
-                    sets = ex.sets.map { SavedSet(it.id, it.index, it.previous, it.weight, it.reps, it.isDone, it.isRecord) },
+                    sets = ex.sets.map { SavedSet(it.id, it.index, it.previous, it.weight, it.reps, it.isDone, it.isRecord, it.countOnly) },
                     completedWarmUp = ex.completedWarmUp,
                     prescription = ex.prescription
                 )
@@ -851,7 +878,7 @@ object WorkoutSessionManager {
             ActiveExerciseState(
                 prescription = presc,
                 restSeconds = saved.restSeconds,
-                sets = saved.sets.map { ActiveSetState(nextId(), it.index, it.previous, it.weight, it.reps, it.isDone, it.isRecord) },
+                sets = saved.sets.map { ActiveSetState(nextId(), it.index, it.previous, it.weight, it.reps, it.isDone, it.isRecord, it.countOnly) },
                 bestBefore = saved.bestBefore,
                 completedWarmUp = saved.completedWarmUp
             )
@@ -860,6 +887,8 @@ object WorkoutSessionManager {
         activeWorkout = workout
         profileId = session.profileId
         startMillis = session.startMillis
+        publishToFeed = session.publishToFeed
+        recipients = session.recipients
         noteText = session.note
         snapshotProgress = session.snapshotProgress
         snapshotLog = session.snapshotLog

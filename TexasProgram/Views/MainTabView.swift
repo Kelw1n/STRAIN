@@ -435,7 +435,7 @@ struct TodayView: View {
                 if profile.allSetsDone(for: workout) {
                     // Тренировка закончена — отдыхать уже незачем.
                     restTimer.stop()
-                    profile.toggleCompleted(week: workout.week, day: workout.day.number)
+                    profile.toggleCompleted(week: workout.week, day: workout.day.number, scheduledBench: workout.benchSession)
                 } else {
                     let completedCount = profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise)
                     let details: String = {
@@ -621,7 +621,7 @@ struct TodayWorkoutPreviewCard: View {
                     }
                     Button {
                         withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
-                            profile.toggleCompleted(week: workout.week, day: workout.day.number)
+                            profile.toggleCompleted(week: workout.week, day: workout.day.number, scheduledBench: workout.benchSession)
                         }
                     } label: {
                         Label(workout.isCompleted ? L("Снять отметку") : L("Отметить выполненной вручную"),
@@ -1059,7 +1059,7 @@ struct DayDetailView: View {
 
                 CompleteButton(isCompleted: profile.isCompleted(week: week, day: day.number)) {
                     withAnimation(Motion.maybe(Motion.bouncy, reduce: reduceMotion)) {
-                        profile.toggleCompleted(week: week, day: day.number)
+                        profile.toggleCompleted(week: week, day: day.number, scheduledBench: scheduled?.benchSession)
                     }
                 }
                 .padding(.top, 4)

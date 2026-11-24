@@ -25,7 +25,7 @@ struct WorkoutShareSummary {
     static func current(title: String, durationSeconds: Int, manager: WorkoutSessionManager = .shared) -> WorkoutShareSummary {
         let lines: [Line] = manager.exercises.compactMap { exercise in
             let done = exercise.sets.filter(\.isDone)
-            guard let top = done.max(by: { ($0.weight, $0.reps) < ($1.weight, $1.reps) }) else { return nil }
+            guard let top = done.filter({ $0.countOnly != true }).max(by: { ($0.weight, $0.reps) < ($1.weight, $1.reps) }) else { return nil }
             return Line(
                 id: exercise.id,
                 name: exercise.prescription.name,

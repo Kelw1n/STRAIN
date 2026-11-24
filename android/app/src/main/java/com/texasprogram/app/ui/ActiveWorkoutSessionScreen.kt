@@ -9,6 +9,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.expandVertically
+import com.texasprogram.app.service.L
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -332,9 +333,9 @@ private class SessionActions(
     fun weight(ex: Int, set: Int, value: Double) = withProfile { manager.setWeight(value, ex, set, it, update) }
     fun reps(ex: Int, set: Int, value: Int) = withProfile { manager.setReps(value, ex, set, it, update) }
 
-    fun toggleWarmUp(exerciseId: Long, step: WarmUp.Step) {
+    fun toggleWarmUp(exerciseId: Long, step: WarmUp.Step): Boolean {
         haptics.light()
-        manager.toggleWarmUp(step, exerciseId)
+        return manager.toggleWarmUp(step, exerciseId)
     }
 
     fun previous(ex: Int, set: Int) = withProfile {
@@ -874,7 +875,11 @@ private fun ExerciseSessionCard(
             if (WarmUp.enabled(context) && exercise.doneCount == 0) {
                 val warmUp = exercise.warmUpSteps
                 if (warmUp.isNotEmpty()) {
-                    WarmUpRow(warmUp, exercise.completedWarmUp) { actions.toggleWarmUp(exercise.id, it) }
+                    WarmUpRow(warmUp, exercise.completedWarmUp) { step ->
+                        if (!actions.toggleWarmUp(exercise.id, step)) {
+                            android.widget.Toast.makeText(context, L("Не удалось сохранить файл"), android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             }
             SetsTable(exercise, index, actions)

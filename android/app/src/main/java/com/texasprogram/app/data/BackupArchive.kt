@@ -140,7 +140,8 @@ data class CompletionSnapshot(
     val actualBench: Double? = null,
     val actualDeadlift: Double? = null,
     val durationSeconds: Int? = null,
-    val effort: String? = null
+    val effort: String? = null,
+    val benchSession: Int? = null
 )
 
 @Serializable
@@ -233,7 +234,7 @@ object BackupService {
         completionLog = profile.completionLog.map {
             CompletionSnapshot(
                 it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift,
-                it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort
+                it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort, it.benchSession
             )
         },
         planEdits = profile.planEdits,
@@ -294,7 +295,7 @@ object BackupService {
         completionLog = snapshot.completionLog.map {
             CompletionRecord(
                 it.key, it.epochDay, it.week, it.day, it.squat, it.bench, it.deadlift,
-                it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort
+                it.actualSquat, it.actualBench, it.actualDeadlift, it.durationSeconds, it.effort, it.benchSession
             )
         },
         planEdits = snapshot.planEdits.map { edit ->

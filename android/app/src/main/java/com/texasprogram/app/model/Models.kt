@@ -112,7 +112,8 @@ data class CompletionRecord(
     val actualBench: Double? = null,
     val actualDeadlift: Double? = null,
     val durationSeconds: Int? = null,
-    val effort: String? = null
+    val effort: String? = null,
+    val benchSession: Int? = null
 )
 
 data class ProgramInput(

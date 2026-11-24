@@ -269,6 +269,62 @@ class WorkoutSessionTest {
     }
 
     @Test
+    fun sparseEntryAndQuickMarkSurviveWithoutInventingWeights() {
+        val w = workout()
+        val exercise = profile.exercises(w).first()
+        profile = profile.recordSet(w.week, w.day.number, exercise, 1000000, 7, 87.5, completedCount = 2)
+        manager.startWorkout(w, profile)
+        val rows = manager.exercises.first().sets
+        assertEquals(exercise.sets + 1, rows.size)
+        assertTrue(rows.first().countOnly)
+        assertEquals(1000000, rows.last().index)
+        assertEquals(87.5 * 7, manager.totalTonnage, 0.001)
+        manager.finishWorkout(profile, onUpdateProfile = update)
+        assertNull(profile.setEntry(w.week, w.day.number, exercise, 0))
+        assertEquals(listOf(87.5), profile.entries(w.week, w.day.number, exercise).map { it.weight })
+    }
+
+    @Test
+    fun shareChoicesBelongToTheRestoredSession() {
+        val w = start()
+        manager.updateSharing(false, setOf("friend"))
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(profile)
+        assertFalse(manager.publishToFeed)
+        assertEquals(setOf("friend"), manager.recipients)
+        manager.discardWorkout(profile, update)
+        manager.startWorkout(w, profile)
+        assertTrue(manager.publishToFeed)
+        assertTrue(manager.recipients.isEmpty())
+    }
+
+    @Test
+    fun failedWarmUpWriteRollsBackTheMark() {
+        start()
+        val exercise = manager.exercises.first { it.warmUpSteps.isNotEmpty() }
+        manager.attach(File(dir, "blocked").apply { writeText("occupied") })
+        assertFalse(manager.toggleWarmUp(exercise.warmUpSteps.first(), exercise.id))
+        assertTrue(manager.exercises.single { it.id == exercise.id }.completedWarmUp.isEmpty())
+        manager.attach(dir)
+        assertTrue(manager.toggleWarmUp(exercise.warmUpSteps.first(), exercise.id))
+    }
+
+    @Test
+    fun finishingFutureBenchDayUsesAndUndoesItsAssignedWave() {
+        profile = ProgramProfile.upperLower(UpperLowerInput.demo)
+        val workouts = profile.schedule().allPending.filter { it.benchSession != null }
+        val later = workouts[1]
+        manager.startWorkout(later, profile)
+        manager.finishWorkout(profile, onUpdateProfile = update)
+        assertEquals(listOf(2), profile.completedBenchSessions)
+        val pending = profile.schedule().allPending.mapNotNull { it.benchSession }
+        assertEquals(listOf(1, 3), pending.take(2))
+        profile = profile.toggleCompleted(workouts[0].week, workouts[0].day.number, scheduledBench = 1)
+        profile = profile.toggleCompleted(workouts[0].week, workouts[0].day.number)
+        assertEquals(listOf(2), profile.completedBenchSessions)
+    }
+
+    @Test
     fun benchWaveUsesPlannedWeightAndRepsForEachSet() {
         profile = ProgramProfile.upperLower(UpperLowerInput.demo)
         val w = profile.schedule().allPending.first { it.benchSession == 1 }
