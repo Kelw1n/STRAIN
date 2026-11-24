@@ -175,6 +175,7 @@ fun formatWeight(value: Double): String {
     return text
 }
 
+@Serializable
 data class ExercisePrescription(
     val name: String,
     val sets: Int,

@@ -320,12 +320,6 @@ struct ActiveWorkoutSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(L("Готово")) {
-                        // Пустой текст — тоже ответ: заметку стёрли, её надо удалить.
-                        profile.setNote(
-                            sessionManager.noteText,
-                            week: workout.week,
-                            day: workout.day.number
-                        )
                         sessionManager.showingNoteSheet = false
                     }
                     .font(.body.weight(.bold))
@@ -455,18 +449,16 @@ private struct ExerciseSessionCard: View {
 
     private var manager: WorkoutSessionManager { .shared }
     private var doneCount: Int { exercise.sets.filter(\.isDone).count }
-    /// Разминка до самого тяжёлого рабочего подхода.
-    private var warmUp: [WarmUp.Step] {
-        WarmUp.steps(for: exercise.prescription.name, working: exercise.sets.map(\.weight).max() ?? 0)
-    }
-
     var body: some View {
+        let warmUp = exercise.warmUpSteps
         VStack(alignment: .leading, spacing: 14) {
             header
             // Разминка — пока не сделан первый рабочий подход.
             if !compact, warmUpEnabled, doneCount == 0, !warmUp.isEmpty {
-                WarmUpRow(steps: warmUp)
-                    .transition(.opacity)
+                WarmUpRow(steps: warmUp, done: exercise.completedWarmUp ?? []) { step in
+                    manager.toggleWarmUp(step, exerciseID: exercise.id)
+                }
+                .transition(.opacity)
             }
             if !compact {
                 setsTable
@@ -1117,7 +1109,8 @@ struct MinimizedWorkoutBar: View {
 /// подход — только для себя: в записи тренировки, объём и рекорды разминка не идёт.
 private struct WarmUpRow: View {
     let steps: [WarmUp.Step]
-    @State private var done: Set<WarmUp.Step> = []
+    let done: Set<WarmUp.Step>
+    let onToggle: (WarmUp.Step) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1142,7 +1135,7 @@ private struct WarmUpRow: View {
         return Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             withAnimation(Motion.snappy) {
-                if isDone { done.remove(step) } else { done.insert(step) }
+                onToggle(step)
             }
         } label: {
             HStack(spacing: 4) {

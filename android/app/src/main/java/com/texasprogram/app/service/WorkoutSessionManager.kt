@@ -4,6 +4,7 @@ import com.texasprogram.app.model.discardFreeWorkout
 import com.texasprogram.app.model.replaceFreeExercise
 import com.texasprogram.app.model.appendFreeExercises
 import com.texasprogram.app.model.startWorkout
+import com.texasprogram.app.model.setFreeCompleted
 import com.texasprogram.app.model.LibraryExercise
 import com.texasprogram.app.model.WorkoutTemplate
 import com.texasprogram.app.model.TemplateExercise
@@ -26,6 +27,7 @@ import com.texasprogram.app.model.ExerciseSwap
 import com.texasprogram.app.model.Progression
 import com.texasprogram.app.model.SetEntry
 import com.texasprogram.app.model.SocialLive
+import com.texasprogram.app.model.WarmUp
 import com.texasprogram.app.model.formatWeight
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +40,8 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicLong
 
@@ -74,10 +77,16 @@ data class ActiveExerciseState(
     val restSeconds: Int,
     val sets: List<ActiveSetState>,
     /// Лучший вес до этой тренировки — от него считается рекорд.
-    val bestBefore: Double = 0.0
+    val bestBefore: Double = 0.0,
+    val completedWarmUp: Set<WarmUp.Step> = emptySet()
 ) {
     val key: String get() = prescription.key
     val doneCount: Int get() = sets.count { it.isDone }
+    val warmUpSteps: List<WarmUp.Step>
+        get() = WarmUp.steps(prescription.name, sets.maxOfOrNull { it.weight } ?: 0.0)
+
+    fun beatsRecord(set: ActiveSetState): Boolean =
+        bestBefore > 0 && set.weight > bestBefore && set.reps > 0
 }
 
 @Immutable
@@ -101,7 +110,9 @@ private data class SavedExercise(
     val key: String,
     val restSeconds: Int,
     val bestBefore: Double,
-    val sets: List<SavedSet>
+    val sets: List<SavedSet>,
+    val completedWarmUp: Set<WarmUp.Step> = emptySet(),
+    val prescription: ExercisePrescription? = null
 )
 
 @Serializable
@@ -281,7 +292,7 @@ object WorkoutSessionManager {
         }
         // Тренируешься сегодня — в заголовке сегодняшний день недели, даже если по
         // расписанию тренировка стояла на другой: «ПЯТНИЦА» в среду выглядела ошибкой.
-        val today = java.time.LocalDate.now()
+        val today = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
         activeWorkout = workout.copy(date = today, weekday = RuDate.weekdayOf(today))
         profileId = profile.id
         startMillis = now
@@ -325,6 +336,9 @@ object WorkoutSessionManager {
         val best = history.maxOfOrNull { it.best } ?: 0.0
         val planned = weight ?: plannedWeight(presc, profile, workout, last)
         val reps = repsOverride ?: presc.plannedReps ?: 10
+        val waveSets = presc.benchSession?.let { session ->
+            profile.benchWave.firstOrNull { it.id == session }?.sets
+        }.orEmpty()
         // Подходы этого дня, уже записанные до старта (точками на «Главном»
         // или в прошлой сессии), приходят отмеченными. Раньше они показывались
         // пустыми, и казалось, что сделанное пропало.
@@ -335,11 +349,14 @@ object WorkoutSessionManager {
         // Сколько подходов в плане, столько и строк: два — значит два.
         val sets = (0 until count).map { index ->
             val entry = logged[index]
+            val waveSet = waveSets.getOrNull(index)
+            // В тесте на максимум число повторов заранее неизвестно.
+            val waveReps = waveSet?.let { it.reps.toIntOrNull() ?: 0 }
             ActiveSetState(
                 index = index,
                 previous = last.getOrNull(index) ?: last.firstOrNull(),
-                weight = entry?.weight ?: planned,
-                reps = entry?.reps ?: reps,
+                weight = entry?.weight ?: weight ?: waveSet?.weight ?: planned,
+                reps = entry?.reps ?: repsOverride ?: waveReps ?: reps,
                 isDone = entry != null
             )
         }
@@ -483,7 +500,7 @@ object WorkoutSessionManager {
     ) {
         val workout = activeWorkout ?: return
         val xpBefore = Progression.xp(profile)
-        var next = profile
+        var next = profile.setNote(noteText, workout.week, workout.day.number)
         for (ex in exercises) {
             for (set in ex.sets) {
                 if (set.isDone) {
@@ -491,15 +508,19 @@ object WorkoutSessionManager {
                 }
             }
         }
-        if (!next.isCompleted(workout.week, workout.day.number)) {
+        val duration = customDuration ?: elapsedSeconds
+        if (next.isCompleted(workout.week, workout.day.number)) {
+            next = next.withWorkoutSummary(workout.week, workout.day.number, duration, effort)
+        } else if (workout.week == ProgramProfile.FREE_WEEK) {
+            next = next.setFreeCompleted(workout.day.number, true, Instant.ofEpochMilli(startMillis), duration, effort)
+        } else {
             next = next.toggleCompleted(
                 week = workout.week,
                 day = workout.day.number,
-                durationSeconds = customDuration ?: elapsedSeconds,
+                today = workout.date,
+                durationSeconds = duration,
                 effort = effort
             )
-        } else {
-            next = next.withWorkoutSummary(workout.week, workout.day.number, customDuration ?: elapsedSeconds, effort)
         }
         onUpdateProfile(next)
         reset()
@@ -540,6 +561,16 @@ object WorkoutSessionManager {
 
     // MARK: Подходы
 
+    fun toggleWarmUp(step: WarmUp.Step, exerciseId: Long) {
+        if (activeWorkout == null) return
+        val index = exercises.indexOfFirst { it.id == exerciseId }
+        val exercise = exercises.getOrNull(index) ?: return
+        if (step !in exercise.warmUpSteps) return
+        val done = exercise.completedWarmUp
+        exercises[index] = exercise.copy(completedWarmUp = if (step in done) done - step else done + step)
+        writeNow()
+    }
+
     private inline fun updateSet(exIdx: Int, sIdx: Int, change: (ActiveSetState) -> ActiveSetState): ActiveSetState? {
         val ex = exercises.getOrNull(exIdx) ?: return null
         val set = ex.sets.getOrNull(sIdx) ?: return null
@@ -562,12 +593,15 @@ object WorkoutSessionManager {
         if (!set.isDone) {
             // Рекорд — только против прошлых тренировок: первый раз в жизни
             // сделанное упражнение рекордом не считается.
-            val isRecord = ex.bestBefore > 0 && set.weight > ex.bestBefore && set.reps > 0
+            val isRecord = ex.beatsRecord(set)
             val done = updateSet(exIdx, sIdx) { it.copy(isDone = true, isRecord = isRecord) } ?: return
-            // Отмеченный подход сохраняем сразу: закрытое приложение не теряет тренировку.
-            onUpdateProfile(profile.recordSet(workout.week, workout.day.number, ex.prescription, done.index, done.reps, done.weight))
-            if (isRecord) lastRecord = RecordNotice(nextId(), ex.prescription.name, done.weight)
             val updatedEx = exercises[exIdx]
+            // Отмеченный подход сохраняем сразу: закрытое приложение не теряет тренировку.
+            onUpdateProfile(profile.recordSet(
+                workout.week, workout.day.number, ex.prescription, done.index, done.reps, done.weight,
+                completedCount = updatedEx.doneCount
+            ))
+            if (isRecord) lastRecord = RecordNotice(nextId(), ex.prescription.name, done.weight)
             restTimer?.start(
                 seconds = ex.restSeconds.toLong(),
                 exerciseName = ex.prescription.name,
@@ -619,7 +653,7 @@ object WorkoutSessionManager {
     fun applyPrevious(exIdx: Int, sIdx: Int, profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
         val previous = exercises.getOrNull(exIdx)?.sets?.getOrNull(sIdx)?.previous ?: return
         val set = updateSet(exIdx, sIdx) { it.copy(weight = previous.weight, reps = previous.reps) } ?: return
-        rerecordIfDone(exIdx, set, profile, onUpdateProfile)
+        rerecordIfDone(exIdx, sIdx, set, profile, onUpdateProfile)
         save()
     }
 
@@ -627,21 +661,25 @@ object WorkoutSessionManager {
     /// иначе до «Завершить» в истории висел бы старый вес.
     fun setWeight(value: Double, exIdx: Int, sIdx: Int, profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
         val set = updateSet(exIdx, sIdx) { it.copy(weight = value.coerceIn(0.0, 1000.0)) } ?: return
-        rerecordIfDone(exIdx, set, profile, onUpdateProfile)
+        rerecordIfDone(exIdx, sIdx, set, profile, onUpdateProfile)
         save()
     }
 
     fun setReps(value: Int, exIdx: Int, sIdx: Int, profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
         val set = updateSet(exIdx, sIdx) { it.copy(reps = value.coerceIn(0, 999)) } ?: return
-        rerecordIfDone(exIdx, set, profile, onUpdateProfile)
+        rerecordIfDone(exIdx, sIdx, set, profile, onUpdateProfile)
         save()
     }
 
-    private fun rerecordIfDone(exIdx: Int, set: ActiveSetState, profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
+    private fun rerecordIfDone(exIdx: Int, sIdx: Int, set: ActiveSetState, profile: ProgramProfile, onUpdateProfile: (ProgramProfile) -> Unit) {
         val workout = activeWorkout ?: return
         if (!set.isDone) return
         val ex = exercises[exIdx]
-        onUpdateProfile(profile.recordSet(workout.week, workout.day.number, ex.prescription, set.index, set.reps, set.weight))
+        updateSet(exIdx, sIdx) { it.copy(isRecord = ex.beatsRecord(it)) }
+        onUpdateProfile(profile.recordSet(
+            workout.week, workout.day.number, ex.prescription, set.index, set.reps, set.weight,
+            completedCount = ex.doneCount
+        ))
     }
 
     /// Переносит упражнение на другое место. Порядок меняется только в этой тренировке.
@@ -730,9 +768,14 @@ object WorkoutSessionManager {
             startMillis = startMillis,
             note = noteText,
             exercises = exercises.map { ex ->
-                SavedExercise(ex.key, ex.restSeconds, ex.bestBefore, ex.sets.map {
-                    SavedSet(it.id, it.index, it.previous, it.weight, it.reps, it.isDone, it.isRecord)
-                })
+                SavedExercise(
+                    key = ex.key,
+                    restSeconds = ex.restSeconds,
+                    bestBefore = ex.bestBefore,
+                    sets = ex.sets.map { SavedSet(it.id, it.index, it.previous, it.weight, it.reps, it.isDone, it.isRecord) },
+                    completedWarmUp = ex.completedWarmUp,
+                    prescription = ex.prescription
+                )
             },
             snapshotProgress = snapshotProgress,
             snapshotLog = snapshotLog,
@@ -787,10 +830,10 @@ object WorkoutSessionManager {
             return
         }
         // День недели — того дня, когда тренировку начали, а не дня по расписанию.
-        val startedOn = java.time.Instant.ofEpochMilli(session.startMillis).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        val startedOn = Instant.ofEpochMilli(session.startMillis).atZone(ZoneId.systemDefault()).toLocalDate()
         val workout = profile.schedule().allPending
             .firstOrNull { it.week == session.week && it.day.number == session.day }
-            ?.copy(date = startedOn, weekday = RuDate.weekdayOf(startedOn))
+            ?.copy(date = startedOn, weekday = RuDate.weekdayOf(startedOn), benchSession = session.benchSession)
             ?: run {
                 val day = profile.dayPlan(session.week, session.day) ?: return
                 ScheduledWorkout(
@@ -804,12 +847,13 @@ object WorkoutSessionManager {
             }
         val byKey = profile.exercises(workout).associateBy { it.key }
         val restored = session.exercises.mapNotNull { saved ->
-            val presc = byKey[saved.key] ?: return@mapNotNull null
+            val presc = saved.prescription ?: byKey[saved.key] ?: return@mapNotNull null
             ActiveExerciseState(
                 prescription = presc,
                 restSeconds = saved.restSeconds,
                 sets = saved.sets.map { ActiveSetState(nextId(), it.index, it.previous, it.weight, it.reps, it.isDone, it.isRecord) },
-                bestBefore = saved.bestBefore
+                bestBefore = saved.bestBefore,
+                completedWarmUp = saved.completedWarmUp
             )
         }
         if (restored.isEmpty() && session.exercises.isNotEmpty()) return

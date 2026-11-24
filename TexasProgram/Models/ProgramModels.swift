@@ -903,10 +903,12 @@ final class ProgramProfile {
     }
 
     /// Записывает факт подхода и заодно закрывает точку: отмечать дважды незачем.
-    func recordSet(week: Int, day: Int, exercise: ExercisePrescription, index: Int, reps: Int, weight: Double, now: Date = Date()) {
+    func recordSet(week: Int, day: Int, exercise: ExercisePrescription, index: Int, reps: Int, weight: Double,
+                   now: Date = Date(), completedCount: Int? = nil) {
         setLog[logKey(week: week, day: day, exercise: exercise, index: index)] = SetEntry(reps: reps, weight: weight)
         let key = setKey(week: week, day: day, exercise: exercise)
-        if (setProgress[key] ?? 0) < index + 1 { setProgress[key] = index + 1 }
+        let count = completedCount ?? max(setProgress[key] ?? 0, index + 1)
+        if setProgress[key] != count { setProgress[key] = count }
         refreshCompletion(week: week, day: day)
     }
 
@@ -1564,10 +1566,12 @@ final class ProgramProfile {
 
     /// Отметка дня. Верхний день двигает волну жима на одну тренировку:
     /// какая именно это тренировка, определяет счётчик волны, а не день недели.
-    func toggleCompleted(week: Int, day: Int, now: Date = Date(), durationSeconds: Int? = nil, effort: String? = nil) {
+    func toggleCompleted(week: Int, day: Int, now: Date = Date(), durationSeconds: Int? = nil,
+                         effort: String? = nil, trainingDate: Date? = nil) {
+        let date = trainingDate ?? now
         // Свободная тренировка программу не двигает: только история.
         if week == Self.freeWeek {
-            setFreeCompleted(day, !isCompleted(week: week, day: day), now: now, durationSeconds: durationSeconds, effort: effort)
+            setFreeCompleted(day, !isCompleted(week: week, day: day), now: date, durationSeconds: durationSeconds, effort: effort)
             return
         }
         let done = !isCompleted(week: week, day: day)
@@ -1583,8 +1587,8 @@ final class ProgramProfile {
         // Возместил пропущенное — задержка снимается сама.
         if done { skipped.removeAll { $0.week == week && $0.day == day && isCurrentSkip($0) } }
         if done {
-            lastCompletionDate = now
-            recordCompletion(week: week, day: day, now: now, durationSeconds: durationSeconds, effort: effort)
+            lastCompletionDate = max(lastCompletionDate ?? date, date)
+            recordCompletion(week: week, day: day, now: date, durationSeconds: durationSeconds, effort: effort)
             let dur = Double(durationSeconds ?? 3600)
             Task {
                 await HealthKitService.shared.saveWorkout(

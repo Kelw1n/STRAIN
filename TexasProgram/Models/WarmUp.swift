@@ -8,7 +8,7 @@ import Foundation
 /// хотя бы на 2,5 кг, выпадают. В становой пустого грифа нет: с пола без блинов
 /// не тянут. Расчёт тот же, что на Android, — `WarmUp.kt`.
 enum WarmUp {
-    struct Step: Equatable, Hashable, Sendable {
+    struct Step: Codable, Hashable, Sendable {
         let weight: Double
         let reps: Int
     }

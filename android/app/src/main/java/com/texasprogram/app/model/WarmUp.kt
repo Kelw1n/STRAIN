@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.texasprogram.app.service.ExerciseArt
+import kotlinx.serialization.Serializable
 import kotlin.math.floor
 import kotlin.math.max
 
@@ -16,6 +17,7 @@ import kotlin.math.max
 /// хотя бы на 2,5 кг, выпадают. В становой пустого грифа нет: с пола без блинов
 /// не тянут. Расчёт тот же, что на iOS, — `WarmUp.swift`.
 object WarmUp {
+    @Serializable
     data class Step(val weight: Double, val reps: Int)
 
     const val BAR_WEIGHT = 20.0

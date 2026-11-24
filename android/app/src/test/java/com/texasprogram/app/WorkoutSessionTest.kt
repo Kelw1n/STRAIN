@@ -1,7 +1,9 @@
 package com.texasprogram.app
 
 import com.texasprogram.app.model.ProgramInput
+import com.texasprogram.app.model.PlanEditScope
 import com.texasprogram.app.model.ProgramProfile
+import com.texasprogram.app.model.UpperLowerInput
 import com.texasprogram.app.model.WorkoutTemplate
 import com.texasprogram.app.service.ExerciseArt
 import com.texasprogram.app.service.RuPlural
@@ -17,6 +19,8 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import java.time.LocalDate
+import java.time.ZoneId
 
 /// Тренировка на экране: подходы, перестановка, отмена и сохранение на диск.
 class WorkoutSessionTest {
@@ -232,6 +236,123 @@ class WorkoutSessionTest {
         assertTrue(manager.exercises[0].sets[0].isDone)
         assertEquals(101.0, manager.exercises[0].sets[1].weight, 0.001)
         assertEquals("тяжело", manager.noteText)
+    }
+
+    @Test
+    fun partialWarmUpSurvivesReorderingAndProcessDeath() {
+        val w = start()
+        val index = manager.exercises.indexOfFirst { it.warmUpSteps.isNotEmpty() }
+        val exercise = manager.exercises[index]
+        val step = exercise.warmUpSteps.first()
+        assertTrue(exercise.warmUpSteps.size > 1)
+
+        manager.toggleWarmUp(step, exercise.id)
+        manager.moveExercise(index, if (index == 0) 1 else 0)
+        assertEquals(setOf(step), manager.exercises.single { it.id == exercise.id }.completedWarmUp)
+        manager.minimize()
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(profile)
+
+        val restored = manager.exercises.single { it.key == exercise.key }
+        assertEquals(setOf(step), restored.completedWarmUp)
+        assertEquals(0, manager.totalCompletedSets)
+        assertEquals(0.0, manager.totalTonnage, 0.001)
+        val restoredIndex = manager.exercises.indexOfFirst { it.id == restored.id }
+        manager.toggleSetDone(restoredIndex, 0, profile, null, update)
+        manager.toggleSetDone(restoredIndex, 0, profile, null, update)
+        assertEquals(setOf(step), manager.exercises[restoredIndex].completedWarmUp)
+        manager.toggleWarmUp(step, restored.id)
+        assertTrue(manager.exercises.single { it.key == exercise.key }.completedWarmUp.isEmpty())
+        manager.discardWorkout(profile, update)
+        manager.startWorkout(w, profile)
+        assertTrue(manager.exercises.single { it.key == exercise.key }.completedWarmUp.isEmpty())
+    }
+
+    @Test
+    fun benchWaveUsesPlannedWeightAndRepsForEachSet() {
+        profile = ProgramProfile.upperLower(UpperLowerInput.demo)
+        val w = profile.schedule().allPending.first { it.benchSession == 1 }
+        val wave = profile.benchWave.first { it.id == 1 }
+        manager.startWorkout(w, profile)
+
+        val bench = manager.exercises.single { it.prescription.benchSession == 1 }
+        assertEquals(wave.sets.map { it.weight }, bench.sets.map { it.weight })
+        assertEquals(wave.sets.map { it.reps.toInt() }, bench.sets.map { it.reps })
+
+        // Пока сессия была закрыта, для того же дня расписание назначило другой жим.
+        manager.writeNow()
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(profile.setCurrentBenchSession(2))
+        assertEquals(1, manager.activeWorkout?.benchSession)
+        assertEquals(bench.prescription, manager.exercises.single { it.prescription.benchSession == 1 }.prescription)
+    }
+
+    @Test
+    fun restoreKeepsExerciseRemovedFromPlanAfterStart() {
+        val w = start()
+        val exercise = manager.exercises.last()
+        manager.setWeight(91.5, manager.exercises.lastIndex, 0, profile, update)
+        manager.writeNow()
+        manager.forgetForTesting()
+
+        profile = profile.hideExercise(exercise.prescription, w.week, w.day.number, PlanEditScope.SINGLE)
+        val updatedDay = profile.schedule().allPending.first { it.id == w.id }
+        assertFalse(profile.exercises(updatedDay).any { it.key == exercise.key })
+        manager.restoreIfNeeded(profile)
+
+        val restored = manager.exercises.last()
+        assertEquals(exercise.prescription, restored.prescription)
+        assertEquals(91.5, restored.sets.first().weight, 0.001)
+    }
+
+    @Test
+    fun editingOutOfOrderSetUpdatesRecordAndCount() {
+        val older = workout()
+        val first = profile.exercises(older).first()
+        profile = profile.recordSet(older.week, older.day.number, first, 0, 5, 80.0)
+        val w = profile.schedule().allPending.first { candidate ->
+            candidate.id != older.id && profile.exercises(candidate).any { it.name == first.name && it.sets > 1 }
+        }
+        manager.startWorkout(w, profile)
+        val index = manager.exercises.indexOfFirst { it.prescription.name == first.name }
+        val exercise = manager.exercises[index].prescription
+
+        manager.setWeight(90.0, index, 1, profile, update)
+        manager.toggleSetDone(index, 1, profile, null, update)
+        assertTrue(manager.exercises[index].sets[1].isRecord)
+        assertEquals(1, profile.completedSets(w.week, w.day.number, exercise))
+        manager.setWeight(75.0, index, 1, profile, update)
+        assertFalse(manager.exercises[index].sets[1].isRecord)
+        assertEquals(1, profile.completedSets(w.week, w.day.number, exercise))
+    }
+
+    @Test
+    fun noteDraftSurvivesProcessDeathAndClearsOldNoteOnFinish() {
+        val w = workout()
+        profile = profile.setNote("старая заметка", w.week, w.day.number)
+        manager.startWorkout(w, profile)
+        manager.updateNote("")
+        manager.writeNow()
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(profile)
+
+        assertEquals("", manager.noteText)
+        assertEquals("старая заметка", profile.note(w.week, w.day.number))
+        manager.finishWorkout(profile, onUpdateProfile = update)
+        assertEquals("", profile.note(w.week, w.day.number))
+    }
+
+    @Test
+    fun finishingAfterMidnightRecordsDayWorkoutStarted() {
+        val w = workout()
+        val zone = ZoneId.systemDefault()
+        val started = LocalDate.now(zone).atStartOfDay(zone).minusMinutes(1)
+        manager.startWorkout(w, profile, now = started.toInstant().toEpochMilli())
+        manager.finishWorkout(profile, customDuration = 20 * 60, onUpdateProfile = update)
+
+        val record = profile.completionLog.single { it.week == w.week && it.day == w.day.number }
+        assertEquals(started.toLocalDate().toEpochDay(), record.epochDay)
+        assertEquals(20 * 60, record.durationSeconds)
     }
 
     @Test

@@ -507,11 +507,12 @@ data class ProgramProfile(
         index: Int,
         reps: Int,
         weight: Double,
-        today: LocalDate = LocalDate.now()
+        today: LocalDate = LocalDate.now(),
+        completedCount: Int? = null
     ): ProgramProfile {
         val key = setKey(week, day, exercise)
         val progress = setProgress.toMutableMap()
-        if ((progress[key] ?: 0) < index + 1) progress[key] = index + 1
+        progress[key] = completedCount ?: maxOf(progress[key] ?: 0, index + 1)
         return copy(
             setLog = setLog + (logKey(week, day, exercise, index) to SetEntry(reps, weight)),
             setProgress = progress
@@ -1164,7 +1165,9 @@ data class ProgramProfile(
         }
         next = next.syncSets(week, day, done)
         next = if (done) {
-            next.copy(lastCompletionEpochDay = today.toEpochDay()).recordCompletion(week, day, today, durationSeconds, effort)
+            val epochDay = today.toEpochDay()
+            next.copy(lastCompletionEpochDay = maxOf(lastCompletionEpochDay ?: epochDay, epochDay))
+                .recordCompletion(week, day, today, durationSeconds, effort)
         } else {
             val key = dayKey(week, day)
             next.removeProgramCompletion(key)

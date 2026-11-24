@@ -10,7 +10,6 @@ struct WorkoutCompletionSummaryView: View {
     @Bindable var sessionManager = WorkoutSessionManager.shared
 
     @State private var workoutTitle: String = ""
-    @State private var workoutDescription: String = ""
     /// Оценка усилия 1–10; пусто — не ставили.
     @State private var effortScore: Int? = nil
 
@@ -126,9 +125,6 @@ struct WorkoutCompletionSummaryView: View {
         }
         .onAppear {
             workoutTitle = L(workout.fullTitle)
-            workoutDescription = sessionManager.noteText.isEmpty
-                ? profile.note(week: workout.week, day: workout.day.number)
-                : sessionManager.noteText
             durationSeconds = max(sessionManager.elapsedSeconds, 60)
             pickerHours = durationSeconds / 3600
             pickerMinutes = max(1, (durationSeconds % 3600) / 60)
@@ -346,7 +342,7 @@ struct WorkoutCompletionSummaryView: View {
             clientId: UUID().uuidString.lowercased(),
             createdAt: Date(),
             title: workoutTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L(workout.fullTitle) : workoutTitle,
-            description: workoutDescription.trimmingCharacters(in: .whitespacesAndNewlines),
+            description: sessionManager.noteText.trimmingCharacters(in: .whitespacesAndNewlines),
             durationSeconds: durationSeconds,
             volumeKg: sessionManager.totalTonnage,
             sets: sessionManager.totalCompletedSets,
@@ -381,7 +377,7 @@ struct WorkoutCompletionSummaryView: View {
             // Описание
             HStack(alignment: .top, spacing: 12) {
                 ZStack(alignment: .topLeading) {
-                    if workoutDescription.isEmpty {
+                    if sessionManager.noteText.isEmpty {
                         Text(L("Описание"))
                             .font(.system(size: 15, weight: .regular))
                             .foregroundStyle(Color.ink.opacity(0.35))
@@ -389,7 +385,7 @@ struct WorkoutCompletionSummaryView: View {
                             .padding(.leading, 4)
                     }
 
-                    TextEditor(text: $workoutDescription)
+                    TextEditor(text: $sessionManager.noteText)
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.ink)
                         .frame(minHeight: 70)
@@ -615,9 +611,6 @@ struct WorkoutCompletionSummaryView: View {
 
     private func handleComplete() {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-
-        // Сохраняем заметку к тренировке
-        profile.setNote(workoutDescription, week: workout.week, day: workout.day.number)
 
         // Пост в ленту и карточки друзьям — до завершения: потом подходы сессии уже сброшены.
         if SocialService.shared.isSignedIn && (publishToFeed || !recipients.isEmpty) {
