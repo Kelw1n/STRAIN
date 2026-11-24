@@ -93,12 +93,7 @@ fun WorkoutCompletionSummaryScreen(
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     var workoutTitle by remember { mutableStateOf<String>(L(workout.fullTitle)) }
-    var workoutDescription by remember {
-        mutableStateOf<String>(
-            if (WorkoutSessionManager.noteText.isNotEmpty()) WorkoutSessionManager.noteText
-            else profile.note(workout.week, workout.day.number)
-        )
-    }
+    val workoutDescription = WorkoutSessionManager.noteText
     /// Оценка усилия 1–10; пусто — не ставили.
     var effortScore by remember { mutableStateOf<Int?>(null) }
     // Фото и файл снимка переживают пересоздание экрана, пока открыта камера.
@@ -334,7 +329,7 @@ fun WorkoutCompletionSummaryScreen(
                     ) {
                         OutlinedTextField(
                             value = workoutDescription,
-                            onValueChange = { workoutDescription = it },
+                            onValueChange = WorkoutSessionManager::updateNote,
                             placeholder = { Text("Описание", color = Theme.ink.copy(alpha = 0.35f)) },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Theme.ink,
@@ -470,8 +465,6 @@ fun WorkoutCompletionSummaryScreen(
                     .height(54.dp)
                     .pressable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val updatedProfile = profile.setNote(workoutDescription, workout.week, workout.day.number)
-
                         // Пост в ленту и карточки друзьям — до завершения: потом подходы сессии уже сброшены.
                         if (SocialService.isSignedIn && (publishToFeed || recipients.isNotEmpty())) {
                             val draft = feedDraft(
@@ -487,7 +480,7 @@ fun WorkoutCompletionSummaryScreen(
                         }
                         if (!publishToFeed) SocialService.finishTogether()
                         WorkoutSessionManager.finishWorkout(
-                            profile = updatedProfile,
+                            profile = profile,
                             customDuration = durationSeconds,
                             effort = EffortScale.text(effortScore),
                             onUpdateProfile = onUpdateProfile

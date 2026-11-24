@@ -28,6 +28,16 @@ struct ActiveExerciseState: Identifiable, Equatable, Codable {
     var sets: [ActiveSetState]
     /// Лучший вес до этой тренировки — от него считается рекорд.
     var bestBefore: Double = 0
+    /// В сессиях, сохранённых до появления галочек разминки, поля нет.
+    var completedWarmUp: Set<WarmUp.Step>? = nil
+
+    var warmUpSteps: [WarmUp.Step] {
+        WarmUp.steps(for: prescription.name, working: sets.map(\.weight).max() ?? 0)
+    }
+
+    func beatsRecord(_ set: ActiveSetState) -> Bool {
+        bestBefore > 0 && set.weight > bestBefore && set.reps > 0
+    }
 }
 
 /// Всё, что нужно, чтобы поднять тренировку после выгрузки приложения.
@@ -248,7 +258,7 @@ final class WorkoutSessionManager {
         }
     }
 
-    func startWorkout(workout: ScheduledWorkout, profile: ProgramProfile) {
+    func startWorkout(workout: ScheduledWorkout, profile: ProgramProfile, now: Date = Date()) {
         if let current = activeWorkout, current.id == workout.id {
             expand()
             return
@@ -256,7 +266,6 @@ final class WorkoutSessionManager {
 
         // Тренируешься сегодня — в заголовке сегодняшний день недели, даже если по
         // расписанию тренировка стояла на другой: «ПЯТНИЦА» в среду выглядела ошибкой.
-        let now = Date()
         activeWorkout = ScheduledWorkout(
             week: workout.week, day: workout.day, date: now,
             weekday: WorkoutScheduler.trainingCalendar().component(.weekday, from: now),
@@ -297,6 +306,9 @@ final class WorkoutSessionManager {
         let best = history.map(\.best).max() ?? 0
         let plannedWeight = override ?? plannedWeight(for: presc, profile: profile, workout: workout, last: last)
         let plannedReps = overrideReps ?? presc.plannedReps ?? 10
+        let waveSets = presc.benchSession.flatMap { session in
+            profile.benchWave.first { $0.id == session }?.sets
+        } ?? []
         // Подходы этого дня, уже записанные до старта (точками на «Главном»
         // или в прошлой сессии), приходят отмеченными. Раньше они показывались
         // пустыми, и казалось, что сделанное пропало.
@@ -307,11 +319,16 @@ final class WorkoutSessionManager {
         let count = max(overrideCount ?? presc.sets, 1, (logged.keys.max() ?? -1) + 1)
         // Сколько подходов в плане, столько и строк: два — значит два.
         let sets = (0..<count).map { index in
-            ActiveSetState(
+            let waveSet = waveSets.indices.contains(index) ? waveSets[index] : nil
+            // В тесте на максимум число повторов заранее неизвестно.
+            let waveReps = waveSet.map { Int($0.reps) ?? 0 }
+            let weight = override ?? waveSet?.weight ?? plannedWeight
+            let reps = overrideReps ?? waveReps ?? plannedReps
+            return ActiveSetState(
                 index: index,
                 previous: index < last.count ? last[index] : last.first,
-                weight: logged[index]?.weight ?? plannedWeight,
-                reps: logged[index]?.reps ?? plannedReps,
+                weight: logged[index]?.weight ?? weight,
+                reps: logged[index]?.reps ?? reps,
                 isDone: logged[index] != nil
             )
         }
@@ -386,6 +403,7 @@ final class WorkoutSessionManager {
         guard let workout = activeWorkout else { return }
         // Опыт до и после — разница уйдёт на экран «+N опыта» и новый уровень.
         let xpBefore = Progression.xp(for: profile)
+        profile.setNote(noteText, week: workout.week, day: workout.day.number)
 
         for ex in exercises {
             for set in ex.sets where set.isDone {
@@ -407,7 +425,8 @@ final class WorkoutSessionManager {
                 day: workout.day.number,
                 now: Date(),
                 durationSeconds: finalDuration,
-                effort: effort
+                effort: effort,
+                trainingDate: workout.date
             )
         } else {
             profile.setWorkoutSummary(
@@ -456,6 +475,15 @@ final class WorkoutSessionManager {
 
     // MARK: - Подходы
 
+    func toggleWarmUp(_ step: WarmUp.Step, exerciseID: String) {
+        guard activeWorkout != nil, let index = exercises.firstIndex(where: { $0.id == exerciseID }),
+              exercises[index].warmUpSteps.contains(step) else { return }
+        var completed = exercises[index].completedWarmUp ?? []
+        if !completed.insert(step).inserted { completed.remove(step) }
+        exercises[index].completedWarmUp = completed
+        writeNow()
+    }
+
     func toggleSetDone(exIdx: Int, sIdx: Int, profile: ProgramProfile, restTimer: RestTimer) {
         guard exercises.indices.contains(exIdx), exercises[exIdx].sets.indices.contains(sIdx),
               let workout = activeWorkout else { return }
@@ -464,17 +492,19 @@ final class WorkoutSessionManager {
         let ex = exercises[exIdx]
 
         if set.isDone {
+            let completed = ex.sets.filter(\.isDone).count
             profile.recordSet(
                 week: workout.week,
                 day: workout.day.number,
                 exercise: ex.prescription,
                 index: set.index,
                 reps: set.reps,
-                weight: set.weight
+                weight: set.weight,
+                completedCount: completed
             )
             // Рекорд — только против прошлых тренировок: первый раз в жизни
             // сделанное упражнение рекордом не считается.
-            let isRecord = ex.bestBefore > 0 && set.weight > ex.bestBefore && set.reps > 0
+            let isRecord = ex.beatsRecord(set)
             exercises[exIdx].sets[sIdx].isRecord = isRecord
             if isRecord {
                 lastRecord = RecordNotice(exercise: ex.prescription.name, weight: set.weight)
@@ -482,7 +512,6 @@ final class WorkoutSessionManager {
             } else {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }
-            let completed = exercises[exIdx].sets.filter(\.isDone).count
             restTimer.start(
                 TimeInterval(ex.restSeconds),
                 exerciseName: ex.prescription.name,
@@ -576,13 +605,16 @@ final class WorkoutSessionManager {
         guard let workout = activeWorkout else { return }
         let set = exercises[exIdx].sets[sIdx]
         guard set.isDone else { return }
+        let ex = exercises[exIdx]
+        exercises[exIdx].sets[sIdx].isRecord = ex.beatsRecord(set)
         profile.recordSet(
             week: workout.week,
             day: workout.day.number,
-            exercise: exercises[exIdx].prescription,
+            exercise: ex.prescription,
             index: set.index,
             reps: set.reps,
-            weight: set.weight
+            weight: set.weight,
+            completedCount: ex.sets.filter(\.isDone).count
         )
     }
 

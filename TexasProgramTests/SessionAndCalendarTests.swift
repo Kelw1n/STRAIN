@@ -286,6 +286,101 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertFalse(manager.isPresented, "поднятая тренировка открывается свёрнутой")
     }
 
+    func testPartialWarmUpSurvivesReorderingAndRelaunch() throws {
+        let profile = texas()
+        let workout = try workoutWithSeveralSets(profile)
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: workout, profile: profile)
+        let index = try XCTUnwrap(manager.exercises.firstIndex { !$0.warmUpSteps.isEmpty })
+        let exercise = manager.exercises[index]
+        let step = try XCTUnwrap(exercise.warmUpSteps.first)
+        XCTAssertGreaterThan(exercise.warmUpSteps.count, 1)
+
+        manager.toggleWarmUp(step, exerciseID: exercise.id)
+        manager.moveExercise(from: index, to: index == 0 ? 1 : 0)
+        XCTAssertEqual(manager.exercises.first { $0.id == exercise.id }?.completedWarmUp, Set([step]))
+        manager.minimize()
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(for: profile)
+
+        XCTAssertEqual(manager.exercises.first { $0.id == exercise.id }?.completedWarmUp, Set([step]))
+        XCTAssertEqual(manager.totalCompletedSets, 0)
+        XCTAssertEqual(manager.totalTonnage, 0)
+        let restoredIndex = try XCTUnwrap(manager.exercises.firstIndex { $0.id == exercise.id })
+        let timer = RestTimer()
+        defer { timer.stop() }
+        manager.toggleSetDone(exIdx: restoredIndex, sIdx: 0, profile: profile, restTimer: timer)
+        manager.toggleSetDone(exIdx: restoredIndex, sIdx: 0, profile: profile, restTimer: timer)
+        XCTAssertEqual(manager.exercises[restoredIndex].completedWarmUp, Set([step]))
+        manager.toggleWarmUp(step, exerciseID: exercise.id)
+        XCTAssertEqual(manager.exercises.first { $0.id == exercise.id }?.completedWarmUp, Set<WarmUp.Step>())
+        manager.discardWorkout(profile: profile)
+        manager.startWorkout(workout: workout, profile: profile)
+        XCTAssertNil(manager.exercises.first { $0.id == exercise.id }?.completedWarmUp)
+    }
+
+    func testBenchWaveUsesPlannedWeightAndRepsForEachSet() throws {
+        let profile = ProgramProfile(upperLowerInput: .demo)
+        let workout = try XCTUnwrap(profile.schedule.allPending.first { $0.benchSession == 1 })
+        let wave = try XCTUnwrap(profile.benchWave.first { $0.id == 1 })
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: workout, profile: profile)
+
+        let bench = try XCTUnwrap(manager.exercises.first { $0.prescription.benchSession == 1 })
+        XCTAssertEqual(bench.sets.map(\.weight), wave.sets.map(\.weight))
+        XCTAssertEqual(bench.sets.map(\.reps), wave.sets.compactMap { Int($0.reps) })
+    }
+
+    func testEditingOutOfOrderSetUpdatesRecordAndCount() throws {
+        let profile = texas()
+        let workout = try workoutWithSeveralSets(profile)
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: workout, profile: profile)
+        let exercise = manager.exercises[0].prescription
+        manager.exercises[0].bestBefore = 80
+        let timer = RestTimer()
+        defer { timer.stop() }
+
+        manager.setWeight(90, exIdx: 0, sIdx: 1, profile: profile)
+        manager.toggleSetDone(exIdx: 0, sIdx: 1, profile: profile, restTimer: timer)
+        XCTAssertTrue(manager.exercises[0].sets[1].isRecord)
+        XCTAssertEqual(profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise), 1)
+        manager.setWeight(75, exIdx: 0, sIdx: 1, profile: profile)
+        XCTAssertFalse(manager.exercises[0].sets[1].isRecord)
+        XCTAssertEqual(profile.completedSets(week: workout.week, day: workout.day.number, exercise: exercise), 1)
+    }
+
+    func testWorkoutNoteDraftSurvivesRelaunchAndClearsOldNoteOnFinish() throws {
+        let profile = texas()
+        let workout = try XCTUnwrap(profile.schedule.focus)
+        let manager = WorkoutSessionManager.shared
+        profile.setNote("старая заметка", week: workout.week, day: workout.day.number)
+        manager.startWorkout(workout: workout, profile: profile)
+        manager.noteText = ""
+        manager.writeNow()
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(for: profile)
+
+        XCTAssertEqual(manager.noteText, "")
+        XCTAssertEqual(profile.note(week: workout.week, day: workout.day.number), "старая заметка")
+        manager.finishWorkout(profile: profile)
+        XCTAssertEqual(profile.note(week: workout.week, day: workout.day.number), "")
+    }
+
+    func testFinishingAfterMidnightRecordsDayWorkoutStarted() throws {
+        let profile = texas()
+        let workout = try XCTUnwrap(profile.schedule.focus)
+        let calendar = WorkoutScheduler.trainingCalendar()
+        let started = calendar.startOfDay(for: Date()).addingTimeInterval(-60)
+        let manager = WorkoutSessionManager.shared
+        manager.startWorkout(workout: workout, profile: profile, now: started)
+        manager.finishWorkout(profile: profile, customDuration: 20 * 60)
+
+        let record = try XCTUnwrap(profile.completionLog.first { $0.week == workout.week && $0.day == workout.day.number })
+        XCTAssertEqual(record.date, started)
+        XCTAssertEqual(record.durationSeconds, 20 * 60)
+    }
+
     func testSavedSessionOfAnotherProfileIsIgnored() throws {
         let profile = texas()
         let manager = WorkoutSessionManager.shared

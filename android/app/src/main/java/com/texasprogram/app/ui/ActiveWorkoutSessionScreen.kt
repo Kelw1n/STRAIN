@@ -102,6 +102,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
@@ -140,6 +141,7 @@ import com.texasprogram.app.service.RecordNotice
 import com.texasprogram.app.service.RestTimer
 import com.texasprogram.app.service.RuPlural
 import com.texasprogram.app.service.WorkoutSessionManager
+import com.texasprogram.app.model.WarmUp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -329,6 +331,11 @@ private class SessionActions(
 
     fun weight(ex: Int, set: Int, value: Double) = withProfile { manager.setWeight(value, ex, set, it, update) }
     fun reps(ex: Int, set: Int, value: Int) = withProfile { manager.setReps(value, ex, set, it, update) }
+
+    fun toggleWarmUp(exerciseId: Long, step: WarmUp.Step) {
+        haptics.light()
+        manager.toggleWarmUp(step, exerciseId)
+    }
 
     fun previous(ex: Int, set: Int) = withProfile {
         haptics.light()
@@ -725,8 +732,6 @@ fun ActiveWorkoutSessionScreen(
                 initialNote = WorkoutSessionManager.noteText,
                 onSave = { text ->
                     WorkoutSessionManager.updateNote(text)
-                    // Пустой текст — тоже ответ: заметку стёрли, её надо удалить.
-                    currentProfile()?.let { currentUpdate(it.setNote(text, workout.week, workout.day.number)) }
                     WorkoutSessionManager.showingNoteSheet = false
                 },
                 onDismiss = { WorkoutSessionManager.showingNoteSheet = false }
@@ -866,12 +871,11 @@ private fun ExerciseSessionCard(
         if (!compact) {
             // Разминка — пока не сделан первый рабочий подход.
             val context = LocalContext.current
-            val working = exercise.sets.maxOfOrNull { it.weight } ?: 0.0
-            val warmUp = remember(exercise.prescription.name, working) {
-                com.texasprogram.app.model.WarmUp.steps(exercise.prescription.name, working)
-            }
-            if (com.texasprogram.app.model.WarmUp.enabled(context) && exercise.doneCount == 0 && warmUp.isNotEmpty()) {
-                WarmUpRow(warmUp)
+            if (WarmUp.enabled(context) && exercise.doneCount == 0) {
+                val warmUp = exercise.warmUpSteps
+                if (warmUp.isNotEmpty()) {
+                    WarmUpRow(warmUp, exercise.completedWarmUp) { actions.toggleWarmUp(exercise.id, it) }
+                }
             }
             SetsTable(exercise, index, actions)
         }
@@ -881,9 +885,7 @@ private fun ExerciseSessionCard(
 /// Разминочные подходы перед рабочими: «20×10 · 40×5 · 60×3». Нажатие отмечает
 /// подход — только для себя: в записи тренировки, объём и рекорды разминка не идёт.
 @Composable
-private fun WarmUpRow(steps: List<com.texasprogram.app.model.WarmUp.Step>) {
-    var done by remember(steps) { mutableStateOf(emptySet<com.texasprogram.app.model.WarmUp.Step>()) }
-    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+private fun WarmUpRow(steps: List<WarmUp.Step>, done: Set<WarmUp.Step>, onToggle: (WarmUp.Step) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "РАЗМИНКА",
@@ -901,10 +903,8 @@ private fun WarmUpRow(steps: List<com.texasprogram.app.model.WarmUp.Step>) {
                 Row(
                     Modifier
                         .height(30.dp)
-                        .pressable {
-                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                            done = if (isDone) done - step else done + step
-                        }
+                        .pressable { onToggle(step) }
+                        .semantics { selected = isDone }
                         .background(if (isDone) Theme.accent else Theme.ink.copy(alpha = 0.08f), CircleShape)
                         .padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
