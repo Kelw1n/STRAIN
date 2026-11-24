@@ -195,6 +195,14 @@ object AppUpdater {
                 // Скачалось именно наше приложение, а не страница ошибки.
                 val info = app.packageManager.getPackageArchiveInfo(file.path, 0)
                 if (info == null || info.packageName != app.packageName) throw IOException("Не тот файл")
+                if (PackageInfoCompat.getLongVersionCode(info) != release.versionCode) {
+                    // Пока качали, android-latest мог переключиться на другую сборку.
+                    file.delete()
+                    state = State.Failed(release, "Не удалось скачать обновление. Проверь интернет и попробуй ещё раз.")
+                    download = null
+                    check(app, force = true)
+                    return@launch
+                }
                 state = State.Ready(release)
                 install(app, file, release)
             } catch (e: CancellationException) {
