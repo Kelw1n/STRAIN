@@ -212,11 +212,44 @@ object WorkoutSessionManager {
 
     val totalCompletedSets: Int get() = exercises.sumOf { it.doneCount }
     val totalSetsCount: Int get() = exercises.sumOf { it.sets.size }
+    private fun supersetPartner(exercise: ActiveExerciseState): ActiveExerciseState? {
+        val pair = exercise.prescription.superset ?: return null
+        return exercises.firstOrNull {
+            it.id != exercise.id && pair.contains(it.key) && it.prescription.superset == pair
+        }
+    }
+
+    val nextSet: Pair<ActiveExerciseState, Int>?
+        get() {
+            for (exercise in exercises) {
+                val pair = exercise.prescription.superset
+                val partner = supersetPartner(exercise)
+                if (pair != null && partner != null) {
+                    val first = if (exercise.key == pair.first) exercise else partner
+                    val second = if (exercise.key == pair.first) partner else exercise
+                    val firstPosition = first.sets.indexOfFirst { !it.isDone }.takeIf { it >= 0 } ?: Int.MAX_VALUE
+                    val secondPosition = second.sets.indexOfFirst { !it.isDone }.takeIf { it >= 0 } ?: Int.MAX_VALUE
+                    if (firstPosition <= secondPosition && firstPosition != Int.MAX_VALUE) return first to firstPosition
+                    if (secondPosition != Int.MAX_VALUE) return second to secondPosition
+                } else {
+                    val position = exercise.sets.indexOfFirst { !it.isDone }
+                    if (position >= 0) return exercise to position
+                }
+            }
+            return null
+        }
+
+    internal fun restsAfterSet(exIdx: Int, sIdx: Int): Boolean {
+        val exercise = exercises[exIdx]
+        if (exercise.prescription.superset?.restAfterEach == true) return true
+        return supersetPartner(exercise)?.sets?.getOrNull(sIdx)?.isDone ?: true
+    }
+
     /// Что видят друзья: день, текущее упражнение и его подходы — «Присед · 3/5».
     val liveStatus: SocialLive?
         get() {
             val workout = activeWorkout ?: return null
-            val current = exercises.firstOrNull { exercise -> exercise.sets.any { !it.isDone } } ?: exercises.lastOrNull()
+            val current = nextSet?.first ?: exercises.lastOrNull()
             return SocialLive(
                 title = workout.day.title,
                 exercise = current?.prescription?.name.orEmpty(),
@@ -450,6 +483,7 @@ object WorkoutSessionManager {
         workout: ScheduledWorkout,
         last: List<SetEntry>? = null
     ): Double {
+        profile.customProgressedWeight(presc, workout.week, workout.day.number)?.let { return it }
         (presc.load as? LoadPrescription.Kilograms)?.let { return it.value }
         profile.accessoryHint(presc, workout.week, workout.day.number)?.weight?.let { return it }
         val previous = last ?: profile.history(presc.name)
@@ -624,19 +658,25 @@ object WorkoutSessionManager {
                 completedCount = updatedEx.doneCount
             ))
             if (isRecord) lastRecord = RecordNotice(nextId(), ex.prescription.name, done.weight)
-            restTimer?.start(
-                seconds = ex.restSeconds.toLong(),
-                exerciseName = ex.prescription.name,
-                setDetails = "${formatWeight(done.weight)} кг × ${done.reps}",
-                completedSets = updatedEx.doneCount,
-                totalSets = updatedEx.sets.size
-            )
+            if (restsAfterSet(exIdx, sIdx)) {
+                restTimer?.start(
+                    seconds = ex.restSeconds.toLong(),
+                    exerciseName = ex.prescription.name,
+                    setDetails = "${formatWeight(done.weight)} кг × ${done.reps}",
+                    completedSets = updatedEx.doneCount,
+                    totalSets = updatedEx.sets.size
+                )
+            } else if (restTimer?.isRunning == true) {
+                restTimer.stop()
+            }
         } else {
             updateSet(exIdx, sIdx) { it.copy(isDone = false, isRecord = false) }
             val cleared = profile.clearSetEntry(workout.week, workout.day.number, ex.prescription, set.index)
             onUpdateProfile(cleared.updateCompletedSets(workout.week, workout.day.number, ex.prescription, exercises[exIdx].doneCount))
         }
-        save()
+        if (ex.prescription.superset != null) {
+            if (!writeNow()) save()
+        } else save()
     }
 
     fun addSet(exIdx: Int) {

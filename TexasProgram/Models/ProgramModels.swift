@@ -212,9 +212,11 @@ struct ExercisePrescription: Identifiable, Equatable, Hashable, Codable, Sendabl
     let isOptional: Bool
     /// Номер тренировки в волне «Жим 14», если упражнение — часть жимовой волны.
     let benchSession: Int?
+    let superset: Superset?
 
-    init(id: String? = nil, name: String, sets: Int, reps: String, load: LoadPrescription, isOptional: Bool = false, benchSession: Int? = nil) {
+    init(id: String? = nil, name: String, sets: Int, reps: String, load: LoadPrescription, isOptional: Bool = false, benchSession: Int? = nil, superset: Superset? = nil) {
         self.id = id ?? name; self.name = name; self.sets = sets; self.reps = reps; self.load = load; self.isOptional = isOptional; self.benchSession = benchSession
+        self.superset = superset
     }
 
     /// Число повторов из плана. У диапазона «8-10» берём нижнюю границу:
@@ -1063,7 +1065,7 @@ final class ProgramProfile {
     func plannedExercises(week: Int, day: Int) -> [ExercisePrescription] {
         guard let plan = workoutPlan.weeks.first(where: { $0.number == week })?
             .days.first(where: { $0.number == day }) else { return [] }
-        return exercises(day: plan, benchSession: benchSession(week: week, day: day))
+        return exercises(day: plan, benchSession: benchSession(week: week, day: day), week: week)
     }
 
     func completeAsPlanned(week: Int, day: Int, now: Date = Date()) {
@@ -1771,15 +1773,42 @@ final class ProgramProfile {
         programKind.hasBenchWave && (day == 1 || day == 3)
     }
 
+    func customProgressedWeight(for exercise: ExercisePrescription, week: Int, day: Int) -> Double? {
+        guard programKind == .custom, week > 0,
+              let custom = customProgram?.days.first(where: { $0.number == day })?.exercises.first(where: { $0.id == exercise.id }),
+              custom.advanceAfterTarget == true, let start = custom.kilograms, start.isFinite,
+              custom.weeklyIncrement.isFinite, custom.weeklyIncrement > 0,
+              let target = exercise.topReps, exercise.sets > 0 else { return nil }
+        var weight = start
+        for priorWeek in 1..<week where isCompleted(week: priorWeek, day: day) {
+            if (0..<exercise.sets).allSatisfy({ index in
+                guard let entry = setEntry(week: priorWeek, day: day, exercise: exercise, index: index) else { return false }
+                return entry.reps >= target && entry.weight + 1e-6 >= weight
+            }) {
+                weight = min(1000, weight + custom.weeklyIncrement)
+            }
+        }
+        return weight
+    }
+
     /// Упражнения тренировки: вспомогательные — из дня программы, жим — из волны.
     func exercises(for workout: ScheduledWorkout) -> [ExercisePrescription] {
-        exercises(day: workout.day, benchSession: workout.benchSession)
+        exercises(day: workout.day, benchSession: workout.benchSession, week: workout.week)
     }
 
     /// То же самое, но по дню напрямую. Экран деталей берёт день из свежего плана,
     /// а не из расписания, собранного до правки, — иначе добавленное упражнение
     /// появлялось бы только после выхода и повторного захода.
-    func exercises(day: WorkoutDayPlan, benchSession: Int?) -> [ExercisePrescription] {
+    func exercises(day: WorkoutDayPlan, benchSession: Int?, week: Int? = nil) -> [ExercisePrescription] {
+        if programKind == .custom, let week {
+            return day.exercises.map { exercise in
+                guard let weight = customProgressedWeight(for: exercise, week: week, day: day.number) else { return exercise }
+                return ExercisePrescription(
+                    id: exercise.id, name: exercise.name, sets: exercise.sets, reps: exercise.reps,
+                    load: .kilograms(weight), isOptional: exercise.isOptional, superset: exercise.superset
+                )
+            }
+        }
         guard let session = benchSession,
               let wave = benchWave.first(where: { $0.id == session })
         else { return day.exercises }

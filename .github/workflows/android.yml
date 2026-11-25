@@ -4,6 +4,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      preview:
+        description: "Собрать для тестирования без изменения канала обновлений"
+        type: boolean
+        default: false
       notes:
         description: "Что нового — покажется на плашке обновления в приложении"
         required: false
@@ -100,7 +104,7 @@ jobs:
       # Рядом с APK — version.json: номер сборки и «что нового». Его читает само
       # приложение и предлагает обновиться.
       - name: Publish APK
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && !inputs.preview
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES_INPUT: ${{ github.event.inputs.notes }}

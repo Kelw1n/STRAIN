@@ -135,10 +135,38 @@ final class WorkoutSessionManager {
         exercises.reduce(0) { $0 + $1.sets.count }
     }
 
+    private func supersetPartner(of exercise: ActiveExerciseState) -> ActiveExerciseState? {
+        guard let pair = exercise.prescription.superset else { return nil }
+        return exercises.first { $0.id != exercise.id && pair.contains($0.id) && $0.prescription.superset == pair }
+    }
+
+    var nextSet: (exercise: ActiveExerciseState, position: Int)? {
+        for exercise in exercises {
+            if let pair = exercise.prescription.superset, let partner = supersetPartner(of: exercise) {
+                let first = exercise.id == pair.first ? exercise : partner
+                let second = exercise.id == pair.first ? partner : exercise
+                let firstPosition = first.sets.firstIndex { !$0.isDone } ?? Int.max
+                let secondPosition = second.sets.firstIndex { !$0.isDone } ?? Int.max
+                if firstPosition <= secondPosition, firstPosition != Int.max { return (first, firstPosition) }
+                if secondPosition != Int.max { return (second, secondPosition) }
+            } else if let position = exercise.sets.firstIndex(where: { !$0.isDone }) {
+                return (exercise, position)
+            }
+        }
+        return nil
+    }
+
+    func restsAfterSet(exIdx: Int, sIdx: Int) -> Bool {
+        let exercise = exercises[exIdx]
+        guard exercise.prescription.superset?.restAfterEach != true,
+              let partner = supersetPartner(of: exercise), partner.sets.indices.contains(sIdx) else { return true }
+        return partner.sets[sIdx].isDone
+    }
+
     /// Что видят друзья: день, текущее упражнение и его подходы — «Присед · 3/5».
     var liveStatus: SocialLive? {
         guard let workout = activeWorkout else { return nil }
-        let current = exercises.first { $0.sets.contains { !$0.isDone } } ?? exercises.last
+        let current = nextSet?.exercise ?? exercises.last
         return SocialLive(
             title: workout.day.title,
             exercise: current?.prescription.name ?? "",
@@ -523,13 +551,17 @@ final class WorkoutSessionManager {
             } else {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }
-            restTimer.start(
-                TimeInterval(ex.restSeconds),
-                exerciseName: ex.prescription.name,
-                setDetails: "\(WeightFormat.kilogramsPrecise(set.weight)) × \(set.reps)",
-                completedSets: completed,
-                totalSets: exercises[exIdx].sets.count
-            )
+            if restsAfterSet(exIdx: exIdx, sIdx: sIdx) {
+                restTimer.start(
+                    TimeInterval(ex.restSeconds),
+                    exerciseName: ex.prescription.name,
+                    setDetails: "\(WeightFormat.kilogramsPrecise(set.weight)) × \(set.reps)",
+                    completedSets: completed,
+                    totalSets: exercises[exIdx].sets.count
+                )
+            } else if restTimer.isRunning {
+                restTimer.stop()
+            }
         } else {
             exercises[exIdx].sets[sIdx].isRecord = false
             profile.clearSetEntry(
@@ -545,7 +577,7 @@ final class WorkoutSessionManager {
                 count: exercises[exIdx].sets.filter(\.isDone).count
             )
         }
-        save()
+        if ex.prescription.superset == nil || !writeNow() { save() }
     }
 
     func addSet(to exIdx: Int, profile: ProgramProfile) {
@@ -681,6 +713,9 @@ final class WorkoutSessionManager {
     }
 
     private func plannedWeight(for presc: ExercisePrescription, profile: ProgramProfile, workout: ScheduledWorkout, last: [SetEntry]) -> Double {
+        if let weight = profile.customProgressedWeight(for: presc, week: workout.week, day: workout.day.number) {
+            return weight
+        }
         if case .kilograms(let value) = presc.load { return value }
         if let hint = profile.accessoryHint(for: presc, week: workout.week, day: workout.day.number)?.weight {
             return hint

@@ -2,6 +2,7 @@ package com.texasprogram.app.ui
 
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,8 +54,25 @@ fun PlanScreen(
     profile: ProgramProfile,
     onOpenDay: (Int, Int) -> Unit,
     onSetCurrent: (Int, Int) -> Unit,
-    contentPadding: PaddingValues
+    contentPadding: PaddingValues,
+    onEditProgram: ((com.texasprogram.app.model.CustomProgram) -> Unit)? = null
 ) {
+    var editingProgram by remember { mutableStateOf(false) }
+    val custom = profile.customProgram
+    if (editingProgram && custom != null && onEditProgram != null) {
+        BackHandler { editingProgram = false }
+        CustomProgramBuilder(
+            contentPadding = contentPadding,
+            initial = custom,
+            title = "Редактировать программу",
+            saveTitle = "Сохранить",
+            onBack = { editingProgram = false }
+        ) { updated ->
+            onEditProgram(updated)
+            editingProgram = false
+        }
+        return
+    }
     val plan = profile.workoutPlan
     // Открываемся на текущей неделе, а не на первой. Дальше выбор за
     // пользователем, поэтому пересчёта на каждую перерисовку нет.
@@ -73,6 +92,11 @@ fun PlanScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(key = "title") { ScreenTitle("План") }
+        if (custom != null && onEditProgram != null) {
+            item(key = "edit-program") {
+                SecondaryButton("Редактировать программу", icon = Icons.Filled.Edit) { editingProgram = true }
+            }
+        }
 
         item(key = "weeks") {
             LazyRow(
@@ -217,7 +241,7 @@ fun DayDetailScreen(
     contentPadding: PaddingValues
 ) {
     // У запланированной тренировки жим берётся из волны, у выполненной — как в плане.
-    val exercises = if (scheduled != null) profile.exercises(scheduled) else day.exercises
+    val exercises = profile.exercises(day, scheduled?.benchSession, week)
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = contentPadding,

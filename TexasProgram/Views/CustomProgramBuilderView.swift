@@ -58,10 +58,12 @@ struct CustomProgramBuilderView: View {
                         }
                         .onDelete { offsets in
                             day.exercises.remove(atOffsets: offsets)
+                            day.supersets = day.validSupersets
                         }
                         .onMove { source, destination in
                             day.exercises.move(fromOffsets: source, toOffset: destination)
                         }
+                        if day.exercises.count >= 2 { supersetEditor($day) }
                         Button {
                             editing = CustomExerciseDraft(dayID: day.id, exercise: nil)
                         } label: {
@@ -114,6 +116,56 @@ struct CustomProgramBuilderView: View {
                 } onDelete: { dayID, exerciseID in
                     guard let index = program.days.firstIndex(where: { $0.id == dayID }) else { return }
                     program.days[index].exercises.removeAll { $0.id == exerciseID }
+                    program.days[index].supersets = program.days[index].validSupersets
+                }
+            }
+        }
+    }
+    @ViewBuilder
+    private func supersetEditor(_ binding: Binding<CustomDay>) -> some View {
+        let day = binding.wrappedValue
+        let pairs = day.validSupersets
+        let available = day.exercises.filter { exercise in !pairs.contains { $0.contains(exercise.id) } }
+        ForEach(pairs) { pair in
+            let first = day.exercises.first { $0.id == pair.first }?.name ?? ""
+            let second = day.exercises.first { $0.id == pair.second }?.name ?? ""
+            Menu {
+                Button(L("Отдых после пары")) {
+                    binding.wrappedValue.supersets = pairs.map { item in
+                        var item = item
+                        if item.id == pair.id { item.restAfterEach = false }
+                        return item
+                    }
+                }
+                Button(L("Отдых после каждого подхода")) {
+                    binding.wrappedValue.supersets = pairs.map { item in
+                        var item = item
+                        if item.id == pair.id { item.restAfterEach = true }
+                        return item
+                    }
+                }
+                Button(L("Разъединить"), role: .destructive) {
+                    binding.wrappedValue.supersets = pairs.filter { $0.id != pair.id }
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(first + " → " + second, systemImage: "link")
+                    Text(L(pair.restAfterEach == true ? "Отдых после каждого подхода" : "Отдых после пары"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        if available.count >= 2 {
+            Menu(L("Добавить суперсет")) {
+                ForEach(available) { first in
+                    Menu(first.name) {
+                        ForEach(available.filter { $0.id != first.id }) { second in
+                            Button(second.name) {
+                                binding.wrappedValue.supersets = pairs + [Superset(first: first.id, second: second.id)]
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -140,13 +192,14 @@ private struct CustomExerciseForm: View {
     @State private var weightText = ""
     @State private var loadText = ""
     @State private var incrementText = ""
+    @State private var advanceAfterTarget = false
     @State private var loaded = false
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func number(_ text: String) -> Double? {
         let cleaned = text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
-        guard !cleaned.isEmpty, let value = Double(cleaned) else { return nil }
+        guard !cleaned.isEmpty, let value = Double(cleaned), value.isFinite else { return nil }
         return value
     }
 
@@ -162,11 +215,13 @@ private struct CustomExerciseForm: View {
                 Section {
                     TextField(L("Вес, кг"), text: $weightText).keyboardType(.decimalPad)
                     TextField(L("Или подпись: RPE 8, свой вес"), text: $loadText)
-                    TextField(L("Прибавка за неделю, кг"), text: $incrementText).keyboardType(.decimalPad)
+                    Toggle(L("Прибавлять после всех повторов"), isOn: $advanceAfterTarget)
+                    TextField(L(advanceAfterTarget ? "Шаг прибавки, кг" : "Прибавка за неделю, кг"), text: $incrementText)
+                        .keyboardType(.decimalPad)
                 } header: {
                     Text(L("Нагрузка"))
                 } footer: {
-                    Text(L("Прибавка работает только вместе с весом: каждую следующую неделю к нему добавится указанное и округлится до блина."))
+                    Text(advanceAfterTarget ? L("Прибавка сработает, когда ты выполнишь все подходы с верхней границей повторов на целевом весе.") : L("Прибавка работает только вместе с весом: каждую следующую неделю к нему добавится указанное и округлится до блина."))
                 }
 
                 Section {
@@ -178,13 +233,16 @@ private struct CustomExerciseForm: View {
                             reps: reps,
                             kilograms: number(weightText),
                             loadText: loadText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : loadText,
-                            weeklyIncrement: number(incrementText) ?? 0
+                            weeklyIncrement: number(incrementText) ?? 0,
+                            advanceAfterTarget: advanceAfterTarget ? true : nil
                         ))
                         dismiss()
                     } label: {
                         Label(draft.exercise == nil ? L("Добавить") : L("Сохранить"), systemImage: "checkmark.circle.fill")
                     }
-                    .disabled(trimmedName.isEmpty)
+                    .disabled(trimmedName.isEmpty || (advanceAfterTarget &&
+                        (!(0...1000).contains(number(weightText) ?? -1) || !(0.001...1000).contains(number(incrementText) ?? 0) ||
+                         !reps.contains(where: \.isNumber))))
 
                     if let existing = draft.exercise {
                         Button(role: .destructive) {
@@ -210,6 +268,7 @@ private struct CustomExerciseForm: View {
                 reps = exercise.reps
                 weightText = exercise.kilograms.map(WeightFormat.plain) ?? ""
                 loadText = exercise.loadText ?? ""
+                advanceAfterTarget = exercise.advanceAfterTarget == true
                 incrementText = exercise.weeklyIncrement == 0 ? "" : WeightFormat.plain(exercise.weeklyIncrement)
             }
         }

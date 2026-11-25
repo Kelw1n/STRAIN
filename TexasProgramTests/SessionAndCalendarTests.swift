@@ -286,6 +286,40 @@ final class SessionAndCalendarTests: XCTestCase {
         XCTAssertFalse(manager.isPresented, "поднятая тренировка открывается свёрнутой")
     }
 
+    func testSupersetRestoresRoundAndProgressesEachExerciseSeparately() throws {
+        let biceps = CustomExercise(name: "Бицепс", sets: 3, reps: "10", kilograms: 12, weeklyIncrement: 2, advanceAfterTarget: true)
+        let triceps = CustomExercise(name: "Трицепс", sets: 3, reps: "12", kilograms: 25, weeklyIncrement: 2.5, advanceAfterTarget: true)
+        let day = CustomDay(number: 1, title: "Руки", exercises: [biceps, triceps],
+                            supersets: [Superset(first: biceps.id, second: triceps.id)])
+        let profile = ProgramProfile(customProgram: CustomProgram(template: .custom, weeks: 3, days: [day]))
+        let first = try XCTUnwrap(profile.schedule.allPending.first { $0.week == 1 })
+        let manager = WorkoutSessionManager.shared
+        let timer = RestTimer()
+        defer { timer.stop() }
+        manager.startWorkout(workout: first, profile: profile)
+        XCTAssertEqual(manager.exercises.compactMap { $0.sets.first?.weight }, [12, 25])
+        XCTAssertEqual(manager.nextSet?.exercise.id, biceps.id)
+        manager.toggleSetDone(exIdx: 0, sIdx: 0, profile: profile, restTimer: timer)
+        XCTAssertFalse(timer.isRunning)
+        XCTAssertEqual(manager.nextSet?.exercise.id, triceps.id)
+        manager.toggleSetDone(exIdx: 1, sIdx: 0, profile: profile, restTimer: timer)
+        XCTAssertTrue(timer.isRunning)
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(for: profile)
+        XCTAssertEqual(manager.nextSet?.exercise.id, biceps.id)
+        XCTAssertEqual(manager.nextSet?.position, 1)
+        XCTAssertTrue(manager.exercises.allSatisfy { $0.sets[0].isDone })
+        for index in 1...2 {
+            manager.toggleSetDone(exIdx: 0, sIdx: index, profile: profile, restTimer: timer)
+            if index == 2 { manager.setReps(9, exIdx: 1, sIdx: index, profile: profile) }
+            manager.toggleSetDone(exIdx: 1, sIdx: index, profile: profile, restTimer: timer)
+        }
+        manager.finishWorkout(profile: profile)
+        let second = try XCTUnwrap(profile.schedule.allPending.first { $0.week == 2 })
+        manager.startWorkout(workout: second, profile: profile)
+        XCTAssertEqual(manager.exercises.compactMap { $0.sets.first?.weight }, [14, 25])
+    }
+
     func testPartialWarmUpSurvivesReorderingAndRelaunch() throws {
         let profile = texas()
         let workout = try workoutWithSeveralSets(profile)

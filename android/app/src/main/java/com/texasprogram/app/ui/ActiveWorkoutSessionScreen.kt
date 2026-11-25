@@ -618,6 +618,18 @@ fun ActiveWorkoutSessionScreen(
             // Совместная тренировка: что сейчас делает напарник. Над списком,
             // чтобы не сбивать перетаскивание упражнений.
             PartnerStrip(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            val next = WorkoutSessionManager.nextSet
+            if (!compact && next?.first?.prescription?.superset != null) {
+                val (exercise, position) = next
+                Text(
+                    "Дальше: ${exercise.prescription.name} · подход ${position + 1}",
+                    color = Theme.accent,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).pressable {
+                        val target = exercises.indexOfFirst { it.id == exercise.id }
+                        if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
+                    }
+                )
+            }
 
             LazyColumn(
                 state = listState,
@@ -965,6 +977,9 @@ private fun ExerciseHeader(
                 overflow = TextOverflow.Ellipsis
             )
             if (!compact) {
+                if (exercise.prescription.superset != null) {
+                    Text("Суперсет", color = Theme.accent, fontSize = 12.sp)
+                }
                 // Отдых — под названием, как в REBRN: справа он отнимал место,
                 // и длинные названия рвались посреди слова.
                 Row(
@@ -1092,13 +1107,16 @@ private fun SetsTable(exercise: ActiveExerciseState, exIndex: Int, actions: Sess
         }
 
         val sets = exercise.sets
+    val next = if (exercise.prescription.superset != null) WorkoutSessionManager.nextSet else null
         sets.forEachIndexed { position, set ->
             androidx.compose.runtime.key(set.id) {
                 SetRow(
                     set = set,
                     position = position,
                     exIndex = exIndex,
-                    isCurrent = !set.isDone && (0 until position).all { sets[it].isDone },
+                    isCurrent = if (exercise.prescription.superset == null) {
+                        !set.isDone && (0 until position).all { sets[it].isDone }
+                    } else next?.first?.id == exercise.id && next.second == position,
                     canDelete = sets.size > 1,
                     highlighted = set.id == justAdded,
                     actions = actions

@@ -23,6 +23,16 @@ struct ActiveWorkoutSessionView: View {
                         VStack(spacing: 16) {
                             // Совместная тренировка: что сейчас делает напарник.
                             PartnerStrip()
+                            if !reorder.isActive, let next = sessionManager.nextSet,
+                               next.exercise.prescription.superset != nil {
+                                Button {
+                                    withAnimation(Motion.sheet) { proxy.scrollTo(next.exercise.id, anchor: .center) }
+                                } label: {
+                                    Label(L("Дальше: \(next.exercise.prescription.name) · подход \(next.position + 1)"),
+                                          systemImage: "arrow.down.circle")
+                                }
+                                .foregroundStyle(Theme.accent)
+                            }
                             exerciseList
                             if isFree && !reorder.isActive { addExerciseButton }
                         }
@@ -503,6 +513,11 @@ private struct ExerciseSessionCard: View {
                         // и «Приседания» рвались посреди слова.
                         restChip
                             .transition(.opacity)
+                        if exercise.prescription.superset != nil {
+                            Text(L("Суперсет"))
+                                .font(.caption)
+                                .foregroundStyle(Theme.accent)
+                        }
                     }
                     if compact {
                         // После «из» — родительный падеж: «из 3 подходов», а не «из 3 подхода».
@@ -661,7 +676,9 @@ private struct ExerciseSessionCard: View {
                     set: set,
                     position: sIdx,
                     exerciseIndex: index,
-                    isCurrent: !set.isDone && exercise.sets.prefix(sIdx).allSatisfy(\.isDone),
+                    isCurrent: exercise.prescription.superset == nil
+                        ? !set.isDone && exercise.sets.prefix(sIdx).allSatisfy(\.isDone)
+                        : manager.nextSet?.exercise.id == exercise.id && manager.nextSet?.position == sIdx,
                     canDelete: exercise.sets.count > 1,
                     highlighted: set.id == justAdded,
                     profile: profile

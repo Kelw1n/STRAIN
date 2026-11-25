@@ -769,6 +769,7 @@ struct PlanView: View {
     /// Открываем план один раз за запуск — на текущей неделе. Дальше выбор
     /// остаётся за пользователем: иначе возврат из дня сбрасывал бы просмотр.
     @State private var focusedOnOpen = false
+    @State private var editingCustomProgram = false
     @Namespace private var weekPill
 
     private var plan: WorkoutPlan { profile.workoutPlan }
@@ -829,6 +830,27 @@ struct PlanView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle(L("План"))
+            .toolbar {
+                if profile.programKind == .custom, profile.customProgram != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(L("Редактировать программу")) { editingCustomProgram = true }
+                    }
+                }
+            }
+            .sheet(isPresented: $editingCustomProgram) {
+                if let program = profile.customProgram {
+                    CustomProgramBuilderView(
+                        initial: program,
+                        title: L("Редактировать программу"),
+                        saveTitle: L("Сохранить"),
+                        onBack: { editingCustomProgram = false }
+                    ) { updated in
+                        profile.customProgram = updated
+                        selectedWeek = min(selectedWeek, updated.weeks)
+                        editingCustomProgram = false
+                    }
+                }
+            }
             .onAppear {
                 guard !focusedOnOpen else { return }
                 focusedOnOpen = true
@@ -973,7 +995,7 @@ struct DayDetailView: View {
         // `workoutPlan` из каждого вычисляемого свойства значило бы пересобирать
         // все двенадцать недель по нескольку раз на кадр.
         let currentDay = self.currentDay
-        let exercises = profile.exercises(day: currentDay, benchSession: scheduled?.benchSession)
+        let exercises = profile.exercises(day: currentDay, benchSession: scheduled?.benchSession, week: week)
         let targetWorkout = scheduled ?? ScheduledWorkout(
             week: week,
             day: currentDay,

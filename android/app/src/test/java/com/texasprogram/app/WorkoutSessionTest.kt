@@ -1,6 +1,12 @@
 package com.texasprogram.app
 
 import com.texasprogram.app.model.ProgramInput
+import com.texasprogram.app.model.CustomDay
+import com.texasprogram.app.model.CustomExercise
+import com.texasprogram.app.model.CustomProgram
+import com.texasprogram.app.model.SplitTemplate
+import com.texasprogram.app.model.Superset
+import com.texasprogram.app.data.BackupService
 import com.texasprogram.app.model.PlanEditScope
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.UpperLowerInput
@@ -57,6 +63,71 @@ class WorkoutSessionTest {
     }
 
     private val update: (ProgramProfile) -> Unit = { profile = it }
+
+    private fun supersetProfile(restAfterEach: Boolean = false): ProgramProfile {
+        val biceps = CustomExercise(
+            name = "Бицепс", sets = 3, reps = "10", kilograms = 12.0,
+            weeklyIncrement = 2.0, advanceAfterTarget = true
+        )
+        val triceps = CustomExercise(
+            name = "Трицепс", sets = 3, reps = "12", kilograms = 25.0,
+            weeklyIncrement = 2.5, advanceAfterTarget = true
+        )
+        val day = CustomDay(
+            number = 1, title = "Руки", exercises = listOf(biceps, triceps),
+            supersets = listOf(Superset(biceps.id, triceps.id, restAfterEach = restAfterEach))
+        )
+        return ProgramProfile.custom(CustomProgram(template = SplitTemplate.CUSTOM, weeks = 3, days = listOf(day)))
+    }
+
+    @Test
+    fun supersetRestoresRoundAndProgressesEachExerciseSeparately() {
+        profile = supersetProfile()
+        val first = profile.schedule().allPending.first { it.week == 1 }
+        manager.startWorkout(first, profile)
+        assertEquals(listOf(12.0, 25.0), manager.exercises.map { it.sets.first().weight })
+        assertEquals("Бицепс", manager.nextSet?.first?.prescription?.name)
+        assertFalse(manager.restsAfterSet(0, 0))
+        manager.toggleSetDone(0, 0, profile, null, update)
+        assertEquals("Трицепс", manager.nextSet?.first?.prescription?.name)
+        assertTrue(manager.restsAfterSet(1, 0))
+        manager.toggleSetDone(1, 0, profile, null, update)
+        manager.forgetForTesting()
+        manager.restoreIfNeeded(profile)
+        assertEquals("Бицепс", manager.nextSet?.first?.prescription?.name)
+        assertEquals(1, manager.nextSet?.second)
+        assertTrue(manager.exercises.all { it.sets[0].isDone })
+
+        manager.toggleSetDone(0, 1, profile, null, update)
+        manager.toggleSetDone(1, 1, profile, null, update)
+        manager.toggleSetDone(0, 2, profile, null, update)
+        manager.setReps(9, 1, 2, profile, update)
+        manager.toggleSetDone(1, 2, profile, null, update)
+        manager.finishWorkout(profile, onUpdateProfile = update)
+
+        val copy = BackupService.parse(BackupService.export(listOf(profile), activeProfileId = profile.id))
+        profile = BackupService.profile(copy.profiles.single())
+        val second = profile.schedule().allPending.first { it.week == 2 }
+        manager.startWorkout(second, profile)
+        assertEquals(listOf(14.0, 25.0), manager.exercises.map { it.sets.first().weight })
+        assertEquals("Бицепс", manager.nextSet?.first?.prescription?.name)
+    }
+
+    @Test
+    fun supersetCanRestAfterEachSetAndAllowsAnUnpairedExtraSet() {
+        profile = supersetProfile(restAfterEach = true)
+        manager.startWorkout(profile.schedule().allPending.first(), profile)
+        assertTrue(manager.restsAfterSet(0, 0))
+        manager.discardWorkout(profile, update)
+
+        profile = supersetProfile()
+        manager.startWorkout(profile.schedule().allPending.first(), profile)
+        manager.addSet(0)
+        assertTrue(manager.restsAfterSet(0, 3))
+        manager.toggleSetDone(1, 0, profile, null, update)
+        assertEquals("Бицепс", manager.nextSet?.first?.prescription?.name)
+        assertTrue(manager.restsAfterSet(0, 0))
+    }
 
     @Test
     fun startBuildsAsManyRowsAsThePlan() {

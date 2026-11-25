@@ -8,10 +8,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -35,7 +39,9 @@ import com.texasprogram.app.model.CustomDay
 import com.texasprogram.app.model.CustomExercise
 import com.texasprogram.app.model.CustomProgram
 import com.texasprogram.app.model.SplitTemplate
+import com.texasprogram.app.model.Superset
 import com.texasprogram.app.model.formatWeight
+import com.texasprogram.app.service.L
 
 /// Сборка своей программы: схема разбивки, число недель и упражнения по дням.
 @Composable
@@ -61,7 +67,10 @@ fun CustomProgramBuilder(
             onCancel = { editing = null },
             onDelete = { exerciseId ->
                 program = program.copy(days = program.days.map { day ->
-                    if (day.id == draft.first) day.copy(exercises = day.exercises.filterNot { it.id == exerciseId }) else day
+                    if (day.id == draft.first) day.copy(
+                        exercises = day.exercises.filterNot { it.id == exerciseId },
+                        supersets = day.supersets.filterNot { it.contains(exerciseId) }
+                    ) else day
                 })
                 editing = null
             },
@@ -144,6 +153,13 @@ fun CustomProgramBuilder(
                         }
                     )
                 }
+                if (day.exercises.size >= 2) {
+                    SupersetEditor(day) { pairs ->
+                        program = program.copy(days = program.days.map {
+                            if (it.id == day.id) it.copy(supersets = pairs) else it
+                        })
+                    }
+                }
                 SecondaryButton("Добавить упражнение", icon = Icons.Filled.Add) { editing = day.id to null }
             }
         }
@@ -161,6 +177,76 @@ fun CustomProgramBuilder(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SupersetEditor(day: CustomDay, update: (List<Superset>) -> Unit) {
+    val pairs = day.validSupersets
+    val available = day.exercises.filter { exercise -> pairs.none { it.contains(exercise.id) } }
+    var adding by remember { mutableStateOf(false) }
+    var firstId by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<String?>(null) }
+
+    pairs.forEach { pair ->
+        val first = day.exercises.first { it.id == pair.first }
+        val second = day.exercises.first { it.id == pair.second }
+        Column(Modifier.fillMaxWidth().pressable { editing = pair.id }) {
+            Text(first.name + " → " + second.name, color = Theme.textPrimary)
+            Text(
+                if (pair.restAfterEach == true) "Отдых после каждого подхода" else "Отдых после пары",
+                color = Theme.textSecondary,
+                fontSize = 11.sp
+            )
+        }
+    }
+    if (available.size >= 2) {
+        SecondaryButton("Добавить суперсет", icon = Icons.Filled.Add) {
+            firstId = null
+            adding = true
+        }
+    }
+    if (adding && available.size >= 2) {
+        AlertDialog(
+            onDismissRequest = { adding = false },
+            title = { androidx.compose.material3.Text(L(if (firstId == null) "Первое упражнение" else "Второе упражнение")) },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 340.dp)) {
+                    items(available.filter { it.id != firstId }, key = { it.id }) { exercise ->
+                        TextButton(onClick = {
+                            val first = firstId
+                            if (first == null) firstId = exercise.id
+                            else {
+                                update(pairs + Superset(first, exercise.id))
+                                adding = false
+                            }
+                        }) { Text(exercise.name) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { adding = false }) { Text("Отмена") } }
+        )
+    }
+    pairs.firstOrNull { it.id == editing }?.let { pair ->
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Суперсет") },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Отдых после каждого подхода", modifier = Modifier.weight(1f))
+                    Switch(checked = pair.restAfterEach == true, onCheckedChange = { checked ->
+                        update(pairs.map { if (it.id == pair.id) it.copy(restAfterEach = checked) else it })
+                    })
+                }
+            },
+            confirmButton = { TextButton(onClick = { editing = null }) { Text("Готово") } },
+            dismissButton = {
+                TextButton(onClick = {
+                    update(pairs.filterNot { it.id == pair.id })
+                    editing = null
+                }) { Text("Разъединить") }
+            }
+        )
     }
 }
 
@@ -227,8 +313,13 @@ private fun CustomExerciseForm(
         mutableStateOf(existing?.weeklyIncrement?.takeIf { it != 0.0 }?.let { formatWeight(it) } ?: "")
     }
 
-    fun number(text: String) = text.replace(',', '.').trim().toDoubleOrNull()
+    var advanceAfterTarget by remember(existing) { mutableStateOf(existing?.advanceAfterTarget == true) }
+    fun number(text: String) = text.replace(',', '.').trim().toDoubleOrNull()?.takeIf { it.isFinite() }
     val sets = (setsText.toIntOrNull() ?: 3).coerceIn(1, 12)
+    val validProgression = !advanceAfterTarget || (
+        (number(weight) ?: -1.0) in 0.0..1000.0 &&
+            (number(increment) ?: 0.0) in 0.001..1000.0 && reps.any(Char::isDigit)
+        )
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -251,9 +342,19 @@ private fun CustomExerciseForm(
                 SectionLabel("Нагрузка")
                 DecimalField(value = weight, label = "Вес, кг", onValueChange = { weight = it })
                 TextRow(loadText, "Или подпись: RPE 8, свой вес") { loadText = it }
-                DecimalField(value = increment, label = "Прибавка за неделю, кг", onValueChange = { increment = it })
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Прибавлять после всех повторов", modifier = Modifier.weight(1f), color = Theme.textPrimary)
+                    Switch(checked = advanceAfterTarget, onCheckedChange = { advanceAfterTarget = it })
+                }
+                DecimalField(
+                    value = increment,
+                    label = if (advanceAfterTarget) "Шаг прибавки, кг" else "Прибавка за неделю, кг",
+                    onValueChange = { increment = it }
+                )
                 Text(
-                    "Прибавка работает только вместе с весом: каждую следующую неделю к нему добавится указанное и округлится до блина.",
+                    if (advanceAfterTarget)
+                        "Прибавка сработает, когда ты выполнишь все подходы с верхней границей повторов на целевом весе."
+                    else "Прибавка работает только вместе с весом: каждую следующую неделю к нему добавится указанное и округлится до блина.",
                     color = Theme.textTertiary,
                     fontSize = 11.sp
                 )
@@ -262,7 +363,7 @@ private fun CustomExerciseForm(
 
         item(key = "actions") {
             CardView(Modifier.appearIn(2)) {
-                GradientButton(if (existing == null) "Добавить" else "Сохранить", enabled = name.isNotBlank()) {
+                GradientButton(if (existing == null) "Добавить" else "Сохранить", enabled = name.isNotBlank() && validProgression) {
                     onSave(
                         CustomExercise(
                             id = existing?.id ?: ("own-" + java.util.UUID.randomUUID().toString()),
@@ -271,7 +372,8 @@ private fun CustomExerciseForm(
                             reps = reps,
                             kilograms = number(weight),
                             loadText = loadText.trim().ifBlank { null },
-                            weeklyIncrement = number(increment) ?: 0.0
+                            weeklyIncrement = number(increment) ?: 0.0,
+                            advanceAfterTarget = true.takeIf { advanceAfterTarget }
                         )
                     )
                 }

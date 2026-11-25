@@ -725,6 +725,7 @@ data class ProgramProfile(
     fun plannedExercises(week: Int, day: Int): List<ExercisePrescription> {
         val plan = workoutPlan.weeks.firstOrNull { it.number == week }
             ?.days?.firstOrNull { it.number == day } ?: return emptyList()
+        if (programKind == TrainingProgramKind.CUSTOM) return exercises(plan, week = week)
         val session = benchSession(week, day) ?: return plan.exercises
         val wave = benchWave.firstOrNull { it.id == session } ?: return plan.exercises
         return plan.exercises.map { exercise ->
@@ -1316,12 +1317,41 @@ data class ProgramProfile(
     fun carriesBenchWave(day: Int): Boolean =
         programKind.hasBenchWave && (day == 1 || day == 3)
 
-    /// Упражнения тренировки: вспомогательные — из дня программы, жим — из волны.
-    fun exercises(workout: ScheduledWorkout): List<ExercisePrescription> {
-        return exercises(workout.day, workout.benchSession)
+    fun customProgressedWeight(exercise: ExercisePrescription, week: Int, day: Int): Double? {
+        if (programKind != TrainingProgramKind.CUSTOM || week <= 0) return null
+        val custom = customProgram?.days?.firstOrNull { it.number == day }?.exercises
+            ?.firstOrNull { it.id == exercise.key } ?: return null
+        val start = custom.kilograms ?: return null
+        val target = exercise.topReps ?: return null
+        if (custom.advanceAfterTarget != true || !start.isFinite() || !custom.weeklyIncrement.isFinite() ||
+            custom.weeklyIncrement <= 0 || exercise.sets <= 0
+        ) return null
+
+        var weight = start
+        for (priorWeek in 1 until week) {
+            if (!isCompleted(priorWeek, day)) continue
+            if ((0 until exercise.sets).all { index ->
+                    val entry = setEntry(priorWeek, day, exercise, index)
+                    entry != null && entry.reps >= target && entry.weight + 1e-6 >= weight
+                }) {
+                weight = minOf(1000.0, weight + custom.weeklyIncrement)
+            }
+        }
+        return weight
     }
 
-    fun exercises(day: WorkoutDayPlan, benchSession: Int? = null): List<ExercisePrescription> {
+    /// Упражнения тренировки: вспомогательные — из дня программы, жим — из волны.
+    fun exercises(workout: ScheduledWorkout): List<ExercisePrescription> {
+        return exercises(workout.day, workout.benchSession, workout.week)
+    }
+
+    fun exercises(day: WorkoutDayPlan, benchSession: Int? = null, week: Int? = null): List<ExercisePrescription> {
+        if (programKind == TrainingProgramKind.CUSTOM && week != null) {
+            return day.exercises.map { exercise ->
+                val weight = customProgressedWeight(exercise, week, day.number)
+                if (weight == null) exercise else exercise.copy(load = LoadPrescription.Kilograms(weight))
+            }
+        }
         val session = benchSession ?: return day.exercises
         val wave = benchWave.firstOrNull { it.id == session } ?: return day.exercises
         return day.exercises.map { exercise ->

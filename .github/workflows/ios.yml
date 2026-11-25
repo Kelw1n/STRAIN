@@ -4,6 +4,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      preview:
+        description: "Собрать для тестирования без изменения канала обновлений"
+        type: boolean
+        default: false
       notes:
         description: "Что нового — покажется на плашке обновления в приложении"
         required: false
@@ -121,6 +125,7 @@ jobs:
       # Рядом с IPA — version.json: номер сборки и «что нового» за последние
       # версии. Его читает приложение и показывает плашку обновления.
       - name: Publish IPA
+        if: ${{ !inputs.preview }}
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES_INPUT: ${{ github.event.inputs.notes }}

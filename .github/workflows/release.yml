@@ -6,6 +6,15 @@ name: Release
 # что приложение предлагает обновлением.
 on:
   workflow_dispatch:
+    inputs:
+      preview_android_run:
+        description: "ID проверенной сборки Android для тестового релиза"
+        required: false
+        type: string
+      preview_ios_run:
+        description: "ID проверенной сборки iOS для тестового релиза"
+        required: false
+        type: string
   push:
     branches: ["claude/possible-improvements-b00203"]
     paths:
@@ -14,6 +23,7 @@ on:
 
 jobs:
   release:
+    if: ${{ !inputs.preview_android_run && !inputs.preview_ios_run }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -55,3 +65,39 @@ jobs:
               --latest
           fi
           echo "Релиз: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  preview:
+    if: inputs.preview_android_run || inputs.preview_ios_run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_RUN: ${{ inputs.preview_android_run }}
+          IOS_RUN: ${{ inputs.preview_ios_run }}
+        run: |
+          set -euo pipefail
+          verify_run() {
+            local run="$1" workflow="$2"
+            [[ "$run" =~ ^[0-9]+$ ]]
+            gh run view "$run" --repo "$GITHUB_REPOSITORY" --json headSha,event,conclusion,workflowName |
+              jq -e --arg sha "$GITHUB_SHA" --arg workflow "$workflow" \
+                '.headSha == $sha and .event == "workflow_dispatch" and .conclusion == "success" and .workflowName == $workflow'
+          }
+          verify_run "$ANDROID_RUN" "Android build"
+          verify_run "$IOS_RUN" "iOS build"
+
+          gh run download "$ANDROID_RUN" --repo "$GITHUB_REPOSITORY" -n strain-android-apk -D dist
+          gh run download "$IOS_RUN" --repo "$GITHUB_REPOSITORY" -n TexasProgram-unsigned -D dist
+          mv dist/app-release.apk dist/STRAIN-preview.apk
+          mv dist/TexasProgram-unsigned.ipa dist/STRAIN-preview.ipa
+
+          TAG="preview-${GITHUB_SHA:0:12}"
+          gh release create "$TAG" dist/STRAIN-preview.apk dist/STRAIN-preview.ipa \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "STRAIN · тестовая сборка" --notes-file .github/release-notes.md

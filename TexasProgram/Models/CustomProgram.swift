@@ -55,6 +55,7 @@ struct CustomExercise: Codable, Equatable, Hashable, Identifiable, Sendable {
     var loadText: String?
     /// Прибавка к весу за неделю. Ноль — вес не растёт.
     var weeklyIncrement: Double
+    var advanceAfterTarget: Bool? = nil
 
     var load: LoadPrescription {
         if let kilograms { return .kilograms(kilograms) }
@@ -65,19 +66,30 @@ struct CustomExercise: Codable, Equatable, Hashable, Identifiable, Sendable {
     }
 
     /// Упражнение для конкретной недели: вес растёт от номера недели.
-    func prescription(week: Int) -> ExercisePrescription {
+    func prescription(week: Int, superset: Superset? = nil) -> ExercisePrescription {
         var value = load
-        if let kilograms, weeklyIncrement != 0 {
+        if let kilograms, weeklyIncrement != 0, advanceAfterTarget != true {
             value = .kilograms(ProgramCalculator.roundToPlate(kilograms + Double(week - 1) * weeklyIncrement))
         }
-        return ExercisePrescription(id: id, name: name, sets: sets, reps: reps, load: value)
+        return ExercisePrescription(id: id, name: name, sets: sets, reps: reps, load: value, superset: superset)
     }
 
     var detail: String {
         let volume = sets > 0 ? "\(sets) × \(reps)" : reps
-        let growth = weeklyIncrement != 0 ? " · +\(WeightFormat.plain(weeklyIncrement)) кг/нед" : ""
+        let growth = advanceAfterTarget == true
+            ? " · +" + WeightFormat.plain(weeklyIncrement) + " кг"
+            : weeklyIncrement != 0 ? " · +\(WeightFormat.plain(weeklyIncrement)) кг/нед" : ""
         return volume + " · " + load.displayText + growth
     }
+}
+
+struct Superset: Codable, Equatable, Hashable, Identifiable, Sendable {
+    var id: String = UUID().uuidString
+    let first: String
+    let second: String
+    var restAfterEach: Bool? = nil
+
+    func contains(_ exerciseID: String) -> Bool { first == exerciseID || second == exerciseID }
 }
 
 /// День своей программы.
@@ -86,6 +98,18 @@ struct CustomDay: Codable, Equatable, Hashable, Identifiable, Sendable {
     var number: Int
     var title: String
     var exercises: [CustomExercise] = []
+    var supersets: [Superset]? = nil
+
+    var validSupersets: [Superset] {
+        let ids = Set(exercises.map(\.id))
+        var paired = Set<String>()
+        return (supersets ?? []).filter { pair in
+            guard pair.first != pair.second, ids.contains(pair.first), ids.contains(pair.second),
+                  !paired.contains(pair.first), !paired.contains(pair.second) else { return false }
+            paired.formUnion([pair.first, pair.second])
+            return true
+        }
+    }
 }
 
 /// Своя программа целиком: сколько недель, какие дни, что в них.
@@ -113,11 +137,14 @@ struct CustomProgram: Codable, Equatable, Hashable, Sendable {
     var plan: WorkoutPlan {
         WorkoutPlan(weeks: (1...max(weeks, 1)).map { week in
             WorkoutWeekPlan(id: week, number: week, days: days.map { day in
-                WorkoutDayPlan(
+                let pairs = day.validSupersets
+                return WorkoutDayPlan(
                     id: "\(week)-\(day.number)",
                     number: day.number,
                     title: day.title,
-                    exercises: day.exercises.map { $0.prescription(week: week) }
+                    exercises: day.exercises.map { exercise in
+                        exercise.prescription(week: week, superset: pairs.first { $0.contains(exercise.id) })
+                    }
                 )
             })
         }, isPeaking: false)

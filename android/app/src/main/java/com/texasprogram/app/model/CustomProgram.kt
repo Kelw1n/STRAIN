@@ -48,7 +48,8 @@ data class CustomExercise(
     /// Свободная подпись нагрузки: «RPE 8», «свой вес».
     val loadText: String? = null,
     /// Прибавка к весу за неделю. Ноль — вес не растёт.
-    val weeklyIncrement: Double = 0.0
+    val weeklyIncrement: Double = 0.0,
+    val advanceAfterTarget: Boolean? = null
 ) {
     val load: LoadPrescription
         get() {
@@ -58,21 +59,35 @@ data class CustomExercise(
         }
 
     /// Упражнение для конкретной недели: вес растёт от номера недели.
-    fun prescription(week: Int): ExercisePrescription {
-        val value = if (kilograms != null && weeklyIncrement != 0.0) {
+    fun prescription(week: Int, superset: Superset? = null): ExercisePrescription {
+        val value = if (kilograms != null && weeklyIncrement != 0.0 && advanceAfterTarget != true) {
             LoadPrescription.Kilograms(ProgramCalculator.roundToPlate(kilograms + (week - 1) * weeklyIncrement))
         } else {
             load
         }
-        return ExercisePrescription(name = name, sets = sets, reps = reps, load = value, id = id)
+        return ExercisePrescription(name = name, sets = sets, reps = reps, load = value, id = id, superset = superset)
     }
 
     val detail: String
         get() {
             val volume = if (sets > 0) "$sets × $reps" else reps
-            val growth = if (weeklyIncrement != 0.0) " · +${formatWeight(weeklyIncrement)} кг/нед" else ""
+            val growth = when {
+                advanceAfterTarget == true -> " · +${formatWeight(weeklyIncrement)} кг"
+                weeklyIncrement != 0.0 -> " · +${formatWeight(weeklyIncrement)} кг/нед"
+                else -> ""
+            }
             return volume + " · " + load.displayText + growth
         }
+}
+
+@Serializable
+data class Superset(
+    val first: String,
+    val second: String,
+    val id: String = UUID.randomUUID().toString(),
+    val restAfterEach: Boolean? = null
+) {
+    fun contains(exerciseId: String) = first == exerciseId || second == exerciseId
 }
 
 /// День своей программы.
@@ -81,8 +96,25 @@ data class CustomDay(
     val id: String = UUID.randomUUID().toString(),
     val number: Int,
     val title: String,
-    val exercises: List<CustomExercise> = emptyList()
-)
+    val exercises: List<CustomExercise> = emptyList(),
+    val supersets: List<Superset> = emptyList()
+) {
+    val validSupersets: List<Superset>
+        get() {
+            val ids = exercises.map { it.id }.toSet()
+            val paired = mutableSetOf<String>()
+            return supersets.filter { pair ->
+                if (pair.first == pair.second || pair.first !in ids || pair.second !in ids ||
+                    pair.first in paired || pair.second in paired
+                ) {
+                    false
+                } else {
+                    paired.addAll(listOf(pair.first, pair.second))
+                    true
+                }
+            }
+        }
+}
 
 /// Своя программа целиком: сколько недель, какие дни, что в них.
 @Serializable
@@ -102,11 +134,14 @@ data class CustomProgram(
                 WorkoutWeekPlan(
                     number = week,
                     days = days.map { day ->
+                        val pairs = day.validSupersets
                         WorkoutDayPlan(
                             id = "$week-${day.number}",
                             number = day.number,
                             title = day.title,
-                            exercises = day.exercises.map { it.prescription(week) }
+                            exercises = day.exercises.map { exercise ->
+                                exercise.prescription(week, pairs.firstOrNull { it.contains(exercise.id) })
+                            }
                         )
                     }
                 )

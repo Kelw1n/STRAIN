@@ -677,6 +677,10 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         onSetCurrent = { week, day ->
                             store.updateActive { it.setCurrentWorkout(week, day) }
                         },
+                        onEditProgram = { updated ->
+                            store.update(profile.id) { it.copy(customProgram = updated) }
+                            syncProfileInBackground()
+                        },
                         contentPadding = screenPadding(bottomExtra = 32.dp)
                     )
                     CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
