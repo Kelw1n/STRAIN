@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>STRAIN сохраняет выбранные фото из ленты и профилей в приложение «Фото».</string>
 	<!-- ProMotion: без этого ключа iPhone держит анимации приложения на 60 кадрах
 	     в секунду, даже если экран умеет 120. -->
 	<key>CADisableMinimumFrameDurationOnPhone</key>

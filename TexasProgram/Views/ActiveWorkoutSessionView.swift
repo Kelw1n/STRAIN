@@ -58,19 +58,19 @@ struct ActiveWorkoutSessionView: View {
             .animation(Motion.sheet, value: sessionManager.showingZeroSetsAlert)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
-            .sheet(isPresented: $sessionManager.showingSummary) {
+            .edgeBackSheet(isPresented: $sessionManager.showingSummary) {
                 WorkoutCompletionSummaryView(profile: profile, workout: workout)
             }
-            .sheet(isPresented: $sessionManager.showingNoteSheet) {
+            .edgeBackSheet(isPresented: $sessionManager.showingNoteSheet) {
                 workoutNoteSheet
             }
-            .sheet(item: $sessionManager.artTarget) { target in
+            .edgeBackSheet(item: $sessionManager.artTarget) { target in
                 ExerciseArtSheet(name: target.name)
             }
-            .sheet(item: $sessionManager.swapTarget) { target in
+            .edgeBackSheet(item: $sessionManager.swapTarget) { target in
                 ExerciseSwapSheet(profile: profile, workout: workout, index: target.index)
             }
-            .sheet(isPresented: $addingExercises) {
+            .edgeBackSheet(isPresented: $addingExercises) {
                 ExerciseLibraryView(profile: profile, onPick: { items in
                     sessionManager.addExercises(items, profile: profile)
                 }, pickTitle: "Добавить")

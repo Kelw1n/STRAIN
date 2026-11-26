@@ -193,7 +193,7 @@ struct LevelCard: View {
         }
         .buttonStyle(.pressable)
         .accessibilityLabel(L("Уровень \(level.level), \(level.title). \(ProgressionText.toNext(level))"))
-        .sheet(isPresented: $showing) { LevelSheet(profile: profile) }
+        .edgeBackSheet(isPresented: $showing) { LevelSheet(profile: profile) }
     }
 }
 

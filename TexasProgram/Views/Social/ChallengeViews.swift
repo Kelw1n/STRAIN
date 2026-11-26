@@ -95,7 +95,7 @@ struct ChallengesSection: View {
         }
         .task { await store.refresh() }
         .sheet(isPresented: $creating) { NewChallengeSheet() }
-        .sheet(item: $opened) { ChallengeDetailSheet(id: $0.id) }
+        .edgeBackSheet(item: $opened) { ChallengeDetailSheet(id: $0.id) }
     }
 
     private var emptyCard: some View {

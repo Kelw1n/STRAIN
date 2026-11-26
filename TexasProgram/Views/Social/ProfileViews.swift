@@ -98,7 +98,7 @@ struct ProfileTabView: View {
                     AchievementsView(progress: statsCache.stats(for: profile).progress)
                 }
             }
-            .sheet(isPresented: $showingEdit) {
+            .edgeBackSheet(isPresented: $showingEdit) {
                 EditProfileView(profile: profile)
             }
         }
@@ -352,7 +352,6 @@ struct ProfileContent<Action: View>: View {
     @State private var tab = 0
     @State private var showingRecords = false
     @State private var viewingAvatar = false
-    @State private var pressingAvatar = false
     @State private var showingLevel = false
 
     var body: some View {
@@ -393,6 +392,7 @@ struct ProfileContent<Action: View>: View {
                     .frame(height: 170)
                     .frame(maxWidth: .infinity)
                     .clipped()
+                    .saveSocialPhoto(user.cover)
                     .padding(.horizontal, -16)
                 avatar
                     .offset(y: 58)
@@ -435,23 +435,18 @@ struct ProfileContent<Action: View>: View {
         }
     }
 
-    /// Аватарка как в Telegram: зажми — и она откроется на весь экран.
-    /// Обычное нажатие тоже открывает. Без фото открывать нечего.
+    /// Нажатие открывает аватар, удержание показывает действие сохранения.
     private var avatar: some View {
         AvatarView(imageId: user.avatar, username: user.username, size: 118)
             .overlay(Circle().strokeBorder(Color.canvas, lineWidth: 4))
-            .scaleEffect(pressingAvatar ? 0.94 : 1)
-            .animation(pressingAvatar ? Motion.press : Motion.release, value: pressingAvatar)
             .contentShape(Circle())
             .onTapGesture { openAvatar() }
-            .onLongPressGesture(minimumDuration: 0.3, perform: openAvatar) { pressing in
-                pressingAvatar = pressing && user.avatar != nil
-            }
+            .saveSocialPhoto(user.avatar)
             .accessibilityAddTraits(user.avatar == nil ? [] : .isButton)
             .accessibilityLabel(user.avatar == nil ? "" : L("Аватарка @\(user.username)"))
             .accessibilityHint(user.avatar == nil ? "" : L("Открыть на весь экран"))
             .avatarViewer(isPresented: $viewingAvatar, imageId: user.avatar, username: user.username)
-            .sheet(isPresented: $showingLevel) {
+            .edgeBackSheet(isPresented: $showingLevel) {
                 if let levelProfile {
                     LevelSheet(profile: levelProfile)
                 } else {
@@ -463,7 +458,6 @@ struct ProfileContent<Action: View>: View {
     private func openAvatar() {
         guard user.avatar != nil, !viewingAvatar else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        pressingAvatar = false
         presentWithoutAnimation { viewingAvatar = true }
     }
 
@@ -475,7 +469,7 @@ struct ProfileContent<Action: View>: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 showingRecords = true
             }
-            .sheet(isPresented: $showingRecords) {
+            .edgeBackSheet(isPresented: $showingRecords) {
                 RecordsSheet(username: user.username, records: shown, bodyWeight: user.weightKg, profile: levelProfile)
             }
         }

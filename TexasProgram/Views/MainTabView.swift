@@ -229,12 +229,13 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $sessionManager.isPresented) {
             if let workout = sessionManager.activeWorkout {
                 ActiveWorkoutSessionView(profile: profile, workout: workout)
+                    .edgeSwipeBack { sessionManager.minimize() }
             }
         }
-        .sheet(isPresented: $showingSettings) {
+        .edgeBackSheet(isPresented: $showingSettings) {
             SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
         }
-        .sheet(isPresented: $showingBench) {
+        .edgeBackSheet(isPresented: $showingBench) {
             BenchWaveView(profile: profile, focused: $benchFocus, onClose: { showingBench = false })
         }
         // Виджет живёт в другой песочнице и сам данные не достанет — публикуем слепок.
@@ -404,11 +405,11 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle(L("Сегодня"))
-            .sheet(isPresented: $showingCycleFinish) { CycleFinishView(profile: profile) }
-            .sheet(item: $customizing) { workout in
+            .edgeBackSheet(isPresented: $showingCycleFinish) { CycleFinishView(profile: profile) }
+            .edgeBackSheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)
             }
-            .sheet(item: $entryTarget) { target in
+            .edgeBackSheet(item: $entryTarget) { target in
                 SetEntrySheet(profile: profile, target: target)
             }
             .navigationDestination(item: $historyFor) { name in
@@ -1100,10 +1101,10 @@ struct DayDetailView: View {
                 .accessibilityLabel(L("Свои упражнения"))
             }
         }
-        .sheet(isPresented: $showCustomize) {
+        .edgeBackSheet(isPresented: $showCustomize) {
             DayCustomizeView(profile: profile, week: week, day: currentDay)
         }
-        .sheet(item: $entryTarget) { target in
+        .edgeBackSheet(item: $entryTarget) { target in
             SetEntrySheet(profile: profile, target: target)
         }
         .navigationDestination(item: $historyFor) { name in

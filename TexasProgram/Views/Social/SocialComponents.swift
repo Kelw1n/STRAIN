@@ -1,4 +1,5 @@
 import ImageIO
+import Photos
 import SwiftUI
 import UIKit
 
@@ -53,6 +54,18 @@ final class ImagePipeline: @unchecked Sendable {
         return image
     }
 
+    func originalPhoto(_ url: URL) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              http.mimeType?.hasPrefix("image/") == true,
+              let image = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(image) > 0 else { throw URLError(.cannotDecodeContentData) }
+        return data
+    }
+
     /// Уменьшает до нужного размера сразу при чтении и распаковывает заранее:
     /// главному потоку остаётся только показать готовые пиксели.
     private static func decode(_ data: Data, maxPixel: Int) -> UIImage? {
@@ -66,6 +79,61 @@ final class ImagePipeline: @unchecked Sendable {
         ] as CFDictionary
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions) else { return nil }
         return UIImage(cgImage: cgImage)
+    }
+}
+
+private struct SaveSocialPhoto: ViewModifier {
+    let imageID: String?
+    @State private var saving = false
+    @State private var message: String?
+
+    func body(content: Content) -> some View {
+        if let imageID, !imageID.isEmpty {
+            content
+                .contextMenu {
+                    Button(action: save) {
+                        Label(L("Сохранить фото"), systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(saving)
+                }
+                .accessibilityAction(named: Text(L("Сохранить фото")), save)
+                .alert(message.map { L($0) } ?? "", isPresented: Binding(
+                    get: { message != nil },
+                    set: { if !$0 { message = nil } }
+                )) {
+                    Button(L("Понятно"), role: .cancel) { message = nil }
+                }
+        } else {
+            content
+        }
+    }
+
+    private func save() {
+        guard !saving, let url = SocialService.shared.imageURL(imageID) else { return }
+        saving = true
+        Task { @MainActor in
+            defer { saving = false }
+            let access = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard access == .authorized || access == .limited else {
+                message = "Разреши STRAIN сохранять фото в настройках телефона."
+                return
+            }
+            do {
+                let data = try await ImagePipeline.shared.originalPhoto(url)
+                try await PHPhotoLibrary.shared().performChanges {
+                    PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
+                }
+                message = "Фото сохранено"
+            } catch {
+                message = "Не удалось сохранить фото"
+            }
+        }
+    }
+}
+
+extension View {
+    func saveSocialPhoto(_ imageID: String?) -> some View {
+        modifier(SaveSocialPhoto(imageID: imageID))
     }
 }
 

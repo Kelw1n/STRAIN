@@ -9,6 +9,7 @@ import com.texasprogram.app.ui.popIn
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import com.texasprogram.app.ui.rememberEdgeSwipeBack
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -425,22 +426,26 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         }
     }
 
-    BackHandler(
-        enabled = WorkoutSessionManager.isPresented || showPlan || benchFocus != null ||
-            dayDetail != null || customizing != null || showHistoryList || historyFor != null || showNotes ||
-            showBodyWeight || showToday || showSettings || showGuide
-    ) {
+    val covered = WorkoutSessionManager.isPresented || showPlan || dayDetail != null || customizing != null ||
+        benchFocus != null || showHistoryList || historyFor != null || showNotes || showBodyWeight ||
+        showToday || showSettings || showGuide
+    BackHandler(enabled = covered) {
+        // Match the drawing order so Back always removes the foremost surface.
         when {
-            WorkoutSessionManager.isPresented -> WorkoutSessionManager.minimize()
-            // Правка и день открываются поверх плана — «Назад» сначала закрывает их.
-            customizing != null -> customizing = null
-            benchFocus != null -> benchFocus = null
-            dayDetail != null -> dayDetail = null
-            showPlan -> showPlan = false
+            showBodyWeight -> showBodyWeight = false
+            showNotes -> showNotes = false
             historyFor != null -> historyFor = null
             showHistoryList -> showHistoryList = false
-            showNotes -> showNotes = false
-            showBodyWeight -> showBodyWeight = false
+            WorkoutSessionManager.isPresented -> when {
+                WorkoutSessionManager.showingNoteSheet -> WorkoutSessionManager.showingNoteSheet = false
+                WorkoutSessionManager.showingSummary -> WorkoutSessionManager.showingSummary = false
+                WorkoutSessionManager.showingZeroSetsAlert -> WorkoutSessionManager.showingZeroSetsAlert = false
+                else -> WorkoutSessionManager.minimize()
+            }
+            benchFocus != null -> benchFocus = null
+            customizing != null -> customizing = null
+            dayDetail != null -> dayDetail = null
+            showPlan -> showPlan = false
             showGuide -> showGuide = false
             showSettings -> showSettings = false
             showToday -> showToday = false
@@ -450,14 +455,11 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     // Телефон лежит на лавке между подходами — гасить экран тут незачем.
     KeepScreenOn(profile.keepScreenOn)
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().then(rememberEdgeSwipeBack())) {
         // Открытые вкладки живут дальше: при возврате экран не собирается заново —
         // без пустого кадра, перезагрузки ленты и рывка анимации.
         // Пока поверх вкладок открыт полноэкранный раздел, вкладку под ним
         // не пересчитываем — её не видно, а отметки подходов идут часто.
-        val covered = WorkoutSessionManager.isPresented || showPlan || dayDetail != null || customizing != null ||
-            benchFocus != null || showHistoryList || historyFor != null || showNotes || showBodyWeight ||
-            showToday || showSettings || showGuide
         // Вкладка передаётся лямбдой: её смена перестраивает только KeepAliveTabs,
         // а не весь этот экран — и открываемая вкладка не пересобирается заново.
         KeepAliveTabs(selectedTab = { tab }, frozen = covered) { current ->
@@ -1052,7 +1054,7 @@ private fun KeepAliveTabs(
                         }
                         .then(if (active) CatchTouches else SwallowTouches)
                 ) {
-                    androidx.compose.runtime.CompositionLocalProvider(com.texasprogram.app.ui.LocalTabActive provides active) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.texasprogram.app.ui.LocalTabActive provides (active && !frozen)) {
                         TabContent(held[0]!!, item)
                     }
                 }

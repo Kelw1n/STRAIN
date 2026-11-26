@@ -11,7 +11,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -118,7 +117,7 @@ fun PostCard(
             PostStatsRow(post)
         }
         // Фото — без сжатия при нажатии: оно дёргало карточку на каждом свайпе.
-        PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen))
+        PostMedia(post, onTap = onOpen)
         if (post.photos.isNotEmpty()) {
             if (showsWorkout) {
                 Box(Modifier.pressable(onClick = onOpen)) { WorkoutSummary(post.workout, limit = 4) }
@@ -494,7 +493,7 @@ fun PostDetailScreen(
         // Тренировка — последним слайдом, как в REBRN; все подходы — по нажатию.
         item {
             if (mediaReady || post.photos.isEmpty()) {
-                PostMedia(post, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showingSets = true })
+                PostMedia(post, onTap = { showingSets = true })
             } else {
                 Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f).clip(RoundedCornerShape(22.dp)).background(Theme.tone(0xFF1F1F22)))
             }
@@ -703,10 +702,10 @@ private fun CommentRow(
 /// Карусель поста: сначала фото, последним слайдом — сама тренировка.
 /// Без фото — только тренировка.
 @Composable
-fun PostMedia(post: SocialPost, modifier: Modifier = Modifier) {
+fun PostMedia(post: SocialPost, modifier: Modifier = Modifier, onTap: () -> Unit = {}) {
     val hasWorkout = post.workout.exercises.isNotEmpty()
     if (post.photos.isEmpty()) {
-        Box(modifier.fillMaxWidth().padding(vertical = 6.dp)) { PostWorkoutSlide(post.workout) }
+        Box(modifier.fillMaxWidth().clickable(onClick = onTap).padding(vertical = 6.dp)) { PostWorkoutSlide(post.workout) }
         return
     }
     val count = post.photos.size + if (hasWorkout) 1 else 0
@@ -719,9 +718,11 @@ fun PostMedia(post: SocialPost, modifier: Modifier = Modifier) {
     ) {
         androidx.compose.foundation.pager.HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
             if (page < post.photos.size) {
-                RemoteImage(post.photos[page], Modifier.fillMaxSize())
+                SaveableSocialPhoto(post.photos[page], Modifier.fillMaxSize(), onTap) {
+                    RemoteImage(post.photos[page], Modifier.fillMaxSize())
+                }
             } else {
-                Box(Modifier.fillMaxSize().background(Theme.canvas).padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 34.dp)) {
+                Box(Modifier.fillMaxSize().clickable(onClick = onTap).background(Theme.canvas).padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 34.dp)) {
                     PostWorkoutSlide(post.workout)
                 }
             }

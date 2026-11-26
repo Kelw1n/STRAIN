@@ -540,11 +540,11 @@ struct SettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showPeaking) { PeakingView(profile: profile) }
-        .sheet(isPresented: $showGuide) {
+        .edgeBackSheet(isPresented: $showPeaking) { PeakingView(profile: profile) }
+        .edgeBackSheet(isPresented: $showGuide) {
             InstructionsView(programKind: profile.programKind, onClose: { showGuide = false })
         }
-        .sheet(isPresented: $showNewCycle) {
+        .edgeBackSheet(isPresented: $showNewCycle) {
             // У своей программы максимумов нет — новый цикл считается от её весов.
             if profile.programKind == .custom { CycleFinishView(profile: profile) } else { NewCycleView(profile: profile) }
         }

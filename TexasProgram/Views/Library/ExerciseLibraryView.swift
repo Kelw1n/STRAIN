@@ -108,7 +108,7 @@ struct ExerciseLibraryView: View {
                 }
             }
         }
-        .sheet(item: $detail) { item in
+        .edgeBackSheet(item: $detail) { item in
             ExerciseDetailView(profile: profile, exercise: item)
         }
         .sheet(isPresented: $scanning) { EquipmentScannerSheet() }
