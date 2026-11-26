@@ -425,7 +425,7 @@ struct LeaderboardView: View {
                 .foregroundStyle(Color.ink.opacity(0.35))
         }
         .task { await reload() }
-        .sheet(isPresented: $showingWinners) { WeekWinnersSheet() }
+        .edgeBackSheet(isPresented: $showingWinners) { WeekWinnersSheet() }
     }
 
     static func weekTitle(now: Date = Date()) -> String {

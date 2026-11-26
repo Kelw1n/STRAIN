@@ -98,7 +98,7 @@ struct ProfileTabView: View {
                     AchievementsView(progress: statsCache.stats(for: profile).progress)
                 }
             }
-            .sheet(isPresented: $showingEdit) {
+            .edgeBackSheet(isPresented: $showingEdit) {
                 EditProfileView(profile: profile)
             }
         }
@@ -446,7 +446,7 @@ struct ProfileContent<Action: View>: View {
             .accessibilityLabel(user.avatar == nil ? "" : L("Аватарка @\(user.username)"))
             .accessibilityHint(user.avatar == nil ? "" : L("Открыть на весь экран"))
             .avatarViewer(isPresented: $viewingAvatar, imageId: user.avatar, username: user.username)
-            .sheet(isPresented: $showingLevel) {
+            .edgeBackSheet(isPresented: $showingLevel) {
                 if let levelProfile {
                     LevelSheet(profile: levelProfile)
                 } else {
@@ -469,7 +469,7 @@ struct ProfileContent<Action: View>: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 showingRecords = true
             }
-            .sheet(isPresented: $showingRecords) {
+            .edgeBackSheet(isPresented: $showingRecords) {
                 RecordsSheet(username: user.username, records: shown, bodyWeight: user.weightKg, profile: levelProfile)
             }
         }

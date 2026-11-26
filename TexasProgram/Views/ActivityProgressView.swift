@@ -86,16 +86,16 @@ struct ActivityProgressView: View {
                     }
                 }
             }
-            .sheet(isPresented: $restoringHistory) {
+            .edgeBackSheet(isPresented: $restoringHistory) {
                 RestoreWorkoutDatesSheet(workouts: profile.undatedWorkouts) { profile.restoreWorkoutDates($0) }
             }
-            .sheet(item: $editingWorkoutDate) { workout in
+            .edgeBackSheet(item: $editingWorkoutDate) { workout in
                 WorkoutDateEditSheet(record: workout) { profile.correctWorkoutDate(workout, to: $0) }
             }
-            .sheet(isPresented: $showingWeightSheet) {
+            .edgeBackSheet(isPresented: $showingWeightSheet) {
                 BodyWeightScreen(profile: profile)
             }
-            .sheet(isPresented: $showingMuscleSheet) {
+            .edgeBackSheet(isPresented: $showingMuscleSheet) {
                 MuscleGroupsDetailSheet(profile: profile)
             }
             .navigationDestination(for: Route.self) { route in

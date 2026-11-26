@@ -125,31 +125,31 @@ struct WorkoutHubView: View {
                     .accessibilityLabel(L("План на сегодня"))
                 }
             }
-            .sheet(isPresented: $showingGoalSheet) {
+            .edgeBackSheet(isPresented: $showingGoalSheet) {
                 GoalSettingsSheet(profile: profile)
             }
-            .sheet(isPresented: $showingStreak) {
+            .edgeBackSheet(isPresented: $showingStreak) {
                 StreakCalendarSheet(profile: profile)
             }
-            .sheet(isPresented: $showingToday, onDismiss: {
+            .edgeBackSheet(isPresented: $showingToday, onDismiss: {
                 WorkoutSessionManager.shared.representAfterSheet()
             }) {
                 TodayView(profile: profile, onSettings: {}, onOpenBench: onOpenBench, onStartWorkout: onStartWorkout)
             }
-            .sheet(isPresented: $showingTemplates, onDismiss: {
+            .edgeBackSheet(isPresented: $showingTemplates, onDismiss: {
                 WorkoutSessionManager.shared.representAfterSheet()
             }) {
                 TemplatesView(profile: profile) { template in
                     WorkoutSessionManager.shared.startTemplate(template, profile: profile)
                 }
             }
-            .sheet(isPresented: $showingCycleFinish) {
+            .edgeBackSheet(isPresented: $showingCycleFinish) {
                 CycleFinishView(profile: profile)
             }
-            .sheet(isPresented: $showingLibrary) {
+            .edgeBackSheet(isPresented: $showingLibrary) {
                 ExerciseLibraryView(profile: profile)
             }
-            .sheet(isPresented: $showingProgramCatalog, onDismiss: {
+            .edgeBackSheet(isPresented: $showingProgramCatalog, onDismiss: {
                 WorkoutSessionManager.shared.representAfterSheet()
             }) {
                 PlanView(profile: profile, onOpenBench: onOpenBench)

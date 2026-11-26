@@ -576,7 +576,7 @@ struct PostDetailView: View {
                 social.send(SocialChatWorkout(post: post), to: friend.username)
             }
         }
-        .sheet(isPresented: $showingSets) {
+        .edgeBackSheet(isPresented: $showingSets) {
             NavigationStack {
                 ScrollView { PostWorkoutSets(workout: post.workout).padding(16) }
                     .background(Color.canvas.ignoresSafeArea())

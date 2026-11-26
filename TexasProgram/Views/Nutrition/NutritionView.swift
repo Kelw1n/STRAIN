@@ -107,17 +107,17 @@ struct NutritionView: View {
         }
         .photosPicker(isPresented: $showingLibrary, selection: $libraryPick, matching: .images)
         .onChange(of: libraryPick) { _, item in loadLibrary(item) }
-        .sheet(item: $photo) { picked in
+        .edgeBackSheet(item: $photo) { picked in
             FoodPhotoSheet(image: picked.image) { foods in addRecognized(foods) }
         }
-        .sheet(item: $editing) { entry in
+        .edgeBackSheet(item: $editing) { entry in
             FoodEntrySheet(original: entry, day: day, onSave: { store.update($0) }, onDelete: { store.remove(entry) })
         }
-        .sheet(isPresented: $addingManually) {
+        .edgeBackSheet(isPresented: $addingManually) {
             FoodEntrySheet(original: nil, day: day, recent: store.recentFoods(), onSave: { store.add([$0]) })
         }
-        .sheet(isPresented: $showingGuide) { NutritionGuideView() }
-        .sheet(isPresented: $showingKey) { GeminiKeySheet() }
+        .edgeBackSheet(isPresented: $showingGuide) { NutritionGuideView() }
+        .edgeBackSheet(isPresented: $showingKey) { GeminiKeySheet() }
     }
 
     // MARK: - Этап метода

@@ -229,12 +229,13 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $sessionManager.isPresented) {
             if let workout = sessionManager.activeWorkout {
                 ActiveWorkoutSessionView(profile: profile, workout: workout)
+                    .edgeSwipeBack { sessionManager.minimize() }
             }
         }
-        .sheet(isPresented: $showingSettings) {
+        .edgeBackSheet(isPresented: $showingSettings) {
             SettingsView(profile: profile, onAddProfile: onAddProfile, onDeleteProfile: onDeleteProfile)
         }
-        .sheet(isPresented: $showingBench) {
+        .edgeBackSheet(isPresented: $showingBench) {
             BenchWaveView(profile: profile, focused: $benchFocus, onClose: { showingBench = false })
         }
         // Виджет живёт в другой песочнице и сам данные не достанет — публикуем слепок.
@@ -404,11 +405,11 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle(L("Сегодня"))
-            .sheet(isPresented: $showingCycleFinish) { CycleFinishView(profile: profile) }
-            .sheet(item: $customizing) { workout in
+            .edgeBackSheet(isPresented: $showingCycleFinish) { CycleFinishView(profile: profile) }
+            .edgeBackSheet(item: $customizing) { workout in
                 DayCustomizeView(profile: profile, week: workout.week, day: workout.day)
             }
-            .sheet(item: $entryTarget) { target in
+            .edgeBackSheet(item: $entryTarget) { target in
                 SetEntrySheet(profile: profile, target: target)
             }
             .navigationDestination(item: $historyFor) { name in
@@ -761,7 +762,6 @@ struct BenchTeaser: View {
 // MARK: - План
 
 struct PlanView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var profile: ProgramProfile
     var onOpenBench: ((Int) -> Void)?
@@ -818,14 +818,6 @@ struct PlanView: View {
                             }
                         }
                         .padding(.horizontal)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
-                            let offset = drag.translation
-                            if offset.width < -75 && abs(offset.width) > abs(offset.height) * 1.5 {
-                                dismiss()
-                            }
-                        })
                         .id(selectedWeek)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .offset(y: 24)),
@@ -1109,10 +1101,10 @@ struct DayDetailView: View {
                 .accessibilityLabel(L("Свои упражнения"))
             }
         }
-        .sheet(isPresented: $showCustomize) {
+        .edgeBackSheet(isPresented: $showCustomize) {
             DayCustomizeView(profile: profile, week: week, day: currentDay)
         }
-        .sheet(item: $entryTarget) { target in
+        .edgeBackSheet(item: $entryTarget) { target in
             SetEntrySheet(profile: profile, target: target)
         }
         .navigationDestination(item: $historyFor) { name in

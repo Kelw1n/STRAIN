@@ -51,6 +51,7 @@ struct AvatarViewer: View {
         }
         .ignoresSafeArea()
         .overlay(alignment: .top) { header }
+        .edgeSwipeBack(close)
         .onAppear {
             withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { appeared = true }
         }

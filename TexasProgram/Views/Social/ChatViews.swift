@@ -330,12 +330,13 @@ struct ChatView: View {
         .cameraSheet(isPresented: $showingCamera) { attachment = $0.downscaled() }
         .fullScreenCover(item: $viewing) { item in
             ImageViewer(id: item.id) { viewing = nil }
+                .edgeSwipeBack { viewing = nil }
                 .preferredColorScheme(.dark)
         }
-        .sheet(item: $forwarding) { message in
+        .edgeBackSheet(item: $forwarding) { message in
             ChatTargetSheet(title: "Переслать") { target in forward(message, to: target) }
         }
-        .sheet(item: $openedWorkout) { opened in
+        .edgeBackSheet(item: $openedWorkout) { opened in
             ChatWorkoutDetail(workout: opened.workout, author: opened.author)
         }
         .confirmationDialog(

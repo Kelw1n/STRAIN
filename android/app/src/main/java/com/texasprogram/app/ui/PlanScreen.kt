@@ -3,7 +3,6 @@ package com.texasprogram.app.ui
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,13 +33,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,19 +52,8 @@ fun PlanScreen(
     profile: ProgramProfile,
     onOpenDay: (Int, Int) -> Unit,
     onSetCurrent: (Int, Int) -> Unit,
-    contentPadding: PaddingValues,
-    onClose: (() -> Unit)? = null
+    contentPadding: PaddingValues
 ) {
-    val close by rememberUpdatedState(onClose)
-    val swipeClose = if (onClose == null) Modifier else Modifier.pointerInput(Unit) {
-        val threshold = 75.dp.toPx()
-        var offset = 0f
-        detectHorizontalDragGestures(
-            onDragStart = { offset = 0f },
-            onDragEnd = { if (offset < -threshold) close?.invoke() },
-            onHorizontalDrag = { _, delta -> offset += delta }
-        )
-    }
     val plan = profile.workoutPlan
     // Открываемся на текущей неделе, а не на первой. Дальше выбор за
     // пользователем, поэтому пересчёта на каждую перерисовку нет.
@@ -86,7 +72,7 @@ fun PlanScreen(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item(key = "title") { Box(swipeClose.fillMaxWidth()) { ScreenTitle("План") } }
+        item(key = "title") { ScreenTitle("План") }
 
         item(key = "weeks") {
             LazyRow(
@@ -110,7 +96,7 @@ fun PlanScreen(
                     week = week.number,
                     day = day,
                     scheduled = scheduled["${week.number}-${day.number}"],
-                    modifier = swipeClose.appearIn(index),
+                    modifier = Modifier.appearIn(index),
                     onClick = { onOpenDay(week.number, day.number) },
                     onSetCurrent = { onSetCurrent(week.number, day.number) }
                 )
