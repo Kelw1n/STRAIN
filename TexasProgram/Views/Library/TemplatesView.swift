@@ -95,7 +95,7 @@ struct TemplatesView: View {
                 tab = .mine
             }
         }
-        .sheet(item: $preview) { target in
+        .edgeBackSheet(item: $preview) { target in
             TemplatePreviewView(
                 profile: profile,
                 template: target.template,

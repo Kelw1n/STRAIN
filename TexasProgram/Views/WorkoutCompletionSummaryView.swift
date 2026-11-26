@@ -115,7 +115,7 @@ struct WorkoutCompletionSummaryView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingDurationPicker) {
+            .edgeBackSheet(isPresented: $showingDurationPicker) {
                 durationPickerSheet
             }
             .sheet(item: $shareImage) { item in
