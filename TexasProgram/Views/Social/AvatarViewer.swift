@@ -3,7 +3,7 @@ import UIKit
 
 // MARK: - Аватарка на весь экран
 
-/// Аватарка на весь экран, как в Telegram и WhatsApp: зажми или нажми на неё
+/// Аватарка на весь экран: нажми на неё
 /// в профиле. Фото вырастает из аватарки, щипок приближает, двойное касание —
 /// ×2,5, смахивание вниз или вверх закрывает.
 struct AvatarViewer: View {
@@ -45,6 +45,7 @@ struct AvatarViewer: View {
                     .gesture(drag(side: side, height: proxy.size.height))
                     .simultaneousGesture(magnify(side: side, height: proxy.size.height))
                     .onTapGesture(count: 2) { toggleZoom() }
+                    .saveSocialPhoto(imageId)
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
