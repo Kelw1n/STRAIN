@@ -99,7 +99,7 @@ private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
         return true
     }
 
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         let velocity = pan.velocity(in: pan.view)
         return velocity.x > 0 && velocity.x > abs(velocity.y)
     }
