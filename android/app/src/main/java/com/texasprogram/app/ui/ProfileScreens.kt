@@ -9,12 +9,6 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
@@ -515,12 +509,6 @@ fun ProfileContent(
 @Composable
 private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues, onAvatar: () -> Unit, onLevel: () -> Unit) {
     val haptics = rememberHapticEngine()
-    var pressingAvatar by remember { mutableStateOf(false) }
-    val avatarScale by animateFloatAsState(
-        if (pressingAvatar) 0.94f else 1f,
-        animationSpec = if (pressingAvatar) spring(stiffness = Spring.StiffnessHigh) else spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
-        label = "avatarPress"
-    )
     fun openAvatar() {
         if (user.avatar == null) return
         haptics.medium()
@@ -529,42 +517,22 @@ private fun ProfileHeader(user: SocialUser, contentPadding: PaddingValues, onAva
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         // Обложка — от края до края экрана, сквозь боковые отступы списка.
         Box(Modifier.bleed(16.dp).fillMaxWidth().height(contentPadding.calculateTopPadding() + 230.dp)) {
-            ProfileCover(
+            SaveableSocialPhoto(
                 user.cover,
-                Modifier
-                    .fillMaxWidth()
-                    .height(contentPadding.calculateTopPadding() + 170.dp)
-            )
-            // Аватарка как в Telegram: зажми — и она откроется на весь экран.
-            // Обычное нажатие тоже открывает. Без фото открывать нечего.
-            Avatar(
+                Modifier.fillMaxWidth().height(contentPadding.calculateTopPadding() + 170.dp)
+            ) {
+                ProfileCover(user.cover, Modifier.fillMaxSize())
+            }
+            SaveableSocialPhoto(
                 user.avatar,
-                user.username,
-                118.dp,
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .graphicsLayer {
-                        scaleX = avatarScale
-                        scaleY = avatarScale
-                    }
-                    .border(4.dp, Theme.canvas, CircleShape)
-                    .pointerInput(user.avatar) {
-                        if (user.avatar == null) return@pointerInput
-                        detectTapGestures(
-                            onPress = {
-                                pressingAvatar = true
-                                tryAwaitRelease()
-                                pressingAvatar = false
-                            },
-                            onTap = { openAvatar() },
-                            onLongPress = {
-                                pressingAvatar = false
-                                openAvatar()
-                            }
-                        )
-                    }
-                    .semantics { if (user.avatar != null) contentDescription = "Аватарка @${user.username}, открыть на весь экран" }
-            )
+                    .size(118.dp)
+                    .semantics { if (user.avatar != null) contentDescription = "Аватарка @${user.username}, открыть на весь экран" },
+                onTap = ::openAvatar
+            ) {
+                Avatar(user.avatar, user.username, 118.dp, Modifier.border(4.dp, Theme.canvas, CircleShape))
+            }
         }
         Text("@${user.username}", color = Theme.ink, fontSize = 28.sp, fontWeight = FontWeight.Black)
         LevelChip(

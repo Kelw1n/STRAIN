@@ -361,6 +361,10 @@ struct PostMedia: View {
                         Group {
                             if index < post.photos.count {
                                 RemoteImage(id: post.photos[index])
+                                    .containerRelativeFrame([.horizontal, .vertical])
+                                    .clipped()
+                                    .contentShape(Rectangle())
+                                    .saveSocialPhoto(post.photos[index])
                             } else {
                                 PostWorkoutSlide(workout: post.workout)
                                     .padding(.horizontal, 4)
@@ -368,10 +372,10 @@ struct PostMedia: View {
                                     .padding(.bottom, 34)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                                     .background(Color.canvas)
+                                    .containerRelativeFrame([.horizontal, .vertical])
+                                    .clipped()
                             }
                         }
-                        .containerRelativeFrame([.horizontal, .vertical])
-                        .clipped()
                         .id(index)
                     }
                 }

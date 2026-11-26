@@ -761,6 +761,7 @@ struct BenchTeaser: View {
 // MARK: - План
 
 struct PlanView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var profile: ProgramProfile
     var onOpenBench: ((Int) -> Void)?
@@ -817,6 +818,14 @@ struct PlanView: View {
                             }
                         }
                         .padding(.horizontal)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
+                            let offset = drag.translation
+                            if offset.width < -75 && abs(offset.width) > abs(offset.height) * 1.5 {
+                                dismiss()
+                            }
+                        })
                         .id(selectedWeek)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .offset(y: 24)),

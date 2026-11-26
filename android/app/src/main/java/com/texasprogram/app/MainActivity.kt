@@ -677,7 +677,8 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
                         onSetCurrent = { week, day ->
                             store.updateActive { it.setCurrentWorkout(week, day) }
                         },
-                        contentPadding = screenPadding(bottomExtra = 32.dp)
+                        contentPadding = screenPadding(bottomExtra = 32.dp),
+                        onClose = { showPlan = false }
                     )
                     CloseButton(Modifier.align(Alignment.TopEnd)) { showPlan = false }
                 }
