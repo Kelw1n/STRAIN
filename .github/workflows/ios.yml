@@ -121,6 +121,7 @@ jobs:
       # Рядом с IPA — version.json: номер сборки и «что нового» за последние
       # версии. Его читает приложение и показывает плашку обновления.
       - name: Publish IPA
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES_INPUT: ${{ github.event.inputs.notes }}
