@@ -7,19 +7,27 @@ import SwiftUI
 struct NotesListView: View {
     @Bindable var profile: ProgramProfile
 
+    private struct Note: Identifiable {
+        let id: String
+        let week: Int
+        let day: Int
+        let text: String
+        let archived: Bool
+    }
+
     /// От свежих к старым: перечитывают обычно последнее.
-    private var notes: [(key: String, week: Int, day: Int, text: String, archived: Bool)] {
+    private var notes: [Note] {
         let dates = Dictionary(profile.completionLog.map { ($0.key, $0.date) }, uniquingKeysWith: { first, _ in first })
         return profile.workoutNotes
             .compactMap { key, text in
                 let current = profile.noteSlot(for: key)
                 guard let slot = current ?? profile.previousDaySlot(for: key) else { return nil }
-                return (key: key, week: slot.week, day: slot.day, text: text, archived: current == nil)
+                return Note(id: key, week: slot.week, day: slot.day, text: text, archived: current == nil)
             }
             .sorted { first, second in
                 if first.archived != second.archived { return !first.archived }
-                return (dates[first.key] ?? .distantPast, first.week, first.day, first.key) >
-                       (dates[second.key] ?? .distantPast, second.week, second.day, second.key)
+                return (dates[first.id] ?? .distantPast, first.week, first.day, first.id) >
+                       (dates[second.id] ?? .distantPast, second.week, second.day, second.id)
             }
     }
 
@@ -35,33 +43,8 @@ struct NotesListView: View {
                     }
                     .appearIn(0)
                 }
-                ForEach(Array(notes.enumerated()), id: \.offset) { index, note in
-                    CardView(padding: 15, spacing: 7) {
-                        HStack {
-                            Text(note.archived
-                                 ? L("Прошлый цикл · Неделя \(note.week), день \(note.day)")
-                                 : title(week: note.week, day: note.day))
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(Theme.accentGradient)
-                            Spacer(minLength: 8)
-                            Button {
-                                withAnimation(Motion.card) {
-                                    profile.workoutNotes.removeValue(forKey: note.key)
-                                }
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.pressable)
-                        }
-                        Text(verbatim: note.text)
-                            .font(.footnote)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .appearIn(index)
-                    .softScroll()
+                ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
+                    row(note).appearIn(index).softScroll()
                 }
             }
             .padding(.horizontal)
@@ -71,6 +54,32 @@ struct NotesListView: View {
         .screenBackground()
         .navigationTitle(L("Заметки"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ note: Note) -> some View {
+        let header = note.archived
+            ? L("Прошлый цикл · Неделя \(note.week), день \(note.day)")
+            : title(week: note.week, day: note.day)
+        return CardView(padding: 15, spacing: 7) {
+            HStack {
+                Text(header)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Theme.accentGradient)
+                Spacer(minLength: 8)
+                Button {
+                    withAnimation(Motion.card) { profile.workoutNotes[note.id] = nil }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.pressable)
+            }
+            Text(verbatim: note.text)
+                .font(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func title(week: Int, day: Int) -> String {
