@@ -53,7 +53,8 @@ data class ExerciseHistoryPoint(
     val week: Int,
     val day: Int,
     val planned: Double?,
-    val entries: List<SetEntry>
+    val entries: List<SetEntry>,
+    val archiveKey: String? = null
 ) {
     /// Лучший подход дня: по нему и видно, растёт ли движение.
     val best: Double get() = entries.maxOfOrNull { it.weight } ?: 0.0

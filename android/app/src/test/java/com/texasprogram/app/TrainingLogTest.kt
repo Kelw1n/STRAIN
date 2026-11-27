@@ -8,6 +8,7 @@ import com.texasprogram.app.model.ExercisePrescription
 import com.texasprogram.app.model.LoadPrescription
 import com.texasprogram.app.model.PlanEditScope
 import com.texasprogram.app.model.ProgramInput
+import com.texasprogram.app.model.CustomDay
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.SplitTemplate
 import com.texasprogram.app.model.TrainingProgramKind
@@ -30,6 +31,31 @@ class TrainingLogTest {
             ?.days?.firstOrNull { it.number == day }?.exercises.orEmpty()
 
     // MARK: - Факт подхода
+
+    @Test
+    fun changingProgramAfterRestartRetainsProfileAndWorkoutHistory() {
+        val exercise = CustomExercise(name = "Жим гантелей", sets = 3, reps = "10", kilograms = 24.0)
+        val day = CustomDay(number = 1, title = "Верх", exercises = listOf(exercise))
+        val profile = ProgramProfile.custom(CustomProgram(weeks = 2, days = listOf(day)))
+        val oldKey = profile.dayKey(1, 1)
+        val switched = profile
+            .recordSet(1, 1, exercise.prescription(1), 0, 10, 24.0)
+            .setNote("Свой темп", 1, 1)
+            .toggleCompleted(1, 1)
+            .recordBodyWeight(75.0)
+            .startNewCycle(100.0, 80.0, 120.0)
+            .switchProgram(ProgramProfile.texas(ProgramInput.demo))
+
+        assertEquals(profile.id, switched.id)
+        assertEquals(ProgramProfile.texas(ProgramInput.demo).programKind, switched.programKind)
+        assertEquals(1, switched.currentWeek)
+        assertFalse(switched.isCompleted(1, 1))
+        assertEquals(listOf(oldKey), switched.completionLog.map { it.key })
+        assertEquals("Свой темп", switched.workoutNotes[oldKey])
+        assertEquals(75.0, switched.latestBodyWeight)
+        assertEquals(24.0, switched.fullHistory(exercise.name).single().best, 0.001)
+        assertTrue(exercise.name in switched.loggedExerciseNames)
+    }
 
     @Test
     fun recordedSetFillsDotAndStaysInLog() {

@@ -48,6 +48,7 @@ struct ProfileSnapshot: Codable, Equatable, Sendable {
     var autoregulationEnabled: Bool?
     var liftReports: [LiftReportSnapshot]?
     var workoutNotes: [String: String]?
+    var pastExerciseNames: [String: String]? = nil
     var bodyWeightLog: [BodyWeightEntry]?
     /// Шаг прибавки по упражнениям. Необязательное: в старых копиях его нет.
     var weightSteps: [String: Double]?
@@ -286,6 +287,7 @@ enum BackupService {
                 LiftReportSnapshot(key: $0.key, lift: $0.lift, outcome: $0.outcome, date: $0.date, epochDay: epochDay($0.date))
             },
             workoutNotes: profile.workoutNotes,
+            pastExerciseNames: profile.pastExerciseNames,
             bodyWeightLog: profile.bodyWeightLog,
             weightSteps: profile.weightSteps,
             defaultWeightStep: profile.defaultWeightStep,
@@ -413,6 +415,7 @@ enum BackupService {
             LiftReport(key: $0.key, lift: $0.lift, outcome: $0.outcome, date: $0.date ?? $0.epochDay.map(date) ?? .now)
         }
         result.workoutNotes = snapshot.workoutNotes ?? [:]
+        result.pastExerciseNames = snapshot.pastExerciseNames
         result.bodyWeightLog = snapshot.bodyWeightLog ?? []
         result.weightSteps = snapshot.weightSteps ?? [:]
         result.defaultWeightStep = snapshot.defaultWeightStep ?? AccessoryHint.step

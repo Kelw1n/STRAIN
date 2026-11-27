@@ -54,7 +54,7 @@ fun ExerciseHistoryScreen(
     name: String,
     contentPadding: PaddingValues
 ) {
-    val points = remember(profile, name) { profile.history(name) }
+    val points = remember(profile, name) { profile.fullHistory(name) }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -82,7 +82,9 @@ fun ExerciseHistoryScreen(
 
         // Одно движение дважды в дне даёт две точки с одной датой — ключ с номером.
         itemsIndexed(points, key = { index, it -> "${it.week}-${it.day}-$index" }) { _, point ->
-            PointRow(point, profile.historyTitle(point.week, point.day))
+            val title = if (point.archiveKey == null) profile.historyTitle(point.week, point.day)
+            else "Прошлый цикл · Неделя ${point.week}, день ${point.day}"
+            PointRow(point, title)
         }
     }
 }
@@ -144,15 +146,17 @@ private fun Stat(title: String, value: String) {
 @Composable
 private fun HistoryChart(points: List<ExerciseHistoryPoint>, modifier: Modifier = Modifier) {
     CardView(modifier) {
-        Text("Вес по неделям", color = Theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        val archived = points.any { it.archiveKey != null }
+        Text(if (archived) "Вес по тренировкам" else "Вес по неделям", color = Theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
 
-        val facts = points.map { it.week to it.best }
-        val plans = points.mapNotNull { point -> point.planned?.let { point.week to it } }
+        fun position(index: Int) = if (archived) index + 1 else points[index].week
+        val facts = points.mapIndexed { index, point -> position(index) to point.best }
+        val plans = points.mapIndexedNotNull { index, point -> point.planned?.let { position(index) to it } }
         val all = facts.map { it.second } + plans.map { it.second }
         val minWeight = all.minOrNull() ?: 0.0
         val maxWeight = all.maxOrNull() ?: 1.0
-        val minWeek = points.minOf { it.week }
-        val maxWeek = points.maxOf { it.week }
+        val minWeek = facts.minOf { it.first }
+        val maxWeek = facts.maxOf { it.first }
 
         Canvas(
             Modifier

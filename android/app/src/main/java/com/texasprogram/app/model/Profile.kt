@@ -91,6 +91,7 @@ data class ProgramProfile(
     val liftReports: List<LiftReport> = emptyList(),
     /// Заметка к тренировке: ключ дня плана.
     val workoutNotes: Map<String, String> = emptyMap(),
+    val pastExerciseNames: Map<String, String>? = null,
     /// Замеры веса тела, по одному на дату.
     val bodyWeightLog: List<BodyWeightEntry> = emptyList(),
     /// Опыт за места в законченных челленджах: один раз за каждый челлендж.
@@ -407,6 +408,15 @@ data class ProgramProfile(
         return (week to day).takeIf { key == dayKey(week, day) }
     }
 
+    fun previousDaySlot(key: String): Pair<Int, Int>? {
+        if (key.startsWith("free-") || isOwnKey(key)) return null
+        val parts = key.split('-')
+        if (parts.size < 2) return null
+        val week = parts[parts.size - 2].toIntOrNull()?.takeIf { it > 0 } ?: return null
+        val day = parts.last().toIntOrNull()?.takeIf { it > 0 } ?: return null
+        return week to day
+    }
+
     fun note(week: Int, day: Int): String = workoutNotes[dayKey(week, day)] ?: ""
 
     fun setNote(text: String, week: Int, day: Int): ProgramProfile {
@@ -553,7 +563,23 @@ data class ProgramProfile(
     /// нужно человеческое имя, и порядок должен совпадать с порядком в программе.
     /// Профиль неизменяемый — список считаем один раз на экземпляр.
     val loggedExerciseNames: List<String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        collectHistory(null).map { it.first }.distinct()
+        (collectHistory(null).map { it.first } + pastHistory.keys.sorted()).distinct()
+    }
+
+    fun fullHistory(name: String): List<ExerciseHistoryPoint> = pastHistory[name].orEmpty() + history(name)
+
+    private val pastHistory: Map<String, List<ExerciseHistoryPoint>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val dates = completionLog.associate { it.key to it.epochDay }
+        val items = setsByExercise.mapNotNull { (key, entries) ->
+            val divider = key.indexOf('|')
+            if (divider < 0) return@mapNotNull null
+            val dayKey = key.substring(0, divider)
+            val (week, day) = previousDaySlot(dayKey) ?: return@mapNotNull null
+            val exerciseKey = key.substring(divider + 1)
+            val name = pastExerciseNames?.get(exerciseKey) ?: exerciseKey
+            Triple(name, dates[dayKey] ?: Long.MIN_VALUE, ExerciseHistoryPoint(week, day, null, entries.values.toList(), key))
+        }.sortedWith(compareBy({ it.second }, { it.third.archiveKey }))
+        items.groupBy({ it.first }, { it.third })
     }
 
     /// Весь путь одного движения по текущему циклу и свободным тренировкам.
@@ -984,6 +1010,28 @@ data class ProgramProfile(
             scheduleAnchorWeek = 0,
             scheduleAnchorEpochDay = null
         )
+
+    /// Starts the selected program on the same profile with its existing journals.
+    fun switchProgram(next: ProgramProfile, today: LocalDate = LocalDate.now()): ProgramProfile {
+        val names = workoutPlan.weeks.flatMap { it.days }.flatMap { it.exercises }
+            .filter { it.key != it.name }.associate { it.key to it.name }
+        val switched = startNewCycle(next.squat5RM, next.bench5RM, next.deadlift5RM, today).copy(
+            programKind = next.programKind,
+            pastExerciseNames = pastExerciseNames.orEmpty() + names,
+            level = next.level,
+            fullBodyLevel = next.fullBodyLevel,
+            pull = next.pull,
+            arms = next.arms,
+            core = next.core,
+            back = next.back,
+            press = next.press,
+            customProgram = next.customProgram,
+            euthanasiaInput = next.euthanasiaInput,
+            planEdits = emptyList(),
+            liftReports = emptyList()
+        )
+        return if (scheduleWeekdays.size == switched.trainingDayCount) switched else switched.copy(scheduleWeekdays = emptyList())
+    }
 
     // MARK: - Свои упражнения
 

@@ -51,7 +51,9 @@ struct ExerciseHistoryPoint: Identifiable, Equatable, Sendable {
     let planned: Double?
     let entries: [SetEntry]
 
-    var id: String { "\(week)-\(day)" }
+    var archiveKey: String? = nil
+
+    var id: String { archiveKey ?? "\(week)-\(day)" }
     /// Лучший подход дня: по нему и видно, растёт ли движение.
     var best: Double { entries.map(\.weight).max() ?? 0 }
     var tonnage: Double { entries.reduce(0) { $0 + $1.tonnage } }

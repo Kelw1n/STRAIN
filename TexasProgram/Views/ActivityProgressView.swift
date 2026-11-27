@@ -132,7 +132,7 @@ struct ActivityProgressView: View {
             linkDivider
             NavigationLink(value: Route.notes) {
                 linkRow("Заметки",
-                        subtitle: Self.countText(profile.workoutNotes.keys.filter { profile.noteSlot(for: $0) != nil }.count,
+                        subtitle: Self.countText(profile.workoutNotes.count,
                                                  "запись", "записи", "записей"),
                         symbol: "note.text")
             }

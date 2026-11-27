@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,14 +47,32 @@ import com.texasprogram.app.model.ScheduleMode
 import com.texasprogram.app.model.WorkoutDayPlan
 import com.texasprogram.app.service.RuDate
 import com.texasprogram.app.service.ScheduledWorkout
+import com.texasprogram.app.service.WorkoutSessionManager
 
 @Composable
 fun PlanScreen(
     profile: ProgramProfile,
     onOpenDay: (Int, Int) -> Unit,
     onSetCurrent: (Int, Int) -> Unit,
-    contentPadding: PaddingValues
+    contentPadding: PaddingValues,
+    onSwitchProgram: ((ProgramProfile) -> Unit)? = null
 ) {
+    var switching by remember { mutableStateOf(false) }
+    if (switching && onSwitchProgram != null) {
+        OnboardingScreen(
+            canCancel = true,
+            onCancel = { switching = false },
+            onSave = { next ->
+                if (!WorkoutSessionManager.isRunning) {
+                    onSwitchProgram(next)
+                    switching = false
+                }
+            },
+            contentPadding = contentPadding,
+            switchingProgram = true
+        )
+        return
+    }
     val plan = profile.workoutPlan
     // Открываемся на текущей неделе, а не на первой. Дальше выбор за
     // пользователем, поэтому пересчёта на каждую перерисовку нет.
@@ -73,6 +92,16 @@ fun PlanScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(key = "title") { ScreenTitle("План") }
+        if (onSwitchProgram != null) {
+            item(key = "switch-program") {
+                CardView {
+                    Text(profile.customProgram?.name ?: profile.programKind.title, color = Theme.textPrimary)
+                    val running = WorkoutSessionManager.isRunning
+                    GradientButton("Сменить программу", enabled = !running) { switching = true }
+                    if (running) Text("Заверши текущую тренировку, чтобы сменить программу.", color = Theme.textSecondary)
+                }
+            }
+        }
 
         item(key = "weeks") {
             LazyRow(

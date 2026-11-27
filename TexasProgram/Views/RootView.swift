@@ -85,6 +85,7 @@ struct ProgramOnboardingView: View {
     var canCancel: Bool = false
     var onCancel: () -> Void = {}
     var onRestore: ((BackupArchive) throws -> Void)? = nil
+    var switchingProgram = false
     let onSave: (ProgramProfile) -> Void
     @State private var selectedProgram: TrainingProgramKind?
 
@@ -121,7 +122,7 @@ struct ProgramOnboardingView: View {
                 CustomProgramBuilderView(onBack: { selectedProgram = nil }) { onSave(ProgramProfile(customProgram: $0)) }
                     .transition(forward)
             case nil:
-                ProgramSelectionView(selection: $selectedProgram, canCancel: canCancel, onCancel: onCancel, onRestore: onRestore)
+                ProgramSelectionView(selection: $selectedProgram, canCancel: canCancel, onCancel: onCancel, onRestore: onRestore, switchingProgram: switchingProgram)
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
                         removal: .move(edge: .leading).combined(with: .opacity)
@@ -138,6 +139,7 @@ struct ProgramSelectionView: View {
     var canCancel: Bool = false
     var onCancel: () -> Void = {}
     var onRestore: ((BackupArchive) throws -> Void)? = nil
+    var switchingProgram = false
     @State private var breathe = false
     @State private var showImporter = false
     @State private var restoreError: String?
@@ -157,7 +159,9 @@ struct ProgramSelectionView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(L("Выбери программу"))
                                 .font(.system(size: 34, weight: .bold, design: Theme.fontDesign))
-                            Text(L("После выбора введи свои максимумы. Вернуться сюда можно полным сбросом в настройках."))
+                            Text(switchingProgram
+                                 ? L("Новый план начнётся с первой недели. Питание и история останутся в этом профиле.")
+                                 : L("После выбора введи свои максимумы."))
                                 .foregroundStyle(.secondary)
                         }
                     }

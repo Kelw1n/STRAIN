@@ -167,7 +167,7 @@ fun ProgressScreen(
                 LinkRow(
                     title = "Заметки",
                     subtitle = countText(
-                        profile.workoutNotes.keys.count { profile.noteSlot(it) != null },
+                        profile.workoutNotes.size,
                         "запись", "записи", "записей"
                     ),
                     icon = Icons.Filled.Notes,

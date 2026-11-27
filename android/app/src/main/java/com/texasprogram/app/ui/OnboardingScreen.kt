@@ -60,9 +60,13 @@ fun OnboardingScreen(
     contentPadding: PaddingValues,
     /// Восстановить из файла копии — сразу, без пустого профиля.
     onRestore: (() -> Unit)? = null,
-    restoreMessage: String? = null
+    restoreMessage: String? = null,
+    switchingProgram: Boolean = false
 ) {
     var selected by remember { mutableStateOf<TrainingProgramKind?>(null) }
+    androidx.activity.compose.BackHandler(enabled = switchingProgram) {
+        if (selected != null) selected = null else onCancel()
+    }
 
     AnimatedContent(
         targetState = selected,
@@ -78,7 +82,7 @@ fun OnboardingScreen(
         label = "onboarding"
     ) { kind ->
         when (kind) {
-            null -> ProgramSelection(canCancel, onCancel, contentPadding, onRestore, restoreMessage) { selected = it }
+            null -> ProgramSelection(canCancel, onCancel, contentPadding, onRestore, restoreMessage, switchingProgram) { selected = it }
             TrainingProgramKind.TEXAS -> TexasSetup(contentPadding, onBack = { selected = null }) {
                 onSave(ProgramProfile.texas(it))
             }
@@ -108,6 +112,7 @@ private fun ProgramSelection(
     contentPadding: PaddingValues,
     onRestore: (() -> Unit)?,
     restoreMessage: String?,
+    switchingProgram: Boolean,
     onPick: (TrainingProgramKind) -> Unit
 ) {
     LazyColumn(
@@ -116,7 +121,7 @@ private fun ProgramSelection(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         if (canCancel) {
-            item(key = "bar") { TopBar("Новый профиль", onBack = onCancel) }
+            item(key = "bar") { TopBar(if (switchingProgram) "Сменить программу" else "Новый профиль", onBack = onCancel) }
         }
 
         item(key = "hero") {
@@ -132,7 +137,8 @@ private fun ProgramSelection(
                 }
                 Text("Выбери программу", color = Theme.textPrimary, fontSize = 34.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "После выбора введи свои максимумы. Вернуться сюда можно полным сбросом в настройках.",
+                    if (switchingProgram) "Новый план начнётся с первой недели. Питание и история останутся в этом профиле."
+                    else "После выбора введи свои максимумы.",
                     color = Theme.textSecondary,
                     fontSize = 14.sp
                 )
@@ -142,6 +148,14 @@ private fun ProgramSelection(
         TrainingProgramKind.ready.forEachIndexed { index, kind ->
             item(key = kind.name) {
                 ProgramOptionCard(kind, Modifier.appearIn(index + 1)) { onPick(kind) }
+            }
+        }
+
+        if (switchingProgram) {
+            item(key = TrainingProgramKind.CUSTOM.name) {
+                ProgramOptionCard(TrainingProgramKind.CUSTOM, Modifier.appearIn(TrainingProgramKind.ready.size + 1)) {
+                    onPick(TrainingProgramKind.CUSTOM)
+                }
             }
         }
 
