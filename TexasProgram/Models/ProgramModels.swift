@@ -300,6 +300,7 @@ final class ProgramProfile {
     var planEdits: [PlanEdit] = []
     /// Что реально сделано в подходе: ключ «деньПлана|упражнение|номерПодхода».
     var setLog: [String: SetEntry] = [:]
+    var pastExerciseNames: [String: String]?
     /// Пропущенные тренировки.
     var skipped: [SkippedWorkout] = []
     /// Не гасить экран, пока открыта тренировка.
@@ -601,6 +602,30 @@ final class ProgramProfile {
         scheduleAnchorDate = nil
     }
 
+    /// Меняет параметры плана, сохраняя идентификатор и все журналы профиля.
+    func switchProgram(to next: ProgramProfile, now: Date = Date()) {
+        var names = pastExerciseNames ?? [:]
+        for exercise in workoutPlan.weeks.flatMap(\.days).flatMap(\.exercises) where exercise.id != exercise.name {
+            names[exercise.id] = exercise.name
+        }
+        pastExerciseNames = names
+        startNewCycle(squat: next.squat5RM, bench: next.bench5RM, deadlift: next.deadlift5RM, now: now)
+        programKind = next.programKind
+        level = next.level
+        fullBodyLevel = next.fullBodyLevel
+        pull = next.pull
+        arms = next.arms
+        core = next.core
+        back = next.back
+        press = next.press
+        customProgram = next.customProgram
+        euthanasiaInput = next.euthanasiaInput
+        // Эти изменения привязаны к упражнениям и дням прежнего плана.
+        planEdits = []
+        liftReports = []
+        if scheduleWeekdays.count != trainingDayCount { scheduleWeekdays = [] }
+    }
+
     // MARK: - Серия без пропусков
 
     /// Недели подряд, закрытые полностью.
@@ -799,6 +824,14 @@ final class ProgramProfile {
         return (week, day)
     }
 
+    func previousDaySlot(for key: String) -> (week: Int, day: Int)? {
+        guard !key.hasPrefix("free-"), !isOwnKey(key) else { return nil }
+        let parts = key.split(separator: "-")
+        guard parts.count >= 2, let week = Int(parts[parts.count - 2]), let day = Int(parts[parts.count - 1]),
+              week > 0, day > 0 else { return nil }
+        return (week, day)
+    }
+
     func note(week: Int, day: Int) -> String {
         workoutNotes[dayKey(week: week, day: day)] ?? ""
     }
@@ -968,7 +1001,37 @@ final class ProgramProfile {
     ///
     /// Берём из плана, а не из ключей: в ключе лежит идентификатор, а показать
     /// нужно человеческое имя, и порядок должен совпадать с порядком в программе.
-    var loggedExerciseNames: [String] { historyByName().names }
+    var loggedExerciseNames: [String] {
+        let current = historyByName().names
+        return current + pastHistory().keys.filter { !current.contains($0) }.sorted()
+    }
+
+    func fullHistory(forExerciseNamed name: String) -> [ExerciseHistoryPoint] {
+        (pastHistory()[name] ?? []) + history(forExerciseNamed: name)
+    }
+
+    private func pastHistory() -> [String: [ExerciseHistoryPoint]] {
+        let dates = Dictionary(completionLog.map { ($0.key, $0.date) }, uniquingKeysWith: { first, _ in first })
+        var groups: [String: [ExerciseHistoryPoint]] = [:]
+        for (key, entries) in groupedEntries() {
+            guard let separator = key.firstIndex(of: "|") else { continue }
+            let dayKey = String(key[..<separator])
+            guard let slot = previousDaySlot(for: dayKey) else { continue }
+            let exerciseID = String(key[key.index(after: separator)...])
+            let name = pastExerciseNames?[exerciseID] ?? exerciseID
+            groups[name, default: []].append(ExerciseHistoryPoint(
+                week: slot.week, day: slot.day, planned: nil, entries: entries.map(\.entry), archiveKey: key
+            ))
+        }
+        return groups.mapValues { points in
+            points.sorted { first, second in
+                let a = first.archiveKey ?? "", b = second.archiveKey ?? ""
+                let firstDate = SetKeyParts.dayKey(from: a).flatMap { dates[$0] } ?? .distantPast
+                let secondDate = SetKeyParts.dayKey(from: b).flatMap { dates[$0] } ?? .distantPast
+                return (firstDate, a) < (secondDate, b)
+            }
+        }
+    }
 
     /// Весь путь одного движения по текущему циклу и свободным тренировкам.
     ///

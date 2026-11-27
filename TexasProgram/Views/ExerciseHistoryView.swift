@@ -9,7 +9,7 @@ struct ExerciseHistoryView: View {
     @Bindable var profile: ProgramProfile
     let name: String
 
-    private var points: [ExerciseHistoryPoint] { profile.history(forExerciseNamed: name) }
+    private var points: [ExerciseHistoryPoint] { profile.fullHistory(forExerciseNamed: name) }
 
     var body: some View {
         ScrollView {
@@ -88,12 +88,13 @@ struct ExerciseHistoryView: View {
     /// План линией, факт точками: видно и то, что назначено, и то, что вышло.
     private var chart: some View {
         CardView {
-            Text(L("Вес по неделям")).font(.title3.weight(.bold))
+            Text(L(points.contains { $0.archiveKey != nil } ? "Вес по тренировкам" : "Вес по неделям")).font(.title3.weight(.bold))
             Chart {
-                ForEach(points) { point in
+                ForEach(Array(points.enumerated()), id: \.offset) { index, point in
+                    let position = points.contains { $0.archiveKey != nil } ? index + 1 : point.week
                     if let planned = point.planned {
                         LineMark(
-                            x: .value("Неделя", point.week),
+                            x: .value("Тренировка", position),
                             y: .value("План", planned),
                             series: .value("Ряд", "план")
                         )
@@ -101,7 +102,7 @@ struct ExerciseHistoryView: View {
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
                     }
                     PointMark(
-                        x: .value("Неделя", point.week),
+                        x: .value("Тренировка", position),
                         y: .value("Факт", point.best)
                     )
                     .foregroundStyle(Theme.accentGradient)
@@ -143,7 +144,9 @@ struct ExerciseHistoryView: View {
     private func row(_ point: ExerciseHistoryPoint) -> some View {
         CardView(padding: 14, spacing: 8) {
             HStack {
-                Text(profile.historyTitle(week: point.week, day: point.day))
+                Text(point.archiveKey == nil
+                     ? profile.historyTitle(week: point.week, day: point.day)
+                     : L("Прошлый цикл · Неделя \(point.week), день \(point.day)"))
                     .font(.subheadline.weight(.semibold))
                 Spacer(minLength: 8)
                 Text(WeightFormat.kilogramsPrecise(point.best))

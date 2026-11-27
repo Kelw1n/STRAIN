@@ -17,14 +17,19 @@ internal fun rememberEdgeSwipeBack(): Modifier {
     val back = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher ?: return Modifier
     return Modifier.pointerInput(back) {
         val edge = 26.dp.toPx()
-        val requiredTravel = 72.dp.toPx()
+        val edgeTravel = 65.dp.toPx()
+        val centerTravel = 90.dp.toPx()
         val slop = viewConfiguration.touchSlop
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            if (down.position.x !in 0f..edge || !back.hasEnabledCallbacks()) return@awaitEachGesture
+            if (!back.hasEnabledCallbacks()) return@awaitEachGesture
+            val fromEdge = down.position.x in 0f..edge
+            val requiredTravel = if (fromEdge) edgeTravel else centerTravel
+            // A child pager, slider or horizontal list gets first refusal away from the edge.
+            val pass = if (fromEdge) PointerEventPass.Initial else PointerEventPass.Main
             var claimed = false
             while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val event = awaitPointerEvent(pass)
                 if (event.changes.any { it.id != down.id && it.pressed }) break
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 if (change.isConsumed || !back.hasEnabledCallbacks()) break
@@ -35,7 +40,7 @@ internal fun rememberEdgeSwipeBack(): Modifier {
                 }
                 if (claimed) change.consume()
                 if (!change.pressed) {
-                    if (claimed && travel.x >= requiredTravel && travel.x > abs(travel.y)) {
+                    if (claimed && travel.x >= requiredTravel && travel.x > abs(travel.y) * 1.5f) {
                         back.onBackPressed()
                     }
                     break

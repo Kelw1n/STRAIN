@@ -66,6 +66,7 @@ data class ProfileSnapshot(
     val autoregulationEnabled: Boolean = false,
     val liftReports: List<LiftReportSnapshot> = emptyList(),
     val workoutNotes: Map<String, String> = emptyMap(),
+    val pastExerciseNames: Map<String, String>? = null,
     /// Замеры веса тела. Дата — ISO-строка, как пишет iOS: раньше вес тела
     /// в копию не попадал вовсе и терялся при восстановлении.
     val bodyWeightLog: List<BodyWeightSnapshot> = emptyList(),
@@ -253,6 +254,7 @@ object BackupService {
             LiftReportSnapshot(it.key, it.lift, it.outcome, it.epochDay, isoDate(it.epochDay))
         },
         workoutNotes = profile.workoutNotes,
+        pastExerciseNames = profile.pastExerciseNames,
         bodyWeightLog = profile.bodyWeightLog.map { BodyWeightSnapshot(isoDate(it.epochDay), it.weight) },
         weightSteps = profile.weightSteps,
         defaultWeightStep = profile.defaultWeightStep,
@@ -321,6 +323,7 @@ object BackupService {
             LiftReport(entry.key, entry.lift, entry.outcome, day)
         },
         workoutNotes = snapshot.workoutNotes,
+        pastExerciseNames = snapshot.pastExerciseNames,
         bodyWeightLog = snapshot.bodyWeightLog.mapNotNull { entry ->
             epochDayOf(entry.date)?.let { com.texasprogram.app.model.BodyWeightEntry(it, entry.weight) }
         },

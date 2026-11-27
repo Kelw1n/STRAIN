@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Все заметки цикла одним списком.
+/// Все заметки профиля одним списком.
 ///
 /// Заметка живёт на своей тренировке, и это правильно — писать её удобно там же.
 /// Но смысл в ней появляется, только когда месяц можно перечитать подряд.
@@ -8,13 +8,19 @@ struct NotesListView: View {
     @Bindable var profile: ProgramProfile
 
     /// От свежих к старым: перечитывают обычно последнее.
-    private var notes: [(week: Int, day: Int, text: String)] {
-        profile.workoutNotes
-            .compactMap { entry -> (week: Int, day: Int, text: String)? in
-                guard let slot = profile.noteSlot(for: entry.key) else { return nil }
-                return (slot.week, slot.day, entry.value)
+    private var notes: [(key: String, week: Int, day: Int, text: String, archived: Bool)] {
+        let dates = Dictionary(profile.completionLog.map { ($0.key, $0.date) }, uniquingKeysWith: { first, _ in first })
+        return profile.workoutNotes
+            .compactMap { key, text in
+                let current = profile.noteSlot(for: key)
+                guard let slot = current ?? profile.previousDaySlot(for: key) else { return nil }
+                return (key: key, week: slot.week, day: slot.day, text: text, archived: current == nil)
             }
-            .sorted { ($0.week, $0.day) > ($1.week, $1.day) }
+            .sorted { first, second in
+                if first.archived != second.archived { return !first.archived }
+                return (dates[first.key] ?? .distantPast, first.week, first.day, first.key) >
+                       (dates[second.key] ?? .distantPast, second.week, second.day, second.key)
+            }
     }
 
     var body: some View {
@@ -32,13 +38,15 @@ struct NotesListView: View {
                 ForEach(Array(notes.enumerated()), id: \.offset) { index, note in
                     CardView(padding: 15, spacing: 7) {
                         HStack {
-                            Text(title(week: note.week, day: note.day))
+                            Text(note.archived
+                                 ? L("Прошлый цикл · Неделя \(note.week), день \(note.day)")
+                                 : title(week: note.week, day: note.day))
                                 .font(.caption.weight(.bold))
                                 .foregroundStyle(Theme.accentGradient)
                             Spacer(minLength: 8)
                             Button {
                                 withAnimation(Motion.card) {
-                                    profile.setNote("", week: note.week, day: note.day)
+                                    profile.workoutNotes.removeValue(forKey: note.key)
                                 }
                             } label: {
                                 Image(systemName: "trash")

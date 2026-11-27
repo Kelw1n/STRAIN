@@ -770,6 +770,7 @@ struct PlanView: View {
     /// Открываем план один раз за запуск — на текущей неделе. Дальше выбор
     /// остаётся за пользователем: иначе возврат из дня сбрасывал бы просмотр.
     @State private var focusedOnOpen = false
+    @State private var switchingProgram = false
     @Namespace private var weekPill
 
     private var plan: WorkoutPlan { profile.workoutPlan }
@@ -783,6 +784,19 @@ struct PlanView: View {
         return NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L(profile.customProgram?.name ?? profile.programKind.rawValue))
+                            .font(.headline)
+                        Button(L("Сменить программу")) { switchingProgram = true }
+                            .disabled(WorkoutSessionManager.shared.isRunning)
+                            .buttonStyle(.bordered)
+                        if WorkoutSessionManager.shared.isRunning {
+                            Text(L("Заверши текущую тренировку, чтобы сменить программу."))
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
                     weekSelector
                     if let week = plan.weeks.first(where: { $0.number == selectedWeek }) {
                         VStack(spacing: 14) {
@@ -830,6 +844,21 @@ struct PlanView: View {
             .scrollIndicators(.hidden)
             .screenBackground()
             .navigationTitle(L("План"))
+            .edgeBackSheet(isPresented: $switchingProgram) {
+                ProgramOnboardingView(
+                    canCancel: true,
+                    onCancel: { switchingProgram = false },
+                    switchingProgram: true
+                ) { selected in
+                    guard !WorkoutSessionManager.shared.isRunning else { return }
+                    profile.switchProgram(to: selected)
+                    selectedWeek = profile.currentWeek
+                    ReminderScheduler.reschedule(for: profile)
+                    WidgetBridge.publish(profile)
+                    SocialService.shared.scheduleSync(from: profile)
+                    switchingProgram = false
+                }
+            }
             .onAppear {
                 guard !focusedOnOpen else { return }
                 focusedOnOpen = true

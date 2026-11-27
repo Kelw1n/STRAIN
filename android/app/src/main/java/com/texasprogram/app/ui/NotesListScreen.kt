@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.texasprogram.app.model.ProgramProfile
 import com.texasprogram.app.model.freeDay
 
-/// Все заметки цикла одним списком.
+/// Все заметки профиля одним списком.
 ///
 /// Заметка живёт на своей тренировке, и это правильно — писать её удобно там же.
 /// Но смысл в ней появляется, только когда месяц можно перечитать подряд.
@@ -31,14 +31,20 @@ fun NotesListScreen(
     onUpdate: (ProgramProfile) -> Unit,
     contentPadding: PaddingValues
 ) {
-    // От свежих к старым: перечитывают обычно последнее.
-    val notes = remember(profile.workoutNotes, profile.keyPrefix) {
+    data class Note(val key: String, val week: Int, val day: Int, val text: String, val archived: Boolean)
+    val notes = remember(profile) {
+        val dates = profile.completionLog.associate { it.key to it.epochDay }
         profile.workoutNotes
             .mapNotNull { (key, text) ->
-                val (week, day) = profile.noteSlot(key) ?: return@mapNotNull null
-                Triple(week, day, text)
+                val current = profile.noteSlot(key)
+                val (week, day) = current ?: profile.previousDaySlot(key) ?: return@mapNotNull null
+                Note(key, week, day, text, current == null)
             }
-            .sortedWith(compareByDescending<Triple<Int, Int, String>> { it.first }.thenByDescending { it.second })
+            .sortedWith(compareBy<Note> { it.archived }
+                .thenByDescending { dates[it.key] ?: Long.MIN_VALUE }
+                .thenByDescending { it.week }
+                .thenByDescending { it.day }
+                .thenBy { it.key })
     }
 
     LazyColumn(
@@ -61,11 +67,12 @@ fun NotesListScreen(
             }
         }
 
-        items(notes, key = { "${it.first}-${it.second}" }) { (week, day, text) ->
+        items(notes, key = { it.key }) { (key, week, day, text, archived) ->
             CardView(padding = 15.dp, spacing = 7.dp) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (week == ProgramProfile.FREE_WEEK) profile.freeDay(day)?.title ?: "Свободная тренировка"
+                        else if (archived) "Прошлый цикл · Неделя $week, день $day"
                         else "Неделя $week, день $day",
                         color = Theme.accent,
                         fontSize = 11.sp,
@@ -78,7 +85,7 @@ fun NotesListScreen(
                         tint = Theme.textTertiary,
                         modifier = Modifier
                             .size(18.dp)
-                            .pressable { onUpdate(profile.setNote("", week, day)) }
+                            .pressable { onUpdate(profile.copy(workoutNotes = profile.workoutNotes - key)) }
                     )
                 }
                 RawText(text, color = Theme.textPrimary, fontSize = 13.sp)

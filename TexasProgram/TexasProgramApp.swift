@@ -32,6 +32,7 @@ struct TexasProgramApp: App {
             ZStack {
                 RootView()
                     .id(language)
+                    .navigationSwipeBack()
                     .environment(\.locale, (AppLanguage(rawValue: language) ?? .system).locale)
                     .environment(restTimer)
                     .onOpenURL { url in

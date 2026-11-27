@@ -21,6 +21,32 @@ final class TrainingLogTests: XCTestCase {
 
     // MARK: - Факт подхода
 
+    func testChangingProgramAfterRestartRetainsProfileAndWorkoutHistory() throws {
+        let exercise = CustomExercise(name: "Жим гантелей", sets: 3, reps: "10",
+                                      kilograms: 24, weeklyIncrement: 0)
+        let day = CustomDay(number: 1, title: "Верх", exercises: [exercise])
+        let profile = ProgramProfile(customProgram: CustomProgram(weeks: 2, days: [day]))
+        let id = profile.profileID
+        let prescription = exercise.prescription(week: 1)
+        let previousDay = profile.dayKey(week: 1, day: 1)
+        profile.recordSet(week: 1, day: 1, exercise: prescription, index: 0, reps: 10, weight: 24)
+        profile.setNote("Свой темп", week: 1, day: 1)
+        profile.toggleCompleted(week: 1, day: 1)
+        profile.recordBodyWeight(75)
+        profile.startNewCycle(squat: 100, bench: 80, deadlift: 120)
+        profile.switchProgram(to: ProgramProfile(input: .demo))
+
+        XCTAssertEqual(profile.profileID, id)
+        XCTAssertEqual(profile.programKind, .texas)
+        XCTAssertEqual(profile.currentWeek, 1)
+        XCTAssertFalse(profile.isCompleted(week: 1, day: 1))
+        XCTAssertEqual(profile.completionLog.map(\.key), [previousDay])
+        XCTAssertEqual(profile.workoutNotes[previousDay], "Свой темп")
+        XCTAssertEqual(profile.latestBodyWeight, 75)
+        XCTAssertEqual(profile.fullHistory(forExerciseNamed: exercise.name).first?.best, 24)
+        XCTAssertTrue(profile.loggedExerciseNames.contains(exercise.name))
+    }
+
     func testRecordedSetFillsDotAndStaysInLog() {
         let profile = ProgramProfile(input: .demo)
         let squat = exercises(profile, week: 1, day: 1)[0]

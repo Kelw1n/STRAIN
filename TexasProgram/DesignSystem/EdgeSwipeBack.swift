@@ -2,10 +2,13 @@ import SwiftUI
 import UIKit
 
 extension View {
-    /// Adds the left-edge gesture to dismissible STRAIN presentations. A pushed
-    /// destination inside the presentation keeps UIKit's interactive pop.
-    func edgeSwipeBack(_ action: (() -> Void)? = nil) -> some View {
-        modifier(EdgeSwipeBack(action: action))
+    /// Adds a rightward swipe to STRAIN presentations and their navigation stack.
+    func edgeSwipeBack(allowsCenter: Bool = true, _ action: (() -> Void)? = nil) -> some View {
+        modifier(EdgeSwipeBack(navigationOnly: false, allowsCenter: allowsCenter, action: action))
+    }
+
+    func navigationSwipeBack() -> some View {
+        modifier(EdgeSwipeBack(navigationOnly: true, allowsCenter: true, action: nil))
     }
 
     func edgeBackSheet<Content: View>(
@@ -27,14 +30,20 @@ extension View {
 
 private struct EdgeSwipeBack: ViewModifier {
     @Environment(\.dismiss) private var dismiss
+    let navigationOnly: Bool
+    let allowsCenter: Bool
     let action: (() -> Void)?
 
     func body(content: Content) -> some View {
-        content.background(EdgePanInstaller { if let action { action() } else { dismiss() } })
+        content.background(EdgePanInstaller(navigationOnly: navigationOnly, allowsCenter: allowsCenter) {
+            if let action { action() } else { dismiss() }
+        })
     }
 }
 
 private struct EdgePanInstaller: UIViewRepresentable {
+    let navigationOnly: Bool
+    let allowsCenter: Bool
     let onBack: () -> Void
 
     func makeUIView(context: Context) -> EdgePanView {
@@ -43,7 +52,11 @@ private struct EdgePanInstaller: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ view: EdgePanView, context: Context) { view.onBack = onBack }
+    func updateUIView(_ view: EdgePanView, context: Context) {
+        view.navigationOnly = navigationOnly
+        view.allowsCenter = allowsCenter
+        view.onBack = onBack
+    }
 
     static func dismantleUIView(_ view: EdgePanView, coordinator: Void) { view.uninstall() }
 }
@@ -51,9 +64,14 @@ private struct EdgePanInstaller: UIViewRepresentable {
 private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
     var onBack: (() -> Void)?
     private weak var owner: UIViewController?
-    private lazy var pan: UIScreenEdgePanGestureRecognizer = {
-        let recognizer = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
-        recognizer.edges = .left
+    var navigationOnly = false
+    var allowsCenter = true
+    private weak var destination: UINavigationController?
+    private weak var topAtStart: UIViewController?
+    private var fromEdge = false
+    private lazy var pan: UIPanGestureRecognizer = {
+        let recognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        recognizer.maximumNumberOfTouches = 1
         recognizer.delegate = self
         return recognizer
     }()
@@ -84,24 +102,44 @@ private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        guard window != nil else { return false }
+        guard let host = pan.view, window != nil else { return false }
+        fromEdge = touch.location(in: host).x - host.bounds.minX <= 26
+        guard fromEdge || allowsCenter else { return false }
+
         var responder = touch.view as UIResponder?
+        var navigation: UINavigationController?
         while let current = responder {
+            if let view = current as? UIView, !fromEdge {
+                if view is UIControl || view is UITextView { return false }
+                if let scroll = view as? UIScrollView,
+                   scroll.alwaysBounceHorizontal || scroll.contentSize.width > scroll.bounds.width + 1 {
+                    return false
+                }
+            }
             if let controller = current as? UIViewController {
-                // A child may be presented in its own host within the outer host.
                 if controller.isBeingDismissed || controller.presentedViewController != nil { return false }
-                let navigation = (controller as? UINavigationController) ?? controller.navigationController
-                if let navigation, navigation.viewControllers.count > 1 { return false }
+                navigation = navigation ?? (controller as? UINavigationController) ?? controller.navigationController
             }
             if current === owner { break }
             responder = current.next
         }
-        return true
+
+        destination = nil
+        topAtStart = nil
+        if let navigation, navigation.viewControllers.count > 1 {
+            // Leave the left edge to UIKit's interactive navigation transition.
+            if fromEdge, navigation.interactivePopGestureRecognizer?.isEnabled == true { return false }
+            guard navigation.transitionCoordinator == nil else { return false }
+            destination = navigation
+            topAtStart = navigation.topViewController
+            return true
+        }
+        return !navigationOnly
     }
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         let velocity = pan.velocity(in: pan.view)
-        return velocity.x > 0 && velocity.x > abs(velocity.y)
+        return velocity.x > 0 && velocity.x > abs(velocity.y) * 1.5
     }
 
     func gestureRecognizer(
@@ -114,11 +152,17 @@ private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
         return false
     }
 
-    @objc private func handlePan(_ recognizer: UIScreenEdgePanGestureRecognizer) {
+    @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
         guard recognizer.state == .ended else { return }
         let distance = recognizer.translation(in: recognizer.view)
         let speed = recognizer.velocity(in: recognizer.view)
-        if distance.x > abs(distance.y) && (distance.x >= 72 || (distance.x >= 32 && speed.x >= 450)) {
+        let minimum: CGFloat = fromEdge ? 65 : 90
+        guard distance.x > abs(distance.y) * 1.5,
+              distance.x >= minimum || (distance.x >= minimum / 2 && speed.x >= 500) else { return }
+        if let destination {
+            guard destination.topViewController === topAtStart, destination.transitionCoordinator == nil else { return }
+            destination.popViewController(animated: true)
+        } else if !navigationOnly {
             onBack?()
         }
     }
