@@ -151,6 +151,14 @@ private fun ProgramSelection(
             }
         }
 
+        if (switchingProgram) {
+            item(key = TrainingProgramKind.CUSTOM.name) {
+                ProgramOptionCard(TrainingProgramKind.CUSTOM, Modifier.appearIn(TrainingProgramKind.ready.size + 1)) {
+                    onPick(TrainingProgramKind.CUSTOM)
+                }
+            }
+        }
+
         if (onRestore != null) {
             item(key = "restore") {
                 CardView(Modifier.appearIn(TrainingProgramKind.ready.size + 1).pressable(onClick = onRestore), padding = 20.dp) {

@@ -47,6 +47,7 @@ import com.texasprogram.app.model.ScheduleMode
 import com.texasprogram.app.model.WorkoutDayPlan
 import com.texasprogram.app.service.RuDate
 import com.texasprogram.app.service.ScheduledWorkout
+import com.texasprogram.app.service.WorkoutSessionManager
 
 @Composable
 fun PlanScreen(
@@ -62,7 +63,7 @@ fun PlanScreen(
             canCancel = true,
             onCancel = { switching = false },
             onSave = { next ->
-                if (!com.texasprogram.app.service.WorkoutSessionManager.isRunning) {
+                if (!WorkoutSessionManager.isRunning) {
                     onSwitchProgram(next)
                     switching = false
                 }
@@ -95,7 +96,7 @@ fun PlanScreen(
             item(key = "switch-program") {
                 CardView {
                     Text(profile.customProgram?.name ?: profile.programKind.title, color = Theme.textPrimary)
-                    val running = com.texasprogram.app.service.WorkoutSessionManager.isRunning
+                    val running = WorkoutSessionManager.isRunning
                     GradientButton("Сменить программу", enabled = !running) { switching = true }
                     if (running) Text("Заверши текущую тренировку, чтобы сменить программу.", color = Theme.textSecondary)
                 }
