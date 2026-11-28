@@ -84,6 +84,7 @@ private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
         super.didMoveToWindow()
         uninstall()
         guard window != nil else { return }
+        finishing = false
         // The SwiftUI host is in the responder chain after the view is mounted.
         DispatchQueue.main.async { [weak self] in
             guard let self, let window = self.window else { return }
@@ -101,7 +102,7 @@ private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
     }
 
     func uninstall() {
-        if !finishing { movingView?.transform = restingTransform }
+        if !finishing || movingView?.window == nil { movingView?.transform = restingTransform }
         movingView = nil
         pan.view?.removeGestureRecognizer(pan)
         owner = nil
