@@ -3,7 +3,7 @@ import UIKit
 
 extension View {
     /// Adds a rightward swipe to STRAIN presentations and their navigation stack.
-    func edgeSwipeBack(allowsCenter: Bool = true, _ action: (() -> Void)? = nil) -> some View {
+    func edgeSwipeBack(allowsCenter: Bool = true, _ action: @escaping () -> Void) -> some View {
         modifier(EdgeSwipeBack(navigationOnly: false, allowsCenter: allowsCenter, action: action))
     }
 
@@ -16,7 +16,9 @@ extension View {
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        sheet(isPresented: isPresented, onDismiss: onDismiss) { content().edgeSwipeBack() }
+        sheet(isPresented: isPresented, onDismiss: onDismiss) {
+            content().edgeSwipeBack { isPresented.wrappedValue = false }
+        }
     }
 
     func edgeBackSheet<Item: Identifiable, Content: View>(
@@ -24,27 +26,26 @@ extension View {
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping (Item) -> Content
     ) -> some View {
-        sheet(item: item, onDismiss: onDismiss) { content($0).edgeSwipeBack() }
+        sheet(item: item, onDismiss: onDismiss) { value in
+            content(value).edgeSwipeBack { item.wrappedValue = nil }
+        }
     }
 }
 
 private struct EdgeSwipeBack: ViewModifier {
-    @Environment(\.dismiss) private var dismiss
     let navigationOnly: Bool
     let allowsCenter: Bool
     let action: (() -> Void)?
 
     func body(content: Content) -> some View {
-        content.background(EdgePanInstaller(navigationOnly: navigationOnly, allowsCenter: allowsCenter) {
-            if let action { action() } else { dismiss() }
-        })
+        content.background(EdgePanInstaller(navigationOnly: navigationOnly, allowsCenter: allowsCenter, onBack: action))
     }
 }
 
 private struct EdgePanInstaller: UIViewRepresentable {
     let navigationOnly: Bool
     let allowsCenter: Bool
-    let onBack: () -> Void
+    let onBack: (() -> Void)?
 
     func makeUIView(context: Context) -> EdgePanView {
         let view = EdgePanView(frame: .zero)
@@ -69,6 +70,9 @@ private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
     private weak var destination: UINavigationController?
     private weak var topAtStart: UIViewController?
     private var fromEdge = false
+    private weak var movingView: UIView?
+    private var restingTransform = CGAffineTransform.identity
+    private var finishing = false
     private lazy var pan: UIPanGestureRecognizer = {
         let recognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         recognizer.maximumNumberOfTouches = 1
@@ -97,12 +101,14 @@ private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
     }
 
     func uninstall() {
+        if !finishing { movingView?.transform = restingTransform }
+        movingView = nil
         pan.view?.removeGestureRecognizer(pan)
         owner = nil
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        guard let host = pan.view, window != nil else { return false }
+        guard let host = pan.view, window != nil, !finishing else { return false }
         fromEdge = touch.location(in: host).x - host.bounds.minX <= 26
         guard fromEdge || allowsCenter else { return false }
 
@@ -152,18 +158,90 @@ private final class EdgePanView: UIView, UIGestureRecognizerDelegate {
         return false
     }
 
+    private func presentedSurface() -> UIView? {
+        var controller = owner
+        while let current = controller {
+            if let presentation = current.presentationController,
+               presentation.presentedViewController === current, let surface = presentation.presentedView {
+                return surface
+            }
+            controller = current.parent
+        }
+        return pan.view
+    }
+
+    private func moveSheet(by distance: CGFloat) {
+        movingView?.transform = restingTransform.concatenating(
+            CGAffineTransform(translationX: max(0, distance), y: 0)
+        )
+    }
+
+    private func resetSheet() {
+        guard let surface = movingView else { return }
+        movingView = nil
+        let original = restingTransform
+        UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
+            surface.transform = original
+        }
+    }
+
+    private func finishSheet() {
+        guard let onBack else { resetSheet(); return }
+        finishing = true
+        let closeWithoutVerticalAnimation = {
+            UIView.performWithoutAnimation {
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction, onBack)
+            }
+        }
+        guard let surface = movingView else {
+            closeWithoutVerticalAnimation()
+            return
+        }
+        let original = restingTransform
+        let travel = surface.window?.bounds.width ?? surface.bounds.width
+        UIView.animate(withDuration: 0.22, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
+            surface.transform = original.concatenating(CGAffineTransform(translationX: travel, y: 0))
+        } completion: { [weak self] finished in
+            guard let self, self.window != nil else { return }
+            if finished {
+                closeWithoutVerticalAnimation()
+            } else {
+                self.finishing = false
+                self.resetSheet()
+            }
+        }
+    }
+
     @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
-        guard recognizer.state == .ended else { return }
-        let distance = recognizer.translation(in: recognizer.view)
-        let speed = recognizer.velocity(in: recognizer.view)
-        let minimum: CGFloat = fromEdge ? 65 : 90
-        guard distance.x > abs(distance.y) * 1.5,
-              distance.x >= minimum || (distance.x >= minimum / 2 && speed.x >= 500) else { return }
-        if let destination {
-            guard destination.topViewController === topAtStart, destination.transitionCoordinator == nil else { return }
-            destination.popViewController(animated: true)
-        } else if !navigationOnly {
-            onBack?()
+        let distance = recognizer.translation(in: window)
+        switch recognizer.state {
+        case .began, .changed:
+            guard destination == nil, !navigationOnly, !UIAccessibility.isReduceMotionEnabled else { return }
+            if recognizer.state == .began {
+                movingView = presentedSurface()
+                restingTransform = movingView?.transform ?? .identity
+            }
+            moveSheet(by: distance.x)
+        case .ended:
+            let speed = recognizer.velocity(in: window)
+            let minimum: CGFloat = fromEdge ? 65 : 90
+            guard distance.x > abs(distance.y) * 1.5,
+                  distance.x >= minimum || (distance.x >= minimum / 2 && speed.x >= 500) else {
+                resetSheet()
+                return
+            }
+            if let destination {
+                guard destination.topViewController === topAtStart, destination.transitionCoordinator == nil else { return }
+                destination.popViewController(animated: true)
+            } else if !navigationOnly {
+                finishSheet()
+            }
+        case .cancelled, .failed:
+            resetSheet()
+        default:
+            break
         }
     }
 }

@@ -429,7 +429,20 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
     val covered = WorkoutSessionManager.isPresented || showPlan || dayDetail != null || customizing != null ||
         benchFocus != null || showHistoryList || historyFor != null || showNotes || showBodyWeight ||
         showToday || showSettings || showGuide
+    var backAnimation by remember { mutableIntStateOf(0) }
+    var horizontalBack by remember { mutableStateOf(false) }
+    LaunchedEffect(backAnimation) {
+        if (horizontalBack) {
+            delay(340)
+            horizontalBack = false
+        }
+    }
+    fun backExit(normal: androidx.compose.animation.ExitTransition): androidx.compose.animation.ExitTransition =
+        if (horizontalBack) Motion.pushExit() else normal
+
     BackHandler(enabled = covered) {
+        horizontalBack = true
+        backAnimation++
         // Match the drawing order so Back always removes the foremost surface.
         when {
             showBodyWeight -> showBodyWeight = false
@@ -563,7 +576,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // Экран «Сегодня» с точками подходов и настройки — поверх вкладок.
         AnimatedContent(
             targetState = showToday,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "today"
         ) { visible ->
             if (visible) {
@@ -621,7 +634,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showSettings,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "settings"
         ) { visible ->
             if (visible) {
@@ -653,7 +666,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // Инструкция — поверх настроек, из которых её открыли.
         AnimatedContent(
             targetState = showGuide,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "guide"
         ) { visible ->
             if (visible) {
@@ -668,7 +681,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // открытый из плана, должен лечь поверх плана, а не под него.
         AnimatedContent(
             targetState = showPlan,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "plan"
         ) { visible ->
             if (visible) {
@@ -757,7 +770,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = customizing,
             transitionSpec = {
-                Motion.sheetEnter() togetherWith Motion.sheetExit()
+                Motion.sheetEnter() togetherWith backExit(Motion.sheetExit())
             },
             label = "customize"
         ) { target ->
@@ -779,7 +792,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // Модальный экран жимовой волны
         AnimatedContent(
             targetState = benchFocus,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "benchFocus"
         ) { session ->
             if (session != null) {
@@ -805,7 +818,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         AnimatedContent(
             targetState = WorkoutSessionManager.isPresented,
             transitionSpec = {
-                Motion.sheetEnter() togetherWith Motion.sheetExit()
+                Motion.sheetEnter() togetherWith backExit(Motion.sheetExit())
             },
             label = "activeWorkout"
         ) { presented ->
@@ -848,7 +861,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
         // Список движений, история одного и заметки — тоже поверх вкладок.
         AnimatedContent(
             targetState = showHistoryList,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "historyList"
         ) { visible ->
             if (visible) {
@@ -866,7 +879,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = historyFor,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "history"
         ) { name ->
             if (name != null) {
@@ -883,7 +896,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showNotes,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "notes"
         ) { visible ->
             if (visible) {
@@ -900,7 +913,7 @@ private fun MainScaffold(store: AppStore, profile: ProgramProfile, timer: RestTi
 
         AnimatedContent(
             targetState = showBodyWeight,
-            transitionSpec = { Motion.modalEnter() togetherWith Motion.modalExit() },
+            transitionSpec = { Motion.modalEnter() togetherWith backExit(Motion.modalExit()) },
             label = "bodyWeight"
         ) { visible ->
             if (visible) {

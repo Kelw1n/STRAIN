@@ -229,7 +229,7 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $sessionManager.isPresented) {
             if let workout = sessionManager.activeWorkout {
                 ActiveWorkoutSessionView(profile: profile, workout: workout)
-                    .edgeSwipeBack { sessionManager.minimize() }
+                    .edgeSwipeBack { sessionManager.isPresented = false }
             }
         }
         .edgeBackSheet(isPresented: $showingSettings) {

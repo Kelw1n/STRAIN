@@ -54,7 +54,7 @@ struct TrainingRecapEntryCard: View {
             .background(Theme.surface(.dark), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .fullScreenCover(item: $opened) { recap in
                 TrainingRecapView(recap: recap)
-                    .edgeSwipeBack()
+                    .edgeSwipeBack { opened = nil }
                     .preferredColorScheme(.dark)
             }
         }
